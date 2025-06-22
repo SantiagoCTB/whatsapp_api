@@ -1,0 +1,134 @@
+body {
+    margin: 0;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: #f0f2f5;
+}
+
+.container {
+    display: flex;
+    height: 100vh;
+}
+
+/* Barra lateral estilo WhatsApp */
+.sidebar {
+    width: 25%;
+    background-color: #075e54;
+    color: white;
+    padding: 20px 10px;
+    display: flex;
+    flex-direction: column;
+}
+
+.sidebar h2 {
+    text-align: center;
+    margin-bottom: 20px;
+    font-weight: normal;
+}
+
+.sidebar ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    flex: 1;
+    overflow-y: auto;
+}
+
+.sidebar li {
+    padding: 12px 16px;
+    cursor: pointer;
+    border-radius: 8px;
+    transition: background-color 0.3s;
+}
+
+.sidebar li:hover {
+    background-color: #128c7e;
+}
+
+/* Ventana de chat */
+.chatWindow {
+    width: 75%;
+    display: flex;
+    flex-direction: column;
+    background-color: #e5ddd5;
+    border-left: 1px solid #ccc;
+}
+
+#chatBox {
+    flex: 1;
+    padding: 20px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+/* Estilo de burbujas */
+.cliente, .bot, .asesor {
+    max-width: 70%;
+    padding: 10px 14px;
+    border-radius: 15px;
+    word-wrap: break-word;
+    font-size: 14px;
+    line-height: 1.4;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+/* Burbujas específicas */
+.cliente {
+    align-self: flex-end;
+    background-color: #dcf8c6;
+    color: #000;
+    border-bottom-right-radius: 0;
+}
+
+.bot {
+    align-self: flex-start;
+    background-color: #fff;
+    color: #000;
+    border-bottom-left-radius: 0;
+}
+
+.asesor {
+    align-self: flex-start;
+    background-color: #f0f0f0;
+    color: #333;
+    border-bottom-left-radius: 0;
+}
+
+/* Área de input */
+.inputArea {
+    display: flex;
+    padding: 10px;
+    background-color: #fff;
+    border-top: 1px solid #ccc;
+}
+
+#messageInput {
+    flex: 1;
+    padding: 10px 15px;
+    border: 1px solid #ccc;
+    border-radius: 20px;
+    outline: none;
+    font-size: 14px;
+}
+
+button {
+    margin-left: 10px;
+    padding: 10px 16px;
+    background-color: #128c7e;
+    color: white;
+    border: none;
+    border-radius: 20px;
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+
+button:hover {
+    background-color: #0e7c71;
+}
+
+.asesor-activo {
+    background-color: #ff5c5c !important;
+    color: white;
+    font-weight: bold;
+}
