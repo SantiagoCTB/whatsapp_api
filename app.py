@@ -1,9 +1,10 @@
-from flask import Flask, request, jsonify, render_template
+from flask import Flask, request, jsonify, render_template, session, redirect, url_for, flash
 import requests
 import sqlite3
 import os
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
+import hashlib
 
 load_dotenv()
 
@@ -22,6 +23,8 @@ user_steps = {}
 def init_db():
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
+    
+    # Tabla mensajes
     c.execute('''
         CREATE TABLE IF NOT EXISTS mensajes (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -31,11 +34,33 @@ def init_db():
             timestamp TEXT
         )
     ''')
+    
+    # Tabla mensajes procesados
     c.execute('''
         CREATE TABLE IF NOT EXISTS mensajes_procesados (
             mensaje_id TEXT PRIMARY KEY
         )
     ''')
+
+    # Tabla de usuarios
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS usuarios (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE NOT NULL,
+            password TEXT NOT NULL,
+            rol TEXT NOT NULL
+        )
+    ''')
+
+    # Crear usuario admin si no existe
+    c.execute("SELECT * FROM usuarios WHERE username = 'admin'")
+    if not c.fetchone():
+        import hashlib
+        password = 'admin123'
+        hashed = hashlib.sha256(password.encode()).hexdigest()
+        c.execute("INSERT INTO usuarios (username, password, rol) VALUES (?, ?, ?)",
+                  ('admin', hashed, 'admin'))
+
     conn.commit()
     conn.close()
 
@@ -203,6 +228,9 @@ def webhook():
 
 @app.route('/')
 def index():
+    if "user" not in session:
+        return redirect(url_for("login"))
+
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute("SELECT DISTINCT numero FROM mensajes")
@@ -218,8 +246,12 @@ def index():
     conn.close()
     return render_template('index.html', chats=chats)
 
+
 @app.route('/get_chat/<numero>')
 def get_chat(numero):
+    if "user" not in session:
+        return redirect(url_for("login"))
+    
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute("SELECT mensaje, tipo, timestamp FROM mensajes WHERE numero = ? ORDER BY timestamp", (numero,))
@@ -229,6 +261,9 @@ def get_chat(numero):
 
 @app.route('/send_message', methods=['POST'])
 def send_message():
+    if "user" not in session:
+        return redirect(url_for("login"))
+    
     data = request.get_json()
     numero = data.get('numero')
     mensaje = data.get('mensaje')
@@ -237,6 +272,9 @@ def send_message():
 
 @app.route('/get_chat_list')
 def get_chat_list():
+    if "user" not in session:
+        return redirect(url_for("login"))
+    
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute("SELECT DISTINCT numero FROM mensajes")
@@ -251,6 +289,37 @@ def get_chat_list():
         chats.append({'numero': numero, 'asesor': requiere_asesor})
     conn.close()
     return jsonify(chats)
+
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    error = None
+    if request.method == "POST":
+        username = request.form["username"]
+        password = request.form["password"]
+        hashed = hashlib.sha256(password.encode()).hexdigest()
+
+        conn = sqlite3.connect(DB_PATH)
+        c = conn.cursor()
+        c.execute("SELECT * FROM usuarios WHERE username = ? AND password = ?", (username, hashed))
+        user = c.fetchone()
+        conn.close()
+
+        if user:
+            session["user"] = user[1]
+            session["rol"] = user[3]
+            return redirect("/")
+        else:
+            error = "Usuario o contraseña incorrectos"
+
+    return render_template("login.html", error=error)
+
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect(url_for("login"))
+
 
 if __name__ == '__main__':
     app.run(debug=True)
