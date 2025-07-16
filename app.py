@@ -165,7 +165,7 @@ def webhook():
                     from_number = message['from']
                     text = message['text']['body'].strip()
 
-                    # Verificar si el mensaje ya fue procesado
+                    # Verificar si ya se procesó
                     conn = sqlite3.connect(DB_PATH)
                     c = conn.cursor()
                     c.execute("SELECT 1 FROM mensajes_procesados WHERE mensaje_id = ?", (mensaje_id,))
@@ -176,54 +176,75 @@ def webhook():
                     conn.commit()
                     conn.close()
 
-                    # Guardar el mensaje del cliente
+                    # Guardar mensaje del cliente
                     guardar_mensaje(from_number, text, 'cliente')
 
-                    # Verificar timeout de sesión
+                    # Verificar timeout
                     now = datetime.now()
                     last_time = user_last_activity.get(from_number)
-
                     if last_time and (now - last_time).total_seconds() > SESSION_TIMEOUT:
-                        msg = "Muchas gracias por comunicarte con nosotros. La sesión se dará por terminada ya que no recibimos respuesta. ¡Te esperamos nuevamente por aquí!"
-                        enviar_mensaje(from_number, msg)
+                        enviar_mensaje(from_number, "Muchas gracias por comunicarte con nosotros. La sesión se dará por terminada por inactividad. ¡Te esperamos nuevamente por aquí!")
                         user_steps.pop(from_number, None)
-
                     user_last_activity[from_number] = now
 
-                    # Obtener el paso actual del usuario
+                    # Obtener paso actual
                     step = user_steps.get(from_number)
 
-                    # 🟢 Si no hay paso (primera vez), mostrar bienvenida automáticamente
+                    # Si no tiene paso aún → enviar bienvenida automática
                     if not step:
                         step = 'menu_principal'
                         user_steps[from_number] = step
                         conn = sqlite3.connect(DB_PATH)
                         c = conn.cursor()
                         c.execute("SELECT respuesta, siguiente_step FROM reglas WHERE step = ? AND input_text = ?", (step, 'iniciar'))
-                        regla = c.fetchone()
+                        bienvenida = c.fetchone()
                         conn.close()
 
-                        if regla:
-                            enviar_mensaje(from_number, regla[0])
-                            if regla[1]:
-                                user_steps[from_number] = regla[1]
+                        if bienvenida:
+                            enviar_mensaje(from_number, bienvenida[0])
+                            if bienvenida[1]:
+                                user_steps[from_number] = bienvenida[1]
                         return jsonify({"status": "sent_welcome"})
 
-                    # 🔄 Buscar regla correspondiente al paso y texto ingresado
+                    # Buscar regla para paso + input_text
                     conn = sqlite3.connect(DB_PATH)
                     c = conn.cursor()
-                    c.execute("SELECT respuesta, siguiente_step FROM reglas WHERE step = ? AND input_text = ?", (step, text))
+                    c.execute("SELECT respuesta, siguiente_step, tipo FROM reglas WHERE step = ? AND input_text = ?", (step, text))
                     regla = c.fetchone()
                     conn.close()
 
                     if regla:
-                        enviar_mensaje(from_number, regla[0])
-                        if regla[1]:
-                            user_steps[from_number] = regla[1]
+                        respuesta, siguiente, tipo = regla
+
+                        # Reinicio del flujo
+                        if tipo == 'reinicio':
+                            user_steps.pop(from_number, None)
+                            user_steps[from_number] = 'menu_principal'
+
+                            # Enviar confirmación + bienvenida
+                            enviar_mensaje(from_number, respuesta)
+
+                            conn = sqlite3.connect(DB_PATH)
+                            c = conn.cursor()
+                            c.execute("SELECT respuesta, siguiente_step FROM reglas WHERE step = 'menu_principal' AND input_text = 'iniciar'")
+                            bienvenida = c.fetchone()
+                            conn.close()
+
+                            if bienvenida:
+                                enviar_mensaje(from_number, bienvenida[0])
+                                if bienvenida[1]:
+                                    user_steps[from_number] = bienvenida[1]
+                            return jsonify({"status": "reiniciado"})
+
+                        # Respuesta normal
+                        enviar_mensaje(from_number, respuesta)
+                        if siguiente:
+                            user_steps[from_number] = siguiente
                     else:
                         enviar_mensaje(from_number, "Lo siento, no entendí tu respuesta. Por favor intenta nuevamente.")
 
     return jsonify({"status": "received"})
+
 
 @app.route('/eliminar_regla/<int:regla_id>', methods=['POST'])
 def eliminar_regla(regla_id):
