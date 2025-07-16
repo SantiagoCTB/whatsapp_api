@@ -1,2 +1,4 @@
 # Archivos de entorno
 .env
+database.db
+chat_support.db
