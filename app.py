@@ -250,22 +250,21 @@ def configuracion():
             hoja = wb.active
 
             for fila in hoja.iter_rows(min_row=2, values_only=True):
-                step, input_text, respuesta, siguiente_step, tipo = fila
+                step, input_text, respuesta, siguiente_step, tipo, opciones = fila
 
-                # Validar existencia
                 c.execute("SELECT id FROM reglas WHERE step = ? AND input_text = ?", (step, input_text))
                 existente = c.fetchone()
                 if existente:
                     c.execute('''
                         UPDATE reglas
-                        SET respuesta = ?, siguiente_step = ?, tipo = ?
+                        SET respuesta = ?, siguiente_step = ?, tipo = ?, opciones = ?
                         WHERE id = ?
-                    ''', (respuesta, siguiente_step, tipo, existente[0]))
+                    ''', (respuesta, siguiente_step, tipo, opciones, existente[0]))
                 else:
                     c.execute('''
-                        INSERT INTO reglas (step, input_text, respuesta, siguiente_step, tipo)
-                        VALUES (?, ?, ?, ?, ?)
-                    ''', (step, input_text, respuesta, siguiente_step, tipo))
+                        INSERT INTO reglas (step, input_text, respuesta, siguiente_step, tipo, opciones)
+                        VALUES (?, ?, ?, ?, ?, ?)
+                    ''', (step, input_text, respuesta, siguiente_step, tipo, opciones))
             conn.commit()
 
         else:
