@@ -93,14 +93,14 @@ def init_db():
 
 init_db()
 
-def enviar_mensaje(numero, mensaje, tipo='bot', formato='texto', opciones=None):
+def enviar_mensaje(numero, mensaje, tipo='bot', tipo_respuesta='texto', opciones=None):
     url = f"https://graph.facebook.com/v19.0/{PHONE_NUMBER_ID}/messages"
     headers = {
         "Authorization": f"Bearer {META_TOKEN}",
         "Content-Type": "application/json"
     }
 
-    if formato == 'texto':
+    if tipo_respuesta == 'texto':
         data = {
             "messaging_product": "whatsapp",
             "to": numero,
@@ -108,16 +108,9 @@ def enviar_mensaje(numero, mensaje, tipo='bot', formato='texto', opciones=None):
             "text": {"body": mensaje}
         }
 
-    elif formato == 'boton' and opciones:
-        buttons = [
-            {
-                "type": "reply",
-                "reply": {
-                    "id": f"opcion_{i}",
-                    "title": opcion.strip()
-                }
-            } for i, opcion in enumerate(opciones.split("||"))
-        ]
+    elif tipo_respuesta == 'boton':
+        # Hasta 3 botones
+        buttons = [{"type": "reply", "reply": {"id": f"btn_{i}", "title": op}} for i, op in enumerate(opciones[:3])]
         data = {
             "messaging_product": "whatsapp",
             "to": numero,
@@ -129,43 +122,28 @@ def enviar_mensaje(numero, mensaje, tipo='bot', formato='texto', opciones=None):
             }
         }
 
-    elif formato == 'lista' and opciones:
-        rows = [
-            {
-                "id": f"opcion_{i}",
-                "title": opcion.strip(),
-                "description": ""
-            } for i, opcion in enumerate(opciones.split("||"))
-        ]
+    elif tipo_respuesta == 'lista':
+        sections = [{
+            "title": "Opciones disponibles",
+            "rows": [{"id": f"opt_{i}", "title": op, "description": ""} for i, op in enumerate(opciones)]
+        }]
         data = {
             "messaging_product": "whatsapp",
             "to": numero,
             "type": "interactive",
             "interactive": {
                 "type": "list",
+                "header": {"type": "text", "text": "Menú"},
                 "body": {"text": mensaje},
+                "footer": {"text": "Selecciona una opción"},
                 "action": {
-                    "button": "Selecciona una opción",
-                    "sections": [
-                        {
-                            "title": "Opciones disponibles",
-                            "rows": rows
-                        }
-                    ]
+                    "button": "Ver opciones",
+                    "sections": sections
                 }
             }
         }
 
-    else:
-        # fallback a texto si no está bien configurado
-        data = {
-            "messaging_product": "whatsapp",
-            "to": numero,
-            "type": "text",
-            "text": {"body": mensaje}
-        }
-
-    response = requests.post(url, headers=headers, json=data)
+    requests.post(url, headers=headers, json=data)
     guardar_mensaje(numero, mensaje, tipo)
 
 
@@ -480,8 +458,10 @@ def webhook():
                     conn.close()
 
                     if regla:
-                        respuesta, siguiente, tipo, opciones = regla
-                        enviar_mensaje(from_number, respuesta, formato=tipo, opciones=opciones)
+                        respuesta, siguiente, tipo_respuesta, opciones_raw = regla
+                        opciones = opciones_raw.split("||") if opciones_raw else []
+
+                        enviar_mensaje(from_number, respuesta, tipo='bot', tipo_respuesta=tipo_respuesta, opciones=opciones)
                         if siguiente:
                             user_steps[from_number] = siguiente
                     else:
