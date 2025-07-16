@@ -165,7 +165,7 @@ def webhook():
                     from_number = message['from']
                     text = message['text']['body'].strip().lower()
 
-                    # Verificar si ya se procesó
+                    # Verificar duplicados
                     conn = sqlite3.connect(DB_PATH)
                     c = conn.cursor()
                     c.execute("SELECT 1 FROM mensajes_procesados WHERE mensaje_id = ?", (mensaje_id,))
@@ -176,10 +176,9 @@ def webhook():
                     conn.commit()
                     conn.close()
 
-                    # Guardar mensaje del cliente
                     guardar_mensaje(from_number, text, 'cliente')
 
-                    # Verificar timeout
+                    # Timeout de sesión
                     now = datetime.now()
                     last_time = user_last_activity.get(from_number)
                     if last_time and (now - last_time).total_seconds() > SESSION_TIMEOUT:
@@ -187,7 +186,7 @@ def webhook():
                         user_steps.pop(from_number, None)
                     user_last_activity[from_number] = now
 
-                    # 🔁 Palabras clave para reiniciar
+                    # Reinicio por palabra clave
                     if text in ['reiniciar', 'volver al inicio', 'inicio', 'menú', 'menu', 'ayuda']:
                         user_steps.pop(from_number, None)
                         user_steps[from_number] = 'menu_principal'
@@ -204,13 +203,12 @@ def webhook():
                             enviar_mensaje(from_number, bienvenida[0])
                             if bienvenida[1]:
                                 user_steps[from_number] = bienvenida[1]
+                        return jsonify({"status": "reiniciado"})
 
-                        return jsonify({"status": "reiniciado_por_palabra_clave"})
-
-                    # Obtener paso actual
+                    # Paso actual
                     step = user_steps.get(from_number)
 
-                    # Si no tiene paso aún → enviar bienvenida automática
+                    # Bienvenida automática
                     if not step:
                         step = 'menu_principal'
                         user_steps[from_number] = step
@@ -226,7 +224,41 @@ def webhook():
                                 user_steps[from_number] = bienvenida[1]
                         return jsonify({"status": "sent_welcome"})
 
-                    # Buscar regla para paso + input_text
+                    # 🔢 Lógica de medidas
+                    try:
+                        if step == 'barra_medida':
+                            medida = int(text)
+                            total = medida * 1700
+                            respuesta = f"El valor estimado para tu barra de largo {medida} cm es: {total:,} $ Pesos.\nSi deseas comunicarte con un asesor, ENVÍA 2."
+                            enviar_mensaje(from_number, respuesta)
+                            user_steps[from_number] = 'esperando_confirmacion'
+                            return jsonify({"status": "barra_ok"})
+
+                        elif step == 'meson_recto_medida':
+                            medida = int(text)
+                            total = (medida + 100) * 1700
+                            respuesta = f"El valor estimado para tu mesón recto es: {total:,} $ Pesos.\nSi deseas comunicarte con un asesor, ENVÍA 2."
+                            enviar_mensaje(from_number, respuesta)
+                            user_steps[from_number] = 'esperando_confirmacion'
+                            return jsonify({"status": "recto_ok"})
+
+                        elif step == 'meson_l_medida':
+                            partes = text.replace(" ", "").split("x")
+                            if len(partes) == 2:
+                                parte1, parte2 = map(int, partes)
+                                total = (parte1 + parte2 + 40) * 1700
+                                respuesta = f"El valor estimado para tu mesón en L es: {total:,} $ Pesos.\nSi deseas comunicarte con un asesor, ENVÍA 2."
+                                enviar_mensaje(from_number, respuesta)
+                                user_steps[from_number] = 'esperando_confirmacion'
+                                return jsonify({"status": "l_ok"})
+                            else:
+                                raise ValueError("Formato inválido")
+
+                    except Exception as e:
+                        enviar_mensaje(from_number, "Por favor ingresa la medida correctamente. Ej: 150 o 200 x 150")
+                        return jsonify({"status": "invalid_measure"})
+
+                    # Buscar regla en base de datos
                     conn = sqlite3.connect(DB_PATH)
                     c = conn.cursor()
                     c.execute("SELECT respuesta, siguiente_step, tipo FROM reglas WHERE step = ? AND input_text = ?", (step, text))
@@ -242,6 +274,7 @@ def webhook():
                         enviar_mensaje(from_number, "Lo siento, no entendí tu respuesta. Por favor intenta nuevamente.")
 
     return jsonify({"status": "received"})
+
 
 
 
