@@ -1,4 +1,12 @@
 # Archivos de entorno
 .env
-database.db
-chat_support.db
+.env.*
+
+# Bases de datos SQLite
+*.db
+*.db-journal
+
+# Archivos de log o temporales
+*.log
+__pycache__/
+*.pyc
