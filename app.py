@@ -103,16 +103,18 @@ def enviar_mensaje(numero, mensaje, tipo='bot', tipo_respuesta='texto', opciones
     if tipo_respuesta == 'texto':
         data = {
             "messaging_product": "whatsapp",
+            "recipient_type": "individual",
             "to": numero,
             "type": "text",
             "text": {"body": mensaje}
         }
 
     elif tipo_respuesta == 'boton':
-        # Hasta 3 botones
-        buttons = [{"type": "reply", "reply": {"id": f"btn_{i}", "title": op}} for i, op in enumerate(opciones[:3])]
+        buttons = [{"type": "reply", "reply": {"id": f"btn_{i}", "title": op}}
+                   for i, op in enumerate(opciones[:3])]
         data = {
             "messaging_product": "whatsapp",
+            "recipient_type": "individual",
             "to": numero,
             "type": "interactive",
             "interactive": {
@@ -125,10 +127,12 @@ def enviar_mensaje(numero, mensaje, tipo='bot', tipo_respuesta='texto', opciones
     elif tipo_respuesta == 'lista':
         sections = [{
             "title": "Opciones disponibles",
-            "rows": [{"id": f"opt_{i}", "title": op, "description": ""} for i, op in enumerate(opciones)]
+            "rows": [{"id": f"opt_{i}", "title": op, "description": ""}
+                     for i, op in enumerate(opciones)]
         }]
         data = {
             "messaging_product": "whatsapp",
+            "recipient_type": "individual",
             "to": numero,
             "type": "interactive",
             "interactive": {
@@ -143,9 +147,9 @@ def enviar_mensaje(numero, mensaje, tipo='bot', tipo_respuesta='texto', opciones
             }
         }
 
-    requests.post(url, headers=headers, json=data)
+    resp = requests.post(url, headers=headers, json=data)
+    print(f"[WhatsApp API] {resp.status_code} — {resp.text}")
     guardar_mensaje(numero, mensaje, tipo)
-
 
 
 def enviar_mensaje_boton(numero, mensaje, botones):
@@ -154,27 +158,25 @@ def enviar_mensaje_boton(numero, mensaje, botones):
         "Authorization": f"Bearer {META_TOKEN}",
         "Content-Type": "application/json"
     }
-
     botones_payload = [
         {"type": "reply", "reply": {"id": f"opcion_{i+1}", "title": btn.strip()}}
         for i, btn in enumerate(botones[:3])
     ]
-
     data = {
         "messaging_product": "whatsapp",
+        "recipient_type": "individual",
         "to": numero,
         "type": "interactive",
         "interactive": {
             "type": "button",
             "body": {"text": mensaje},
-            "action": {
-                "buttons": botones_payload
-            }
+            "action": {"buttons": botones_payload}
         }
     }
-
-    requests.post(url, headers=headers, json=data)
+    resp = requests.post(url, headers=headers, json=data)
+    print(f"[WhatsApp API] {resp.status_code} — {resp.text}")
     guardar_mensaje(numero, "[BOTÓN] " + mensaje, "bot")
+
 
 def enviar_mensaje_lista(numero, mensaje, opciones):
     url = f"https://graph.facebook.com/v23.0/{PHONE_NUMBER_ID}/messages"
@@ -182,7 +184,6 @@ def enviar_mensaje_lista(numero, mensaje, opciones):
         "Authorization": f"Bearer {META_TOKEN}",
         "Content-Type": "application/json"
     }
-
     lista_payload = [{
         "title": "Opciones",
         "rows": [
@@ -190,22 +191,24 @@ def enviar_mensaje_lista(numero, mensaje, opciones):
             for i, opt in enumerate(opciones[:10])
         ]
     }]
-
     data = {
         "messaging_product": "whatsapp",
+        "recipient_type": "individual",
         "to": numero,
         "type": "interactive",
         "interactive": {
             "type": "list",
+            "header": {"type": "text", "text": "Menú"},
             "body": {"text": mensaje},
+            "footer": {"text": "Selecciona una opción"},
             "action": {
                 "button": "Seleccionar",
                 "sections": lista_payload
             }
         }
     }
-
-    requests.post(url, headers=headers, json=data)
+    resp = requests.post(url, headers=headers, json=data)
+    print(f"[WhatsApp API] {resp.status_code} — {resp.text}")
     guardar_mensaje(numero, "[LISTA] " + mensaje, "bot")
 
 
