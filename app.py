@@ -86,20 +86,60 @@ def init_db():
 
 init_db()
 
-def enviar_mensaje(numero, mensaje, tipo='bot'):
+def enviar_mensaje(numero, mensaje, tipo='bot', interactivo=None):
     url = f"https://graph.facebook.com/v19.0/{PHONE_NUMBER_ID}/messages"
     headers = {
         "Authorization": f"Bearer {META_TOKEN}",
         "Content-Type": "application/json"
     }
-    data = {
-        "messaging_product": "whatsapp",
-        "to": numero,
-        "type": "text",
-        "text": {"body": mensaje}
-    }
+
+    if interactivo == "botones":
+        data = {
+            "messaging_product": "whatsapp",
+            "to": numero,
+            "type": "interactive",
+            "interactive": {
+                "type": "button",
+                "body": {"text": mensaje},
+                "action": {
+                    "buttons": [
+                        {"type": "reply", "reply": {"id": "btn_1", "title": "Sí"}},
+                        {"type": "reply", "reply": {"id": "btn_2", "title": "No"}}
+                    ]
+                }
+            }
+        }
+    elif interactivo == "lista":
+        data = {
+            "messaging_product": "whatsapp",
+            "to": numero,
+            "type": "interactive",
+            "interactive": {
+                "type": "list",
+                "body": {"text": mensaje},
+                "action": {
+                    "button": "Selecciona una opción",
+                    "sections": [{
+                        "title": "Opciones",
+                        "rows": [
+                            {"id": "op_1", "title": "Opción 1"},
+                            {"id": "op_2", "title": "Opción 2"}
+                        ]
+                    }]
+                }
+            }
+        }
+    else:
+        data = {
+            "messaging_product": "whatsapp",
+            "to": numero,
+            "type": "text",
+            "text": {"body": mensaje}
+        }
+
     requests.post(url, headers=headers, json=data)
     guardar_mensaje(numero, mensaje, tipo)
+
 
 def guardar_mensaje(numero, mensaje, tipo):
     conn = sqlite3.connect(DB_PATH)
@@ -350,7 +390,8 @@ def webhook():
 
                     if regla:
                         respuesta, siguiente, tipo = regla
-                        enviar_mensaje(from_number, respuesta)
+                        interactivo = tipo if tipo in ["botones", "lista"] else None
+                        enviar_mensaje(from_number, respuesta, tipo='bot', interactivo=interactivo)
                         if siguiente:
                             user_steps[from_number] = siguiente
                     else:
