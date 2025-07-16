@@ -66,27 +66,18 @@
         <button type="submit">Importar reglas</button>
     </form>
 
-    <!-- Agregar regla manual -->
-    <form method="POST">
-        <label for="step">Paso:</label>
-        <input type="text" name="step" required>
-
-        <label for="input_text">Entrada esperada:</label>
-        <input type="text" name="input_text" required>
-
-        <label for="respuesta">Respuesta del bot:</label>
-        <textarea name="respuesta" rows="3" required></textarea>
-
-        <label for="siguiente_step">Siguiente paso:</label>
-        <input type="text" name="siguiente_step">
-
-        <label for="tipo">Tipo de mensaje:</label>
-        <select name="tipo" required>
+    <!-- Agregar nueva regla -->
+    <form method="POST" enctype="multipart/form-data">
+        <input type="text" name="step" placeholder="Paso" required>
+        <input type="text" name="input_text" placeholder="Texto de entrada" required>
+        <input type="text" name="respuesta" placeholder="Mensaje de respuesta" required>
+        <input type="text" name="siguiente_step" placeholder="Siguiente paso">
+        <select name="tipo">
             <option value="texto">Texto</option>
-            <option value="botones">Botones (Sí / No)</option>
-            <option value="lista">Lista desplegable</option>
+            <option value="boton">Botón</option>
+            <option value="lista">Lista</option>
         </select>
-
+        <input type="text" name="opciones" placeholder="Opciones separadas por || (solo para botones/listas)">
         <button type="submit">Guardar regla</button>
     </form>
 
@@ -100,6 +91,7 @@
             <th>Respuesta</th>
             <th>Siguiente</th>
             <th>Tipo</th>
+            <th>Opciones</th>
             <th>Acción</th>
         </tr>
         {% for r in reglas %}
@@ -108,8 +100,9 @@
             <td>{{ r[1] }}</td>
             <td>{{ r[2] }}</td>
             <td>{{ r[3] }}</td>
-            <td>{{ r[4] }}</td>
-            <td>{{ r[5] }}</td>
+            <td>{{ r[4] or '' }}</td>
+            <td>{{ r[5] or 'texto' }}</td>
+            <td>{{ r[6] or '' }}</td>
             <td>
                 <form method="POST" action="{{ url_for('eliminar_regla', regla_id=r[0]) }}">
                     <button class="delete-btn" type="submit">Eliminar</button>

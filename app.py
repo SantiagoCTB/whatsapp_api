@@ -52,7 +52,7 @@ def init_db():
         )
     ''')
 
-    # Tabla de reglas de automatización
+    # Tabla de reglas de automatización (con soporte para tipo y opciones interactivas)
     c.execute('''
         CREATE TABLE IF NOT EXISTS reglas (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -60,7 +60,8 @@ def init_db():
             input_text TEXT NOT NULL,
             respuesta TEXT NOT NULL,
             siguiente_step TEXT,
-            tipo TEXT DEFAULT 'texto'
+            tipo TEXT DEFAULT 'texto',  -- texto, boton, lista
+            opciones TEXT DEFAULT NULL  -- Opciones separadas por || para botones o listas
         )
     ''')
 
@@ -140,6 +141,67 @@ def enviar_mensaje(numero, mensaje, tipo='bot', interactivo=None):
     requests.post(url, headers=headers, json=data)
     guardar_mensaje(numero, mensaje, tipo)
 
+def enviar_mensaje_boton(numero, mensaje, botones):
+    url = f"https://graph.facebook.com/v19.0/{PHONE_NUMBER_ID}/messages"
+    headers = {
+        "Authorization": f"Bearer {META_TOKEN}",
+        "Content-Type": "application/json"
+    }
+
+    botones_payload = [
+        {"type": "reply", "reply": {"id": f"opcion_{i+1}", "title": btn.strip()}}
+        for i, btn in enumerate(botones[:3])
+    ]
+
+    data = {
+        "messaging_product": "whatsapp",
+        "to": numero,
+        "type": "interactive",
+        "interactive": {
+            "type": "button",
+            "body": {"text": mensaje},
+            "action": {
+                "buttons": botones_payload
+            }
+        }
+    }
+
+    requests.post(url, headers=headers, json=data)
+    guardar_mensaje(numero, "[BOTÓN] " + mensaje, "bot")
+
+def enviar_mensaje_lista(numero, mensaje, opciones):
+    url = f"https://graph.facebook.com/v19.0/{PHONE_NUMBER_ID}/messages"
+    headers = {
+        "Authorization": f"Bearer {META_TOKEN}",
+        "Content-Type": "application/json"
+    }
+
+    lista_payload = [{
+        "title": "Opciones",
+        "rows": [
+            {"id": f"opcion_{i+1}", "title": opt.strip()}
+            for i, opt in enumerate(opciones[:10])
+        ]
+    }]
+
+    data = {
+        "messaging_product": "whatsapp",
+        "to": numero,
+        "type": "interactive",
+        "interactive": {
+            "type": "list",
+            "body": {"text": mensaje},
+            "action": {
+                "button": "Seleccionar",
+                "sections": lista_payload
+            }
+        }
+    }
+
+    requests.post(url, headers=headers, json=data)
+    guardar_mensaje(numero, "[LISTA] " + mensaje, "bot")
+
+
 
 def guardar_mensaje(numero, mensaje, tipo):
     conn = sqlite3.connect(DB_PATH)
@@ -193,20 +255,21 @@ def configuracion():
             respuesta = request.form['respuesta']
             siguiente_step = request.form['siguiente_step']
             tipo = request.form['tipo']
+            opciones = request.form.get('opciones', None)
 
             c.execute("SELECT id FROM reglas WHERE step = ? AND input_text = ?", (step, input_text))
             existente = c.fetchone()
             if existente:
                 c.execute('''
                     UPDATE reglas
-                    SET respuesta = ?, siguiente_step = ?, tipo = ?
+                    SET respuesta = ?, siguiente_step = ?, tipo = ?, opciones = ?
                     WHERE id = ?
-                ''', (respuesta, siguiente_step, tipo, existente[0]))
+                ''', (respuesta, siguiente_step, tipo, opciones, existente[0]))
             else:
                 c.execute('''
-                    INSERT INTO reglas (step, input_text, respuesta, siguiente_step, tipo)
-                    VALUES (?, ?, ?, ?, ?)
-                ''', (step, input_text, respuesta, siguiente_step, tipo))
+                    INSERT INTO reglas (step, input_text, respuesta, siguiente_step, tipo, opciones)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                ''', (step, input_text, respuesta, siguiente_step, tipo, opciones))
 
             conn.commit()
 
@@ -384,14 +447,24 @@ def webhook():
                     # Consultar reglas desde la base
                     conn = sqlite3.connect(DB_PATH)
                     c = conn.cursor()
-                    c.execute("SELECT respuesta, siguiente_step, tipo FROM reglas WHERE step = ? AND input_text = ?", (step, text))
+                    c.execute("SELECT respuesta, siguiente_step, tipo, opciones FROM reglas WHERE step = ? AND input_text = ?", (step, text))
                     regla = c.fetchone()
                     conn.close()
 
                     if regla:
-                        respuesta, siguiente, tipo = regla
-                        interactivo = tipo if tipo in ["botones", "lista"] else None
-                        enviar_mensaje(from_number, respuesta, tipo='bot', interactivo=interactivo)
+                        respuesta, siguiente, tipo, opciones = regla
+
+                        if tipo == "boton":
+                            botones = opciones.split("||") if opciones else []
+                            enviar_mensaje_boton(from_number, respuesta, botones)
+                        
+                        elif tipo == "lista":
+                            items = opciones.split("||") if opciones else []
+                            enviar_mensaje_lista(from_number, respuesta, items)
+                        
+                        else:
+                            enviar_mensaje(from_number, respuesta)
+
                         if siguiente:
                             user_steps[from_number] = siguiente
                     else:
