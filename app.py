@@ -100,17 +100,24 @@ def enviar_mensaje(numero, mensaje, tipo='bot', formato='texto', opciones=None):
         "Content-Type": "application/json"
     }
 
-    if formato == 'boton' and opciones:
-        botones = []
-        for i, texto_boton in enumerate(opciones.split("||")):
-            botones.append({
+    if formato == 'texto':
+        data = {
+            "messaging_product": "whatsapp",
+            "to": numero,
+            "type": "text",
+            "text": {"body": mensaje}
+        }
+
+    elif formato == 'boton' and opciones:
+        buttons = [
+            {
                 "type": "reply",
                 "reply": {
-                    "id": f"btn_{i}",
-                    "title": texto_boton.strip()
+                    "id": f"opcion_{i}",
+                    "title": opcion.strip()
                 }
-            })
-
+            } for i, opcion in enumerate(opciones.split("||"))
+        ]
         data = {
             "messaging_product": "whatsapp",
             "to": numero,
@@ -118,19 +125,18 @@ def enviar_mensaje(numero, mensaje, tipo='bot', formato='texto', opciones=None):
             "interactive": {
                 "type": "button",
                 "body": {"text": mensaje},
-                "action": {
-                    "buttons": botones
-                }
+                "action": {"buttons": buttons}
             }
         }
 
     elif formato == 'lista' and opciones:
-        items = [{
-            "id": f"item_{i}",
-            "title": opt.strip(),
-            "description": ""
-        } for i, opt in enumerate(opciones.split("||"))]
-
+        rows = [
+            {
+                "id": f"opcion_{i}",
+                "title": opcion.strip(),
+                "description": ""
+            } for i, opcion in enumerate(opciones.split("||"))
+        ]
         data = {
             "messaging_product": "whatsapp",
             "to": numero,
@@ -139,17 +145,19 @@ def enviar_mensaje(numero, mensaje, tipo='bot', formato='texto', opciones=None):
                 "type": "list",
                 "body": {"text": mensaje},
                 "action": {
-                    "button": "Seleccionar",
-                    "sections": [{
-                        "title": "Opciones",
-                        "rows": items
-                    }]
+                    "button": "Selecciona una opción",
+                    "sections": [
+                        {
+                            "title": "Opciones disponibles",
+                            "rows": rows
+                        }
+                    ]
                 }
             }
         }
 
     else:
-        # Enviar mensaje de texto normal
+        # fallback a texto si no está bien configurado
         data = {
             "messaging_product": "whatsapp",
             "to": numero,
@@ -157,8 +165,9 @@ def enviar_mensaje(numero, mensaje, tipo='bot', formato='texto', opciones=None):
             "text": {"body": mensaje}
         }
 
-    requests.post(url, headers=headers, json=data)
+    response = requests.post(url, headers=headers, json=data)
     guardar_mensaje(numero, mensaje, tipo)
+
 
 
 def enviar_mensaje_boton(numero, mensaje, botones):
@@ -472,7 +481,7 @@ def webhook():
 
                     if regla:
                         respuesta, siguiente, tipo, opciones = regla
-                        enviar_mensaje(from_number, respuesta, tipo='bot', formato=tipo, opciones=opciones)
+                        enviar_mensaje(from_number, respuesta, formato=tipo, opciones=opciones)
                         if siguiente:
                             user_steps[from_number] = siguiente
                     else:
