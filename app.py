@@ -473,18 +473,7 @@ def webhook():
 
                     if regla:
                         respuesta, siguiente, tipo, opciones = regla
-
-                        if tipo == "boton":
-                            botones = opciones.split("||") if opciones else []
-                            enviar_mensaje_boton(from_number, respuesta, botones)
-                        
-                        elif tipo == "lista":
-                            items = opciones.split("||") if opciones else []
-                            enviar_mensaje_lista(from_number, respuesta, items)
-                        
-                        else:
-                            enviar_mensaje(from_number, respuesta)
-
+                        enviar_mensaje(from_number, respuesta, tipo='bot', formato=tipo, opciones=opciones)
                         if siguiente:
                             user_steps[from_number] = siguiente
                     else:
