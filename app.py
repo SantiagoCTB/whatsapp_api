@@ -111,38 +111,63 @@ def configuracion():
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
 
+    # Cargar archivo Excel si se sube
     if request.method == 'POST':
-        step = request.form['step']
-        input_text = request.form['input_text']
-        respuesta = request.form['respuesta']
-        siguiente_step = request.form['siguiente_step']
-        tipo = request.form['tipo']
+        if 'archivo' in request.files:
+            from openpyxl import load_workbook
+            archivo = request.files['archivo']
+            wb = load_workbook(archivo)
+            hoja = wb.active
 
-        # Si ya existe una regla con ese step + input_text, actualizamos
-        c.execute('''
-            SELECT id FROM reglas WHERE step = ? AND input_text = ?
-        ''', (step, input_text))
-        existente = c.fetchone()
+            for fila in hoja.iter_rows(min_row=2, values_only=True):
+                step, input_text, respuesta, siguiente_step, tipo = fila
 
-        if existente:
-            c.execute('''
-                UPDATE reglas
-                SET respuesta = ?, siguiente_step = ?, tipo = ?
-                WHERE id = ?
-            ''', (respuesta, siguiente_step, tipo, existente[0]))
+                # Validar existencia
+                c.execute("SELECT id FROM reglas WHERE step = ? AND input_text = ?", (step, input_text))
+                existente = c.fetchone()
+                if existente:
+                    c.execute('''
+                        UPDATE reglas
+                        SET respuesta = ?, siguiente_step = ?, tipo = ?
+                        WHERE id = ?
+                    ''', (respuesta, siguiente_step, tipo, existente[0]))
+                else:
+                    c.execute('''
+                        INSERT INTO reglas (step, input_text, respuesta, siguiente_step, tipo)
+                        VALUES (?, ?, ?, ?, ?)
+                    ''', (step, input_text, respuesta, siguiente_step, tipo))
+            conn.commit()
+
         else:
-            c.execute('''
-                INSERT INTO reglas (step, input_text, respuesta, siguiente_step, tipo)
-                VALUES (?, ?, ?, ?, ?)
-            ''', (step, input_text, respuesta, siguiente_step, tipo))
+            # Carga desde formulario manual
+            step = request.form['step']
+            input_text = request.form['input_text']
+            respuesta = request.form['respuesta']
+            siguiente_step = request.form['siguiente_step']
+            tipo = request.form['tipo']
 
-        conn.commit()
+            c.execute("SELECT id FROM reglas WHERE step = ? AND input_text = ?", (step, input_text))
+            existente = c.fetchone()
+            if existente:
+                c.execute('''
+                    UPDATE reglas
+                    SET respuesta = ?, siguiente_step = ?, tipo = ?
+                    WHERE id = ?
+                ''', (respuesta, siguiente_step, tipo, existente[0]))
+            else:
+                c.execute('''
+                    INSERT INTO reglas (step, input_text, respuesta, siguiente_step, tipo)
+                    VALUES (?, ?, ?, ?, ?)
+                ''', (step, input_text, respuesta, siguiente_step, tipo))
+
+            conn.commit()
 
     c.execute("SELECT * FROM reglas ORDER BY step, id")
     reglas = c.fetchall()
     conn.close()
 
     return render_template('configuracion.html', reglas=reglas)
+
 
 
 @app.route('/webhook', methods=['GET', 'POST'])
