@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Configuración de Reglas</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+        }
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            margin-top: 20px;
+        }
+        th, td {
+            border: 1px solid #999;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+        form {
+            margin-bottom: 20px;
+        }
+        input, textarea {
+            width: 100%;
+            padding: 6px;
+            margin-bottom: 8px;
+        }
+    </style>
+</head>
+<body>
+    <h2>Configuración de reglas automáticas</h2>
+    <form method="POST">
+        <label>Paso actual (step):</label>
+        <input type="text" name="step" required>
+
+        <label>Texto del usuario (input_text):</label>
+        <input type="text" name="input_text" required>
+
+        <label>Respuesta que enviará el bot:</label>
+        <textarea name="respuesta" required></textarea>
+
+        <label>Paso siguiente (opcional):</label>
+        <input type="text" name="siguiente_step">
+
+        <label>Tipo (texto, cierre, pregunta...):</label>
+        <input type="text" name="tipo" value="texto">
+
+        <button type="submit">Guardar regla</button>
+    </form>
+
+    <table>
+        <tr>
+            <th>ID</th>
+            <th>Step</th>
+            <th>Input</th>
+            <th>Respuesta</th>
+            <th>Siguiente</th>
+            <th>Tipo</th>
+            <th>Acción</th>
+        </tr>
+        {% for r in reglas %}
+        <tr>
+            <td>{{ r[0] }}</td>
+            <td>{{ r[1] }}</td>
+            <td>{{ r[2] }}</td>
+            <td>{{ r[3] }}</td>
+            <td>{{ r[4] }}</td>
+            <td>{{ r[5] }}</td>
+            <td>
+                <form method="POST" action="{{ url_for('eliminar_regla', regla_id=r[0]) }}" onsubmit="return confirm('¿Estás seguro de eliminar esta regla?');">
+                    <button type="submit" style="background-color:#e74c3c; color:white; border:none; padding:6px 10px; border-radius:4px; cursor:pointer;">Eliminar</button>
+                </form>
+            </td>
+        </tr>
+        {% endfor %}
+    </table>
+</body>
+</html>

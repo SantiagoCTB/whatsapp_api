@@ -52,6 +52,18 @@ def init_db():
         )
     ''')
 
+    # Tabla de reglas de automatización
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS reglas (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            step TEXT NOT NULL,
+            input_text TEXT NOT NULL,
+            respuesta TEXT NOT NULL,
+            siguiente_step TEXT,
+            tipo TEXT DEFAULT 'texto'
+        )
+    ''')
+
     # Crear usuario admin si no existe
     c.execute("SELECT * FROM usuarios WHERE username = 'admin'")
     if not c.fetchone():
@@ -89,6 +101,50 @@ def guardar_mensaje(numero, mensaje, tipo):
     conn.commit()
     conn.close()
 
+from flask import render_template, request, redirect, session, url_for
+
+@app.route('/configuracion', methods=['GET', 'POST'])
+def configuracion():
+    if "user" not in session or session["rol"] != "admin":
+        return redirect(url_for("login"))
+
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+
+    if request.method == 'POST':
+        step = request.form['step']
+        input_text = request.form['input_text']
+        respuesta = request.form['respuesta']
+        siguiente_step = request.form['siguiente_step']
+        tipo = request.form['tipo']
+
+        # Si ya existe una regla con ese step + input_text, actualizamos
+        c.execute('''
+            SELECT id FROM reglas WHERE step = ? AND input_text = ?
+        ''', (step, input_text))
+        existente = c.fetchone()
+
+        if existente:
+            c.execute('''
+                UPDATE reglas
+                SET respuesta = ?, siguiente_step = ?, tipo = ?
+                WHERE id = ?
+            ''', (respuesta, siguiente_step, tipo, existente[0]))
+        else:
+            c.execute('''
+                INSERT INTO reglas (step, input_text, respuesta, siguiente_step, tipo)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (step, input_text, respuesta, siguiente_step, tipo))
+
+        conn.commit()
+
+    c.execute("SELECT * FROM reglas ORDER BY step, id")
+    reglas = c.fetchall()
+    conn.close()
+
+    return render_template('configuracion.html', reglas=reglas)
+
+
 @app.route('/webhook', methods=['GET', 'POST'])
 def webhook():
     if request.method == 'GET':
@@ -97,6 +153,7 @@ def webhook():
         return 'Forbidden', 403
 
     data = request.get_json()
+
     if data.get('object'):
         for entry in data.get('entry', []):
             for change in entry.get('changes', []):
@@ -108,7 +165,7 @@ def webhook():
                     from_number = message['from']
                     text = message['text']['body'].strip()
 
-                    # Evitar duplicados
+                    # Verificar si el mensaje ya fue procesado
                     conn = sqlite3.connect(DB_PATH)
                     c = conn.cursor()
                     c.execute("SELECT 1 FROM mensajes_procesados WHERE mensaje_id = ?", (mensaje_id,))
@@ -119,112 +176,68 @@ def webhook():
                     conn.commit()
                     conn.close()
 
+                    # Guardar el mensaje del cliente
                     guardar_mensaje(from_number, text, 'cliente')
 
+                    # Verificar timeout de sesión
                     now = datetime.now()
                     last_time = user_last_activity.get(from_number)
 
                     if last_time and (now - last_time).total_seconds() > SESSION_TIMEOUT:
-                        msg = "Muchas gracias por comunicarte con nosotros, la sesión se dará por terminada ya que no recibimos respuesta, te esperamos nuevamente por aquí !"
+                        msg = "Muchas gracias por comunicarte con nosotros. La sesión se dará por terminada ya que no recibimos respuesta. ¡Te esperamos nuevamente por aquí!"
                         enviar_mensaje(from_number, msg)
                         user_steps.pop(from_number, None)
 
                     user_last_activity[from_number] = now
-                    step = user_steps.get(from_number, 'menu_principal')
 
-                    if step == 'menu_principal':
-                        menu = (
-                            "Hola! Es un gusto para nosotros en Aceros Tecnimedellín atenderte! Somos especialistas en TODO en ACERO.\n\n"
-                            "Para atenderte mira nuestras opciones y ÚNICAMENTE manda el NÚMERO de la opción que estás interesado/a:\n\n"
-                            "1. Hacer una cotización\n"
-                            "2. Averiguar por el estado de mi pedido\n"
-                            "3. Quiero ver el catálogo\n"
-                            "4. Comunicarme con un asesor"
-                        )
-                        enviar_mensaje(from_number, menu)
-                        user_steps[from_number] = 'esperando_opcion_principal'
+                    # Obtener el paso actual del usuario
+                    step = user_steps.get(from_number)
 
-                    elif step == 'esperando_opcion_principal':
-                        if text == '1':
-                            submenu = (
-                                "¿Qué tipo de producto deseas cotizar?\n\n"
-                                "1. Barra recta sin lavaplatos\n"
-                                "2. Mesón recto con lavaplatos\n"
-                                "3. Mesón en L con lavaplatos\n"
-                                "4. Comunicarme con un asesor"
-                            )
-                            enviar_mensaje(from_number, submenu)
-                            user_steps[from_number] = 'cotizacion_tipo'
+                    # 🟢 Si no hay paso (primera vez), mostrar bienvenida automáticamente
+                    if not step:
+                        step = 'menu_principal'
+                        user_steps[from_number] = step
+                        conn = sqlite3.connect(DB_PATH)
+                        c = conn.cursor()
+                        c.execute("SELECT respuesta, siguiente_step FROM reglas WHERE step = ? AND input_text = ?", (step, 'iniciar'))
+                        regla = c.fetchone()
+                        conn.close()
 
-                        elif text == '4':
-                            msg = "Un asesor te contactará pronto."
-                            enviar_mensaje(from_number, msg)
-                            user_steps[from_number] = 'menu_principal'
+                        if regla:
+                            enviar_mensaje(from_number, regla[0])
+                            if regla[1]:
+                                user_steps[from_number] = regla[1]
+                        return jsonify({"status": "sent_welcome"})
 
-                        else:
-                            msg = "Por favor responde con una opción válida del 1 al 4."
-                            enviar_mensaje(from_number, msg)
+                    # 🔄 Buscar regla correspondiente al paso y texto ingresado
+                    conn = sqlite3.connect(DB_PATH)
+                    c = conn.cursor()
+                    c.execute("SELECT respuesta, siguiente_step FROM reglas WHERE step = ? AND input_text = ?", (step, text))
+                    regla = c.fetchone()
+                    conn.close()
 
-                    elif step == 'cotizacion_tipo':
-                        if text == '1':
-                            enviar_mensaje(from_number, "Ingrese la medida de la BARRA en CENTÍMETROS, Ejemplo: 150")
-                            user_steps[from_number] = 'barra_medida'
-
-                        elif text == '2':
-                            enviar_mensaje(from_number, "Ingrese la medida del mesón recto con lavaplatos en CENTÍMETROS, Ejemplo: 150")
-                            user_steps[from_number] = 'meson_recto_medida'
-
-                        elif text == '3':
-                            enviar_mensaje(from_number, "Ingrese las medidas del mesón en L (ejemplo: 200 x 150).")
-                            # enviar_mensaje(from_number, "[Imagen ilustrativa]")
-                            user_steps[from_number] = 'meson_l_medida'
-
-                        elif text == '4':
-                            enviar_mensaje(from_number, "Te conectaremos con un asesor.")
-                            user_steps[from_number] = 'menu_principal'
-                            return jsonify({"status": "waiting_for_asesor"})
-
-                        else:
-                            enviar_mensaje(from_number, "Opción no válida. Responde con 1 a 4.")
-
-                    elif step == 'barra_medida':
-                        try:
-                            medida = int(text)
-                            total = medida * 1700
-                            respuesta = f"El valor estimado para tu barra de largo {medida} cm es: {total:,} $ Pesos.\nSi quieres hacer la orden y comunicarte con un asesor, ENVÍA 2."
-                            enviar_mensaje(from_number, respuesta)
-                            user_steps[from_number] = 'esperando_confirmacion'
-                        except:
-                            enviar_mensaje(from_number, "Por favor, ingresa solo la medida en números. Ejemplo: 150")
-
-                    elif step == 'meson_recto_medida':
-                        try:
-                            medida = int(text)
-                            total = (medida + 100) * 1700
-                            respuesta = f"El valor estimado para tu mesón recto es: {total:,} $ Pesos.\nSi quieres hacer la orden y comunicarte con un asesor, ENVÍA 2."
-                            enviar_mensaje(from_number, respuesta)
-                            user_steps[from_number] = 'esperando_confirmacion'
-                        except:
-                            enviar_mensaje(from_number, "Por favor, ingresa solo la medida en números. Ejemplo: 150")
-
-                    elif step == 'meson_l_medida':
-                        try:
-                            parte1, parte2 = map(int, text.lower().replace(" ", "").split("x"))
-                            total = (parte1 + parte2 + 40) * 1700
-                            respuesta = f"El valor estimado para tu mesón en L es: {total:,} $ Pesos.\nSi quieres hacer la orden y comunicarte con un asesor, ENVÍA 2."
-                            enviar_mensaje(from_number, respuesta)
-                            user_steps[from_number] = 'esperando_confirmacion'
-                        except:
-                            enviar_mensaje(from_number, "Por favor ingresa el formato correctamente: 200 x 150")
-
-                    elif step == 'esperando_confirmacion':
-                        if text == '2':
-                            enviar_mensaje(from_number, "Un asesor te contactará pronto para finalizar tu pedido.")
-                            user_steps[from_number] = 'menu_principal'
-                        else:
-                            enviar_mensaje(from_number, "Si deseas comunicarte con un asesor para tu pedido, ENVÍA 2.")
+                    if regla:
+                        enviar_mensaje(from_number, regla[0])
+                        if regla[1]:
+                            user_steps[from_number] = regla[1]
+                    else:
+                        enviar_mensaje(from_number, "Lo siento, no entendí tu respuesta. Por favor intenta nuevamente.")
 
     return jsonify({"status": "received"})
+
+@app.route('/eliminar_regla/<int:regla_id>', methods=['POST'])
+def eliminar_regla(regla_id):
+    if "user" not in session or session["rol"] != "admin":
+        return redirect(url_for("login"))
+
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("DELETE FROM reglas WHERE id = ?", (regla_id,))
+    conn.commit()
+    conn.close()
+    
+    return redirect(url_for("configuracion"))
+
 
 @app.route('/')
 def index():
