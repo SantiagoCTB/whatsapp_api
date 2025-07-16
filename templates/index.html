@@ -6,11 +6,20 @@
     <link rel="stylesheet" href="/static/style.css">
 </head>
 
-<a href="{{ url_for('logout') }}"
-   style="position: absolute; bottom: 20px; left: 20px; background-color: #e74c3c; color: white;
-          padding: 8px 16px; text-decoration: none; border-radius: 5px; font-size: 14px;">
-    Cerrar sesión
-</a>
+<div style="position: absolute; bottom: 20px; left: 20px; display: flex; gap: 10px;">
+    <a href="{{ url_for('configuracion') }}"
+       style="background-color: #2980b9; color: white;
+              padding: 8px 16px; text-decoration: none;
+              border-radius: 5px; font-size: 14px;">
+        Configuración
+    </a>
+    <a href="{{ url_for('logout') }}"
+       style="background-color: #e74c3c; color: white;
+              padding: 8px 16px; text-decoration: none;
+              border-radius: 5px; font-size: 14px;">
+        Cerrar sesión
+    </a>
+</div>
 
 <body>
     <div class="container">

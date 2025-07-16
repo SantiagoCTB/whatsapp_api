@@ -1,84 +1,124 @@
 <!DOCTYPE html>
-<html>
+<html lang="es">
 <head>
+    <meta charset="UTF-8">
     <title>Configuración de Reglas</title>
     <style>
         body {
-            font-family: Arial, sans-serif;
+            font-family: 'Segoe UI', sans-serif;
+            background-color: #f4f6f9;
+            margin: 0;
             padding: 20px;
         }
-        table {
-            border-collapse: collapse;
-            width: 100%;
-            margin-top: 20px;
+        h2, h3 {
+            color: #2c3e50;
         }
-        th, td {
-            border: 1px solid #999;
-            padding: 8px;
-            text-align: left;
-        }
-        th {
-            background-color: #f2f2f2;
-        }
-        form {
+        form, table {
+            background-color: white;
+            border-radius: 8px;
+            padding: 20px;
             margin-bottom: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
         }
-        input, textarea {
+        input, select, textarea {
             width: 100%;
-            padding: 6px;
-            margin-bottom: 8px;
+            padding: 8px;
+            margin-top: 6px;
+            margin-bottom: 16px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        button {
+            background-color: #27ae60;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #219150;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+        table th, table td {
+            text-align: left;
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+        }
+        .delete-btn {
+            background-color: #e74c3c;
+            color: white;
+            padding: 6px 12px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        .top-buttons {
+            display: flex;
+            justify-content: flex-end;
+            margin-bottom: 10px;
+            gap: 10px;
         }
     </style>
 </head>
 <body>
-    <h2>Configuración de reglas automáticas</h2>
+    <h2>Configuración de Reglas</h2>
+
     <form method="POST">
-        <label>Paso actual (step):</label>
-        <input type="text" name="step" required>
+        <h3>Agregar o actualizar regla</h3>
+        <label for="step">Paso actual:</label>
+        <input type="text" id="step" name="step" required>
 
-        <label>Texto del usuario (input_text):</label>
-        <input type="text" name="input_text" required>
+        <label for="input_text">Texto del usuario:</label>
+        <input type="text" id="input_text" name="input_text" required>
 
-        <label>Respuesta que enviará el bot:</label>
-        <textarea name="respuesta" required></textarea>
+        <label for="respuesta">Respuesta del bot:</label>
+        <textarea id="respuesta" name="respuesta" rows="4" required></textarea>
 
-        <label>Paso siguiente (opcional):</label>
-        <input type="text" name="siguiente_step">
+        <label for="siguiente_step">Siguiente paso:</label>
+        <input type="text" id="siguiente_step" name="siguiente_step">
 
-        <label>Tipo (texto, cierre, pregunta...):</label>
-        <input type="text" name="tipo" value="texto">
+        <label for="tipo">Tipo:</label>
+        <select name="tipo" id="tipo">
+            <option value="texto" selected>texto</option>
+        </select>
 
         <button type="submit">Guardar regla</button>
     </form>
 
-    <hr>
-    <h3>Importar reglas desde archivo Excel</h3>
     <form method="POST" enctype="multipart/form-data">
+        <h3>Importar reglas desde archivo Excel (.xlsx)</h3>
         <input type="file" name="archivo" accept=".xlsx" required>
         <button type="submit">Importar reglas</button>
     </form>
 
+    <h3>Reglas existentes</h3>
     <table>
         <tr>
             <th>ID</th>
-            <th>Step</th>
+            <th>Paso</th>
             <th>Input</th>
             <th>Respuesta</th>
-            <th>Siguiente</th>
+            <th>Siguiente paso</th>
             <th>Tipo</th>
             <th>Acción</th>
         </tr>
-        {% for r in reglas %}
+        {% for regla in reglas %}
         <tr>
-            <td>{{ r[0] }}</td>
-            <td>{{ r[1] }}</td>
-            <td>{{ r[2] }}</td>
-            <td>{{ r[3] }}</td>
-            <td>{{ r[4] }}</td>
-            <td>{{ r[5] }}</td>
+            <td>{{ regla[0] }}</td>
+            <td>{{ regla[1] }}</td>
+            <td>{{ regla[2] }}</td>
+            <td>{{ regla[3] }}</td>
+            <td>{{ regla[4] or '-' }}</td>
+            <td>{{ regla[5] }}</td>
             <td>
-                <form method="POST" action="{{ url_for('eliminar_regla', regla_id=r[0]) }}" onsubmit="return confirm('¿Estás seguro de eliminar esta regla?');">
-                    <button type="submit" style="background-color:#e74c3c; color:white; border:none; padding:6px 10px; border-radius:4px; cursor:pointer;">Eliminar</button>
+                <form method="POST" action="{{ url_for('eliminar_regla', regla_id=regla[0]) }}">
+                    <button class="delete-btn" type="submit">Eliminar</button>
                 </form>
             </td>
         </tr>
