@@ -461,7 +461,7 @@ def webhook():
                         respuesta, siguiente, tipo_respuesta, opciones_raw = regla
                         opciones = opciones_raw.split("||") if opciones_raw else []
 
-                        enviar_mensaje(from_number, respuesta, tipo='bot', tipo_respuesta=tipo_respuesta, opciones=opciones)
+                        enviar_mensaje(from_number, respuesta, tipo_respuesta=tipo_respuesta, opciones=opciones)
                         if siguiente:
                             user_steps[from_number] = siguiente
                     else:
