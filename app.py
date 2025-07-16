@@ -93,14 +93,24 @@ def init_db():
 
 init_db()
 
-def enviar_mensaje(numero, mensaje, tipo='bot', interactivo=None):
+def enviar_mensaje(numero, mensaje, tipo='bot', formato='texto', opciones=None):
     url = f"https://graph.facebook.com/v19.0/{PHONE_NUMBER_ID}/messages"
     headers = {
         "Authorization": f"Bearer {META_TOKEN}",
         "Content-Type": "application/json"
     }
 
-    if interactivo == "botones":
+    if formato == 'boton' and opciones:
+        botones = []
+        for i, texto_boton in enumerate(opciones.split("||")):
+            botones.append({
+                "type": "reply",
+                "reply": {
+                    "id": f"btn_{i}",
+                    "title": texto_boton.strip()
+                }
+            })
+
         data = {
             "messaging_product": "whatsapp",
             "to": numero,
@@ -109,14 +119,18 @@ def enviar_mensaje(numero, mensaje, tipo='bot', interactivo=None):
                 "type": "button",
                 "body": {"text": mensaje},
                 "action": {
-                    "buttons": [
-                        {"type": "reply", "reply": {"id": "btn_1", "title": "Sí"}},
-                        {"type": "reply", "reply": {"id": "btn_2", "title": "No"}}
-                    ]
+                    "buttons": botones
                 }
             }
         }
-    elif interactivo == "lista":
+
+    elif formato == 'lista' and opciones:
+        items = [{
+            "id": f"item_{i}",
+            "title": opt.strip(),
+            "description": ""
+        } for i, opt in enumerate(opciones.split("||"))]
+
         data = {
             "messaging_product": "whatsapp",
             "to": numero,
@@ -125,18 +139,17 @@ def enviar_mensaje(numero, mensaje, tipo='bot', interactivo=None):
                 "type": "list",
                 "body": {"text": mensaje},
                 "action": {
-                    "button": "Selecciona una opción",
+                    "button": "Seleccionar",
                     "sections": [{
                         "title": "Opciones",
-                        "rows": [
-                            {"id": "op_1", "title": "Opción 1"},
-                            {"id": "op_2", "title": "Opción 2"}
-                        ]
+                        "rows": items
                     }]
                 }
             }
         }
+
     else:
+        # Enviar mensaje de texto normal
         data = {
             "messaging_product": "whatsapp",
             "to": numero,
@@ -146,6 +159,7 @@ def enviar_mensaje(numero, mensaje, tipo='bot', interactivo=None):
 
     requests.post(url, headers=headers, json=data)
     guardar_mensaje(numero, mensaje, tipo)
+
 
 def enviar_mensaje_boton(numero, mensaje, botones):
     url = f"https://graph.facebook.com/v19.0/{PHONE_NUMBER_ID}/messages"
