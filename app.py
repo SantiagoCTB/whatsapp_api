@@ -94,7 +94,7 @@ def init_db():
 init_db()
 
 def enviar_mensaje(numero, mensaje, tipo='bot', tipo_respuesta='texto', opciones=None):
-    url = f"https://graph.facebook.com/v19.0/{PHONE_NUMBER_ID}/messages"
+    url = f"https://graph.facebook.com/v23.0/{PHONE_NUMBER_ID}/messages"
     headers = {
         "Authorization": f"Bearer {META_TOKEN}",
         "Content-Type": "application/json"
@@ -149,7 +149,7 @@ def enviar_mensaje(numero, mensaje, tipo='bot', tipo_respuesta='texto', opciones
 
 
 def enviar_mensaje_boton(numero, mensaje, botones):
-    url = f"https://graph.facebook.com/v19.0/{PHONE_NUMBER_ID}/messages"
+    url = f"https://graph.facebook.com/v23.0/{PHONE_NUMBER_ID}/messages"
     headers = {
         "Authorization": f"Bearer {META_TOKEN}",
         "Content-Type": "application/json"
@@ -177,7 +177,7 @@ def enviar_mensaje_boton(numero, mensaje, botones):
     guardar_mensaje(numero, "[BOTÓN] " + mensaje, "bot")
 
 def enviar_mensaje_lista(numero, mensaje, opciones):
-    url = f"https://graph.facebook.com/v19.0/{PHONE_NUMBER_ID}/messages"
+    url = f"https://graph.facebook.com/v23.0/{PHONE_NUMBER_ID}/messages"
     headers = {
         "Authorization": f"Bearer {META_TOKEN}",
         "Content-Type": "application/json"
