@@ -163,7 +163,7 @@ def webhook():
                     message = messages[0]
                     mensaje_id = message.get('id')
                     from_number = message['from']
-                    text = message['text']['body'].strip()
+                    text = message['text']['body'].strip().lower()
 
                     # Verificar si ya se procesó
                     conn = sqlite3.connect(DB_PATH)
@@ -186,6 +186,26 @@ def webhook():
                         enviar_mensaje(from_number, "Muchas gracias por comunicarte con nosotros. La sesión se dará por terminada por inactividad. ¡Te esperamos nuevamente por aquí!")
                         user_steps.pop(from_number, None)
                     user_last_activity[from_number] = now
+
+                    # 🔁 Palabras clave para reiniciar
+                    if text in ['reiniciar', 'volver al inicio', 'inicio', 'menú', 'menu', 'ayuda']:
+                        user_steps.pop(from_number, None)
+                        user_steps[from_number] = 'menu_principal'
+
+                        enviar_mensaje(from_number, "Perfecto, volvamos a empezar.")
+
+                        conn = sqlite3.connect(DB_PATH)
+                        c = conn.cursor()
+                        c.execute("SELECT respuesta, siguiente_step FROM reglas WHERE step = 'menu_principal' AND input_text = 'iniciar'")
+                        bienvenida = c.fetchone()
+                        conn.close()
+
+                        if bienvenida:
+                            enviar_mensaje(from_number, bienvenida[0])
+                            if bienvenida[1]:
+                                user_steps[from_number] = bienvenida[1]
+
+                        return jsonify({"status": "reiniciado_por_palabra_clave"})
 
                     # Obtener paso actual
                     step = user_steps.get(from_number)
@@ -215,28 +235,6 @@ def webhook():
 
                     if regla:
                         respuesta, siguiente, tipo = regla
-
-                        # Reinicio del flujo
-                        if tipo == 'reinicio':
-                            user_steps.pop(from_number, None)
-                            user_steps[from_number] = 'menu_principal'
-
-                            # Enviar confirmación + bienvenida
-                            enviar_mensaje(from_number, respuesta)
-
-                            conn = sqlite3.connect(DB_PATH)
-                            c = conn.cursor()
-                            c.execute("SELECT respuesta, siguiente_step FROM reglas WHERE step = 'menu_principal' AND input_text = 'iniciar'")
-                            bienvenida = c.fetchone()
-                            conn.close()
-
-                            if bienvenida:
-                                enviar_mensaje(from_number, bienvenida[0])
-                                if bienvenida[1]:
-                                    user_steps[from_number] = bienvenida[1]
-                            return jsonify({"status": "reiniciado"})
-
-                        # Respuesta normal
                         enviar_mensaje(from_number, respuesta)
                         if siguiente:
                             user_steps[from_number] = siguiente
@@ -244,6 +242,7 @@ def webhook():
                         enviar_mensaje(from_number, "Lo siento, no entendí tu respuesta. Por favor intenta nuevamente.")
 
     return jsonify({"status": "received"})
+
 
 
 @app.route('/eliminar_regla/<int:regla_id>', methods=['POST'])
