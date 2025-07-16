@@ -64,6 +64,14 @@ def init_db():
         )
     ''')
 
+    # Tabla de botones
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS botones (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            mensaje TEXT NOT NULL
+        )
+    ''')
+
     # Crear usuario admin si no existe
     c.execute("SELECT * FROM usuarios WHERE username = 'admin'")
     if not c.fetchone():
@@ -168,7 +176,57 @@ def configuracion():
 
     return render_template('configuracion.html', reglas=reglas)
 
+@app.route("/get_botones")
+def get_botones():
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("SELECT id, mensaje FROM botones ORDER BY id")
+    botones = [{"id": row[0], "mensaje": row[1]} for row in c.fetchall()]
+    conn.close()
+    return jsonify(botones)
 
+@app.route('/botones', methods=['GET', 'POST'])
+def botones():
+    if "user" not in session or session["rol"] != "admin":
+        return redirect(url_for("login"))
+
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+
+    if request.method == 'POST':
+        if 'archivo' in request.files:
+            from openpyxl import load_workbook
+            archivo = request.files['archivo']
+            wb = load_workbook(archivo)
+            hoja = wb.active
+
+            for fila in hoja.iter_rows(min_row=2, values_only=True):
+                mensaje = fila[0]
+                if mensaje:
+                    c.execute("INSERT INTO botones (mensaje) VALUES (?)", (mensaje,))
+            conn.commit()
+        elif 'mensaje' in request.form:
+            nuevo_mensaje = request.form['mensaje']
+            c.execute("INSERT INTO botones (mensaje) VALUES (?)", (nuevo_mensaje,))
+            conn.commit()
+
+    c.execute("SELECT id, mensaje FROM botones ORDER BY id")
+    botones = c.fetchall()
+    conn.close()
+    return render_template('botones.html', botones=botones)
+
+
+@app.route('/eliminar_boton/<int:boton_id>', methods=['POST'])
+def eliminar_boton(boton_id):
+    if "user" not in session or session["rol"] != "admin":
+        return redirect(url_for("login"))
+
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("DELETE FROM botones WHERE id = ?", (boton_id,))
+    conn.commit()
+    conn.close()
+    return redirect(url_for('botones'))
 
 @app.route('/webhook', methods=['GET', 'POST'])
 def webhook():
@@ -334,8 +392,13 @@ def index():
         if ultimo and "asesor" in ultimo[0].lower():
             requiere_asesor = True
         chats.append((numero, requiere_asesor))
+
+    # Leer botones
+    c.execute("SELECT id, mensaje FROM botones ORDER BY id")
+    botones = c.fetchall()
+
     conn.close()
-    return render_template('index.html', chats=chats)
+    return render_template('index.html', chats=chats, botones=botones)
 
 
 @app.route('/get_chat/<numero>')

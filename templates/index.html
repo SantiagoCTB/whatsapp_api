@@ -13,6 +13,12 @@
               border-radius: 5px; font-size: 14px;">
         Configuración
     </a>
+    <a href="{{ url_for('botones') }}"
+       style="background-color: #16a085; color: white;
+              padding: 8px 16px; text-decoration: none;
+              border-radius: 5px; font-size: 14px;">
+        Botones
+    </a>
     <a href="{{ url_for('logout') }}"
        style="background-color: #e74c3c; color: white;
               padding: 8px 16px; text-decoration: none;
@@ -28,6 +34,10 @@
             <ul id="chatList"></ul>
         </div>
         <div class="chatWindow">
+
+            <!-- NUEVA BARRA DE BOTONES -->
+            <div id="botonera" style="display: flex; gap: 10px; padding: 10px; overflow-x: auto;"></div>
+
             <div id="chatBox"></div>
             <div class="inputArea">
                 <input type="text" id="messageInput" placeholder="Escribe un mensaje...">
@@ -111,10 +121,47 @@
                     sendMessage();
                 }
             });
+
+            fetchChatList();
+            fetchBotones();  // Cargar los botones al iniciar
         });
 
-        // Cargar lista inicial al abrir la página
-        fetchChatList();
+        // NUEVO: Cargar botones predeterminados
+        function fetchBotones() {
+            fetch('/get_botones')
+                .then(res => res.json())
+                .then(data => {
+                    const contenedor = document.getElementById('botonera');
+                    contenedor.innerHTML = '';
+                    data.forEach((boton, i) => {
+                        const btn = document.createElement('button');
+                        btn.textContent = i + 1;
+                        btn.title = boton.mensaje;
+                        btn.style = `
+                            width: 35px;
+                            height: 35px;
+                            border-radius: 50%;
+                            border: none;
+                            background-color: #3498db;
+                            color: white;
+                            font-weight: bold;
+                            cursor: pointer;
+                        `;
+                        btn.onclick = () => {
+                            if (!currentChat) return alert("Selecciona un chat");
+                            fetch('/send_message', {
+                                method: 'POST',
+                                headers: {'Content-Type': 'application/json'},
+                                body: JSON.stringify({numero: currentChat, mensaje: boton.mensaje})
+                            }).then(() => {
+                                fetchChat();
+                                fetchChatList();
+                            });
+                        };
+                        contenedor.appendChild(btn);
+                    });
+                });
+        }
     </script>
 </body>
 </html>

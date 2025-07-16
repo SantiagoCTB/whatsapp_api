@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Configuración de Botones</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background-color: #f4f6f9;
+            padding: 20px;
+        }
+        h2 {
+            color: #2c3e50;
+        }
+        form {
+            background-color: white;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        input, textarea {
+            width: 100%;
+            margin: 8px 0;
+            padding: 10px;
+            border-radius: 4px;
+            border: 1px solid #ccc;
+        }
+        button {
+            background-color: #27ae60;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background-color: white;
+            border-radius: 8px;
+        }
+        th, td {
+            padding: 10px;
+            text-align: left;
+        }
+        .delete-btn {
+            background-color: #e74c3c;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <h2>Botones rápidos para el chat</h2>
+
+    <form method="POST">
+        <label for="mensaje">Nuevo mensaje:</label>
+        <input type="text" name="mensaje" required>
+        <button type="submit">Agregar botón</button>
+    </form>
+
+    <form method="POST" enctype="multipart/form-data">
+        <label for="archivo">Importar botones desde Excel:</label>
+        <input type="file" name="archivo" accept=".xlsx" required>
+        <button type="submit">Importar</button>
+    </form>
+
+    <h3>Botones actuales</h3>
+    <table>
+        <tr><th>ID</th><th>Mensaje</th><th>Acción</th></tr>
+        {% for b in botones %}
+        <tr>
+            <td>{{ b[0] }}</td>
+            <td>{{ b[1] }}</td>
+            <td>
+                <form method="POST" action="{{ url_for('eliminar_boton', boton_id=b[0]) }}">
+                    <button class="delete-btn" type="submit">Eliminar</button>
+                </form>
+            </td>
+        </tr>
+        {% endfor %}
+    </table>
+</body>
+</html>
