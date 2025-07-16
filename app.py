@@ -60,10 +60,16 @@ def init_db():
             input_text TEXT NOT NULL,
             respuesta TEXT NOT NULL,
             siguiente_step TEXT,
-            tipo TEXT DEFAULT 'texto',  -- texto, boton, lista
-            opciones TEXT DEFAULT NULL  -- Opciones separadas por || para botones o listas
+            tipo TEXT DEFAULT 'texto',
+            opciones TEXT
         )
     ''')
+
+    # Asegurar que la columna 'opciones' existe
+    try:
+        c.execute("ALTER TABLE reglas ADD COLUMN opciones TEXT")
+    except:
+        pass
 
     # Tabla de botones
     c.execute('''
