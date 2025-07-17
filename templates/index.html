@@ -101,24 +101,14 @@
             const input = document.getElementById('messageInput');
             const mensaje = input.value;
             if (!mensaje || !currentChat) return alert("Selecciona un chat");
-
-            console.log("➡️ Ejecutando sendMessage()");
-            console.log("➡️ Enviando mensaje:", mensaje, "a", currentChat);
-
             fetch('/send_message', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({numero: currentChat, mensaje})
-            })
-            .then(res => res.json())
-            .then(data => {
-                console.log("✅ Respuesta del servidor:", data);
+            }).then(() => {
                 input.value = '';
-                fetchChat();        // actualiza mensajes
-                fetchChatList();    // actualiza lista
-            })
-            .catch(err => {
-                console.error("❌ Error en fetch:", err);
+                fetchChat();
+                fetchChatList();
             });
         }
 

@@ -7,9 +7,9 @@ TOKEN = Config.META_TOKEN
 PHONE_ID = Config.PHONE_NUMBER_ID
 
 def enviar_mensaje(numero, mensaje, tipo='bot'):
-    url = f"https://graph.facebook.com/v19.0/{PHONE_NUMBER_ID}/messages"
+    url = f"https://graph.facebook.com/v19.0/{PHONE_ID}/messages"
     headers = {
-        "Authorization": f"Bearer {META_TOKEN}",
+        "Authorization": f"Bearer {TOKEN}",
         "Content-Type": "application/json"
     }
     data = {
