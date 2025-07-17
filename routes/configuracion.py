@@ -124,7 +124,7 @@ def eliminar_boton(boton_id):
     conn.commit()
     conn.close()
 
-    return redirect(url_for('configuracion.botones'))
+    return redirect(url_for('botones'))
 
 @config_bp.route("/get_botones")
 def get_botones():

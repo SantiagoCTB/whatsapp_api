@@ -9,7 +9,7 @@ webhook_bp = Blueprint('webhook', __name__)
 user_last_activity = {}
 user_steps = {}
 
-@app.route('/webhook', methods=['GET', 'POST'])
+@webhook_bp.route('/webhook', methods=['GET', 'POST'])
 def webhook():
     if request.method == 'GET':
         if request.args.get('hub.verify_token') == VERIFY_TOKEN:
