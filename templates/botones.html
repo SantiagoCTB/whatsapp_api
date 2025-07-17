@@ -69,6 +69,23 @@
         <button type="submit">Importar</button>
     </form>
 
+<div style="position: absolute; top: 20px; right: 20px;">
+    <a href="{{ url_for('chat.index') }}">
+        <button style="
+            background-color: #3498db;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            padding: 10px 20px;
+            font-size: 14px;
+            cursor: pointer;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        ">
+            Volver al inicio
+        </button>
+    </a>
+</div>
+
     <h3>Botones actuales</h3>
     <table>
         <tr><th>ID</th><th>Mensaje</th><th>Acción</th></tr>
