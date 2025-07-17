@@ -7,16 +7,15 @@ TOKEN = Config.META_TOKEN
 PHONE_ID = Config.PHONE_NUMBER_ID
 
 def enviar_mensaje(numero, mensaje, tipo='bot', tipo_respuesta='texto', opciones=None):
-    url = f"https://graph.facebook.com/v17.0/{PHONE_NUMBER_ID}/messages"
+    url = f"https://graph.facebook.com/v17.0/{Config.PHONE_NUMBER_ID}/messages"
     headers = {
-        "Authorization": f"Bearer {META_TOKEN}",
+        "Authorization": f"Bearer {Config.META_TOKEN}",
         "Content-Type": "application/json"
     }
 
     if tipo_respuesta == 'texto':
         data = {
             "messaging_product": "whatsapp",
-            "recipient_type": "individual",
             "to": numero,
             "type": "text",
             "text": {"body": mensaje}
@@ -27,7 +26,6 @@ def enviar_mensaje(numero, mensaje, tipo='bot', tipo_respuesta='texto', opciones
                    for i, op in enumerate(opciones[:3])]
         data = {
             "messaging_product": "whatsapp",
-            "recipient_type": "individual",
             "to": numero,
             "type": "interactive",
             "interactive": {
@@ -38,21 +36,34 @@ def enviar_mensaje(numero, mensaje, tipo='bot', tipo_respuesta='texto', opciones
         }
 
     elif tipo_respuesta == 'lista':
+        # Construir secciones de una sola con título fijo
+        rows = [{
+            "id": f"opcion_{i+1}",
+            "title": op,
+            "description": ""
+        } for i, op in enumerate(opciones[:10])]  # WhatsApp permite máx 10 filas por sección
+
         sections = [{
             "title": "Opciones disponibles",
-            "rows": [{"id": f"opt_{i}", "title": op, "description": ""}
-                     for i, op in enumerate(opciones)]
+            "rows": rows
         }]
+
         data = {
             "messaging_product": "whatsapp",
-            "recipient_type": "individual",
             "to": numero,
             "type": "interactive",
             "interactive": {
                 "type": "list",
-                "header": {"type": "text", "text": "Menú"},
-                "body": {"text": mensaje},
-                "footer": {"text": "Selecciona una opción"},
+                "header": {
+                    "type": "text",
+                    "text": "Menú"
+                },
+                "body": {
+                    "text": mensaje
+                },
+                "footer": {
+                    "text": "Selecciona una opción"
+                },
                 "action": {
                     "button": "Ver opciones",
                     "sections": sections
@@ -62,4 +73,4 @@ def enviar_mensaje(numero, mensaje, tipo='bot', tipo_respuesta='texto', opciones
 
     resp = requests.post(url, headers=headers, json=data)
     print(f"[WhatsApp API] {resp.status_code} — {resp.text}")
-    guardar_mensaje(numero, mensaje, tipo)
+    guardar_mensaje(numero, f"[{tipo_respuesta.upper()}] {mensaje}", tipo)
