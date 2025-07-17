@@ -62,12 +62,17 @@ def webhook():
 
                         conn = sqlite3.connect(Config.DB_PATH)
                         c = conn.cursor()
-                        c.execute("SELECT respuesta, siguiente_step FROM reglas WHERE step = 'menu_principal' AND input_text = 'iniciar'")
+                        c.execute("SELECT respuesta, siguiente_step, tipo, opciones FROM reglas WHERE step = 'menu_principal' AND input_text = 'iniciar'")
                         bienvenida = c.fetchone()
                         conn.close()
 
                         if bienvenida:
-                            enviar_mensaje(from_number, bienvenida[0])
+                            texto_respuesta = bienvenida[0]
+                            tipo_respuesta = bienvenida[2] if len(bienvenida) > 2 else 'texto'
+                            opciones = bienvenida[3] if len(bienvenida) > 3 else None
+
+                            enviar_mensaje(from_number, texto_respuesta, tipo='bot', tipo_respuesta=tipo_respuesta, opciones=opciones)
+
                             if bienvenida[1]:
                                 user_steps[from_number] = bienvenida[1]
                         return jsonify({"status": "reiniciado"})
@@ -82,7 +87,7 @@ def webhook():
 
                         conn = sqlite3.connect(Config.DB_PATH)
                         c = conn.cursor()
-                        c.execute("SELECT respuesta, siguiente_step FROM reglas WHERE step = ? AND input_text = ?", (step, 'iniciar'))
+                        c.execute("SELECT respuesta, siguiente_step, tipo, opciones FROM reglas WHERE step = ? AND input_text = ?", (step, 'iniciar'))
                         bienvenida = c.fetchone()
                         conn.close()
 

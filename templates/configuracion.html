@@ -84,8 +84,10 @@
         <input type="text" id="siguiente_step" name="siguiente_step">
 
         <label for="tipo">Tipo:</label>
-        <select name="tipo" id="tipo">
-            <option value="texto" selected>texto</option>
+        <select name="tipo" class="form-control">
+            <option value="texto">Texto</option>
+            <option value="boton">Botón</option>
+            <option value="lista">Lista</option> <!-- ✅ agrega esta -->
         </select>
 
         <label for="opciones">Opciones (solo para listas, formato JSON):</label><br>
