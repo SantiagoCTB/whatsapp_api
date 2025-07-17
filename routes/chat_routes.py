@@ -8,14 +8,13 @@ chat_bp = Blueprint('chat', __name__)
 @chat_bp.route('/')
 def index():
     if "user" not in session:
-        return redirect(url_for("auth.login"))
+        return redirect(url_for("login"))
 
-    conn = sqlite3.connect(Config.DB_PATH)
+    conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute("SELECT DISTINCT numero FROM mensajes")
     numeros = [row[0] for row in c.fetchall()]
     chats = []
-
     for numero in numeros:
         c.execute("SELECT mensaje FROM mensajes WHERE numero = ? ORDER BY timestamp DESC LIMIT 1", (numero,))
         ultimo = c.fetchone()
@@ -24,10 +23,11 @@ def index():
             requiere_asesor = True
         chats.append((numero, requiere_asesor))
 
+    # Leer botones
     c.execute("SELECT id, mensaje FROM botones ORDER BY id")
     botones = c.fetchall()
-    conn.close()
 
+    conn.close()
     return render_template('index.html', chats=chats, botones=botones)
 
 @chat_bp.route('/get_chat/<numero>')
