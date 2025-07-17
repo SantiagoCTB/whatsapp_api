@@ -53,8 +53,7 @@ def enviar_mensaje(numero, mensaje, tipo='bot', tipo_respuesta='texto', opciones
             "text": {"body": mensaje}
         }
 
-    if tipo != 'asesor':  # solo enviar a WhatsApp si no es mensaje manual
-        resp = requests.post(url, headers=headers, json=data)
-        print(f"[WA API] {resp.status_code} — {resp.text}")
+    resp = requests.post(url, headers=headers, json=data)
+    print(f"[WA API] {resp.status_code} — {resp.text}")
 
     guardar_mensaje(numero, mensaje, tipo)
