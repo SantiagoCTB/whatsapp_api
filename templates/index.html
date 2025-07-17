@@ -27,10 +27,34 @@
     </a>
 </div>
 
+<!-- MENÚ CONTEXTUAL -->
+<ul id="contextMenu" style="
+    position: absolute;
+    display: none;
+    list-style: none;
+    padding: 8px;
+    margin: 0;
+    background-color: white;
+    border: 1px solid #ccc;
+    box-shadow: 0px 2px 5px rgba(0,0,0,0.2);
+    border-radius: 5px;
+    z-index: 1000;
+">
+    <li id="menu_alias" style="padding: 6px 12px; cursor: pointer;">Añadir contacto</li>
+</ul>
+
 <body>
     <div class="container">
         <div class="sidebar">
             <h2>Clientes</h2>
+
+            <!-- BUSCADOR -->
+            <input
+                type="text"
+                id="buscador"
+                placeholder="Buscar número..."
+                style="width: 90%; padding: 8px; margin-bottom: 10px; border-radius: 5px; border: 1px solid #ccc;">
+
             <ul id="chatList"></ul>
         </div>
         <div class="chatWindow">
@@ -49,6 +73,7 @@
     <script>
         let currentChat = null;
         let autoRefreshInterval = null;
+        let todosLosChats = []; // Almacena todos para filtrar
 
         function fetchChat() {
             if (!currentChat) return;
@@ -71,16 +96,28 @@
             fetch('/get_chat_list')
                 .then(res => res.json())
                 .then(data => {
-                    const chatList = document.getElementById('chatList');
-                    chatList.innerHTML = '';
-                    data.forEach(chat => {
-                        const li = document.createElement('li');
-                        li.textContent = chat.numero;
-                        li.className = chat.asesor ? 'asesor-activo' : '';
-                        li.onclick = () => loadChat(chat.numero);
-                        chatList.appendChild(li);
-                    });
+                    todosLosChats = data;
+                    renderChatList(data);
                 });
+        }
+
+        function renderChatList(lista) {
+            const chatList = document.getElementById('chatList');
+            chatList.innerHTML = '';
+            lista.forEach(chat => {
+                const li = document.createElement('li');
+                const alias = chat.alias;
+                li.textContent = alias ? `${alias} (${chat.numero})` : chat.numero;
+                li.className = chat.asesor ? 'asesor-activo' : '';
+                li.onclick = () => loadChat(chat.numero);
+
+                li.addEventListener('contextmenu', function (e) {
+                    e.preventDefault();
+                    mostrarMenuContextual(e.pageX, e.pageY, chat);
+                });
+
+                chatList.appendChild(li);
+            });
         }
 
         function loadChat(numero) {
@@ -112,7 +149,7 @@
             });
         }
 
-        // Permitir enviar con Enter
+        // Inicialización
         document.addEventListener('DOMContentLoaded', () => {
             const input = document.getElementById('messageInput');
             input.addEventListener('keypress', function(event) {
@@ -122,11 +159,20 @@
                 }
             });
 
+            // Filtro del buscador
+            document.getElementById('buscador').addEventListener('input', function () {
+                const valor = this.value.toLowerCase();
+                const filtrados = todosLosChats.filter(chat => {
+                    const alias = chat.alias || '';
+                    return chat.numero.toLowerCase().includes(valor) || alias.toLowerCase().includes(valor);
+                });
+                renderChatList(filtrados);
+            });
+
             fetchChatList();
-            fetchBotones();  // Cargar los botones al iniciar
+            fetchBotones();
         });
 
-        // NUEVO: Cargar botones predeterminados
         function fetchBotones() {
             fetch('/get_botones')
                 .then(res => res.json())
@@ -162,6 +208,33 @@
                     });
                 });
         }
+
+        let chatContextual = null;
+
+        function mostrarMenuContextual(x, y, chat) {
+            chatContextual = chat;
+            const menu = document.getElementById("contextMenu");
+            menu.style.top = `${y}px`;
+            menu.style.left = `${x}px`;
+            menu.style.display = "block";
+        }
+
+        document.addEventListener("click", () => {
+            document.getElementById("contextMenu").style.display = "none";
+        });
+
+        document.getElementById("menu_alias").addEventListener("click", () => {
+            if (!chatContextual) return;
+            const nuevoAlias = prompt(`¿Qué nombre deseas asignar a ${chatContextual.numero}?`, chatContextual.alias || '');
+            if (nuevoAlias !== null) {
+                fetch('/set_alias', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({numero: chatContextual.numero, nombre: nuevoAlias})
+                }).then(() => fetchChatList());
+            }
+        });
+
     </script>
 </body>
 </html>

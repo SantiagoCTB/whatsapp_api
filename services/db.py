@@ -63,6 +63,13 @@ def init_db():
         )
     ''')
 
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS alias (
+            numero TEXT PRIMARY KEY,
+            nombre TEXT
+        )
+    ''')
+
     # Crear usuario admin si no existe
     c.execute("SELECT * FROM usuarios WHERE username = 'admin'")
     if not c.fetchone():

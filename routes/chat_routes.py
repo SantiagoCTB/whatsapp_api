@@ -57,20 +57,42 @@ def send_message():
 def get_chat_list():
     if "user" not in session:
         return redirect(url_for("auth.login"))
-    
+
     conn = sqlite3.connect(Config.DB_PATH)
     c = conn.cursor()
     c.execute("SELECT DISTINCT numero FROM mensajes")
     numeros = [row[0] for row in c.fetchall()]
-    chats = []
 
+    chats = []
     for numero in numeros:
         c.execute("SELECT mensaje FROM mensajes WHERE numero = ? ORDER BY timestamp DESC LIMIT 1", (numero,))
         ultimo = c.fetchone()
+
+        c.execute("SELECT nombre FROM alias WHERE numero = ?", (numero,))
+        alias = c.fetchone()
+        alias_nombre = alias[0] if alias else None
+
         requiere_asesor = False
         if ultimo and "asesor" in ultimo[0].lower():
             requiere_asesor = True
-        chats.append({'numero': numero, 'asesor': requiere_asesor})
+        chats.append({"numero": numero, "asesor": requiere_asesor, "alias": alias_nombre})
 
     conn.close()
     return jsonify(chats)
+
+@chat_bp.route('/set_alias', methods=['POST'])
+def set_alias():
+    if "user" not in session:
+        return jsonify({"error": "No autorizado"}), 401
+
+    data = request.get_json()
+    numero = data.get('numero')
+    nombre = data.get('nombre')
+
+    conn = sqlite3.connect(Config.DB_PATH)
+    c = conn.cursor()
+    c.execute("REPLACE INTO alias (numero, nombre) VALUES (?, ?)", (numero, nombre))
+    conn.commit()
+    conn.close()
+
+    return jsonify({"status": "ok"})
