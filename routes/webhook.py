@@ -2,13 +2,14 @@ from flask import Blueprint, request, jsonify
 from config import Config
 from services.db import guardar_mensaje
 from services.whatsapp_api import enviar_mensaje
+import sqlite3
 
 webhook_bp = Blueprint('webhook', __name__)
 
 user_last_activity = {}
 user_steps = {}
 
-@webhook_bp.route('/webhook', methods=['GET', 'POST'])
+@app.route('/webhook', methods=['GET', 'POST'])
 def webhook():
     if request.method == 'GET':
         if request.args.get('hub.verify_token') == VERIFY_TOKEN:
@@ -29,7 +30,7 @@ def webhook():
                     text = message['text']['body'].strip().lower()
 
                     # Verificar duplicados
-                    conn = sqlite3.connect(DB_PATH)
+                    conn = sqlite3.connect(Config.DB_PATH)
                     c = conn.cursor()
                     c.execute("SELECT 1 FROM mensajes_procesados WHERE mensaje_id = ?", (mensaje_id,))
                     if c.fetchone():
@@ -55,7 +56,7 @@ def webhook():
                         user_steps[from_number] = 'menu_principal'
                         enviar_mensaje(from_number, "Perfecto, volvamos a empezar.")
 
-                        conn = sqlite3.connect(DB_PATH)
+                        conn = sqlite3.connect(Config.DB_PATH)
                         c = conn.cursor()
                         c.execute("SELECT respuesta, siguiente_step FROM reglas WHERE step = 'menu_principal' AND input_text = 'iniciar'")
                         bienvenida = c.fetchone()
@@ -75,7 +76,7 @@ def webhook():
                         step = 'menu_principal'
                         user_steps[from_number] = step
 
-                        conn = sqlite3.connect(DB_PATH)
+                        conn = sqlite3.connect(Config.DB_PATH)
                         c = conn.cursor()
                         c.execute("SELECT respuesta, siguiente_step FROM reglas WHERE step = ? AND input_text = ?", (step, 'iniciar'))
                         bienvenida = c.fetchone()
@@ -122,20 +123,19 @@ def webhook():
                         return jsonify({"status": "invalid_measure"})
 
                     # Consultar reglas desde la base
-                    conn = sqlite3.connect(DB_PATH)
+                    conn = sqlite3.connect(Config.DB_PATH)
                     c = conn.cursor()
-                    c.execute("SELECT respuesta, siguiente_step, tipo, opciones FROM reglas WHERE step = ? AND input_text = ?", (step, text))
+                    c.execute("SELECT respuesta, siguiente_step, tipo FROM reglas WHERE step = ? AND input_text = ?", (step, text))
                     regla = c.fetchone()
                     conn.close()
 
                     if regla:
-                        respuesta, siguiente, tipo_respuesta, opciones_raw = regla
-                        opciones = opciones_raw.split("||") if opciones_raw else []
-
-                        enviar_mensaje(from_number, respuesta, tipo_respuesta=tipo_respuesta, opciones=opciones)
+                        respuesta, siguiente, tipo = regla
+                        enviar_mensaje(from_number, respuesta)
                         if siguiente:
                             user_steps[from_number] = siguiente
                     else:
                         enviar_mensaje(from_number, "Lo siento, no entendí tu respuesta. Por favor intenta nuevamente.")
 
     return jsonify({"status": "received"})
+

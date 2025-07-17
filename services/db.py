@@ -37,7 +37,7 @@ def init_db():
         )
     ''')
 
-    # Tabla de reglas de automatización (con soporte para tipo y opciones interactivas)
+    # Tabla de reglas de automatización
     c.execute('''
         CREATE TABLE IF NOT EXISTS reglas (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -45,16 +45,9 @@ def init_db():
             input_text TEXT NOT NULL,
             respuesta TEXT NOT NULL,
             siguiente_step TEXT,
-            tipo TEXT DEFAULT 'texto',
-            opciones TEXT
+            tipo TEXT DEFAULT 'texto'
         )
     ''')
-
-    # Asegurar que la columna 'opciones' existe
-    try:
-        c.execute("ALTER TABLE reglas ADD COLUMN opciones TEXT")
-    except:
-        pass
 
     # Tabla de botones
     c.execute('''

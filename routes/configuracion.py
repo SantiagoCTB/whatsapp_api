@@ -12,6 +12,7 @@ def configuracion():
     conn = sqlite3.connect(Config.DB_PATH)
     c = conn.cursor()
 
+    # Cargar archivo Excel si se sube
     if request.method == 'POST':
         if 'archivo' in request.files:
             from openpyxl import load_workbook
@@ -20,42 +21,45 @@ def configuracion():
             hoja = wb.active
 
             for fila in hoja.iter_rows(min_row=2, values_only=True):
-                step, input_text, respuesta, siguiente_step, tipo, opciones = fila
+                step, input_text, respuesta, siguiente_step, tipo = fila
+
+                # Validar existencia
                 c.execute("SELECT id FROM reglas WHERE step = ? AND input_text = ?", (step, input_text))
                 existente = c.fetchone()
                 if existente:
                     c.execute('''
                         UPDATE reglas
-                        SET respuesta = ?, siguiente_step = ?, tipo = ?, opciones = ?
+                        SET respuesta = ?, siguiente_step = ?, tipo = ?
                         WHERE id = ?
-                    ''', (respuesta, siguiente_step, tipo, opciones, existente[0]))
+                    ''', (respuesta, siguiente_step, tipo, existente[0]))
                 else:
                     c.execute('''
-                        INSERT INTO reglas (step, input_text, respuesta, siguiente_step, tipo, opciones)
-                        VALUES (?, ?, ?, ?, ?, ?)
-                    ''', (step, input_text, respuesta, siguiente_step, tipo, opciones))
+                        INSERT INTO reglas (step, input_text, respuesta, siguiente_step, tipo)
+                        VALUES (?, ?, ?, ?, ?)
+                    ''', (step, input_text, respuesta, siguiente_step, tipo))
             conn.commit()
+
         else:
+            # Carga desde formulario manual
             step = request.form['step']
             input_text = request.form['input_text']
             respuesta = request.form['respuesta']
             siguiente_step = request.form['siguiente_step']
             tipo = request.form['tipo']
-            opciones = request.form.get('opciones', None)
 
             c.execute("SELECT id FROM reglas WHERE step = ? AND input_text = ?", (step, input_text))
             existente = c.fetchone()
             if existente:
                 c.execute('''
                     UPDATE reglas
-                    SET respuesta = ?, siguiente_step = ?, tipo = ?, opciones = ?
+                    SET respuesta = ?, siguiente_step = ?, tipo = ?
                     WHERE id = ?
-                ''', (respuesta, siguiente_step, tipo, opciones, existente[0]))
+                ''', (respuesta, siguiente_step, tipo, existente[0]))
             else:
                 c.execute('''
-                    INSERT INTO reglas (step, input_text, respuesta, siguiente_step, tipo, opciones)
-                    VALUES (?, ?, ?, ?, ?, ?)
-                ''', (step, input_text, respuesta, siguiente_step, tipo, opciones))
+                    INSERT INTO reglas (step, input_text, respuesta, siguiente_step, tipo)
+                    VALUES (?, ?, ?, ?, ?)
+                ''', (step, input_text, respuesta, siguiente_step, tipo))
 
             conn.commit()
 
@@ -64,6 +68,7 @@ def configuracion():
     conn.close()
 
     return render_template('configuracion.html', reglas=reglas)
+
 
 @config_bp.route('/eliminar_regla/<int:regla_id>', methods=['POST'])
 def eliminar_regla(regla_id):

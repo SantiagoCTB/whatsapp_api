@@ -46,7 +46,6 @@ def get_chat(numero):
 def send_message():
     if "user" not in session:
         return redirect(url_for("auth.login"))
-    
     data = request.get_json()
     numero = data.get('numero')
     mensaje = data.get('mensaje')
