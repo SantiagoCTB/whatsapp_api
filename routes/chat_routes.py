@@ -10,7 +10,7 @@ def index():
     if "user" not in session:
         return redirect(url_for("login"))
 
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(Config.DB_PATH)
     c = conn.cursor()
     c.execute("SELECT DISTINCT numero FROM mensajes")
     numeros = [row[0] for row in c.fetchall()]
