@@ -104,7 +104,7 @@
             <td>{{ r[5] or 'texto' }}</td>
             <td>{{ r[6] or '' }}</td>
             <td>
-                <form method="POST" action="{{ url_for('eliminar_regla', regla_id=r[0]) }}">
+                <form method="POST" action="{{ url_for('configuracion.eliminar_regla', regla_id=r[0]) }}">
                     <button class="delete-btn" type="submit">Eliminar</button>
                 </form>
             </td>

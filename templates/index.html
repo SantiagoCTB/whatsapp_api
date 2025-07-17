@@ -7,19 +7,19 @@
 </head>
 
 <div style="position: absolute; bottom: 20px; left: 20px; display: flex; gap: 10px;">
-    <a href="{{ url_for('configuracion') }}"
+    <a href="{{ url_for('configuracion.configuracion') }}"
        style="background-color: #2980b9; color: white;
               padding: 8px 16px; text-decoration: none;
               border-radius: 5px; font-size: 14px;">
         Configuración
     </a>
-    <a href="{{ url_for('botones') }}"
+    <a href="{{ url_for('configuracion.botones') }}"
        style="background-color: #16a085; color: white;
               padding: 8px 16px; text-decoration: none;
               border-radius: 5px; font-size: 14px;">
         Botones
     </a>
-    <a href="{{ url_for('logout') }}"
+    <a href="{{ url_for('auth.logout') }}"
        style="background-color: #e74c3c; color: white;
               padding: 8px 16px; text-decoration: none;
               border-radius: 5px; font-size: 14px;">
