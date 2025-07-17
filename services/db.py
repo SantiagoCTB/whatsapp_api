@@ -70,6 +70,7 @@ def init_db():
     conn.close()
 
 
+
 def guardar_mensaje(numero, mensaje, tipo):
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
