@@ -31,7 +31,15 @@ def webhook():
                     message = messages[0]
                     mensaje_id = message.get('id')
                     from_number = message['from']
-                    text = message['text']['body'].strip().lower()
+                    if 'text' in message:
+                        text = message['text']['body'].strip().lower()
+                    elif 'interactive' in message:
+                        text = message['interactive'].get('list_reply', {}).get('title') or \
+                            message['interactive'].get('button_reply', {}).get('title')
+                        if text:
+                            text = text.strip().lower()
+                    else:
+                        return jsonify({"status": "unsupported_message_type"})
 
                     # Verificar duplicados
                     conn = sqlite3.connect(Config.DB_PATH)
