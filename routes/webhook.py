@@ -7,6 +7,8 @@ from datetime import datetime
 
 webhook_bp = Blueprint('webhook', __name__)
 
+VERIFY_TOKEN = Config.VERIFY_TOKEN
+
 user_last_activity = {}
 user_steps = {}
 
