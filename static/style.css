@@ -75,24 +75,30 @@ body {
 
 /* Burbujas específicas */
 .cliente {
-    align-self: flex-end;
-    background-color: #dcf8c6;
-    color: #000;
-    border-bottom-right-radius: 0;
+    background-color: #ecf0f1;
+    color: #2c3e50;
+    padding: 8px;
+    margin: 5px;
+    border-radius: 5px;
+    text-align: left;
 }
 
 .bot {
-    align-self: flex-start;
-    background-color: #fff;
-    color: #000;
-    border-bottom-left-radius: 0;
+    background-color: #3498db;
+    color: white;
+    padding: 8px;
+    margin: 5px;
+    border-radius: 5px;
+    text-align: left;
 }
-
 .asesor {
-    align-self: flex-start;
-    background-color: #f0f0f0;
-    color: #333;
-    border-bottom-left-radius: 0;
+    background-color: #f1c40f;
+    color: #000;
+    padding: 8px;
+    margin: 5px;
+    border-radius: 5px;
+    text-align: right;
+    font-weight: bold;
 }
 
 /* Área de input */
