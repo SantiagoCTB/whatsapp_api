@@ -43,6 +43,25 @@ def enviar_mensaje(numero, mensaje, tipo='bot', tipo_respuesta='texto', opciones
                 }
             }
         }
+    elif tipo_respuesta == 'boton':
+        try:
+            botones = json.loads(opciones) if opciones else []
+        except Exception as e:
+            print(f"Error en JSON de botones: {e}")
+            botones = []
+
+        data = {
+            "messaging_product": "whatsapp",
+            "to": numero,
+            "type": "interactive",
+            "interactive": {
+                "type": "button",
+                "body": {"text": mensaje},
+                "action": {
+                    "buttons": botones  # debe ser una lista de máx. 3
+                }
+            }
+        }
 
     else:
         # fallback por si se configura mal
