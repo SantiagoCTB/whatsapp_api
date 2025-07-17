@@ -8,7 +8,7 @@ chat_bp = Blueprint('chat', __name__)
 @chat_bp.route('/')
 def index():
     if "user" not in session:
-        return redirect(url_for("login"))
+        return redirect(url_for("auth.login"))
 
     conn = sqlite3.connect(Config.DB_PATH)
     c = conn.cursor()
