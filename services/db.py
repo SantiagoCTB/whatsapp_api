@@ -45,9 +45,15 @@ def init_db():
             input_text TEXT NOT NULL,
             respuesta TEXT NOT NULL,
             siguiente_step TEXT,
-            tipo TEXT DEFAULT 'texto'
+            tipo TEXT DEFAULT 'texto',
+            opciones TEXT
         )
     ''')
+    
+    try:
+        c.execute("ALTER TABLE reglas ADD COLUMN opciones TEXT")
+    except:
+        pass
 
     # Tabla de botones
     c.execute('''

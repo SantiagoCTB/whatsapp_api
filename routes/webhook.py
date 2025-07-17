@@ -8,6 +8,7 @@ from datetime import datetime
 webhook_bp = Blueprint('webhook', __name__)
 
 VERIFY_TOKEN = Config.VERIFY_TOKEN
+SESSION_TIMEOUT = Config.SESSION_TIMEOUT
 
 user_last_activity = {}
 user_steps = {}
@@ -128,13 +129,13 @@ def webhook():
                     # Consultar reglas desde la base
                     conn = sqlite3.connect(Config.DB_PATH)
                     c = conn.cursor()
-                    c.execute("SELECT respuesta, siguiente_step, tipo FROM reglas WHERE step = ? AND input_text = ?", (step, text))
+                    c.execute("SELECT respuesta, siguiente_step, tipo, opciones FROM reglas WHERE step = ? AND input_text = ?", (step, text))
                     regla = c.fetchone()
                     conn.close()
 
                     if regla:
-                        respuesta, siguiente, tipo = regla
-                        enviar_mensaje(from_number, respuesta)
+                        respuesta, siguiente, tipo_respuesta, opciones_raw = regla
+                        enviar_mensaje(from_number, respuesta, tipo_respuesta=tipo_respuesta, opciones=opciones_raw)
                         if siguiente:
                             user_steps[from_number] = siguiente
                     else:
