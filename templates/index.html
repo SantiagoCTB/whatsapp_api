@@ -5,263 +5,280 @@
     <title>Chat Tecnimedellín</title>
     <link rel="stylesheet" href="/static/style.css">
 </head>
+<body>
 
-<div style="position: absolute; bottom: 20px; left: 20px; display: flex; gap: 10px;">
+  <!-- Enlaces de navegación -->
+  <div style="position: absolute; bottom: 20px; left: 20px; display: flex; gap: 10px;">
     <a href="{{ url_for('configuracion.configuracion') }}"
        style="background-color: #2980b9; color: white;
               padding: 8px 16px; text-decoration: none;
               border-radius: 5px; font-size: 14px;">
-        Configuración
+      Configuración
     </a>
     <a href="{{ url_for('configuracion.botones') }}"
        style="background-color: #16a085; color: white;
               padding: 8px 16px; text-decoration: none;
               border-radius: 5px; font-size: 14px;">
-        Botones
+      Botones
     </a>
     <a href="{{ url_for('auth.logout') }}"
        style="background-color: #e74c3c; color: white;
               padding: 8px 16px; text-decoration: none;
               border-radius: 5px; font-size: 14px;">
-        Cerrar sesión
+      Cerrar sesión
     </a>
-</div>
+  </div>
 
-<!-- MENÚ CONTEXTUAL -->
-<ul id="contextMenu" style="
-    position: absolute;
-    display: none;
-    list-style: none;
-    padding: 8px;
-    margin: 0;
-    background-color: white;
-    border: 1px solid #ccc;
-    box-shadow: 0px 2px 5px rgba(0,0,0,0.2);
-    border-radius: 5px;
-    z-index: 1000;
-">
+  <!-- MENÚ CONTEXTUAL -->
+  <ul id="contextMenu" style="
+      position: absolute;
+      display: none;
+      list-style: none;
+      padding: 8px;
+      margin: 0;
+      background-color: white;
+      border: 1px solid #ccc;
+      box-shadow: 0px 2px 5px rgba(0,0,0,0.2);
+      border-radius: 5px;
+      z-index: 1000;
+  ">
     <li id="menu_alias" style="padding: 6px 12px; cursor: pointer;">Añadir contacto</li>
-</ul>
+  </ul>
 
-<body>
-    <div class="container">
-        <div class="sidebar">
-            <h2>Clientes</h2>
+  <div class="container">
+    <div class="sidebar">
+      <h2>Clientes</h2>
 
-            <!-- BUSCADOR -->
-            <input
-                type="text"
-                id="buscador"
-                placeholder="Buscar número..."
-                style="width: 90%; padding: 8px; margin-bottom: 10px; border-radius: 5px; border: 1px solid #ccc;">
+      <!-- BUSCADOR -->
+      <input
+        type="text"
+        id="buscador"
+        placeholder="Buscar número..."
+        style="width: 90%; padding: 8px; margin-bottom: 10px; border-radius: 5px; border: 1px solid #ccc;"
+      >
 
-            <ul id="chatList"></ul>
-        </div>
-        <div class="chatWindow">
-
-            <!-- NUEVA BARRA DE BOTONES -->
-            <div id="botonera" style="display: flex; gap: 10px; padding: 10px; overflow-x: auto;"></div>
-
-            <div id="chatBox"></div>
-            <form id="imageForm" enctype="multipart/form-data">
-                <input type="hidden" id="imageNumero" name="numero" />
-                <input type="file" id="imageInput" name="image" accept="image/*" />
-                <input type="text" id="captionInput" name="caption" placeholder="Leyenda opcional…" />
-                <button type="submit">Enviar imagen</button>
-            </form>
-
-            <div class="inputArea">
-                <input type="text" id="messageInput" placeholder="Escribe un mensaje...">
-                <button onclick="sendMessage()">Enviar</button>
-            </div>
-        </div>
+      <ul id="chatList"></ul>
     </div>
 
-    <script>
-        let currentChat = null;
-        let autoRefreshInterval = null;
-        let todosLosChats = []; // Almacena todos para filtrar
+    <div class="chatWindow">
+      <!-- BARRA DE BOTONES RÁPIDOS -->
+      <div id="botonera" style="display: flex; gap: 10px; padding: 10px; overflow-x: auto;"></div>
 
-        function fetchChat() {
-            if (!currentChat) return;
-            fetch(`/get_chat/${currentChat}`)
-            .then(res => res.json())
-            .then(data => {
-                const chatBox = document.getElementById('chatBox');
-                chatBox.innerHTML = '';
+      <!-- CAJA DE MENSAJES -->
+      <div id="chatBox"></div>
 
-                data.mensajes.forEach(msg => {
-                const [texto, tipo, media_url, ts] = msg;
-                const cont = document.createElement('div');
-                cont.className = tipo;  // cliente, bot, cliente_image, bot_image
+      <!-- FORMULARIO PARA ENVIAR IMAGENES -->
+      <form id="imageForm" enctype="multipart/form-data">
+        <input type="hidden" id="imageNumero" name="numero" />
+        <input type="file" id="imageInput" name="image" accept="image/*" />
+        <input type="text" id="captionInput" name="caption" placeholder="Leyenda opcional…" />
+        <button type="submit">Enviar imagen</button>
+      </form>
 
-                if (tipo.endsWith('_image') && media_url) {
-                    // imagen
-                    const img = document.createElement('img');
-                    img.src = media_url;
-                    img.style.maxWidth = '200px';
-                    cont.appendChild(img);
-                    // leyenda (caption)
-                    if (texto) {
-                    const p = document.createElement('p');
-                    p.textContent = texto;
-                    cont.appendChild(p);
-                    }
-                } else {
-                    cont.textContent = `[${ts}] ${tipo}: ${texto}`;
-                }
+      <!-- ÁREA DE TEXTO -->
+      <div class="inputArea">
+        <input type="text" id="messageInput" placeholder="Escribe un mensaje...">
+        <button onclick="sendMessage()">Enviar</button>
+      </div>
+    </div>
+  </div>
 
-                chatBox.appendChild(cont);
-                });  // ← cierra forEach
+  <script>
+    let currentChat = null;
+    let autoRefreshInterval = null;
+    let todosLosChats = []; // almacena lista completa para filtrar
 
-            })  // ← cierra el then(data => { …
-            .catch(err => console.error('Error al obtener chat:', err));
-        }
+    function fetchChat() {
+      if (!currentChat) return;
+      fetch(`/get_chat/${currentChat}`)
+        .then(res => res.json())
+        .then(data => {
+          const chatBox = document.getElementById('chatBox');
+          chatBox.innerHTML = '';
+          data.mensajes.forEach(msg => {
+            const [texto, tipo, media_url, ts] = msg;
+            const cont = document.createElement('div');
+            cont.className = tipo; // cliente, bot, cliente_image, bot_image
 
-        function fetchChatList() {
-            fetch('/get_chat_list')
-                .then(res => res.json())
-                .then(data => {
-                    todosLosChats = data;
-                    renderChatList(data);
-                });
-        }
-
-        function renderChatList(lista) {
-            const chatList = document.getElementById('chatList');
-            chatList.innerHTML = '';
-            lista.forEach(chat => {
-                const li = document.createElement('li');
-                const alias = chat.alias;
-                li.textContent = alias ? `${alias} (${chat.numero})` : chat.numero;
-                li.className = chat.asesor ? 'asesor-activo' : '';
-                li.onclick = () => loadChat(chat.numero);
-
-                li.addEventListener('contextmenu', function (e) {
-                    e.preventDefault();
-                    mostrarMenuContextual(e.pageX, e.pageY, chat);
-                });
-
-                chatList.appendChild(li);
-            });
-        }
-
-        function loadChat(numero) {
-            currentChat = numero;
-            document.getElementById('imageNumero').value = numero;
-            fetchChat();
-            startAutoRefresh();
-        }
-
-        function startAutoRefresh() {
-            if (autoRefreshInterval) clearInterval(autoRefreshInterval);
-            autoRefreshInterval = setInterval(() => {
-                fetchChatList();
-                fetchChat();
-            }, 3000);
-        }
-
-        function sendMessage() {
-            const input = document.getElementById('messageInput');
-            const mensaje = input.value;
-            if (!mensaje || !currentChat) return alert("Selecciona un chat");
-            fetch('/send_message', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({numero: currentChat, mensaje})
-            }).then(() => {
-                input.value = '';
-                fetchChat();
-                fetchChatList();
-            });
-        }
-
-        // Inicialización
-        document.addEventListener('DOMContentLoaded', () => {
-            const input = document.getElementById('messageInput');
-            input.addEventListener('keypress', function(event) {
-                if (event.key === 'Enter') {
-                    event.preventDefault();
-                    sendMessage();
-                }
-            });
-
-            // Filtro del buscador
-            document.getElementById('buscador').addEventListener('input', function () {
-                const valor = this.value.toLowerCase();
-                const filtrados = todosLosChats.filter(chat => {
-                    const alias = chat.alias || '';
-                    return chat.numero.toLowerCase().includes(valor) || alias.toLowerCase().includes(valor);
-                });
-                renderChatList(filtrados);
-            });
-
-            fetchChatList();
-            fetchBotones();
-        });
-
-        function fetchBotones() {
-            fetch('/get_botones')
-                .then(res => res.json())
-                .then(data => {
-                    const contenedor = document.getElementById('botonera');
-                    contenedor.innerHTML = '';
-                    data.forEach((boton, i) => {
-                        const btn = document.createElement('button');
-                        btn.textContent = i + 1;
-                        btn.title = boton.mensaje;
-                        btn.style = `
-                            width: 35px;
-                            height: 35px;
-                            border-radius: 50%;
-                            border: none;
-                            background-color: #3498db;
-                            color: white;
-                            font-weight: bold;
-                            cursor: pointer;
-                        `;
-                        btn.onclick = () => {
-                            if (!currentChat) return alert("Selecciona un chat");
-                            fetch('/send_message', {
-                                method: 'POST',
-                                headers: {'Content-Type': 'application/json'},
-                                body: JSON.stringify({numero: currentChat, mensaje: boton.mensaje})
-                            }).then(() => {
-                                fetchChat();
-                                fetchChatList();
-                            });
-                        };
-                        contenedor.appendChild(btn);
-                    });
-                });
-        }
-
-        let chatContextual = null;
-
-        function mostrarMenuContextual(x, y, chat) {
-            chatContextual = chat;
-            const menu = document.getElementById("contextMenu");
-            menu.style.top = `${y}px`;
-            menu.style.left = `${x}px`;
-            menu.style.display = "block";
-        }
-
-        document.addEventListener("click", () => {
-            document.getElementById("contextMenu").style.display = "none";
-        });
-
-        document.getElementById("menu_alias").addEventListener("click", () => {
-            if (!chatContextual) return;
-            const nuevoAlias = prompt(`¿Qué nombre deseas asignar a ${chatContextual.numero}?`, chatContextual.alias || '');
-            if (nuevoAlias !== null) {
-                fetch('/set_alias', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({numero: chatContextual.numero, nombre: nuevoAlias})
-                }).then(() => fetchChatList());
+            if (tipo.endsWith('_image') && media_url) {
+              const img = document.createElement('img');
+              img.src = media_url;
+              img.style.maxWidth = '200px';
+              cont.appendChild(img);
+              if (texto) {
+                const p = document.createElement('p');
+                p.textContent = texto;
+                cont.appendChild(p);
+              }
+            } else {
+              cont.textContent = `[${ts}] ${tipo}: ${texto}`;
             }
-        });
+            chatBox.appendChild(cont);
+          });
+        })
+        .catch(err => console.error('Error al obtener chat:', err));
+    }
 
-    </script>
+    function fetchChatList() {
+      fetch('/get_chat_list')
+        .then(res => res.json())
+        .then(data => {
+          todosLosChats = data;
+          renderChatList(data);
+        });
+    }
+
+    function renderChatList(lista) {
+      const chatList = document.getElementById('chatList');
+      chatList.innerHTML = '';
+      lista.forEach(chat => {
+        const li = document.createElement('li');
+        const alias = chat.alias;
+        li.textContent = alias
+          ? `${alias} (${chat.numero})`
+          : chat.numero;
+        li.className = chat.asesor ? 'asesor-activo' : '';
+        li.onclick = () => loadChat(chat.numero);
+        li.addEventListener('contextmenu', e => {
+          e.preventDefault();
+          mostrarMenuContextual(e.pageX, e.pageY, chat);
+        });
+        chatList.appendChild(li);
+      });
+    }
+
+    function loadChat(numero) {
+      currentChat = numero;
+      document.getElementById('imageNumero').value = numero;
+      fetchChat();
+      startAutoRefresh();
+    }
+
+    function startAutoRefresh() {
+      if (autoRefreshInterval) clearInterval(autoRefreshInterval);
+      autoRefreshInterval = setInterval(() => {
+        fetchChatList();
+        fetchChat();
+      }, 3000);
+    }
+
+    function sendMessage() {
+      const input = document.getElementById('messageInput');
+      const mensaje = input.value.trim();
+      if (!mensaje || !currentChat) return alert("Selecciona un chat");
+      fetch('/send_message', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ numero: currentChat, mensaje })
+      }).then(() => {
+        input.value = '';
+        fetchChat();
+        fetchChatList();
+      });
+    }
+
+    // Envío de imagen via AJAX
+    document.getElementById('imageForm').addEventListener('submit', async e => {
+      e.preventDefault();
+      if (!currentChat) return alert("Selecciona un chat");
+      const form = new FormData(e.target);
+      form.set('numero', currentChat);
+      const resp = await fetch('/send_image', {
+        method: 'POST',
+        body: form
+      });
+      if (!resp.ok) {
+        console.error(await resp.text());
+        return alert('Error enviando imagen');
+      }
+      e.target.reset();
+      fetchChat();
+      fetchChatList();
+    });
+
+    // Inicialización
+    document.addEventListener('DOMContentLoaded', () => {
+      document.getElementById('messageInput')
+        .addEventListener('keypress', ev => {
+          if (ev.key === 'Enter') {
+            ev.preventDefault();
+            sendMessage();
+          }
+        });
+      document.getElementById('buscador')
+        .addEventListener('input', function() {
+          const val = this.value.toLowerCase();
+          const filt = todosLosChats.filter(c =>
+            c.numero.toLowerCase().includes(val) ||
+            (c.alias || '').toLowerCase().includes(val)
+          );
+          renderChatList(filt);
+        });
+      fetchChatList();
+      fetchBotones();
+    });
+
+    function fetchBotones() {
+      fetch('/get_botones')
+        .then(res => res.json())
+        .then(data => {
+          const cont = document.getElementById('botonera');
+          cont.innerHTML = '';
+          data.forEach((b, i) => {
+            const btn = document.createElement('button');
+            btn.textContent = i + 1;
+            btn.title = b.mensaje;
+            btn.style = `
+              width:35px; height:35px; border-radius:50%;
+              border:none; background-color:#3498db;
+              color:white; font-weight:bold; cursor:pointer;
+            `;
+            btn.onclick = () => {
+              if (!currentChat) return alert("Selecciona un chat");
+              fetch('/send_message', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ numero: currentChat, mensaje: b.mensaje })
+              }).then(() => {
+                fetchChat();
+                fetchChatList();
+              });
+            };
+            cont.appendChild(btn);
+          });
+        });
+    }
+
+    let chatContextual = null;
+    function mostrarMenuContextual(x, y, chat) {
+      chatContextual = chat;
+      const menu = document.getElementById('contextMenu');
+      menu.style.top = `${y}px`;
+      menu.style.left = `${x}px`;
+      menu.style.display = 'block';
+    }
+    document.addEventListener('click', () => {
+      document.getElementById('contextMenu').style.display = 'none';
+    });
+    document.getElementById('menu_alias')
+      .addEventListener('click', () => {
+        if (!chatContextual) return;
+        const nombre = prompt(
+          `¿Qué nombre deseas asignar a ${chatContextual.numero}?`,
+          chatContextual.alias || ''
+        );
+        if (nombre !== null) {
+          fetch('/set_alias', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              numero: chatContextual.numero,
+              nombre
+            })
+          }).then(() => fetchChatList());
+        }
+      });
+  </script>
+
 </body>
 </html>
