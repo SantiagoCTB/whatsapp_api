@@ -9,6 +9,7 @@ webhook_bp = Blueprint('webhook', __name__)
 VERIFY_TOKEN = Config.VERIFY_TOKEN
 SESSION_TIMEOUT = Config.SESSION_TIMEOUT
 
+
 # Para tracking de sesiones
 user_last_activity = {}
 user_steps = {}
