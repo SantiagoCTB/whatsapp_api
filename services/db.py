@@ -16,73 +16,73 @@ def init_db():
     conn = get_connection()
     c    = conn.cursor()
 
-    # Tabla mensajes
+    # mensajes
     c.execute("""
     CREATE TABLE IF NOT EXISTS mensajes (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        numero VARCHAR(20),
-        mensaje TEXT,
-        tipo VARCHAR(50),
-        timestamp DATETIME
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      numero VARCHAR(20),
+      mensaje TEXT,
+      tipo VARCHAR(50),
+      timestamp DATETIME
     );
     """)
 
-    # Tabla mensajes_procesados
+    # mensajes procesados
     c.execute("""
     CREATE TABLE IF NOT EXISTS mensajes_procesados (
-        mensaje_id VARCHAR(255) PRIMARY KEY
+      mensaje_id VARCHAR(255) PRIMARY KEY
     );
     """)
 
-    # Tabla usuarios
+    # usuarios
     c.execute("""
     CREATE TABLE IF NOT EXISTS usuarios (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        username VARCHAR(50) UNIQUE NOT NULL,
-        password VARCHAR(128) NOT NULL,
-        rol VARCHAR(20) NOT NULL
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      username VARCHAR(50) UNIQUE NOT NULL,
+      password VARCHAR(128) NOT NULL,
+      rol VARCHAR(20) NOT NULL
     );
     """)
 
-    # Tabla reglas de automatización
+    # reglas
     c.execute("""
     CREATE TABLE IF NOT EXISTS reglas (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        step TEXT NOT NULL,
-        input_text TEXT NOT NULL,
-        respuesta TEXT NOT NULL,
-        siguiente_step TEXT,
-        tipo VARCHAR(20) NOT NULL DEFAULT 'texto',
-        opciones TEXT
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      step TEXT NOT NULL,
+      input_text TEXT NOT NULL,
+      respuesta TEXT NOT NULL,
+      siguiente_step TEXT,
+      tipo VARCHAR(20) NOT NULL DEFAULT 'texto',
+      opciones TEXT
     );
     """)
 
-    # Tabla botones
+    # botones
     c.execute("""
     CREATE TABLE IF NOT EXISTS botones (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        mensaje TEXT NOT NULL
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      mensaje TEXT NOT NULL
     );
     """)
 
-    # Tabla alias personalizados
+    # alias
     c.execute("""
     CREATE TABLE IF NOT EXISTS alias (
-        numero VARCHAR(20) PRIMARY KEY,
-        nombre VARCHAR(100)
+      numero VARCHAR(20) PRIMARY KEY,
+      nombre VARCHAR(100)
     );
     """)
 
-    # Crear usuario admin si no existe
+    # usuario admin inicial
     hashed = hashlib.sha256('admin123'.encode()).hexdigest()
     c.execute("""
     INSERT INTO usuarios (username, password, rol)
-    SELECT tmp.username, tmp.password, tmp.rol
-      FROM (SELECT %s AS username, %s AS password, 'admin' AS rol) AS tmp
+      SELECT %s, %s, 'admin'
+     FROM DUAL
      WHERE NOT EXISTS (
-        SELECT 1 FROM usuarios WHERE username = %s
+       SELECT 1 FROM usuarios WHERE username=%s
      )
-    LIMIT 1;
+     LIMIT 1;
     """, ('admin', hashed, 'admin'))
 
     conn.commit()
@@ -93,8 +93,62 @@ def guardar_mensaje(numero, mensaje, tipo):
     conn = get_connection()
     c    = conn.cursor()
     c.execute("""
-        INSERT INTO mensajes (numero, mensaje, tipo, timestamp)
-        VALUES (%s, %s, %s, %s)
+      INSERT INTO mensajes (numero, mensaje, tipo, timestamp)
+      VALUES (%s, %s, %s, %s)
     """, (numero, mensaje, tipo, datetime.now()))
+    conn.commit()
+    conn.close()
+
+
+def obtener_mensajes_por_numero(numero):
+    conn = get_connection()
+    c    = conn.cursor()
+    c.execute("""
+      SELECT mensaje, tipo, timestamp
+      FROM mensajes
+      WHERE numero = %s
+      ORDER BY timestamp ASC
+    """, (numero,))
+    rows = c.fetchall()
+    conn.close()
+    return rows  # lista de tuplas (mensaje, tipo, timestamp)
+
+
+def obtener_lista_chats():
+    conn = get_connection()
+    c    = conn.cursor(dictionary=True)
+    # obtenemos cada número único, su último timestamp y alias si existe
+    c.execute("""
+      SELECT m.numero,
+             (SELECT nombre FROM alias a WHERE a.numero=m.numero) AS alias,
+             EXISTS(
+               SELECT 1 FROM reglas r WHERE r.step='asesor' AND r.input_text=m.numero
+             ) AS asesor
+      FROM mensajes m
+      GROUP BY m.numero
+      ORDER BY MAX(m.timestamp) DESC;
+    """)
+    rows = c.fetchall()
+    conn.close()
+    return rows  # lista de dicts {numero, alias, asesor}
+
+
+def obtener_botones():
+    conn = get_connection()
+    c    = conn.cursor(dictionary=True)
+    c.execute("SELECT mensaje FROM botones ORDER BY id ASC;")
+    rows = c.fetchall()
+    conn.close()
+    return [r['mensaje'] for r in rows]
+
+
+def set_alias(numero, nombre):
+    conn = get_connection()
+    c    = conn.cursor()
+    c.execute("""
+      INSERT INTO alias (numero, nombre)
+      VALUES (%s, %s)
+      ON DUPLICATE KEY UPDATE nombre = VALUES(nombre);
+    """, (numero, nombre))
     conn.commit()
     conn.close()

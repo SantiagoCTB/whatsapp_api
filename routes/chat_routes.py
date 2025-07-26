@@ -2,30 +2,40 @@ from flask import Blueprint, render_template, request, redirect, session, url_fo
 import sqlite3
 from config import Config
 from services.whatsapp_api import enviar_mensaje
+from services.db import get_connection
 
 chat_bp = Blueprint('chat', __name__)
 
 @chat_bp.route('/')
 def index():
+    # Autenticación
     if "user" not in session:
         return redirect(url_for("auth.login"))
 
-    conn = sqlite3.connect(Config.DB_PATH)
-    c = conn.cursor()
+    conn = get_connection()
+    c    = conn.cursor()
+
+    # Lista de chats únicos
     c.execute("SELECT DISTINCT numero FROM mensajes")
     numeros = [row[0] for row in c.fetchall()]
+
     chats = []
     for numero in numeros:
-        c.execute("SELECT mensaje FROM mensajes WHERE numero = ? ORDER BY timestamp DESC LIMIT 1", (numero,))
-        ultimo = c.fetchone()
-        requiere_asesor = False
-        if ultimo and "asesor" in ultimo[0].lower():
-            requiere_asesor = True
+        # Último mensaje para determinar si requiere asesor
+        c.execute(
+            "SELECT mensaje FROM mensajes WHERE numero = %s "
+            "ORDER BY timestamp DESC LIMIT 1",
+            (numero,)
+        )
+        fila = c.fetchone()
+        ultimo = fila[0] if fila else ""
+        requiere_asesor = "asesor" in ultimo.lower()
+
         chats.append((numero, requiere_asesor))
 
-    # Leer botones
+    # Botones configurados
     c.execute("SELECT id, mensaje FROM botones ORDER BY id")
-    botones = c.fetchall()
+    botones = c.fetchall()  # lista de tuplas (id, mensaje)
 
     conn.close()
     return render_template('index.html', chats=chats, botones=botones)
@@ -34,11 +44,15 @@ def index():
 def get_chat(numero):
     if "user" not in session:
         return redirect(url_for("auth.login"))
-    
-    conn = sqlite3.connect(Config.DB_PATH)
-    c = conn.cursor()
-    c.execute("SELECT mensaje, tipo, timestamp FROM mensajes WHERE numero = ? ORDER BY timestamp", (numero,))
-    mensajes = c.fetchall()
+
+    conn = get_connection()
+    c    = conn.cursor()
+    c.execute(
+        "SELECT mensaje, tipo, timestamp FROM mensajes "
+        "WHERE numero = %s ORDER BY timestamp",
+        (numero,)
+    )
+    mensajes = c.fetchall()  # [ (mensaje, tipo, timestamp), ... ]
     conn.close()
     return jsonify({'mensajes': mensajes})
 
@@ -46,36 +60,49 @@ def get_chat(numero):
 def send_message():
     if "user" not in session:
         return redirect(url_for("auth.login"))
-    
-    data = request.get_json()
+
+    data   = request.get_json()
     numero = data.get('numero')
-    mensaje = data.get('mensaje')
-    enviar_mensaje(numero, mensaje, tipo='asesor')  # <=== importante cambio aquí
-    return jsonify({'status': 'success'})
+    texto  = data.get('mensaje')
+
+    # Envía por la API y guarda internamente
+    enviar_mensaje(numero, texto, tipo='asesor')
+    return jsonify({'status': 'success'}), 200
 
 @chat_bp.route('/get_chat_list')
 def get_chat_list():
     if "user" not in session:
         return redirect(url_for("auth.login"))
 
-    conn = sqlite3.connect(Config.DB_PATH)
-    c = conn.cursor()
+    conn = get_connection()
+    c    = conn.cursor()
+
+    # Únicos números
     c.execute("SELECT DISTINCT numero FROM mensajes")
     numeros = [row[0] for row in c.fetchall()]
 
     chats = []
     for numero in numeros:
-        c.execute("SELECT mensaje FROM mensajes WHERE numero = ? ORDER BY timestamp DESC LIMIT 1", (numero,))
-        ultimo = c.fetchone()
+        # Alias
+        c.execute("SELECT nombre FROM alias WHERE numero = %s", (numero,))
+        fila = c.fetchone()
+        alias = fila[0] if fila else None
 
-        c.execute("SELECT nombre FROM alias WHERE numero = ?", (numero,))
-        alias = c.fetchone()
-        alias_nombre = alias[0] if alias else None
+        # Último mensaje para asesor
+        c.execute(
+            "SELECT mensaje FROM mensajes WHERE numero = %s "
+            "ORDER BY timestamp DESC LIMIT 1",
+            (numero,)
+        )
+        fila = c.fetchone()
+        ultimo = fila[0] if fila else ""
+        requiere_asesor = "asesor" in ultimo.lower()
 
-        requiere_asesor = False
-        if ultimo and "asesor" in ultimo[0].lower():
-            requiere_asesor = True
-        chats.append({"numero": numero, "asesor": requiere_asesor, "alias": alias_nombre})
+        chats.append({
+            "numero": numero,
+            "alias":  alias,
+            "asesor": requiere_asesor
+        })
 
     conn.close()
     return jsonify(chats)
@@ -85,14 +112,19 @@ def set_alias():
     if "user" not in session:
         return jsonify({"error": "No autorizado"}), 401
 
-    data = request.get_json()
+    data   = request.get_json()
     numero = data.get('numero')
     nombre = data.get('nombre')
 
-    conn = sqlite3.connect(Config.DB_PATH)
-    c = conn.cursor()
-    c.execute("REPLACE INTO alias (numero, nombre) VALUES (?, ?)", (numero, nombre))
+    conn = get_connection()
+    c    = conn.cursor()
+    # Inserta o actualiza alias
+    c.execute(
+        "INSERT INTO alias (numero, nombre) VALUES (%s, %s) "
+        "ON DUPLICATE KEY UPDATE nombre = VALUES(nombre)",
+        (numero, nombre)
+    )
     conn.commit()
     conn.close()
 
-    return jsonify({"status": "ok"})
+    return jsonify({"status": "ok"}), 200
