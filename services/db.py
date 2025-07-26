@@ -20,10 +20,12 @@ def init_db():
     c.execute("""
     CREATE TABLE IF NOT EXISTS mensajes (
       id INT AUTO_INCREMENT PRIMARY KEY,
-      numero VARCHAR(20),
-      mensaje TEXT,
-      tipo VARCHAR(50),
-      timestamp DATETIME
+      numero     VARCHAR(20),
+      mensaje    TEXT,
+      tipo       VARCHAR(50),
+      media_id   VARCHAR(255),
+      media_url  TEXT,
+      timestamp  DATETIME
     );
     """)
 
@@ -89,16 +91,24 @@ def init_db():
     conn.close()
 
 
-def guardar_mensaje(numero, mensaje, tipo):
+def guardar_mensaje(numero, mensaje, tipo, media_id=None, media_url=None):
     conn = get_connection()
     c    = conn.cursor()
     c.execute("""
-      INSERT INTO mensajes (numero, mensaje, tipo, timestamp)
-      VALUES (%s, %s, %s, %s)
-    """, (numero, mensaje, tipo, datetime.now()))
+      INSERT INTO mensajes
+        (numero, mensaje, tipo, media_id, media_url, timestamp)
+      VALUES
+        (%s,     %s,      %s,   %s,       %s,        %s)
+    """, (
+      numero,
+      mensaje,
+      tipo,
+      media_id,
+      media_url,
+      datetime.now()
+    ))
     conn.commit()
     conn.close()
-
 
 def obtener_mensajes_por_numero(numero):
     conn = get_connection()

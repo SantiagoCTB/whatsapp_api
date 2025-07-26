@@ -3,6 +3,10 @@ import sqlite3
 from config import Config
 from services.whatsapp_api import enviar_mensaje
 from services.db import get_connection
+import uuid
+import os
+from werkzeug.utils import secure_filename
+
 
 chat_bp = Blueprint('chat', __name__)
 
@@ -47,12 +51,13 @@ def get_chat(numero):
 
     conn = get_connection()
     c    = conn.cursor()
-    c.execute(
-        "SELECT mensaje, tipo, timestamp FROM mensajes "
-        "WHERE numero = %s ORDER BY timestamp",
-        (numero,)
-    )
-    mensajes = c.fetchall()  # [ (mensaje, tipo, timestamp), ... ]
+    c.execute("""
+      SELECT mensaje, tipo, media_url, timestamp
+      FROM mensajes
+      WHERE numero = %s
+      ORDER BY timestamp
+    """, (numero,))
+    mensajes = c.fetchall()
     conn.close()
     return jsonify({'mensajes': mensajes})
 
@@ -128,3 +133,30 @@ def set_alias():
     conn.close()
 
     return jsonify({"status": "ok"}), 200
+
+@chat_bp.route('/send_image', methods=['POST'])
+def send_image():
+    if 'user' not in session:
+        return redirect(url_for("auth.login"))
+
+    numero = request.form['numero']
+    caption = request.form.get('caption', '')
+
+    img = request.files.get('image')
+    if not img:
+        return jsonify({'error': 'No image uploaded'}), 400
+
+    # Nombre único
+    filename = secure_filename(img.filename)
+    unique   = f"{uuid.uuid4().hex}_{filename}"
+    filepath = os.path.join(Config.UPLOAD_FOLDER, unique)
+    img.save(filepath)
+
+    # URL pública
+    image_url = url_for('static', filename=f'uploads/{unique}', _external=True)
+
+    # Envía por WhatsApp como imagen
+    enviar_mensaje(numero, caption, tipo='bot_image',
+                   tipo_respuesta='image', opciones=image_url)
+
+    return ('', 204)

@@ -63,6 +63,12 @@
             <div id="botonera" style="display: flex; gap: 10px; padding: 10px; overflow-x: auto;"></div>
 
             <div id="chatBox"></div>
+            <form id="imageForm" enctype="multipart/form-data">
+                <input type="file" id="imageInput" name="image" accept="image/*" />
+                <input type="text" id="captionInput" placeholder="Leyenda opcional…" />
+                <button type="submit">Enviar imagen</button>
+            </form>
+
             <div class="inputArea">
                 <input type="text" id="messageInput" placeholder="Escribe un mensaje...">
                 <button onclick="sendMessage()">Enviar</button>
@@ -78,18 +84,37 @@
         function fetchChat() {
             if (!currentChat) return;
             fetch(`/get_chat/${currentChat}`)
-                .then(res => res.json())
-                .then(data => {
-                    const chatBox = document.getElementById('chatBox');
-                    chatBox.innerHTML = '';
-                    data.mensajes.forEach(msg => {
-                        const div = document.createElement('div');
-                        div.className = msg[1]; // cliente, bot, asesor
-                        div.textContent = `[${msg[2]}] ${msg[1]}: ${msg[0]}`;
-                        chatBox.appendChild(div);
-                    });
-                    chatBox.scrollTop = chatBox.scrollHeight;
-                });
+            .then(res => res.json())
+            .then(data => {
+                const chatBox = document.getElementById('chatBox');
+                chatBox.innerHTML = '';
+
+                data.mensajes.forEach(msg => {
+                const [texto, tipo, media_url, ts] = msg;
+                const cont = document.createElement('div');
+                cont.className = tipo;  // cliente, bot, cliente_image, bot_image
+
+                if (tipo.endsWith('_image') && media_url) {
+                    // imagen
+                    const img = document.createElement('img');
+                    img.src = media_url;
+                    img.style.maxWidth = '200px';
+                    cont.appendChild(img);
+                    // leyenda (caption)
+                    if (texto) {
+                    const p = document.createElement('p');
+                    p.textContent = texto;
+                    cont.appendChild(p);
+                    }
+                } else {
+                    cont.textContent = `[${ts}] ${tipo}: ${texto}`;
+                }
+
+                chatBox.appendChild(cont);
+                });  // ← cierra forEach
+
+            })  // ← cierra el then(data => { …
+            .catch(err => console.error('Error al obtener chat:', err));
         }
 
         function fetchChatList() {

@@ -1,6 +1,7 @@
 from flask import Flask
 from dotenv import load_dotenv
 import os
+from config import Config
 
 from services.db import init_db
 from routes.auth_routes import auth_bp
@@ -10,6 +11,7 @@ from routes.webhook import webhook_bp
 
 # Carga .env y crea la app
 load_dotenv()
+os.makedirs(Config.UPLOAD_FOLDER, exist_ok=True)
 app = Flask(__name__)
 app.secret_key = os.getenv('SECRET_KEY')
 

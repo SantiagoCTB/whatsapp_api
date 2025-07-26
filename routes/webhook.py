@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify
 from config import Config
 from services.db import get_connection, guardar_mensaje
-from services.whatsapp_api import enviar_mensaje
+from services.whatsapp_api import enviar_mensaje, get_media_url
 from datetime import datetime
 
 webhook_bp = Blueprint('webhook', __name__)
@@ -45,6 +45,15 @@ def webhook():
                     message['interactive'].get('list_reply', {}).get('title') or
                     message['interactive'].get('button_reply', {}).get('title') or ''
                 ).strip().lower()
+            
+            elif 'image' in message:
+                media_id  = message['image']['id']
+                media_url = get_media_url(media_id)
+                # guardamos en MySQL con tipo cliente_image
+                guardar_mensaje(from_number, None, 'cliente_image', media_id, media_url)
+                # opcional: envía una confirmación al cliente
+                enviar_mensaje(from_number, "Imagen recibida correctamente.", tipo='bot')
+                continue
             else:
                 return jsonify({'status': 'unsupported_message_type'}), 200
 
