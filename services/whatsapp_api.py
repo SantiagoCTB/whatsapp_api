@@ -9,6 +9,16 @@ from flask import url_for
 TOKEN = Config.META_TOKEN
 PHONE_ID = Config.PHONE_NUMBER_ID
 
+import json
+import os
+import requests
+from flask import url_for
+from config import Config
+from services.db import guardar_mensaje
+
+TOKEN = Config.META_TOKEN
+PHONE_ID = Config.PHONE_NUMBER_ID
+
 def enviar_mensaje(numero, mensaje, tipo='bot', tipo_respuesta='texto', opciones=None):
     url = f"https://graph.facebook.com/v19.0/{PHONE_ID}/messages"
     headers = {
@@ -24,13 +34,24 @@ def enviar_mensaje(numero, mensaje, tipo='bot', tipo_respuesta='texto', opciones
             "text": {"body": mensaje}
         }
 
+    elif tipo_respuesta == 'image':
+        # Ahora incluimos el caption junto al link
+        data = {
+            "messaging_product": "whatsapp",
+            "to": numero,
+            "type": "image",
+            "image": {
+                "link": opciones,
+                "caption": mensaje
+            }
+        }
+
     elif tipo_respuesta == 'lista':
         try:
             secciones = json.loads(opciones) if opciones else []
         except Exception as e:
             print(f"Error en JSON de opciones: {e}")
             secciones = []
-
         data = {
             "messaging_product": "whatsapp",
             "to": numero,
@@ -46,13 +67,13 @@ def enviar_mensaje(numero, mensaje, tipo='bot', tipo_respuesta='texto', opciones
                 }
             }
         }
+
     elif tipo_respuesta == 'boton':
         try:
             botones = json.loads(opciones) if opciones else []
         except Exception as e:
             print(f"Error en JSON de botones: {e}")
             botones = []
-
         data = {
             "messaging_product": "whatsapp",
             "to": numero,
@@ -60,28 +81,12 @@ def enviar_mensaje(numero, mensaje, tipo='bot', tipo_respuesta='texto', opciones
             "interactive": {
                 "type": "button",
                 "body": {"text": mensaje},
-                "action": {
-                    "buttons": botones  # debe ser una lista de máx. 3
-                }
+                "action": {"buttons": botones}
             }
         }
-    
-    elif tipo_respuesta == 'image':
-        # opciones aquí es la URL pública de la imagen
-        data = {
-            "messaging_product": "whatsapp",
-            "to": numero,
-            "type": "image",
-            "image": {"link": opciones}
-        }
-        resp = requests.post(url, headers=headers, json=data)
-        print(f"[WA API] {resp.status_code} — {resp.text}")
-        # guardamos también en la base
-        guardar_mensaje(numero, mensaje, tipo, media_id=None, media_url=opciones)
-        return
 
     else:
-        # fallback por si se configura mal
+        # fallback
         data = {
             "messaging_product": "whatsapp",
             "to": numero,
@@ -92,7 +97,10 @@ def enviar_mensaje(numero, mensaje, tipo='bot', tipo_respuesta='texto', opciones
     resp = requests.post(url, headers=headers, json=data)
     print(f"[WA API] {resp.status_code} — {resp.text}")
 
-    guardar_mensaje(numero, mensaje, tipo)
+    # Guardamos en la BDD (mensaje es caption si es imagen)
+    # asumimos que para imagenes media_id=None y media_url=opciones
+    guardar_mensaje(numero, mensaje, tipo, media_id=None, media_url=opciones)
+
 
 def get_media_url(media_id):
     # 1) Obtener la URL temporal del media object
