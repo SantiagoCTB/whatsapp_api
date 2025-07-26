@@ -64,8 +64,9 @@
 
             <div id="chatBox"></div>
             <form id="imageForm" enctype="multipart/form-data">
+                <input type="hidden" id="imageNumero" name="numero" />
                 <input type="file" id="imageInput" name="image" accept="image/*" />
-                <input type="text" id="captionInput" placeholder="Leyenda opcional…" />
+                <input type="text" id="captionInput" name="caption" placeholder="Leyenda opcional…" />
                 <button type="submit">Enviar imagen</button>
             </form>
 
@@ -147,6 +148,7 @@
 
         function loadChat(numero) {
             currentChat = numero;
+            document.getElementById('imageNumero').value = numero;
             fetchChat();
             startAutoRefresh();
         }
