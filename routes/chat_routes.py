@@ -136,27 +136,45 @@ def set_alias():
 
 @chat_bp.route('/send_image', methods=['POST'])
 def send_image():
+    print("▶▶▶ [DEBUG] Llegó petición a /send_image")  # log 🎯
+    # Validación de sesión
     if 'user' not in session:
-        return redirect(url_for("auth.login"))
+        print("↩️ [DEBUG] No autorizado")
+        return jsonify({'error':'No autorizado'}), 401
 
-    numero = request.form['numero']
-    caption = request.form.get('caption', '')
+    # Obtener campos
+    numero  = request.form.get('numero')
+    caption = request.form.get('caption','')
+    img     = request.files.get('image')
 
-    img = request.files.get('image')
-    if not img:
-        return jsonify({'error': 'No image uploaded'}), 400
+    print(f"[DEBUG] numero={numero}, caption={caption}, img={img}")  # log 🎯
 
-    # Nombre único
+    if not numero or not img:
+        print("[DEBUG] Faltan campos: numero o image")
+        return jsonify({'error':'Falta número o imagen'}), 400
+
+    # Guarda archivo en disco
     filename = secure_filename(img.filename)
     unique   = f"{uuid.uuid4().hex}_{filename}"
-    filepath = os.path.join(Config.UPLOAD_FOLDER, unique)
-    img.save(filepath)
+    upload_folder = Config.UPLOAD_FOLDER  # debe concordar con lo de config.py
+    os.makedirs(upload_folder, exist_ok=True)
+    path = os.path.join(upload_folder, unique)
+    img.save(path)
+    print(f"[DEBUG] Imagen guardada en {path}")  # log 🎯
 
     # URL pública
     image_url = url_for('static', filename=f'uploads/{unique}', _external=True)
+    print(f"[DEBUG] image_url = {image_url}")  # log 🎯
 
-    # Envía por WhatsApp como imagen
-    enviar_mensaje(numero, caption, tipo='bot_image',
-                   tipo_respuesta='image', opciones=image_url)
+    # Envía la imagen por la API
+    enviar_mensaje(
+        numero,
+        caption,
+        tipo='bot_image',
+        tipo_respuesta='image',
+        opciones=image_url
+    )
+    print("▶▶▶ [DEBUG] enviar_mensaje() invocado")  # log 🎯
 
-    return ('', 204)
+    # Ya se guarda internamente dentro de enviar_mensaje()
+    return jsonify({'status':'sent_image'}), 200
