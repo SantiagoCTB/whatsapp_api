@@ -86,7 +86,7 @@
   <script>
     let currentChat = null;
     let autoRefreshInterval = null;
-    let todosLosChats = []; // almacena lista completa para filtrar
+    let todosLosChats = [];
 
     function fetchChat() {
       if (!currentChat) return;
@@ -98,8 +98,7 @@
           data.mensajes.forEach(msg => {
             const [texto, tipo, media_url, ts] = msg;
             const cont = document.createElement('div');
-            cont.className = tipo; // cliente, bot, cliente_image, bot_image
-
+            cont.className = tipo;
             if (tipo.endsWith('_image') && media_url) {
               const img = document.createElement('img');
               img.src = media_url;
@@ -134,9 +133,7 @@
       lista.forEach(chat => {
         const li = document.createElement('li');
         const alias = chat.alias;
-        li.textContent = alias
-          ? `${alias} (${chat.numero})`
-          : chat.numero;
+        li.textContent = alias ? `${alias} (${chat.numero})` : chat.numero;
         li.className = chat.asesor ? 'asesor-activo' : '';
         li.onclick = () => loadChat(chat.numero);
         li.addEventListener('contextmenu', e => {
@@ -177,12 +174,17 @@
       });
     }
 
-    // Envío de imagen via AJAX
+    // ☆ Listener para enviar imagen con caption correctamente ☆
     document.getElementById('imageForm').addEventListener('submit', async e => {
       e.preventDefault();
       if (!currentChat) return alert("Selecciona un chat");
-      const form = new FormData(e.target);
-      form.set('numero', currentChat);
+
+      // Construimos FormData y forzamos el caption y el número
+      const form = new FormData();
+      form.append('image', document.getElementById('imageInput').files[0]);
+      form.append('caption', document.getElementById('captionInput').value);
+      form.append('numero', currentChat);
+
       const resp = await fetch('/send_image', {
         method: 'POST',
         body: form
@@ -196,7 +198,6 @@
       fetchChatList();
     });
 
-    // Inicialización
     document.addEventListener('DOMContentLoaded', () => {
       document.getElementById('messageInput')
         .addEventListener('keypress', ev => {
@@ -208,11 +209,12 @@
       document.getElementById('buscador')
         .addEventListener('input', function() {
           const val = this.value.toLowerCase();
-          const filt = todosLosChats.filter(c =>
-            c.numero.toLowerCase().includes(val) ||
-            (c.alias || '').toLowerCase().includes(val)
+          renderChatList(
+            todosLosChats.filter(c =>
+              c.numero.toLowerCase().includes(val) ||
+              (c.alias || '').toLowerCase().includes(val)
+            )
           );
-          renderChatList(filt);
         });
       fetchChatList();
       fetchBotones();
