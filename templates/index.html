@@ -65,19 +65,27 @@
       <div id="botonera" style="display: flex; gap: 10px; padding: 10px; overflow-x: auto;"></div>
 
       <!-- CAJA DE MENSAJES -->
-      <div id="chatBox"></div>
+      <div id="chatBox" style="padding:10px; height:60vh; overflow-y:auto; border:1px solid #ccc; margin-bottom:10px;"></div>
 
       <!-- FORMULARIO PARA ENVIAR IMAGENES -->
-      <form id="imageForm" enctype="multipart/form-data">
+      <form id="imageForm" enctype="multipart/form-data" style="margin-bottom:10px;">
         <input type="hidden" id="imageNumero" name="numero" />
         <input type="file" id="imageInput" name="image" accept="image/*" />
-        <input type="text" id="captionInput" name="caption" placeholder="Leyenda opcional…" />
+        <input type="text" id="captionInput" name="caption" placeholder="Leyenda imagen…" />
         <button type="submit">Enviar imagen</button>
+      </form>
+
+      <!-- FORMULARIO PARA ENVIAR AUDIOS -->
+      <form id="audioForm" enctype="multipart/form-data" style="margin-bottom:10px;">
+        <input type="hidden" id="audioNumero" name="numero" />
+        <input type="file" id="audioInput" name="audio" accept="audio/*" />
+        <input type="text" id="audioCaptionInput" name="caption" placeholder="Leyenda audio…" />
+        <button type="submit">Enviar audio</button>
       </form>
 
       <!-- ÁREA DE TEXTO -->
       <div class="inputArea">
-        <input type="text" id="messageInput" placeholder="Escribe un mensaje...">
+        <input type="text" id="messageInput" placeholder="Escribe un mensaje..." style="width:80%;" />
         <button onclick="sendMessage()">Enviar</button>
       </div>
     </div>
@@ -99,6 +107,7 @@
             const [texto, tipo, media_url, ts] = msg;
             const cont = document.createElement('div');
             cont.className = tipo;
+            // Imágenes
             if (tipo.endsWith('_image') && media_url) {
               const img = document.createElement('img');
               img.src = media_url;
@@ -109,11 +118,28 @@
                 p.textContent = texto;
                 cont.appendChild(p);
               }
-            } else {
+            }
+            // Audios
+            else if (tipo.includes('audio') && media_url) {
+              const audio = document.createElement('audio');
+              audio.controls = true;
+              audio.src = media_url;
+              audio.style.maxWidth = '200px';
+              cont.appendChild(audio);
+              if (texto) {
+                const p2 = document.createElement('p');
+                p2.textContent = texto;
+                cont.appendChild(p2);
+              }
+            }
+            // Texto y demás
+            else {
               cont.textContent = `[${ts}] ${tipo}: ${texto}`;
             }
             chatBox.appendChild(cont);
           });
+          // Scroll al final
+          chatBox.scrollTop = chatBox.scrollHeight;
         })
         .catch(err => console.error('Error al obtener chat:', err));
     }
@@ -147,6 +173,7 @@
     function loadChat(numero) {
       currentChat = numero;
       document.getElementById('imageNumero').value = numero;
+      document.getElementById('audioNumero').value = numero;
       fetchChat();
       startAutoRefresh();
     }
@@ -174,25 +201,31 @@
       });
     }
 
-    // ☆ Listener para enviar imagen con caption correctamente ☆
+    // Enviar imagen
     document.getElementById('imageForm').addEventListener('submit', async e => {
       e.preventDefault();
       if (!currentChat) return alert("Selecciona un chat");
-
-      // Construimos FormData y forzamos el caption y el número
       const form = new FormData();
       form.append('image', document.getElementById('imageInput').files[0]);
       form.append('caption', document.getElementById('captionInput').value);
       form.append('numero', currentChat);
+      const resp = await fetch('/send_image', { method: 'POST', body: form });
+      if (!resp.ok) { console.error(await resp.text()); return alert('Error enviando imagen'); }
+      e.target.reset();
+      fetchChat();
+      fetchChatList();
+    });
 
-      const resp = await fetch('/send_image', {
-        method: 'POST',
-        body: form
-      });
-      if (!resp.ok) {
-        console.error(await resp.text());
-        return alert('Error enviando imagen');
-      }
+    // Enviar audio
+    document.getElementById('audioForm').addEventListener('submit', async e => {
+      e.preventDefault();
+      if (!currentChat) return alert("Selecciona un chat");
+      const form = new FormData();
+      form.append('audio', document.getElementById('audioInput').files[0]);
+      form.append('caption', document.getElementById('audioCaptionInput').value);
+      form.append('numero', currentChat);
+      const resp = await fetch('/send_audio', { method: 'POST', body: form });
+      if (!resp.ok) { console.error(await resp.text()); return alert('Error enviando audio'); }
       e.target.reset();
       fetchChat();
       fetchChatList();
@@ -201,10 +234,7 @@
     document.addEventListener('DOMContentLoaded', () => {
       document.getElementById('messageInput')
         .addEventListener('keypress', ev => {
-          if (ev.key === 'Enter') {
-            ev.preventDefault();
-            sendMessage();
-          }
+          if (ev.key === 'Enter') { ev.preventDefault(); sendMessage(); }
         });
       document.getElementById('buscador')
         .addEventListener('input', function() {

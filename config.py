@@ -15,3 +15,4 @@ class Config:
     DB_NAME     = os.getenv('DB_NAME')
 
     UPLOAD_FOLDER = os.getenv('UPLOAD_FOLDER', 'static/uploads')
+    MEDIA_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'media')

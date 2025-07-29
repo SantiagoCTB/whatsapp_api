@@ -1,14 +1,16 @@
+import os
+import uuid
 from flask import Blueprint, render_template, request, redirect, session, url_for, jsonify
-import sqlite3
+from werkzeug.utils import secure_filename
 from config import Config
 from services.whatsapp_api import enviar_mensaje
 from services.db import get_connection
-import uuid
-import os
-from werkzeug.utils import secure_filename
-
 
 chat_bp = Blueprint('chat', __name__)
+
+# Carpeta de subida debe coincidir con la de whatsapp_api
+UPLOAD_FOLDER = Config.UPLOAD_FOLDER
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 @chat_bp.route('/')
 def index():
@@ -34,12 +36,11 @@ def index():
         fila = c.fetchone()
         ultimo = fila[0] if fila else ""
         requiere_asesor = "asesor" in ultimo.lower()
-
         chats.append((numero, requiere_asesor))
 
     # Botones configurados
     c.execute("SELECT id, mensaje FROM botones ORDER BY id")
-    botones = c.fetchall()  # lista de tuplas (id, mensaje)
+    botones = c.fetchall()
 
     conn.close()
     return render_template('index.html', chats=chats, botones=botones)
@@ -123,7 +124,6 @@ def set_alias():
 
     conn = get_connection()
     c    = conn.cursor()
-    # Inserta o actualiza alias
     c.execute(
         "INSERT INTO alias (numero, nombre) VALUES (%s, %s) "
         "ON DUPLICATE KEY UPDATE nombre = VALUES(nombre)",
@@ -136,35 +136,25 @@ def set_alias():
 
 @chat_bp.route('/send_image', methods=['POST'])
 def send_image():
-    print("▶▶▶ [DEBUG] Llegó petición a /send_image")  # log 🎯
     # Validación de sesión
     if 'user' not in session:
-        print("↩️ [DEBUG] No autorizado")
         return jsonify({'error':'No autorizado'}), 401
 
-    # Obtener campos
     numero  = request.form.get('numero')
     caption = request.form.get('caption','')
     img     = request.files.get('image')
 
-    print(f"[DEBUG] numero={numero}, caption={caption}, img={img}")  # log 🎯
-
     if not numero or not img:
-        print("[DEBUG] Faltan campos: numero o image")
         return jsonify({'error':'Falta número o imagen'}), 400
 
     # Guarda archivo en disco
     filename = secure_filename(img.filename)
     unique   = f"{uuid.uuid4().hex}_{filename}"
-    upload_folder = Config.UPLOAD_FOLDER  # debe concordar con lo de config.py
-    os.makedirs(upload_folder, exist_ok=True)
-    path = os.path.join(upload_folder, unique)
+    path = os.path.join(UPLOAD_FOLDER, unique)
     img.save(path)
-    print(f"[DEBUG] Imagen guardada en {path}")  # log 🎯
 
     # URL pública
     image_url = url_for('static', filename=f'uploads/{unique}', _external=True)
-    print(f"[DEBUG] image_url = {image_url}")  # log 🎯
 
     # Envía la imagen por la API
     enviar_mensaje(
@@ -174,7 +164,35 @@ def send_image():
         tipo_respuesta='image',
         opciones=image_url
     )
-    print("▶▶▶ [DEBUG] enviar_mensaje() invocado")  # log 🎯
 
-    # Ya se guarda internamente dentro de enviar_mensaje()
     return jsonify({'status':'sent_image'}), 200
+
+@chat_bp.route('/send_audio', methods=['POST'])
+def send_audio():
+    # Validación de sesión
+    if 'user' not in session:
+        return jsonify({'error':'No autorizado'}), 401
+
+    numero  = request.form.get('numero')
+    caption = request.form.get('caption','')
+    audio   = request.files.get('audio')
+
+    if not numero or not audio:
+        return jsonify({'error':'Falta número o audio'}), 400
+
+    # Guarda archivo en disco
+    filename = secure_filename(audio.filename)
+    unique   = f"{uuid.uuid4().hex}_{filename}"
+    path = os.path.join(UPLOAD_FOLDER, unique)
+    audio.save(path)
+
+    # Envía el audio por la API
+    enviar_mensaje(
+        numero,
+        caption,
+        tipo='bot_audio',
+        tipo_respuesta='audio',
+        opciones=path
+    )
+
+    return jsonify({'status':'sent_audio'}), 200

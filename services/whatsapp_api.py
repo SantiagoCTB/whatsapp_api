@@ -1,23 +1,14 @@
 import json
+import os
+import mimetypes
+import requests
 from config import Config
 from services.db import guardar_mensaje
-import requests
-import os
 from flask import url_for
 
-
-TOKEN = Config.META_TOKEN
+TOKEN   = Config.META_TOKEN
 PHONE_ID = Config.PHONE_NUMBER_ID
 
-import json
-import os
-import requests
-from flask import url_for
-from config import Config
-from services.db import guardar_mensaje
-
-TOKEN = Config.META_TOKEN
-PHONE_ID = Config.PHONE_NUMBER_ID
 
 def enviar_mensaje(numero, mensaje, tipo='bot', tipo_respuesta='texto', opciones=None):
     url = f"https://graph.facebook.com/v19.0/{PHONE_ID}/messages"
@@ -35,7 +26,6 @@ def enviar_mensaje(numero, mensaje, tipo='bot', tipo_respuesta='texto', opciones
         }
 
     elif tipo_respuesta == 'image':
-        # Ahora incluimos el caption junto al link
         data = {
             "messaging_product": "whatsapp",
             "to": numero,
@@ -85,8 +75,28 @@ def enviar_mensaje(numero, mensaje, tipo='bot', tipo_respuesta='texto', opciones
             }
         }
 
+    elif tipo_respuesta == 'audio':
+        # Si 'opciones' es ruta a archivo existente, lo subimos primero
+        if opciones and os.path.isfile(opciones):
+            media_id = subir_media(opciones)
+            audio_obj = {"id": media_id}
+        else:
+            # Tratamos 'opciones' como URL pública del audio
+            audio_obj = {"link": opciones}
+
+        # Si mensaje no está vacío, lo usamos como caption
+        if mensaje:
+            audio_obj["caption"] = mensaje
+
+        data = {
+            "messaging_product": "whatsapp",
+            "to": numero,
+            "type": "audio",
+            "audio": audio_obj
+        }
+
     else:
-        # fallback
+        # Fallback a texto
         data = {
             "messaging_product": "whatsapp",
             "to": numero,
@@ -97,23 +107,27 @@ def enviar_mensaje(numero, mensaje, tipo='bot', tipo_respuesta='texto', opciones
     resp = requests.post(url, headers=headers, json=data)
     print(f"[WA API] {resp.status_code} — {resp.text}")
 
-    # Guardamos en la BDD (mensaje es caption si es imagen)
-    # asumimos que para imagenes media_id=None y media_url=opciones
-    guardar_mensaje(numero, mensaje, tipo, media_id=None, media_url=opciones)
+    # Guardamos en la BDD
+    if tipo_respuesta == 'audio':
+        # asumimos media_id en audio_obj o None, media_url None
+        guardar_mensaje(numero, mensaje, tipo, media_id=audio_obj.get("id"), media_url=audio_obj.get("link"))
+    else:
+        # para texto, imagen, lista y botones
+        guardar_mensaje(numero, mensaje, tipo, media_id=None, media_url=opciones)
 
 
 def get_media_url(media_id):
-    # 1) Obtener la URL temporal del media object
+    # 1) Obtener URL temporal
     resp = requests.get(
-      f"https://graph.facebook.com/v19.0/{media_id}",
-      params={"access_token": Config.META_TOKEN}
+        f"https://graph.facebook.com/v19.0/{media_id}",
+        params={"access_token": TOKEN}
     )
     resp.raise_for_status()
     media_url = resp.json().get("url")
 
     # 2) Descargar el binario
     media_resp = requests.get(media_url, headers={
-      "Authorization": f"Bearer {Config.META_TOKEN}"
+        "Authorization": f"Bearer {TOKEN}"
     })
     media_resp.raise_for_status()
 
@@ -124,5 +138,26 @@ def get_media_url(media_id):
     with open(path, "wb") as f:
         f.write(media_resp.content)
 
-    # 4) Devolver URL pública
+    # 4) Devolver URL pública para servir vía static/uploads/
     return url_for("static", filename=f"uploads/{filename}", _external=True)
+
+
+def subir_media(ruta_archivo):
+    """
+    Sube un archivo multimedia (audio, video, etc.) y devuelve el media_id.
+    """
+    mime_type, _ = mimetypes.guess_type(ruta_archivo)
+    if not mime_type:
+        raise ValueError(f"No se pudo inferir el MIME type de {ruta_archivo}")
+
+    url = f"https://graph.facebook.com/v19.0/{PHONE_ID}/media"
+    headers = {"Authorization": f"Bearer {TOKEN}"}
+    data = {
+        "messaging_product": "whatsapp",
+        "type": mime_type
+    }
+    with open(ruta_archivo, "rb") as f:
+        files = {"file": (os.path.basename(ruta_archivo), f, mime_type)}
+        resp = requests.post(url, headers=headers, data=data, files=files)
+    resp.raise_for_status()
+    return resp.json().get("id")

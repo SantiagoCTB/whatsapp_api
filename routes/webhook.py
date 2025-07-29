@@ -1,63 +1,92 @@
-from flask import Blueprint, request, jsonify
+import os
+from flask import Blueprint, request, jsonify, send_file
 from config import Config
 from services.db import get_connection, guardar_mensaje
-from services.whatsapp_api import enviar_mensaje, get_media_url
+from services.whatsapp_api import (
+    enviar_mensaje,
+    get_media_url,
+    subir_media,
+    download_audio
+)
 from datetime import datetime
 
 webhook_bp = Blueprint('webhook', __name__)
 
 VERIFY_TOKEN = Config.VERIFY_TOKEN
 SESSION_TIMEOUT = Config.SESSION_TIMEOUT
+MEDIA_FOLDER = Config.MEDIA_FOLDER
+os.makedirs(MEDIA_FOLDER, exist_ok=True)
 
-
-# Para tracking de sesiones
+# Tracking sessions
+defaultdict = dict
+type(user_last_activity)
 user_last_activity = {}
 user_steps = {}
 
 @webhook_bp.route('/webhook', methods=['GET', 'POST'])
 def webhook():
     if request.method == 'GET':
-        # Verificación de webhook
-        if request.args.get('hub.verify_token') == VERIFY_TOKEN:
-            return request.args.get('hub.challenge'), 200
+        token = request.args.get('hub.verify_token')
+        challenge = request.args.get('hub.challenge')
+        if token == VERIFY_TOKEN:
+            return challenge, 200
         return 'Forbidden', 403
 
-    data = request.get_json()
+    data = request.get_json() or {}
     if not data.get('object'):
         return jsonify({'status': 'no_object'}), 400
 
     for entry in data.get('entry', []):
         for change in entry.get('changes', []):
             value = change.get('value', {})
-            messages = value.get('messages')
+            messages = value.get('messages', []) or []
             if not messages:
                 continue
 
-            message = messages[0]
-            mensaje_id = message.get('id')
-            from_number = message.get('from')
+            msg = messages[0]
+            msg_type = msg.get('type')
+            mensaje_id = msg.get('id')
+            from_number = msg.get('from')
 
-            # Extraer texto
-            if 'text' in message:
-                text = message['text']['body'].strip().lower()
-            elif 'interactive' in message:
-                text = (
-                    message['interactive'].get('list_reply', {}).get('title') or
-                    message['interactive'].get('button_reply', {}).get('title') or ''
-                ).strip().lower()
-            
-            elif 'image' in message:
-                media_id  = message['image']['id']
+            # Text message
+            if msg_type == 'text':
+                text = msg['text']['body'].strip().lower()
+
+            # Interactive: list or button
+            elif msg_type == 'interactive':
+                list_reply = msg['interactive'].get('list_reply', {})
+                button_reply = msg['interactive'].get('button_reply', {})
+                text = (list_reply.get('title') or button_reply.get('title') or '').strip().lower()
+
+            # Image
+            elif msg_type == 'image':
+                media_id = msg['image']['id']
                 media_url = get_media_url(media_id)
-                # guardamos en MySQL con tipo cliente_image
-                guardar_mensaje(from_number, None, 'cliente_image', media_id, media_url)
-                # opcional: envía una confirmación al cliente
+                guardar_mensaje(from_number, mensaje_id, 'cliente_image', media_id=media_id, media_url=media_url)
                 enviar_mensaje(from_number, "Imagen recibida correctamente.", tipo='bot')
                 continue
+
+            # Audio
+            elif msg_type == 'audio':
+                audio_id = msg['audio']['id']
+                mime = msg['audio'].get('mime_type', 'audio/ogg')
+                guardar_mensaje(from_number, mensaje_id, 'audio', media_id=audio_id, mime_type=mime)
+
+                # Descargar archivo y guardar localmente
+                audio_bytes = download_audio(audio_id)
+                ext = mime.split('/')[-1]
+                filename = f"{audio_id}.{ext}"
+                path = os.path.join(MEDIA_FOLDER, filename)
+                with open(path, 'wb') as f:
+                    f.write(audio_bytes)
+
+                enviar_mensaje(from_number, "Audio recibido correctamente.", tipo='bot')
+                continue
+
             else:
                 return jsonify({'status': 'unsupported_message_type'}), 200
 
-            # Verificar duplicados
+            # Duplicate check
             conn = get_connection()
             c = conn.cursor()
             c.execute(
@@ -74,10 +103,10 @@ def webhook():
             conn.commit()
             conn.close()
 
-            # Guardar mensaje de cliente
-            guardar_mensaje(from_number, text, 'cliente')
+            # Save client text message
+            guardar_mensaje(from_number, mensaje_id, 'cliente', content=text)
 
-            # Manejo de timeout
+            # Session timeout handling
             now = datetime.now()
             last_time = user_last_activity.get(from_number)
             if last_time and (now - last_time).total_seconds() > SESSION_TIMEOUT:
@@ -88,7 +117,7 @@ def webhook():
                 user_steps.pop(from_number, None)
             user_last_activity[from_number] = now
 
-            # Palabras clave para reiniciar
+            # Restart keywords
             if text in ['reiniciar', 'volver al inicio', 'inicio', 'menú', 'menu', 'ayuda']:
                 user_steps[from_number] = 'menu_principal'
                 enviar_mensaje(from_number, "Perfecto, volvamos a empezar.")
@@ -108,7 +137,7 @@ def webhook():
                     enviar_mensaje(
                         from_number,
                         texto_respuesta,
-                        tipo= 'bot',
+                        tipo='bot',
                         tipo_respuesta=tipo_respuesta,
                         opciones=opciones
                     )
@@ -116,10 +145,10 @@ def webhook():
                         user_steps[from_number] = siguiente
                 return jsonify({'status': 'reiniciado'}), 200
 
-            # Obtener paso actual
+            # Determine current step
             step = user_steps.get(from_number)
 
-            # Si no hay paso, enviar bienvenida inicial
+            # Send initial welcome if no step
             if not step:
                 step = 'menu_principal'
                 user_steps[from_number] = step
@@ -141,7 +170,7 @@ def webhook():
                         user_steps[from_number] = siguiente
                 return jsonify({'status': 'sent_welcome'}), 200
 
-            # Lógica de medidas (cotización)
+            # Business logic for measurements
             try:
                 if step == 'barra_medida':
                     medida = int(text)
@@ -179,11 +208,11 @@ def webhook():
                         return jsonify({'status': 'l_ok'}), 200
                     raise ValueError("Formato inválido")
 
-            except Exception:
+            except ValueError:
                 enviar_mensaje(from_number, "Por favor ingresa la medida correctamente. Ej: 150 o 200 x 150")
                 return jsonify({'status': 'invalid_measure'}), 200
 
-            # Consultar reglas dinámicas
+            # Dynamic rules lookup
             conn = get_connection()
             c = conn.cursor()
             c.execute(
@@ -208,3 +237,17 @@ def webhook():
                 enviar_mensaje(from_number, "Lo siento, no entendí tu respuesta. Por favor intenta nuevamente.")
 
     return jsonify({'status': 'received'}), 200
+
+
+@webhook_bp.route('/media/audio/<media_id>')
+def serve_audio(media_id):
+    """
+    Devuelve el archivo de audio (.ogg u otro) correspondiente al media_id.
+    """
+    # Intentamos cada extensión conocida
+    for ext in ['ogg', 'mp3', 'wav', 'm4a', 'bin']:
+        filename = f"{media_id}.{ext}"
+        path = os.path.join(MEDIA_FOLDER, filename)
+        if os.path.isfile(path):
+            mime = f"audio/{ext}" if ext != 'bin' else 'application/octet-stream'
+            return send_file(path, mimetype=mime)
