@@ -18,7 +18,7 @@ def init_db():
 
     # Elimino la tabla si existe
     c.execute("DROP TABLE IF EXISTS mensajes;")
-    
+
     # mensajes
     c.execute("""
     CREATE TABLE IF NOT EXISTS mensajes (
@@ -95,25 +95,22 @@ def init_db():
     conn.close()
 
 
-def guardar_mensaje(numero, mensaje, tipo, media_id=None, media_url=None):
+def guardar_mensaje(numero, mensaje, tipo, media_id=None, media_url=None, mime_type=None):
+    """
+    Guarda un mensaje en la tabla 'mensajes'.
+    Ahora admite un campo opcional mime_type para audio/video.
+    """
     conn = get_connection()
     c    = conn.cursor()
-    c.execute("""
-      INSERT INTO mensajes
-        (numero, mensaje, tipo, media_id, media_url, timestamp)
-      VALUES
-        (%s,     %s,      %s,   %s,       %s,        %s)
-    """, (
-      numero,
-      mensaje,
-      tipo,
-      media_id,
-      media_url,
-      datetime.now()
-    ))
+    c.execute(
+        "INSERT INTO mensajes "
+        "(numero, mensaje, tipo, media_id, media_url, mime_type, timestamp) "
+        "VALUES (%s, %s, %s, %s, %s, %s, NOW())",
+        (numero, mensaje, tipo, media_id, media_url, mime_type)
+    )
     conn.commit()
     conn.close()
-
+    
 def obtener_mensajes_por_numero(numero):
     conn = get_connection()
     c    = conn.cursor()
