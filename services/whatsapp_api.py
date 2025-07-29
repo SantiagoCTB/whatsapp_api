@@ -161,3 +161,19 @@ def subir_media(ruta_archivo):
         resp = requests.post(url, headers=headers, data=data, files=files)
     resp.raise_for_status()
     return resp.json().get("id")
+
+def download_audio(media_id):
+    """
+    Descarga un audio de WhatsApp (media_id) y devuelve los bytes.
+    """
+    # 1) Pido la URL temporal
+    url_media = f"https://graph.facebook.com/v19.0/{media_id}"
+    params = {"access_token": TOKEN}
+    r1 = requests.get(url_media, params=params)
+    r1.raise_for_status()
+    media_url = r1.json().get("url")
+
+    # 2) Descargo el binario
+    r2 = requests.get(media_url, headers={"Authorization": f"Bearer {TOKEN}"}, stream=True)
+    r2.raise_for_status()
+    return r2.content
