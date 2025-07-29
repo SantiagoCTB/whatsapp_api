@@ -65,34 +65,38 @@ def webhook():
                 continue
 
             # Audio
-            elif msg_type == 'audio':
-                audio_id = msg['audio']['id']
-                mime     = msg['audio'].get('mime_type', 'audio/ogg')
+            if msg.get('type') == 'audio':
+                from_number = msg['from']
+                media_id    = msg['audio']['id']
+                mime        = msg['audio'].get('mime_type', 'audio/ogg')
 
-                # 1) Descargar y guardar localmente
-                audio_bytes = download_audio(audio_id)
-                ext         = mime.split('/')[-1]
-                filename    = f"{audio_id}.{ext}"
-                path        = os.path.join(MEDIA_FOLDER, filename)
+                # 1) Descargar bytes
+                audio_bytes = download_audio(media_id)
+
+                # 2) Guardar en static/uploads
+                ext      = mime.split('/')[-1]
+                filename = f"{media_id}.{ext}"
+                path     = os.path.join(Config.UPLOAD_FOLDER, filename)
                 with open(path, 'wb') as f:
                     f.write(audio_bytes)
 
-                # 2) Generar URL pública para servir el audio
-                public_url = url_for('webhook.serve_audio', media_id=audio_id, _external=True)
+                # 3) URL pública vía /static/uploads/…
+                public_url = url_for('static',
+                                        filename=f'uploads/{filename}',
+                                        _external=True)
 
-                # 3) Persistir en la base de datos con media_url y mime_type
+                # 4) Persistir en BD y confirmar al usuario
                 guardar_mensaje(
                     from_number,
-                    "",           # texto vacío
-                    'audio',      # tipo
-                    media_id=audio_id,
+                    "",           # sin texto
+                    'audio',
+                    media_id=media_id,
                     media_url=public_url,
                     mime_type=mime
                 )
-
-                # 4) Confirmación al cliente
-                enviar_mensaje(from_number, "Audio recibido correctamente.", tipo='bot')
-                continue
+                enviar_mensaje(from_number,
+                                "Audio recibido correctamente.",
+                                tipo='bot')
 
             else:
                 return jsonify({'status': 'unsupported_message_type'}), 200
@@ -248,18 +252,3 @@ def webhook():
                 enviar_mensaje(from_number, "Lo siento, no entendí tu respuesta. Por favor intenta nuevamente.")
 
     return jsonify({'status': 'received'}), 200
-
-
-@webhook_bp.route('/media/audio/<media_id>')
-def serve_audio(media_id):
-    """
-    Devuelve el archivo de audio correspondiente al media_id,
-    probando varias extensiones y retornando un 404 si no existe.
-    """
-    for ext in ('ogg', 'mp3', 'wav', 'm4a', 'bin'):
-        path = os.path.join(MEDIA_FOLDER, f"{media_id}.{ext}")
-        if os.path.isfile(path):
-            mime = f"audio/{ext}" if ext != 'bin' else 'application/octet-stream'
-            return send_file(path, mimetype=mime)
-    # Si no encontramos nada, 404
-    abort(404)
