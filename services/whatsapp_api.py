@@ -38,7 +38,7 @@ def enviar_mensaje(numero, mensaje, tipo='bot', tipo_respuesta='texto', opciones
     elif tipo_respuesta == 'lista':
         try:
             secciones = json.loads(opciones) if opciones else []
-        except:
+        except Exception:
             secciones = []
         data = {
             "messaging_product": "whatsapp",
@@ -59,7 +59,7 @@ def enviar_mensaje(numero, mensaje, tipo='bot', tipo_respuesta='texto', opciones
     elif tipo_respuesta == 'boton':
         try:
             botones = json.loads(opciones) if opciones else []
-        except:
+        except Exception:
             botones = []
         data = {
             "messaging_product": "whatsapp",
@@ -73,11 +73,10 @@ def enviar_mensaje(numero, mensaje, tipo='bot', tipo_respuesta='texto', opciones
         }
 
     elif tipo_respuesta == 'audio':
-        # 'opciones' es la ruta local en static/uploads
         if opciones and os.path.isfile(opciones):
-            filename  = os.path.basename(opciones)
+            filename   = os.path.basename(opciones)
             public_url = url_for('static', filename=f'uploads/{filename}', _external=True)
-            audio_obj = {"link": public_url}
+            audio_obj  = {"link": public_url}
         else:
             audio_obj = {"link": opciones}
 
@@ -102,7 +101,6 @@ def enviar_mensaje(numero, mensaje, tipo='bot', tipo_respuesta='texto', opciones
     resp = requests.post(url, headers=headers, json=data)
     print(f"[WA API] {resp.status_code} — {resp.text}")
 
-    # Guardar en BD
     if tipo_respuesta == 'audio':
         guardar_mensaje(
             numero,
@@ -120,14 +118,48 @@ def enviar_mensaje(numero, mensaje, tipo='bot', tipo_respuesta='texto', opciones
             media_url=opciones
         )
 
+def get_media_url(media_id):
+    resp1 = requests.get(
+        f"https://graph.facebook.com/v19.0/{media_id}",
+        params={"access_token": TOKEN}
+    )
+    resp1.raise_for_status()
+    media_url = resp1.json().get("url")
+
+    resp2 = requests.get(media_url, headers={"Authorization": f"Bearer {TOKEN}"})
+    resp2.raise_for_status()
+
+    ext = resp2.headers.get("Content-Type", "").split("/")[-1] or "bin"
+    filename = f"{media_id}.{ext}"
+    path     = os.path.join(Config.UPLOAD_FOLDER, filename)
+    with open(path, "wb") as f:
+        f.write(resp2.content)
+
+    return url_for("static", filename=f"uploads/{filename}", _external=True)
+
+def subir_media(ruta_archivo):
+    mime_type, _ = mimetypes.guess_type(ruta_archivo)
+    if not mime_type:
+        raise ValueError(f"No se pudo inferir el MIME type de {ruta_archivo}")
+
+    url = f"https://graph.facebook.com/v19.0/{PHONE_ID}/media"
+    headers = {"Authorization": f"Bearer {TOKEN}"}
+    data = {
+        "messaging_product": "whatsapp",
+        "type": mime_type
+    }
+    with open(ruta_archivo, "rb") as f:
+        files = {"file": (os.path.basename(ruta_archivo), f, mime_type)}
+        resp = requests.post(url, headers=headers, data=data, files=files)
+    resp.raise_for_status()
+    return resp.json().get("id")
+
 def download_audio(media_id):
-    # 1) Obtener URL temporal
     url_media = f"https://graph.facebook.com/v19.0/{media_id}"
     resp1     = requests.get(url_media, params={"access_token": TOKEN})
     resp1.raise_for_status()
     media_url = resp1.json().get("url")
 
-    # 2) Descargar bytes
     resp2 = requests.get(media_url, headers={"Authorization": f"Bearer {TOKEN}"}, stream=True)
     resp2.raise_for_status()
     return resp2.content
