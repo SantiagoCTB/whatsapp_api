@@ -14,7 +14,7 @@ webhook_bp = Blueprint('webhook', __name__)
 
 VERIFY_TOKEN = Config.VERIFY_TOKEN
 SESSION_TIMEOUT = Config.SESSION_TIMEOUT
-MEDIA_FOLDER = Config.MEDIA_FOLDER
+MEDIA_FOLDER = Config.UPLOAD_FOLDER
 os.makedirs(MEDIA_FOLDER, exist_ok=True)
 
 # Tracking sessions
