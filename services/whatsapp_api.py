@@ -76,15 +76,16 @@ def enviar_mensaje(numero, mensaje, tipo='bot', tipo_respuesta='texto', opciones
         }
 
     elif tipo_respuesta == 'audio':
-        # Si 'opciones' es ruta a archivo existente, lo subimos primero
+        # Si 'opciones' es una ruta local válida, generamos la URL pública en static/uploads
         if opciones and os.path.isfile(opciones):
-            media_id = subir_media(opciones)
-            audio_obj = {"id": media_id}
+            filename   = os.path.basename(opciones)
+            public_url = url_for('static', filename=f'uploads/{filename}', _external=True)
+            audio_obj  = {"link": public_url}
         else:
-            # Tratamos 'opciones' como URL pública del audio
+            # Tratamos 'opciones' como URL pública directa
             audio_obj = {"link": opciones}
 
-        # Si mensaje no está vacío, lo usamos como caption
+        # Usamos el texto como caption si existe
         if mensaje:
             audio_obj["caption"] = mensaje
 
