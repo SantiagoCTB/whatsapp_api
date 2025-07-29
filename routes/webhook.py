@@ -18,8 +18,6 @@ MEDIA_FOLDER = Config.MEDIA_FOLDER
 os.makedirs(MEDIA_FOLDER, exist_ok=True)
 
 # Tracking sessions
-defaultdict = dict
-type(user_last_activity)
 user_last_activity = {}
 user_steps = {}
 
