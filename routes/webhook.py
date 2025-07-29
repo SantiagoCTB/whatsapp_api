@@ -59,35 +59,37 @@ def webhook():
 
             # ─── AUDIO ─────────────────────────────────────────────────────────
             if msg_type == 'audio':
-                media_id = msg['audio']['id']
-                mime     = msg['audio'].get('mime_type', 'audio/ogg')
-                ext      = mime.split('/')[-1]
+                media_id  = msg['audio']['id']
+                # 1) Limpio el mime type para quitar parámetros
+                mime_raw  = msg['audio'].get('mime_type', 'audio/ogg')
+                mime_clean= mime_raw.split(';')[0].strip()       # "audio/ogg"
+                ext       = mime_clean.split('/')[-1]            # "ogg"
 
-                # Descargar y guardar en static/uploads
+                # 2) Descarga y guarda en static/uploads
                 audio_bytes = download_audio(media_id)
                 filename    = f"{media_id}.{ext}"
                 path        = os.path.join(Config.UPLOAD_FOLDER, filename)
                 with open(path, 'wb') as f:
                     f.write(audio_bytes)
 
-                # URL pública para el audio
+                # 3) URL pública
                 public_url = url_for(
                     'static',
                     filename=f'uploads/{filename}',
                     _external=True
                 )
 
-                # Guardar en la base de datos
+                # 4) Persistir en BD
                 guardar_mensaje(
                     from_number,
-                    "",              # sin texto
+                    "",             # sin texto
                     'audio',
                     media_id=media_id,
                     media_url=public_url,
-                    mime_type=mime
+                    mime_type=mime_clean
                 )
 
-                # Confirmación al cliente
+                # 5) Confirmar al cliente
                 enviar_mensaje(
                     from_number,
                     "Audio recibido correctamente.",
