@@ -15,9 +15,6 @@ def get_connection():
 def init_db():
     conn = get_connection()
     c    = conn.cursor()
-
-    c.execute("DROP TABLE IF EXISTS mensajes;")
-
     # mensajes
     c.execute("""
     CREATE TABLE IF NOT EXISTS mensajes (
