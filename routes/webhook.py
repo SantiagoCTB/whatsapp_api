@@ -1,5 +1,5 @@
 import os
-from flask import Blueprint, request, jsonify, send_file
+from flask import Blueprint, request, jsonify, send_file, url_for
 from config import Config
 from services.db import get_connection, guardar_mensaje
 from services.whatsapp_api import (
@@ -67,17 +67,30 @@ def webhook():
             # Audio
             elif msg_type == 'audio':
                 audio_id = msg['audio']['id']
-                mime = msg['audio'].get('mime_type', 'audio/ogg')
-                guardar_mensaje(from_number, mensaje_id, 'audio', media_id=audio_id, mime_type=mime)
+                mime     = msg['audio'].get('mime_type', 'audio/ogg')
 
-                # Descargar archivo y guardar localmente
+                # 1) Descargar y guardar localmente
                 audio_bytes = download_audio(audio_id)
-                ext = mime.split('/')[-1]
-                filename = f"{audio_id}.{ext}"
-                path = os.path.join(MEDIA_FOLDER, filename)
+                ext         = mime.split('/')[-1]
+                filename    = f"{audio_id}.{ext}"
+                path        = os.path.join(MEDIA_FOLDER, filename)
                 with open(path, 'wb') as f:
                     f.write(audio_bytes)
 
+                # 2) Generar URL pública para servir el audio
+                public_url = url_for('webhook.serve_audio', media_id=audio_id, _external=True)
+
+                # 3) Persistir en la base de datos con media_url y mime_type
+                guardar_mensaje(
+                    from_number,
+                    "",           # texto vacío
+                    'audio',      # tipo
+                    media_id=audio_id,
+                    media_url=public_url,
+                    mime_type=mime
+                )
+
+                # 4) Confirmación al cliente
                 enviar_mensaje(from_number, "Audio recibido correctamente.", tipo='bot')
                 continue
 
