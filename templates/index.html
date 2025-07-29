@@ -123,20 +123,19 @@
             else if (tipo.includes('audio') && media_url) {
               const audio = document.createElement('audio');
               audio.controls = true;
-              audio.src = media_url;
-              audio.style.maxWidth = '200px';
+              audio.src      = media_url;       // Será: https://tu-dominio.com/static/uploads/<media_id>.ogg
               cont.appendChild(audio);
               if (texto) {
-                const p2 = document.createElement('p');
-                p2.textContent = texto;
-                cont.appendChild(p2);
+                const p = document.createElement('p');
+                p.textContent = texto;
+                cont.appendChild(p);
               }
-            }
-            // Texto y demás
-            else {
+            } else {
+              // tu renderizado de texto/imágenes
               cont.textContent = `[${ts}] ${tipo}: ${texto}`;
             }
-            chatBox.appendChild(cont);
+
+            document.getElementById('chatBox').appendChild(cont);
           });
           // Scroll al final
           chatBox.scrollTop = chatBox.scrollHeight;
