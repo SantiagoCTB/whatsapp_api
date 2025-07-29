@@ -15,6 +15,10 @@ def get_connection():
 def init_db():
     conn = get_connection()
     c    = conn.cursor()
+
+    # Elimino la tabla si existe
+    c.execute("DROP TABLE IF EXISTS mensajes;")
+    
     # mensajes
     c.execute("""
     CREATE TABLE IF NOT EXISTS mensajes (
@@ -24,6 +28,7 @@ def init_db():
       tipo       VARCHAR(50),
       media_id   VARCHAR(255),
       media_url  TEXT,
+      mime_type  TEXT,
       timestamp  DATETIME
     );
     """)

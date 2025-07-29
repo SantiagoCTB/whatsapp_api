@@ -102,7 +102,7 @@ def webhook():
             conn.close()
 
             # Save client text message
-            guardar_mensaje(from_number, mensaje_id, 'cliente', content=text)
+            guardar_mensaje(from_number, text, 'cliente')
 
             # Session timeout handling
             now = datetime.now()
