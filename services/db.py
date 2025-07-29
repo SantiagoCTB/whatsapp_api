@@ -17,7 +17,7 @@ def init_db():
     c    = conn.cursor()
 
     # Elimino la tabla si existe
-    c.execute("DROP TABLE IF EXISTS mensajes;")
+    #c.execute("DROP TABLE IF EXISTS mensajes;")
 
     # mensajes
     c.execute("""
@@ -110,7 +110,7 @@ def guardar_mensaje(numero, mensaje, tipo, media_id=None, media_url=None, mime_t
     )
     conn.commit()
     conn.close()
-    
+
 def obtener_mensajes_por_numero(numero):
     conn = get_connection()
     c    = conn.cursor()

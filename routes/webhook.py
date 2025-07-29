@@ -1,5 +1,5 @@
 import os
-from flask import Blueprint, request, jsonify, send_file, url_for
+from flask import Blueprint, request, jsonify, send_file, url_for, abort
 from config import Config
 from services.db import get_connection, guardar_mensaje
 from services.whatsapp_api import (
@@ -253,12 +253,13 @@ def webhook():
 @webhook_bp.route('/media/audio/<media_id>')
 def serve_audio(media_id):
     """
-    Devuelve el archivo de audio (.ogg u otro) correspondiente al media_id.
+    Devuelve el archivo de audio correspondiente al media_id,
+    probando varias extensiones y retornando un 404 si no existe.
     """
-    # Intentamos cada extensión conocida
-    for ext in ['ogg', 'mp3', 'wav', 'm4a', 'bin']:
-        filename = f"{media_id}.{ext}"
-        path = os.path.join(MEDIA_FOLDER, filename)
+    for ext in ('ogg', 'mp3', 'wav', 'm4a', 'bin'):
+        path = os.path.join(MEDIA_FOLDER, f"{media_id}.{ext}")
         if os.path.isfile(path):
             mime = f"audio/{ext}" if ext != 'bin' else 'application/octet-stream'
             return send_file(path, mimetype=mime)
+    # Si no encontramos nada, 404
+    abort(404)
