@@ -96,52 +96,59 @@
     let autoRefreshInterval = null;
     let todosLosChats = [];
 
-    function fetchChat() {
-      if (!currentChat) return;
-      fetch(`/get_chat/${currentChat}`)
-        .then(res => res.json())
-        .then(data => {
-          const chatBox = document.getElementById('chatBox');
-          chatBox.innerHTML = '';
-          data.mensajes.forEach(msg => {
-            const [texto, tipo, media_url, ts] = msg;
-            const cont = document.createElement('div');
-            cont.className = tipo;
-            // Imágenes
-            if (tipo.endsWith('_image') && media_url) {
-              const img = document.createElement('img');
-              img.src = media_url;
-              img.style.maxWidth = '200px';
-              cont.appendChild(img);
-              if (texto) {
-                const p = document.createElement('p');
-                p.textContent = texto;
-                cont.appendChild(p);
-              }
-            }
-            // Audios
-            else if (tipo.includes('audio') && media_url) {
-              const audio = document.createElement('audio');
-              audio.controls = true;
-              audio.src      = media_url;       // Será: https://tu-dominio.com/static/uploads/<media_id>.ogg
-              cont.appendChild(audio);
-              if (texto) {
-                const p = document.createElement('p');
-                p.textContent = texto;
-                cont.appendChild(p);
-              }
-            } else {
-              // tu renderizado de texto/imágenes
-              cont.textContent = `[${ts}] ${tipo}: ${texto}`;
-            }
+      function fetchChat() {
+        if (!currentChat) return;
 
-            document.getElementById('chatBox').appendChild(cont);
-          });
-          // Scroll al final
-          chatBox.scrollTop = chatBox.scrollHeight;
-        })
-        .catch(err => console.error('Error al obtener chat:', err));
-    }
+        // Si hay un audio reproduciéndose, no recargamos
+        const audios = document.querySelectorAll('#chatBox audio');
+        for (const audio of audios) {
+          if (!audio.paused) {
+            return;
+          }
+        }
+
+        fetch(`/get_chat/${currentChat}`)
+          .then(res => res.json())
+          .then(data => {
+            const chatBox = document.getElementById('chatBox');
+            chatBox.innerHTML = '';
+            data.mensajes.forEach(msg => {
+              const [texto, tipo, media_url, ts] = msg;
+              const cont = document.createElement('div');
+              cont.className = tipo;
+
+              if (tipo.endsWith('_image') && media_url) {
+                const img = document.createElement('img');
+                img.src = media_url;
+                img.style.maxWidth = '200px';
+                cont.appendChild(img);
+                if (texto) {
+                  const p = document.createElement('p');
+                  p.textContent = texto;
+                  cont.appendChild(p);
+                }
+              }
+              else if (tipo.includes('audio') && media_url) {
+                const audio = document.createElement('audio');
+                audio.controls = true;
+                audio.src      = media_url;
+                cont.appendChild(audio);
+                if (texto) {
+                  const p2 = document.createElement('p');
+                  p2.textContent = texto;
+                  cont.appendChild(p2);
+                }
+              }
+              else {
+                cont.textContent = `[${ts}] ${tipo}: ${texto}`;
+              }
+
+              chatBox.appendChild(cont);
+            });
+            chatBox.scrollTop = chatBox.scrollHeight;
+          })
+          .catch(err => console.error('Error al obtener chat:', err));
+      }
 
     function fetchChatList() {
       fetch('/get_chat_list')
