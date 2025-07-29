@@ -76,16 +76,15 @@ def enviar_mensaje(numero, mensaje, tipo='bot', tipo_respuesta='texto', opciones
         }
 
     elif tipo_respuesta == 'audio':
-        # Si 'opciones' es una ruta local válida, generamos la URL pública en static/uploads
+        # opciones viene de chat_routes.send_audio como ruta local al archivo
         if opciones and os.path.isfile(opciones):
             filename   = os.path.basename(opciones)
             public_url = url_for('static', filename=f'uploads/{filename}', _external=True)
             audio_obj  = {"link": public_url}
         else:
-            # Tratamos 'opciones' como URL pública directa
+            # Permitimos también pasar directamente una URL pública
             audio_obj = {"link": opciones}
 
-        # Usamos el texto como caption si existe
         if mensaje:
             audio_obj["caption"] = mensaje
 
