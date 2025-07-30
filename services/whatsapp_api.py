@@ -90,6 +90,24 @@ def enviar_mensaje(numero, mensaje, tipo='bot', tipo_respuesta='texto', opciones
             "audio": audio_obj
         }
 
+    elif tipo_respuesta == 'video':
+        if opciones and os.path.isfile(opciones):
+            filename   = os.path.basename(opciones)
+            public_url = url_for('static', filename=f'uploads/{filename}', _external=True)
+            video_obj  = {"link": public_url}
+        else:
+            video_obj  = {"link": opciones}
+
+        if mensaje:
+            video_obj["caption"] = mensaje
+
+        data = {
+            "messaging_product": "whatsapp",
+            "to": numero,
+            "type": "video",
+            "video": video_obj
+        }
+
     else:
         data = {
             "messaging_product": "whatsapp",
@@ -101,7 +119,16 @@ def enviar_mensaje(numero, mensaje, tipo='bot', tipo_respuesta='texto', opciones
     resp = requests.post(url, headers=headers, json=data)
     print(f"[WA API] {resp.status_code} — {resp.text}")
 
-    if tipo_respuesta == 'audio':
+    if tipo_respuesta == 'video':
+        guardar_mensaje(
+            numero,
+            mensaje,
+            tipo,
+            media_id=None,
+            media_url=video_obj.get("link")
+        )
+
+    elif tipo_respuesta == 'audio':
         guardar_mensaje(
             numero,
             mensaje,
@@ -155,12 +182,12 @@ def subir_media(ruta_archivo):
     return resp.json().get("id")
 
 def download_audio(media_id):
+    # sirve tanto para audio como para video
     url_media = f"https://graph.facebook.com/v19.0/{media_id}"
-    resp1     = requests.get(url_media, params={"access_token": TOKEN})
-    resp1.raise_for_status()
-    media_url = resp1.json().get("url")
-
-    resp2 = requests.get(media_url, headers={"Authorization": f"Bearer {TOKEN}"}, stream=True)
-    resp2.raise_for_status()
-    return resp2.content
+    r1        = requests.get(url_media, params={"access_token": TOKEN})
+    r1.raise_for_status()
+    media_url = r1.json()["url"]
+    r2        = requests.get(media_url, headers={"Authorization": f"Bearer {TOKEN}"}, stream=True)
+    r2.raise_for_status()
+    return r2.content
 

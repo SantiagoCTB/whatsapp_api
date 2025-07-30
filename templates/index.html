@@ -1,91 +1,74 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <title>Chat Tecnimedellín</title>
-    <link rel="stylesheet" href="/static/style.css">
+  <meta charset="UTF-8">
+  <title>Chat Tecnimedellín</title>
+  <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
 
-  <!-- Enlaces de navegación -->
+  <!-- Navegación -->
   <div style="position: absolute; bottom: 20px; left: 20px; display: flex; gap: 10px;">
     <a href="{{ url_for('configuracion.configuracion') }}"
-       style="background-color: #2980b9; color: white;
-              padding: 8px 16px; text-decoration: none;
-              border-radius: 5px; font-size: 14px;">
+       style="background-color: #2980b9; color: white; padding: 8px 16px; text-decoration: none; border-radius: 5px; font-size: 14px;">
       Configuración
     </a>
     <a href="{{ url_for('configuracion.botones') }}"
-       style="background-color: #16a085; color: white;
-              padding: 8px 16px; text-decoration: none;
-              border-radius: 5px; font-size: 14px;">
+       style="background-color: #16a085; color: white; padding: 8px 16px; text-decoration: none; border-radius: 5px; font-size: 14px;">
       Botones
     </a>
     <a href="{{ url_for('auth.logout') }}"
-       style="background-color: #e74c3c; color: white;
-              padding: 8px 16px; text-decoration: none;
-              border-radius: 5px; font-size: 14px;">
+       style="background-color: #e74c3c; color: white; padding: 8px 16px; text-decoration: none; border-radius: 5px; font-size: 14px;">
       Cerrar sesión
     </a>
   </div>
 
-  <!-- MENÚ CONTEXTUAL -->
+  <!-- Menú contextual -->
   <ul id="contextMenu" style="
-      position: absolute;
-      display: none;
-      list-style: none;
-      padding: 8px;
-      margin: 0;
-      background-color: white;
-      border: 1px solid #ccc;
-      box-shadow: 0px 2px 5px rgba(0,0,0,0.2);
-      border-radius: 5px;
-      z-index: 1000;
-  ">
+      position: absolute; display: none; list-style: none; padding: 8px; margin: 0;
+      background-color: white; border: 1px solid #ccc;
+      box-shadow: 0px 2px 5px rgba(0,0,0,0.2); border-radius: 5px; z-index: 1000;">
     <li id="menu_alias" style="padding: 6px 12px; cursor: pointer;">Añadir contacto</li>
   </ul>
 
   <div class="container">
     <div class="sidebar">
       <h2>Clientes</h2>
-
-      <!-- BUSCADOR -->
-      <input
-        type="text"
-        id="buscador"
-        placeholder="Buscar número..."
-        style="width: 90%; padding: 8px; margin-bottom: 10px; border-radius: 5px; border: 1px solid #ccc;"
-      >
-
+      <input type="text" id="buscador" placeholder="Buscar número..."
+             style="width: 90%; padding: 8px; margin-bottom: 10px; border-radius: 5px; border: 1px solid #ccc;">
       <ul id="chatList"></ul>
     </div>
 
     <div class="chatWindow">
-      <!-- BARRA DE BOTONES RÁPIDOS -->
       <div id="botonera" style="display: flex; gap: 10px; padding: 10px; overflow-x: auto;"></div>
-
-      <!-- CAJA DE MENSAJES -->
       <div id="chatBox" style="padding:10px; height:60vh; overflow-y:auto; border:1px solid #ccc; margin-bottom:10px;"></div>
 
-      <!-- FORMULARIO PARA ENVIAR IMAGENES -->
+      <!-- Formulario imagen -->
       <form id="imageForm" enctype="multipart/form-data" style="margin-bottom:10px;">
-        <input type="hidden" id="imageNumero" name="numero" />
-        <input type="file" id="imageInput" name="image" accept="image/*" />
-        <input type="text" id="captionInput" name="caption" placeholder="Leyenda imagen…" />
+        <input type="hidden" id="imageNumero" name="numero">
+        <input type="file" id="imageInput" name="image" accept="image/*">
+        <input type="text" id="captionInput" name="caption" placeholder="Leyenda imagen…">
         <button type="submit">Enviar imagen</button>
       </form>
 
-      <!-- FORMULARIO PARA ENVIAR AUDIOS -->
+      <!-- Formulario audio -->
       <form id="audioForm" enctype="multipart/form-data" style="margin-bottom:10px;">
-        <input type="hidden" id="audioNumero" name="numero" />
-        <input type="file" id="audioInput" name="audio" accept="audio/*" />
-        <input type="text" id="audioCaptionInput" name="caption" placeholder="Leyenda audio…" />
+        <input type="hidden" id="audioNumero" name="numero">
+        <input type="file" id="audioInput" name="audio" accept="audio/*">
+        <input type="text" id="audioCaptionInput" name="caption" placeholder="Leyenda audio…">
         <button type="submit">Enviar audio</button>
       </form>
 
-      <!-- ÁREA DE TEXTO -->
+      <!-- Formulario video -->
+      <form id="videoForm" enctype="multipart/form-data" style="margin-bottom:10px;">
+        <input type="hidden" id="videoNumero" name="numero">
+        <input type="file" id="videoInput" name="video" accept="video/*">
+        <input type="text" id="videoCaptionInput" name="caption" placeholder="Leyenda video…">
+        <button type="submit">Enviar video</button>
+      </form>
+
       <div class="inputArea">
-        <input type="text" id="messageInput" placeholder="Escribe un mensaje..." style="width:80%;" />
+        <input type="text" id="messageInput" placeholder="Escribe un mensaje..." style="width:80%;">
         <button onclick="sendMessage()">Enviar</button>
       </div>
     </div>
@@ -96,59 +79,64 @@
     let autoRefreshInterval = null;
     let todosLosChats = [];
 
-      function fetchChat() {
-        if (!currentChat) return;
-
-        // Si hay un audio reproduciéndose, no recargamos
-        const audios = document.querySelectorAll('#chatBox audio');
-        for (const audio of audios) {
-          if (!audio.paused) {
-            return;
-          }
-        }
-
-        fetch(`/get_chat/${currentChat}`)
-          .then(res => res.json())
-          .then(data => {
-            const chatBox = document.getElementById('chatBox');
-            chatBox.innerHTML = '';
-            data.mensajes.forEach(msg => {
-              const [texto, tipo, media_url, ts] = msg;
-              const cont = document.createElement('div');
-              cont.className = tipo;
-
-              if (tipo.endsWith('_image') && media_url) {
-                const img = document.createElement('img');
-                img.src = media_url;
-                img.style.maxWidth = '200px';
-                cont.appendChild(img);
-                if (texto) {
-                  const p = document.createElement('p');
-                  p.textContent = texto;
-                  cont.appendChild(p);
-                }
-              }
-              else if (tipo.includes('audio') && media_url) {
-                const audio = document.createElement('audio');
-                audio.controls = true;
-                audio.src      = media_url;
-                cont.appendChild(audio);
-                if (texto) {
-                  const p2 = document.createElement('p');
-                  p2.textContent = texto;
-                  cont.appendChild(p2);
-                }
-              }
-              else {
-                cont.textContent = `[${ts}] ${tipo}: ${texto}`;
-              }
-
-              chatBox.appendChild(cont);
-            });
-            chatBox.scrollTop = chatBox.scrollHeight;
-          })
-          .catch(err => console.error('Error al obtener chat:', err));
+    function fetchChat() {
+      if (!currentChat) return;
+      // Si hay un audio reproduciéndose, no recargamos para no interrumpirlo
+      const audios = document.querySelectorAll('#chatBox audio');
+      for (const audio of audios) {
+        if (!audio.paused) return;
       }
+
+      fetch(`/get_chat/${currentChat}`)
+        .then(res => res.json())
+        .then(data => {
+          const chatBox = document.getElementById('chatBox');
+          chatBox.innerHTML = '';
+          data.mensajes.forEach(msg => {
+            const [texto, tipo, media_url, ts] = msg;
+            const cont = document.createElement('div');
+            cont.className = tipo;
+
+            if (tipo.endsWith('_image') && media_url) {
+              const img = document.createElement('img');
+              img.src = media_url; img.style.maxWidth = '200px';
+              cont.appendChild(img);
+              if (texto) {
+                const p = document.createElement('p');
+                p.textContent = texto;
+                cont.appendChild(p);
+              }
+            }
+            else if (tipo.includes('audio') && media_url) {
+              const audio = document.createElement('audio');
+              audio.controls = true; audio.src = media_url;
+              cont.appendChild(audio);
+              if (texto) {
+                const p = document.createElement('p');
+                p.textContent = texto;
+                cont.appendChild(p);
+              }
+            }
+            else if (tipo.includes('video') && media_url) {
+              const vid = document.createElement('video');
+              vid.controls = true; vid.src = media_url; vid.style.maxWidth = '200px';
+              cont.appendChild(vid);
+              if (texto) {
+                const p = document.createElement('p');
+                p.textContent = texto;
+                cont.appendChild(p);
+              }
+            }
+            else {
+              cont.textContent = `[${ts}] ${tipo}: ${texto}`;
+            }
+
+            chatBox.appendChild(cont);
+          });
+          chatBox.scrollTop = chatBox.scrollHeight;
+        })
+        .catch(err => console.error('Error al obtener chat:', err));
+    }
 
     function fetchChatList() {
       fetch('/get_chat_list')
@@ -180,6 +168,7 @@
       currentChat = numero;
       document.getElementById('imageNumero').value = numero;
       document.getElementById('audioNumero').value = numero;
+      document.getElementById('videoNumero').value = numero;
       fetchChat();
       startAutoRefresh();
     }
@@ -198,7 +187,7 @@
       if (!mensaje || !currentChat) return alert("Selecciona un chat");
       fetch('/send_message', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({ numero: currentChat, mensaje })
       }).then(() => {
         input.value = '';
@@ -207,7 +196,6 @@
       });
     }
 
-    // Enviar imagen
     document.getElementById('imageForm').addEventListener('submit', async e => {
       e.preventDefault();
       if (!currentChat) return alert("Selecciona un chat");
@@ -222,7 +210,6 @@
       fetchChatList();
     });
 
-    // Enviar audio
     document.getElementById('audioForm').addEventListener('submit', async e => {
       e.preventDefault();
       if (!currentChat) return alert("Selecciona un chat");
@@ -232,6 +219,20 @@
       form.append('numero', currentChat);
       const resp = await fetch('/send_audio', { method: 'POST', body: form });
       if (!resp.ok) { console.error(await resp.text()); return alert('Error enviando audio'); }
+      e.target.reset();
+      fetchChat();
+      fetchChatList();
+    });
+
+    document.getElementById('videoForm').addEventListener('submit', async e => {
+      e.preventDefault();
+      if (!currentChat) return alert("Selecciona un chat");
+      const form = new FormData();
+      form.append('video', document.getElementById('videoInput').files[0]);
+      form.append('caption', document.getElementById('videoCaptionInput').value);
+      form.append('numero', currentChat);
+      const resp = await fetch('/send_video', { method: 'POST', body: form });
+      if (!resp.ok) { console.error(await resp.text()); return alert('Error enviando video'); }
       e.target.reset();
       fetchChat();
       fetchChatList();
@@ -275,7 +276,7 @@
               if (!currentChat) return alert("Selecciona un chat");
               fetch('/send_message', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({ numero: currentChat, mensaje: b.mensaje })
               }).then(() => {
                 fetchChat();
@@ -308,7 +309,7 @@
         if (nombre !== null) {
           fetch('/set_alias', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({
               numero: chatContextual.numero,
               nombre

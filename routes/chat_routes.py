@@ -196,3 +196,30 @@ def send_audio():
     )
 
     return jsonify({'status':'sent_audio'}), 200
+
+@chat_bp.route('/send_video', methods=['POST'])
+def send_video():
+    if 'user' not in session:
+        return jsonify({'error':'No autorizado'}), 401
+
+    numero  = request.form.get('numero')
+    caption = request.form.get('caption','')
+    video   = request.files.get('video')
+
+    if not numero or not video:
+        return jsonify({'error':'Falta número o video'}), 400
+
+    filename = secure_filename(video.filename)
+    unique   = f"{uuid.uuid4().hex}_{filename}"
+    path     = os.path.join(UPLOAD_FOLDER, unique)
+    video.save(path)
+
+    enviar_mensaje(
+        numero,
+        caption,
+        tipo='bot_video',
+        tipo_respuesta='video',
+        opciones=path
+    )
+
+    return jsonify({'status':'sent_video'}), 200

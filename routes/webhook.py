@@ -75,6 +75,36 @@ def webhook():
                 enviar_mensaje(from_number, "Audio recibido correctamente.", tipo='bot')
                 continue
 
+            if msg_type == 'video':
+                media_id   = msg['video']['id']
+                mime_raw   = msg['video'].get('mime_type', 'video/mp4')
+                mime_clean = mime_raw.split(';')[0].strip()
+                ext        = mime_clean.split('/')[-1]
+
+                # 1) Descarga bytes y guardar en static/uploads
+                media_bytes = download_audio(media_id)
+                filename    = f"{media_id}.{ext}"
+                path        = os.path.join(Config.UPLOAD_FOLDER, filename)
+                with open(path, 'wb') as f:
+                    f.write(media_bytes)
+
+                # 2) URL pública
+                public_url = url_for('static', filename=f'uploads/{filename}', _external=True)
+
+                # 3) Guardar en BD
+                guardar_mensaje(
+                    from_number,
+                    "",               # sin texto
+                    'video',
+                    media_id=media_id,
+                    media_url=public_url,
+                    mime_type=mime_clean
+                )
+                
+                # 4) Confirmación al cliente
+                enviar_mensaje(from_number, "Video recibido correctamente.", tipo='bot')
+                continue
+
             # IMAGEN
             if msg_type == 'image':
                 media_id  = msg['image']['id']
