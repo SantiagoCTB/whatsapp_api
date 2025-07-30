@@ -129,8 +129,17 @@
     }
 
     #chatBox {
-      flex:1; padding:20px; overflow-y:auto;
-      display:flex; flex-direction:column; gap:10px;
+      flex: 1;
+      padding: 20px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+
+      background-image: url("/static/fondo_chats.png"); /* ✅ Ruta */
+      background-repeat: repeat;
+      background-size: contain; /* O "cover" si quieres que se estire */
+      background-position: center;
     }
 
     .sidebar, .chatWindow {
