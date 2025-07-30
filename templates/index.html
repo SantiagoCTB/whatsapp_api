@@ -3,34 +3,274 @@
 <head>
   <meta charset="UTF-8">
   <title>Chat Tecnimedellín</title>
-  <link rel="stylesheet" href="/static/style.css">
+  <style>
+    :root {
+      --bg-page:       #fafafa;
+      --bg-sidebar:    #a8dadc;
+      --bg-chat:       #f1faee;
+      --accent:        #457b9d;
+      --accent-hover:  #1d3557;
+      --bubble-user:   #e9c46a;
+      --bubble-bot:    #81b29a;
+      --bubble-asesor: #f4a261;
+      --text-main:     #1d3557;
+      --text-light:    #ffffff;
+      --font-base:     'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      display: flex;
+      height: 100vh;
+      font-family: var(--font-base);
+      background: var(--bg-page);
+    }
+
+    .container {
+      display: flex;
+      width: 100%;
+      margin: auto;
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+      background: var(--bg-chat);
+    }
+
+    /* Sidebar */
+    .sidebar {
+      width: 25%;
+      background: var(--bg-sidebar);
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+    }
+    .sidebar h2 {
+      text-align: center;
+      margin-bottom: 16px;
+      color: var(--text-main);
+      font-weight: normal;
+    }
+    #buscador {
+      padding: 8px;
+      border-radius: 8px;
+      border: none;
+      margin-bottom: 12px;
+      font-size: 14px;
+    }
+    #chatList {
+      list-style: none;
+      overflow-y: auto;
+      flex: 1;
+    }
+    #chatList li {
+      padding: 12px;
+      margin-bottom: 6px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.3s, transform 0.2s;
+      color: var(--text-main);
+    }
+    #chatList li:hover {
+      background: var(--accent-hover);
+      color: var(--text-light);
+      transform: translateX(4px);
+    }
+    #chatList li.active {
+      background: var(--accent);
+      color: var(--text-light);
+    }
+
+    /* Chat Window */
+    .chatWindow {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      background: var(--bg-chat);
+    }
+    #botonera {
+      display: flex;
+      gap: 8px;
+      padding: 12px;
+      overflow-x: auto;
+      background: var(--bg-chat);
+    }
+    #botonera button {
+      width: 36px; height: 36px;
+      border: none; border-radius: 50%;
+      background: var(--accent);
+      color: var(--text-light);
+      font-weight: bold;
+      cursor: pointer;
+      transition: transform 0.2s, background 0.3s;
+      position: relative;
+      overflow: hidden;
+    }
+    #botonera button:hover {
+      transform: scale(1.1);
+      background: var(--accent-hover);
+    }
+
+    #chatBox {
+      flex: 1;
+      padding: 20px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .message {
+      animation: fadeIn 0.3s ease-out;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Bubbles */
+    .cliente {
+      align-self: flex-start;
+      background: var(--bubble-user);
+      color: var(--text-main);
+    }
+    .bot {
+      align-self: flex-start;
+      background: var(--bubble-bot);
+      color: var(--text-light);
+    }
+    .asesor {
+      align-self: flex-end;
+      background: var(--bubble-asesor);
+      color: var(--text-main);
+      font-weight: bold;
+    }
+    .cliente, .bot, .asesor {
+      max-width: 70%;
+      padding: 10px 14px;
+      border-radius: 16px;
+      word-wrap: break-word;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    /* Input area */
+    .inputArea {
+      display: flex;
+      align-items: center;
+      padding: 12px;
+      background: var(--text-light);
+      border-top: 1px solid #ddd;
+    }
+    #attachBtn {
+      width: 40px; height: 40px;
+      border: none; border-radius: 50%;
+      background: var(--accent);
+      color: var(--text-light);
+      font-size: 24px;
+      cursor: pointer;
+      transition: transform 0.2s, background 0.3s;
+      margin-right: 12px;
+      position: relative;
+      overflow: hidden;
+    }
+    #attachBtn:hover {
+      transform: rotate(90deg);
+      background: var(--accent-hover);
+    }
+    .attach-menu {
+      position: absolute;
+      bottom: 60px;
+      left: 20px;
+      background: var(--text-light);
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+      display: flex;
+      flex-direction: column;
+      opacity: 0;
+      transform: scale(0.8);
+      transform-origin: bottom left;
+      transition: opacity 0.2s, transform 0.2s;
+      pointer-events: none;
+      z-index: 10;
+    }
+    .attach-menu.show {
+      opacity: 1;
+      transform: scale(1);
+      pointer-events: auto;
+    }
+    .attach-item {
+      width: 36px; height: 36px;
+      margin: 8px;
+      border-radius: 50%;
+      background: var(--accent);
+      color: var(--text-light);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      cursor: pointer;
+      transition: transform 0.2s, background 0.3s;
+    }
+    .attach-item:hover {
+      transform: scale(1.2);
+      background: var(--accent-hover);
+    }
+
+    #messageInput {
+      flex: 1;
+      padding: 10px 14px;
+      border: 1px solid #ccc;
+      border-radius: 20px;
+      font-size: 14px;
+      outline: none;
+      margin-right: 12px;
+    }
+    #sendBtn {
+      padding: 10px 20px;
+      border: none; border-radius: 20px;
+      background: var(--accent);
+      color: var(--text-light);
+      cursor: pointer;
+      transition: transform 0.2s, background 0.3s;
+      position: relative;
+      overflow: hidden;
+    }
+    #sendBtn:hover {
+      transform: scale(1.05);
+      background: var(--accent-hover);
+    }
+    /* ripple effect */
+    button:after {
+      content: '';
+      position: absolute;
+      width: 100px; height: 100px;
+      background: rgba(255,255,255,0.3);
+      border-radius: 50%;
+      transform: scale(0);
+      opacity: 0;
+      transition: transform 0.5s, opacity 0.8s;
+    }
+    button:active:after {
+      transform: scale(1);
+      opacity: 1;
+      transition: 0s;
+    }
+  </style>
 </head>
 <body>
 
-  <!-- Navegación -->
-  <div style="position: absolute; bottom: 20px; left: 20px; display: flex; gap: 10px;">
-    <a href="{{ url_for('configuracion.configuracion') }}" style="background-color:#2980b9;color:white;padding:8px 16px;text-decoration:none;border-radius:5px;font-size:14px;">Configuración</a>
-    <a href="{{ url_for('configuracion.botones') }}"      style="background-color:#16a085;color:white;padding:8px 16px;text-decoration:none;border-radius:5px;font-size:14px;">Botones</a>
-    <a href="{{ url_for('auth.logout') }}"               style="background-color:#e74c3c;color:white;padding:8px 16px;text-decoration:none;border-radius:5px;font-size:14px;">Cerrar sesión</a>
-  </div>
-
-  <!-- Menú contextual -->
-  <ul id="contextMenu" style="position:absolute;display:none;list-style:none;padding:8px;margin:0;background:#fff;border:1px solid #ccc;box-shadow:0 2px 5px rgba(0,0,0,0.2);border-radius:5px;z-index:1000;">
-    <li id="menu_alias" style="padding:6px 12px;cursor:pointer;">Añadir contacto</li>
-  </ul>
-
+  <!-- Sidebar & Chat -->
   <div class="container">
     <div class="sidebar">
       <h2>Clientes</h2>
-      <input type="text" id="buscador" placeholder="Buscar número…" style="width:90%;padding:8px;margin-bottom:10px;border-radius:5px;border:1px solid #ccc;">
+      <input id="buscador" type="text" placeholder="Buscar número…">
       <ul id="chatList"></ul>
     </div>
 
     <div class="chatWindow">
-      <div id="botonera" style="display:flex;gap:10px;padding:10px;overflow-x:auto;"></div>
-      <div id="chatBox" style="padding:20px;height:60vh;overflow-y:auto;display:flex;flex-direction:column;gap:10px;"></div>
-
-      <!-- Área de input con Attach -->
+      <div id="botonera"></div>
+      <div id="chatBox"></div>
       <div class="inputArea">
         <button id="attachBtn">+</button>
         <div id="attachMenu" class="attach-menu">
@@ -38,172 +278,180 @@
           <div id="attachAudio" class="attach-item" title="Enviar audio">🎤</div>
           <div id="attachVideo" class="attach-item" title="Enviar video">🎥</div>
         </div>
-
-        <input type="text" id="messageInput" placeholder="Escribe un mensaje…" style="flex:1;padding:10px 15px;border:1px solid #ccc;border-radius:20px;font-size:14px;outline:none;margin-right:10px;">
+        <input id="messageInput" type="text" placeholder="Escribe un mensaje…">
         <button id="sendBtn">Enviar</button>
-
-        <!-- Hidden file inputs -->
-        <input type="file" id="imageInput" accept="image/*" style="display:none;">
-        <input type="file" id="audioInput" accept="audio/*" style="display:none;">
-        <input type="file" id="videoInput" accept="video/*" style="display:none;">
+        <input id="imageInput" type="file" accept="image/*" style="display:none;">
+        <input id="audioInput" type="file" accept="audio/*" style="display:none;">
+        <input id="videoInput" type="file" accept="video/*" style="display:none;">
       </div>
     </div>
   </div>
 
-  <!-- Script inline para asegurar que todo funcione sin archivo externo -->
   <script>
   document.addEventListener('DOMContentLoaded', () => {
     let currentChat = null;
-    let autoRefreshInterval = null;
-    let todosLosChats = [];
-    let lastMsgCount = 0;
+    let autoRefresh = null;
+    let todosChats = [];
+    let lastCount = 0;
 
-    function fetchChat() {
-      if (!currentChat) return;
-      // Si hay audio o video reproduciéndose, no recargamos
-      const medias = document.querySelectorAll('#chatBox audio, #chatBox video');
-      for (const m of medias) {
-        if (!m.paused) return;
-      }
-
-      fetch(`/get_chat/${currentChat}`)
-        .then(res => res.json())
-        .then(data => {
-          const chatBox = document.getElementById('chatBox');
-          const msgs    = data.mensajes;
-          const total   = msgs.length;
-          const atBottom = chatBox.scrollHeight - chatBox.scrollTop <= chatBox.clientHeight + 5;
-
-          if (lastMsgCount === 0 || total < lastMsgCount) {
-            chatBox.innerHTML = '';
-            lastMsgCount = 0;
-          }
-
-          for (let i = lastMsgCount; i < total; i++) {
-            const [texto, tipo, media_url, ts] = msgs[i];
-            const cont = document.createElement('div');
-            cont.className = tipo + ' message'; 
-
-            if (tipo.endsWith('_image') && media_url) {
-              const img = document.createElement('img');
-              img.src = media_url; img.style.maxWidth = '200px';
-              cont.appendChild(img);
-            } else if (tipo.includes('audio') && media_url) {
-              const audio = document.createElement('audio');
-              audio.controls = true; audio.src = media_url;
-              cont.appendChild(audio);
-            } else if (tipo.includes('video') && media_url) {
-              const vid = document.createElement('video');
-              vid.controls = true; vid.src = media_url; vid.style.maxWidth = '200px';
-              cont.appendChild(vid);
-            } else {
-              cont.textContent = `[${ts}] ${tipo}: ${texto}`;
-            }
-
-            if (texto && !tipo.endsWith('_image')) {
-              const p = document.createElement('p');
-              p.textContent = texto;
-              cont.appendChild(p);
-            }
-
-            chatBox.appendChild(cont);
-          }
-
-          lastMsgCount = total;
-          if (atBottom) chatBox.scrollTop = chatBox.scrollHeight;
-        })
-        .catch(console.error);
-    }
+    const chatListEl = document.getElementById('chatList');
+    const chatBoxEl  = document.getElementById('chatBox');
+    const botoneraEl = document.getElementById('botonera');
 
     function fetchChatList() {
       fetch('/get_chat_list')
-        .then(res => res.json())
-        .then(data => {
-          todosLosChats = data;
-          renderChatList(data);
-        })
-        .catch(console.error);
+        .then(r=>r.json())
+        .then(data=>{
+          todosChats = data;
+          chatListEl.innerHTML = '';
+          data.forEach(c=>{
+            const li = document.createElement('li');
+            li.textContent = c.alias? `${c.alias} (${c.numero})` : c.numero;
+            li.onclick = ()=>selectChat(c.numero, li);
+            chatListEl.appendChild(li);
+          });
+        });
     }
 
-    function renderChatList(lista) {
-      const chatList = document.getElementById('chatList');
-      chatList.innerHTML = '';
-      lista.forEach(chat => {
-        const li = document.createElement('li');
-        li.textContent = chat.alias
-          ? `${chat.alias} (${chat.numero})`
-          : chat.numero;
-        li.className = chat.asesor ? 'asesor-activo' : '';
-        li.onclick = () => loadChat(chat.numero);
-        chatList.appendChild(li);
-      });
-    }
-
-    function loadChat(numero) {
+    function selectChat(numero, liEl) {
       currentChat = numero;
-      lastMsgCount = 0;
-      fetchChat();
-      if (autoRefreshInterval) clearInterval(autoRefreshInterval);
-      autoRefreshInterval = setInterval(() => {
-        fetchChatList();
-        fetchChat();
-      }, 3000);
+      lastCount = 0;
+      // active styling
+      document.querySelectorAll('#chatList li').forEach(li=>li.classList.remove('active'));
+      liEl.classList.add('active');
+      if (autoRefresh) clearInterval(autoRefresh);
+      autoRefresh = setInterval(loadMessages, 3000);
+      loadMessages();
+      loadBotonera();
     }
 
-    document.getElementById('sendBtn').addEventListener('click', () => {
-      const input = document.getElementById('messageInput');
-      const mensaje = input.value.trim();
-      if (!mensaje || !currentChat) return alert("Selecciona un chat");
-      fetch('/send_message', {
+    function loadMessages() {
+      if (!currentChat) return;
+      // don't interrupt media
+      const mediaEls = chatBoxEl.querySelectorAll('audio, video');
+      for (let m of mediaEls) {
+        if (!m.paused) return;
+      }
+      fetch(`/get_chat/${currentChat}`)
+        .then(r=>r.json())
+        .then(data=>{
+          const msgs = data.mensajes;
+          const total = msgs.length;
+          const atBottom = chatBoxEl.scrollTop + chatBoxEl.clientHeight >= chatBoxEl.scrollHeight - 5;
+          if (lastCount===0 || total<lastCount) {
+            chatBoxEl.innerHTML='';
+            lastCount=0;
+          }
+          for (let i=lastCount;i<total;i++){
+            const [txt, tipo, url, ts] = msgs[i];
+            const div = document.createElement('div');
+            div.className = tipo+' message';
+            if (tipo.endsWith('_image') && url) {
+              const img = document.createElement('img');
+              img.src=url; img.style.maxWidth='200px'; div.appendChild(img);
+            } else if (tipo.includes('audio') && url) {
+              const a = document.createElement('audio');
+              a.controls=true; a.src=url; div.appendChild(a);
+            } else if (tipo.includes('video') && url) {
+              const v = document.createElement('video');
+              v.controls=true; v.src=url; v.style.maxWidth='200px'; div.appendChild(v);
+            } else {
+              div.textContent=`[${ts}] ${tipo}: ${txt}`;
+            }
+            if (txt && !tipo.endsWith('_image')) {
+              const p = document.createElement('p');
+              p.textContent = txt;
+              div.appendChild(p);
+            }
+            chatBoxEl.appendChild(div);
+          }
+          lastCount = total;
+          if (atBottom) chatBoxEl.scrollTop = chatBoxEl.scrollHeight;
+        });
+    }
+
+    // Botonera rápida
+    function loadBotonera() {
+      fetch('/get_botones')
+        .then(r=>r.json())
+        .then(btns=>{
+          botoneraEl.innerHTML='';
+          btns.forEach((b,i)=>{
+            const btn = document.createElement('button');
+            btn.textContent = i+1;
+            btn.onclick = ()=> {
+              fetch('/send_message',{
+                method:'POST',
+                headers:{'Content-Type':'application/json'},
+                body:JSON.stringify({numero:currentChat,mensaje:b.mensaje})
+              }).then(()=>{
+                loadMessages();
+                fetchChatList();
+              });
+            };
+            botoneraEl.appendChild(btn);
+          });
+        });
+    }
+
+    // Send text
+    document.getElementById('sendBtn').addEventListener('click', ()=>{
+      const inp = document.getElementById('messageInput');
+      const txt = inp.value.trim();
+      if (!txt||!currentChat) return;
+      fetch('/send_message',{
         method:'POST',
         headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({numero:currentChat,mensaje})
-      })
-      .then(() => { input.value=''; fetchChat(); fetchChatList(); })
-      .catch(console.error);
+        body:JSON.stringify({numero:currentChat,mensaje:txt})
+      }).then(()=>{
+        inp.value=''; loadMessages(); fetchChatList();
+      });
     });
 
     // Attach menu
-    const attachBtn  = document.getElementById('attachBtn');
+    const attachBtn = document.getElementById('attachBtn');
     const attachMenu = document.getElementById('attachMenu');
-    attachBtn.addEventListener('click', e => {
+    attachBtn.onclick = e=> {
       e.stopPropagation();
       attachMenu.classList.toggle('show');
-    });
-    document.addEventListener('click', () => {
-      attachMenu.classList.remove('show');
-    });
+    };
+    document.addEventListener('click', ()=>attachMenu.classList.remove('show'));
 
-    const imageInput = document.getElementById('imageInput');
-    const audioInput = document.getElementById('audioInput');
-    const videoInput = document.getElementById('videoInput');
+    // File inputs
+    const imgIn = document.getElementById('imageInput');
+    const audIn = document.getElementById('audioInput');
+    const vidIn = document.getElementById('videoInput');
+    document.getElementById('attachImage').onclick = ()=>imgIn.click();
+    document.getElementById('attachAudio').onclick = ()=>audIn.click();
+    document.getElementById('attachVideo').onclick = ()=>vidIn.click();
 
-    document.getElementById('attachImage').addEventListener('click', () => imageInput.click());
-    document.getElementById('attachAudio').addEventListener('click', () => audioInput.click());
-    document.getElementById('attachVideo').addEventListener('click', () => videoInput.click());
-
-    async function sendFile(inputElem, urlPath) {
-      if (!currentChat) return alert("Selecciona un chat");
-      const file = inputElem.files[0];
+    async function sendFile(inputEl, path) {
+      if (!currentChat) return;
+      const file = inputEl.files[0];
       if (!file) return;
       const form = new FormData();
-      form.append(inputElem.id.replace('Input','').toLowerCase(), file);
+      form.append(path.split('_')[1], file);
       form.append('caption','');
       form.append('numero', currentChat);
-      const resp = await fetch(urlPath, {method:'POST',body:form});
-      if (!resp.ok) return alert('Error enviando archivo');
-      inputElem.value = '';
-      attachMenu.classList.remove('show');
-      fetchChat(); fetchChatList();
+      const res = await fetch(`/${path}`, {method:'POST',body:form});
+      if (!res.ok) return;
+      inputEl.value=''; attachMenu.classList.remove('show');
+      loadMessages(); fetchChatList();
     }
+    imgIn.onchange = ()=>sendFile(imgIn,'send_image');
+    audIn.onchange = ()=>sendFile(audIn,'send_audio');
+    vidIn.onchange = ()=>sendFile(vidIn,'send_video');
 
-    imageInput.addEventListener('change', () => sendFile(imageInput, '/send_image'));
-    audioInput.addEventListener('change', () => sendFile(audioInput, '/send_audio'));
-    videoInput.addEventListener('change', () => sendFile(videoInput, '/send_video'));
-
-    document.addEventListener('DOMContentLoaded', () => {
-      fetchChatList();
+    // Search filter
+    document.getElementById('buscador').addEventListener('input', function(){
+      const v = this.value.toLowerCase();
+      document.querySelectorAll('#chatList li').forEach(li=>{
+        li.style.display = li.textContent.toLowerCase().includes(v)? '' : 'none';
+      });
     });
+
+    // Init
+    fetchChatList();
   });
   </script>
 </body>
