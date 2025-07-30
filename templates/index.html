@@ -5,7 +5,7 @@
   <title>Chat Tecnimedellín</title>
   <style>
     :root {
-      --bg-page:        #6d6e6e;  /* fondo general, muy suave verdoso */
+      --bg-page:        #a0a0a0;  /* fondo general, muy suave verdoso */
       --bg-sidebar:     #FFFFFF;  /* blanco puro para la barra lateral */
       --bg-chat:        #F5F9F8;  /* fondo del chat más claro aún */
 
@@ -116,7 +116,11 @@
     .chatWindow { flex:1; display:flex; flex-direction:column; }
     #botonera {
       display:flex; gap:8px; padding:12px;
-      background:var(--bg-chat); overflow-x:auto;
+      background: var(--bg-chat);
+      overflow-x: auto;
+      border: 1px solid var(--border-color); /* ✅ Borde completo */
+      border-radius: 12px; /* Opcional: redondeado si quieres */
+      margin: 8px;         /* Opcional: separación visual */
     }
     #botonera button {
       flex:0 0 auto; width:36px; height:36px;
@@ -238,7 +242,7 @@
   <div class="container">
     <!-- Sidebar -->
     <div class="sidebar">
-      <h2>Clientes</h2>
+      <h2>Chats</h2>
       <div class="sidebar-header">
         <button id="settingsBtn">⚙️</button>
       </div>
@@ -415,6 +419,13 @@
           inp.value=''; loadMessages(); fetchChatList();
         });
       };
+
+      document.getElementById('messageInput').addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          document.getElementById('sendBtn').click();
+        }
+      });
 
       // Attach menu
       const attachBtn = document.getElementById('attachBtn');
