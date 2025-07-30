@@ -78,10 +78,12 @@
     let currentChat = null;
     let autoRefreshInterval = null;
     let todosLosChats = [];
+    let lastMsgCount = 0;     // nuevo: cuántos mensajes hemos renderizado
 
     function fetchChat() {
       if (!currentChat) return;
-      // Si hay un audio reproduciéndose, no recargamos para no interrumpirlo
+
+      // Si hay un audio o video reproduciéndose, no recargamos
       const medias = document.querySelectorAll('#chatBox audio, #chatBox video');
       for (const m of medias) {
         if (!m.paused) return;
@@ -91,9 +93,21 @@
         .then(res => res.json())
         .then(data => {
           const chatBox = document.getElementById('chatBox');
-          chatBox.innerHTML = '';
-          data.mensajes.forEach(msg => {
-            const [texto, tipo, media_url, ts] = msg;
+          const msgs    = data.mensajes;
+          const total   = msgs.length;
+
+          // Determinar si el usuario estaba pegado al final antes de actualizar
+          const atBottom = chatBox.scrollHeight - chatBox.scrollTop <= chatBox.clientHeight + 5;
+
+          // Si es la primera carga o hay menos mensajes que antes, redibuja TODO
+          if (lastMsgCount === 0 || total < lastMsgCount) {
+            chatBox.innerHTML = '';
+            lastMsgCount = 0;
+          }
+
+          // Solo renderiza/apenda los mensajes nuevos
+          for (let i = lastMsgCount; i < total; i++) {
+            const [texto, tipo, media_url, ts] = msgs[i];
             const cont = document.createElement('div');
             cont.className = tipo;
 
@@ -130,10 +144,16 @@
             else {
               cont.textContent = `[${ts}] ${tipo}: ${texto}`;
             }
-
             chatBox.appendChild(cont);
-          });
-          chatBox.scrollTop = chatBox.scrollHeight;
+          }
+
+          // Actualizar el contador
+          lastMsgCount = total;
+
+          // Si antes estábamos al fondo, hacemos scroll
+          if (atBottom) {
+            chatBox.scrollTop = chatBox.scrollHeight;
+          }
         })
         .catch(err => console.error('Error al obtener chat:', err));
     }
