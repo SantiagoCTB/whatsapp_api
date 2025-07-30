@@ -9,47 +9,26 @@
 
   <!-- Navegación -->
   <div style="position: absolute; bottom: 20px; left: 20px; display: flex; gap: 10px;">
-    <a href="{{ url_for('configuracion.configuracion') }}"
-       style="background-color:#2980b9;color:white;padding:8px 16px;text-decoration:none;border-radius:5px;font-size:14px;">
-      Configuración
-    </a>
-    <a href="{{ url_for('configuracion.botones') }}"
-       style="background-color:#16a085;color:white;padding:8px 16px;text-decoration:none;border-radius:5px;font-size:14px;">
-      Botones
-    </a>
-    <a href="{{ url_for('auth.logout') }}"
-       style="background-color:#e74c3c;color:white;padding:8px 16px;text-decoration:none;border-radius:5px;font-size:14px;">
-      Cerrar sesión
-    </a>
+    <a href="{{ url_for('configuracion.configuracion') }}" style="background-color:#2980b9;color:white;padding:8px 16px;text-decoration:none;border-radius:5px;font-size:14px;">Configuración</a>
+    <a href="{{ url_for('configuracion.botones') }}"      style="background-color:#16a085;color:white;padding:8px 16px;text-decoration:none;border-radius:5px;font-size:14px;">Botones</a>
+    <a href="{{ url_for('auth.logout') }}"               style="background-color:#e74c3c;color:white;padding:8px 16px;text-decoration:none;border-radius:5px;font-size:14px;">Cerrar sesión</a>
   </div>
 
   <!-- Menú contextual -->
-  <ul id="contextMenu" style="
-      position: absolute;
-      display: none;
-      list-style: none;
-      padding: 8px;
-      margin: 0;
-      background: white;
-      border: 1px solid #ccc;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-      border-radius: 5px;
-      z-index: 1000;
-  ">
-    <li id="menu_alias" style="padding:6px 12px; cursor:pointer;">Añadir contacto</li>
+  <ul id="contextMenu" style="position:absolute;display:none;list-style:none;padding:8px;margin:0;background:#fff;border:1px solid #ccc;box-shadow:0 2px 5px rgba(0,0,0,0.2);border-radius:5px;z-index:1000;">
+    <li id="menu_alias" style="padding:6px 12px;cursor:pointer;">Añadir contacto</li>
   </ul>
 
   <div class="container">
     <div class="sidebar">
       <h2>Clientes</h2>
-      <input type="text" id="buscador" placeholder="Buscar número…"
-             style="width:90%; padding:8px; margin-bottom:10px; border-radius:5px; border:1px solid #ccc;">
+      <input type="text" id="buscador" placeholder="Buscar número…" style="width:90%;padding:8px;margin-bottom:10px;border-radius:5px;border:1px solid #ccc;">
       <ul id="chatList"></ul>
     </div>
 
     <div class="chatWindow">
-      <div id="botonera" style="display:flex; gap:10px; padding:10px; overflow-x:auto;"></div>
-      <div id="chatBox" style="padding:20px; height:60vh; overflow-y:auto; display:flex; flex-direction:column; gap:10px; background-color:var(--bg-chat);"></div>
+      <div id="botonera" style="display:flex;gap:10px;padding:10px;overflow-x:auto;"></div>
+      <div id="chatBox" style="padding:20px;height:60vh;overflow-y:auto;display:flex;flex-direction:column;gap:10px;"></div>
 
       <!-- Área de input con Attach -->
       <div class="inputArea">
@@ -60,8 +39,7 @@
           <div id="attachVideo" class="attach-item" title="Enviar video">🎥</div>
         </div>
 
-        <input type="text" id="messageInput" placeholder="Escribe un mensaje…"
-               style="flex:1; padding:10px 15px; border:1px solid #ccc; border-radius:20px; font-size:14px; outline:none;">
+        <input type="text" id="messageInput" placeholder="Escribe un mensaje…" style="flex:1;padding:10px 15px;border:1px solid #ccc;border-radius:20px;font-size:14px;outline:none;margin-right:10px;">
         <button id="sendBtn">Enviar</button>
 
         <!-- Hidden file inputs -->
@@ -72,7 +50,161 @@
     </div>
   </div>
 
-  <!-- Carga de tu lógica JavaScript externa -->
-  <script src="/static/js/script.js"></script>
+  <!-- Script inline para asegurar que todo funcione sin archivo externo -->
+  <script>
+  document.addEventListener('DOMContentLoaded', () => {
+    let currentChat = null;
+    let autoRefreshInterval = null;
+    let todosLosChats = [];
+    let lastMsgCount = 0;
+
+    function fetchChat() {
+      if (!currentChat) return;
+      // Si hay audio o video reproduciéndose, no recargamos
+      const medias = document.querySelectorAll('#chatBox audio, #chatBox video');
+      for (const m of medias) {
+        if (!m.paused) return;
+      }
+
+      fetch(`/get_chat/${currentChat}`)
+        .then(res => res.json())
+        .then(data => {
+          const chatBox = document.getElementById('chatBox');
+          const msgs    = data.mensajes;
+          const total   = msgs.length;
+          const atBottom = chatBox.scrollHeight - chatBox.scrollTop <= chatBox.clientHeight + 5;
+
+          if (lastMsgCount === 0 || total < lastMsgCount) {
+            chatBox.innerHTML = '';
+            lastMsgCount = 0;
+          }
+
+          for (let i = lastMsgCount; i < total; i++) {
+            const [texto, tipo, media_url, ts] = msgs[i];
+            const cont = document.createElement('div');
+            cont.className = tipo + ' message'; 
+
+            if (tipo.endsWith('_image') && media_url) {
+              const img = document.createElement('img');
+              img.src = media_url; img.style.maxWidth = '200px';
+              cont.appendChild(img);
+            } else if (tipo.includes('audio') && media_url) {
+              const audio = document.createElement('audio');
+              audio.controls = true; audio.src = media_url;
+              cont.appendChild(audio);
+            } else if (tipo.includes('video') && media_url) {
+              const vid = document.createElement('video');
+              vid.controls = true; vid.src = media_url; vid.style.maxWidth = '200px';
+              cont.appendChild(vid);
+            } else {
+              cont.textContent = `[${ts}] ${tipo}: ${texto}`;
+            }
+
+            if (texto && !tipo.endsWith('_image')) {
+              const p = document.createElement('p');
+              p.textContent = texto;
+              cont.appendChild(p);
+            }
+
+            chatBox.appendChild(cont);
+          }
+
+          lastMsgCount = total;
+          if (atBottom) chatBox.scrollTop = chatBox.scrollHeight;
+        })
+        .catch(console.error);
+    }
+
+    function fetchChatList() {
+      fetch('/get_chat_list')
+        .then(res => res.json())
+        .then(data => {
+          todosLosChats = data;
+          renderChatList(data);
+        })
+        .catch(console.error);
+    }
+
+    function renderChatList(lista) {
+      const chatList = document.getElementById('chatList');
+      chatList.innerHTML = '';
+      lista.forEach(chat => {
+        const li = document.createElement('li');
+        li.textContent = chat.alias
+          ? `${chat.alias} (${chat.numero})`
+          : chat.numero;
+        li.className = chat.asesor ? 'asesor-activo' : '';
+        li.onclick = () => loadChat(chat.numero);
+        chatList.appendChild(li);
+      });
+    }
+
+    function loadChat(numero) {
+      currentChat = numero;
+      lastMsgCount = 0;
+      fetchChat();
+      if (autoRefreshInterval) clearInterval(autoRefreshInterval);
+      autoRefreshInterval = setInterval(() => {
+        fetchChatList();
+        fetchChat();
+      }, 3000);
+    }
+
+    document.getElementById('sendBtn').addEventListener('click', () => {
+      const input = document.getElementById('messageInput');
+      const mensaje = input.value.trim();
+      if (!mensaje || !currentChat) return alert("Selecciona un chat");
+      fetch('/send_message', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({numero:currentChat,mensaje})
+      })
+      .then(() => { input.value=''; fetchChat(); fetchChatList(); })
+      .catch(console.error);
+    });
+
+    // Attach menu
+    const attachBtn  = document.getElementById('attachBtn');
+    const attachMenu = document.getElementById('attachMenu');
+    attachBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      attachMenu.classList.toggle('show');
+    });
+    document.addEventListener('click', () => {
+      attachMenu.classList.remove('show');
+    });
+
+    const imageInput = document.getElementById('imageInput');
+    const audioInput = document.getElementById('audioInput');
+    const videoInput = document.getElementById('videoInput');
+
+    document.getElementById('attachImage').addEventListener('click', () => imageInput.click());
+    document.getElementById('attachAudio').addEventListener('click', () => audioInput.click());
+    document.getElementById('attachVideo').addEventListener('click', () => videoInput.click());
+
+    async function sendFile(inputElem, urlPath) {
+      if (!currentChat) return alert("Selecciona un chat");
+      const file = inputElem.files[0];
+      if (!file) return;
+      const form = new FormData();
+      form.append(inputElem.id.replace('Input','').toLowerCase(), file);
+      form.append('caption','');
+      form.append('numero', currentChat);
+      const resp = await fetch(urlPath, {method:'POST',body:form});
+      if (!resp.ok) return alert('Error enviando archivo');
+      inputElem.value = '';
+      attachMenu.classList.remove('show');
+      fetchChat(); fetchChatList();
+    }
+
+    imageInput.addEventListener('change', () => sendFile(imageInput, '/send_image'));
+    audioInput.addEventListener('change', () => sendFile(audioInput, '/send_audio'));
+    videoInput.addEventListener('change', () => sendFile(videoInput, '/send_video'));
+
+    document.addEventListener('DOMContentLoaded', () => {
+      fetchChatList();
+    });
+  });
+  </script>
 </body>
 </html>
