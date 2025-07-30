@@ -138,3 +138,37 @@ button:hover {
     color: white;
     font-weight: bold;
 }
+
+/* Fade-in para nuevos mensajes */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.message {
+  animation: fadeIn 0.3s ease-out;
+}
+
+/* Efecto “ripple” para botones */
+button {
+  position: relative;
+  overflow: hidden;
+}
+button:after {
+  content: '';
+  position: absolute;
+  width: 100px; height: 100px;
+  background: rgba(255,255,255,0.3);
+  border-radius: 50%;
+  transform: scale(0);
+  opacity: 0;
+  transition: transform 0.5s, opacity 0.8s;
+}
+button:active:after {
+  transform: scale(1);
+  opacity: 1;
+  transition: 0s;
+}
+
+.attach-menu {
+  transition: opacity 0.2s, transform 0.2s;
+}

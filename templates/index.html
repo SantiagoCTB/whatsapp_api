@@ -10,334 +10,69 @@
   <!-- Navegación -->
   <div style="position: absolute; bottom: 20px; left: 20px; display: flex; gap: 10px;">
     <a href="{{ url_for('configuracion.configuracion') }}"
-       style="background-color: #2980b9; color: white; padding: 8px 16px; text-decoration: none; border-radius: 5px; font-size: 14px;">
+       style="background-color:#2980b9;color:white;padding:8px 16px;text-decoration:none;border-radius:5px;font-size:14px;">
       Configuración
     </a>
     <a href="{{ url_for('configuracion.botones') }}"
-       style="background-color: #16a085; color: white; padding: 8px 16px; text-decoration: none; border-radius: 5px; font-size: 14px;">
+       style="background-color:#16a085;color:white;padding:8px 16px;text-decoration:none;border-radius:5px;font-size:14px;">
       Botones
     </a>
     <a href="{{ url_for('auth.logout') }}"
-       style="background-color: #e74c3c; color: white; padding: 8px 16px; text-decoration: none; border-radius: 5px; font-size: 14px;">
+       style="background-color:#e74c3c;color:white;padding:8px 16px;text-decoration:none;border-radius:5px;font-size:14px;">
       Cerrar sesión
     </a>
   </div>
 
   <!-- Menú contextual -->
   <ul id="contextMenu" style="
-      position: absolute; display: none; list-style: none; padding: 8px; margin: 0;
-      background-color: white; border: 1px solid #ccc;
-      box-shadow: 0px 2px 5px rgba(0,0,0,0.2); border-radius: 5px; z-index: 1000;">
-    <li id="menu_alias" style="padding: 6px 12px; cursor: pointer;">Añadir contacto</li>
+      position: absolute;
+      display: none;
+      list-style: none;
+      padding: 8px;
+      margin: 0;
+      background: white;
+      border: 1px solid #ccc;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+      border-radius: 5px;
+      z-index: 1000;
+  ">
+    <li id="menu_alias" style="padding:6px 12px; cursor:pointer;">Añadir contacto</li>
   </ul>
 
   <div class="container">
     <div class="sidebar">
       <h2>Clientes</h2>
-      <input type="text" id="buscador" placeholder="Buscar número..."
-             style="width: 90%; padding: 8px; margin-bottom: 10px; border-radius: 5px; border: 1px solid #ccc;">
+      <input type="text" id="buscador" placeholder="Buscar número…"
+             style="width:90%; padding:8px; margin-bottom:10px; border-radius:5px; border:1px solid #ccc;">
       <ul id="chatList"></ul>
     </div>
 
     <div class="chatWindow">
-      <div id="botonera" style="display: flex; gap: 10px; padding: 10px; overflow-x: auto;"></div>
-      <div id="chatBox" style="padding:10px; height:60vh; overflow-y:auto; border:1px solid #ccc; margin-bottom:10px;"></div>
+      <div id="botonera" style="display:flex; gap:10px; padding:10px; overflow-x:auto;"></div>
+      <div id="chatBox" style="padding:20px; height:60vh; overflow-y:auto; display:flex; flex-direction:column; gap:10px; background-color:var(--bg-chat);"></div>
 
-      <!-- Formulario imagen -->
-      <form id="imageForm" enctype="multipart/form-data" style="margin-bottom:10px;">
-        <input type="hidden" id="imageNumero" name="numero">
-        <input type="file" id="imageInput" name="image" accept="image/*">
-        <input type="text" id="captionInput" name="caption" placeholder="Leyenda imagen…">
-        <button type="submit">Enviar imagen</button>
-      </form>
-
-      <!-- Formulario audio -->
-      <form id="audioForm" enctype="multipart/form-data" style="margin-bottom:10px;">
-        <input type="hidden" id="audioNumero" name="numero">
-        <input type="file" id="audioInput" name="audio" accept="audio/*">
-        <input type="text" id="audioCaptionInput" name="caption" placeholder="Leyenda audio…">
-        <button type="submit">Enviar audio</button>
-      </form>
-
-      <!-- Formulario video -->
-      <form id="videoForm" enctype="multipart/form-data" style="margin-bottom:10px;">
-        <input type="hidden" id="videoNumero" name="numero">
-        <input type="file" id="videoInput" name="video" accept="video/*">
-        <input type="text" id="videoCaptionInput" name="caption" placeholder="Leyenda video…">
-        <button type="submit">Enviar video</button>
-      </form>
-
+      <!-- Área de input con Attach -->
       <div class="inputArea">
-        <input type="text" id="messageInput" placeholder="Escribe un mensaje..." style="width:80%;">
-        <button onclick="sendMessage()">Enviar</button>
+        <button id="attachBtn">+</button>
+        <div id="attachMenu" class="attach-menu">
+          <div id="attachImage" class="attach-item" title="Enviar imagen">📷</div>
+          <div id="attachAudio" class="attach-item" title="Enviar audio">🎤</div>
+          <div id="attachVideo" class="attach-item" title="Enviar video">🎥</div>
+        </div>
+
+        <input type="text" id="messageInput" placeholder="Escribe un mensaje…"
+               style="flex:1; padding:10px 15px; border:1px solid #ccc; border-radius:20px; font-size:14px; outline:none;">
+        <button id="sendBtn">Enviar</button>
+
+        <!-- Hidden file inputs -->
+        <input type="file" id="imageInput" accept="image/*" style="display:none;">
+        <input type="file" id="audioInput" accept="audio/*" style="display:none;">
+        <input type="file" id="videoInput" accept="video/*" style="display:none;">
       </div>
     </div>
   </div>
 
-  <script>
-    let currentChat = null;
-    let autoRefreshInterval = null;
-    let todosLosChats = [];
-    let lastMsgCount = 0;     // nuevo: cuántos mensajes hemos renderizado
-
-    function fetchChat() {
-      if (!currentChat) return;
-
-      // Si hay un audio o video reproduciéndose, no recargamos
-      const medias = document.querySelectorAll('#chatBox audio, #chatBox video');
-      for (const m of medias) {
-        if (!m.paused) return;
-      }
-
-      fetch(`/get_chat/${currentChat}`)
-        .then(res => res.json())
-        .then(data => {
-          const chatBox = document.getElementById('chatBox');
-          const msgs    = data.mensajes;
-          const total   = msgs.length;
-
-          // Determinar si el usuario estaba pegado al final antes de actualizar
-          const atBottom = chatBox.scrollHeight - chatBox.scrollTop <= chatBox.clientHeight + 5;
-
-          // Si es la primera carga o hay menos mensajes que antes, redibuja TODO
-          if (lastMsgCount === 0 || total < lastMsgCount) {
-            chatBox.innerHTML = '';
-            lastMsgCount = 0;
-          }
-
-          // Solo renderiza/apenda los mensajes nuevos
-          for (let i = lastMsgCount; i < total; i++) {
-            const [texto, tipo, media_url, ts] = msgs[i];
-            const cont = document.createElement('div');
-            cont.className = tipo;
-
-            if (tipo.endsWith('_image') && media_url) {
-              const img = document.createElement('img');
-              img.src = media_url; img.style.maxWidth = '200px';
-              cont.appendChild(img);
-              if (texto) {
-                const p = document.createElement('p');
-                p.textContent = texto;
-                cont.appendChild(p);
-              }
-            }
-            else if (tipo.includes('audio') && media_url) {
-              const audio = document.createElement('audio');
-              audio.controls = true; audio.src = media_url;
-              cont.appendChild(audio);
-              if (texto) {
-                const p = document.createElement('p');
-                p.textContent = texto;
-                cont.appendChild(p);
-              }
-            }
-            else if (tipo.includes('video') && media_url) {
-              const vid = document.createElement('video');
-              vid.controls = true; vid.src = media_url; vid.style.maxWidth = '200px';
-              cont.appendChild(vid);
-              if (texto) {
-                const p = document.createElement('p');
-                p.textContent = texto;
-                cont.appendChild(p);
-              }
-            }
-            else {
-              cont.textContent = `[${ts}] ${tipo}: ${texto}`;
-            }
-            chatBox.appendChild(cont);
-          }
-
-          // Actualizar el contador
-          lastMsgCount = total;
-
-          // Si antes estábamos al fondo, hacemos scroll
-          if (atBottom) {
-            chatBox.scrollTop = chatBox.scrollHeight;
-          }
-        })
-        .catch(err => console.error('Error al obtener chat:', err));
-    }
-
-    function fetchChatList() {
-      fetch('/get_chat_list')
-        .then(res => res.json())
-        .then(data => {
-          todosLosChats = data;
-          renderChatList(data);
-        });
-    }
-
-    function renderChatList(lista) {
-      const chatList = document.getElementById('chatList');
-      chatList.innerHTML = '';
-      lista.forEach(chat => {
-        const li = document.createElement('li');
-        const alias = chat.alias;
-        li.textContent = alias ? `${alias} (${chat.numero})` : chat.numero;
-        li.className = chat.asesor ? 'asesor-activo' : '';
-        li.onclick = () => loadChat(chat.numero);
-        li.addEventListener('contextmenu', e => {
-          e.preventDefault();
-          mostrarMenuContextual(e.pageX, e.pageY, chat);
-        });
-        chatList.appendChild(li);
-      });
-    }
-
-    function loadChat(numero) {
-      currentChat = numero;
-      document.getElementById('imageNumero').value = numero;
-      document.getElementById('audioNumero').value = numero;
-      document.getElementById('videoNumero').value = numero;
-      fetchChat();
-      startAutoRefresh();
-    }
-
-    function startAutoRefresh() {
-      if (autoRefreshInterval) clearInterval(autoRefreshInterval);
-      autoRefreshInterval = setInterval(() => {
-        fetchChatList();
-        fetchChat();
-      }, 3000);
-    }
-
-    function sendMessage() {
-      const input = document.getElementById('messageInput');
-      const mensaje = input.value.trim();
-      if (!mensaje || !currentChat) return alert("Selecciona un chat");
-      fetch('/send_message', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ numero: currentChat, mensaje })
-      }).then(() => {
-        input.value = '';
-        fetchChat();
-        fetchChatList();
-      });
-    }
-
-    document.getElementById('imageForm').addEventListener('submit', async e => {
-      e.preventDefault();
-      if (!currentChat) return alert("Selecciona un chat");
-      const form = new FormData();
-      form.append('image', document.getElementById('imageInput').files[0]);
-      form.append('caption', document.getElementById('captionInput').value);
-      form.append('numero', currentChat);
-      const resp = await fetch('/send_image', { method: 'POST', body: form });
-      if (!resp.ok) { console.error(await resp.text()); return alert('Error enviando imagen'); }
-      e.target.reset();
-      fetchChat();
-      fetchChatList();
-    });
-
-    document.getElementById('audioForm').addEventListener('submit', async e => {
-      e.preventDefault();
-      if (!currentChat) return alert("Selecciona un chat");
-      const form = new FormData();
-      form.append('audio', document.getElementById('audioInput').files[0]);
-      form.append('caption', document.getElementById('audioCaptionInput').value);
-      form.append('numero', currentChat);
-      const resp = await fetch('/send_audio', { method: 'POST', body: form });
-      if (!resp.ok) { console.error(await resp.text()); return alert('Error enviando audio'); }
-      e.target.reset();
-      fetchChat();
-      fetchChatList();
-    });
-
-    document.getElementById('videoForm').addEventListener('submit', async e => {
-      e.preventDefault();
-      if (!currentChat) return alert("Selecciona un chat");
-      const form = new FormData();
-      form.append('video', document.getElementById('videoInput').files[0]);
-      form.append('caption', document.getElementById('videoCaptionInput').value);
-      form.append('numero', currentChat);
-      const resp = await fetch('/send_video', { method: 'POST', body: form });
-      if (!resp.ok) { console.error(await resp.text()); return alert('Error enviando video'); }
-      e.target.reset();
-      fetchChat();
-      fetchChatList();
-    });
-
-    document.addEventListener('DOMContentLoaded', () => {
-      document.getElementById('messageInput')
-        .addEventListener('keypress', ev => {
-          if (ev.key === 'Enter') { ev.preventDefault(); sendMessage(); }
-        });
-      document.getElementById('buscador')
-        .addEventListener('input', function() {
-          const val = this.value.toLowerCase();
-          renderChatList(
-            todosLosChats.filter(c =>
-              c.numero.toLowerCase().includes(val) ||
-              (c.alias || '').toLowerCase().includes(val)
-            )
-          );
-        });
-      fetchChatList();
-      fetchBotones();
-    });
-
-    function fetchBotones() {
-      fetch('/get_botones')
-        .then(res => res.json())
-        .then(data => {
-          const cont = document.getElementById('botonera');
-          cont.innerHTML = '';
-          data.forEach((b, i) => {
-            const btn = document.createElement('button');
-            btn.textContent = i + 1;
-            btn.title = b.mensaje;
-            btn.style = `
-              width:35px; height:35px; border-radius:50%;
-              border:none; background-color:#3498db;
-              color:white; font-weight:bold; cursor:pointer;
-            `;
-            btn.onclick = () => {
-              if (!currentChat) return alert("Selecciona un chat");
-              fetch('/send_message', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ numero: currentChat, mensaje: b.mensaje })
-              }).then(() => {
-                fetchChat();
-                fetchChatList();
-              });
-            };
-            cont.appendChild(btn);
-          });
-        });
-    }
-
-    let chatContextual = null;
-    function mostrarMenuContextual(x, y, chat) {
-      chatContextual = chat;
-      const menu = document.getElementById('contextMenu');
-      menu.style.top = `${y}px`;
-      menu.style.left = `${x}px`;
-      menu.style.display = 'block';
-    }
-    document.addEventListener('click', () => {
-      document.getElementById('contextMenu').style.display = 'none';
-    });
-    document.getElementById('menu_alias')
-      .addEventListener('click', () => {
-        if (!chatContextual) return;
-        const nombre = prompt(
-          `¿Qué nombre deseas asignar a ${chatContextual.numero}?`,
-          chatContextual.alias || ''
-        );
-        if (nombre !== null) {
-          fetch('/set_alias', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({
-              numero: chatContextual.numero,
-              nombre
-            })
-          }).then(() => fetchChatList());
-        }
-      });
-  </script>
-
+  <!-- Carga de tu lógica JavaScript externa -->
+  <script src="/static/js/script.js"></script>
 </body>
 </html>
