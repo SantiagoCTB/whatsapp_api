@@ -5,7 +5,7 @@
   <title>Chat Tecnimedellín</title>
   <style>
     :root {
-      --bg-page:        #E8F0EE;  /* fondo general, muy suave verdoso */
+      --bg-page:        #6d6e6e;  /* fondo general, muy suave verdoso */
       --bg-sidebar:     #FFFFFF;  /* blanco puro para la barra lateral */
       --bg-chat:        #F5F9F8;  /* fondo del chat más claro aún */
 
@@ -60,13 +60,23 @@
       background:var(--accent-hover);
     }
     #settingsMenu {
-      position:absolute; top:60px; left:20px;
-      display:flex; flex-direction:column;
-      background:var(--text-light); border:1px solid #ccc;
-      border-radius:8px; box-shadow:0 2px 6px rgba(0,0,0,0.1);
-      opacity:0; transform:scale(0.8); transform-origin:top left;
-      transition:opacity 0.2s,transform 0.2s;
-      pointer-events:none; z-index:10;
+      position: absolute;
+      top: 60px;
+      left: 20px;
+      display: flex;
+      flex-direction: column;
+      background: var(--text-light);
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+      opacity: 0;
+      transform: scale(0.8);
+      transform-origin: top left;
+      transition: opacity 0.2s, transform 0.2s;
+      pointer-events: none;
+      z-index: 10;
+      padding: 4px 0; /* ✅ un pequeño espacio interno */
+      width: max-content; /* ✅ ajusta al contenido */
     }
     #settingsMenu.show {
       opacity:1; transform:scale(1); pointer-events:auto;
@@ -149,8 +159,8 @@
       word-wrap:break-word; box-shadow:0 2px 4px rgba(0,0,0,0.1);
     }
     .cliente { align-self:flex-start; background:var(--bubble-user); color:var(--text-main); }
-    .bot     { align-self:flex-start; background:var(--bubble-bot);  color:var(--text-light);}
-    .asesor  { align-self:flex-end;   background:var(--bubble-asesor);color:var(--text-main);font-weight:bold;}
+    .bot     { align-self:flex-start; background:var(--bubble-bot);  color:var(--text-main); }
+    .asesor  { align-self:flex-end;   background:var(--bubble-asesor); color:var(--text-main); font-weight:bold; }
 
     /* Input area */
     .inputArea {
