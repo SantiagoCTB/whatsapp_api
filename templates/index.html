@@ -5,21 +5,20 @@
   <title>Chat Tecnimedellín</title>
   <style>
     :root {
-          /* Fondo general */
-          --bg-page:        #585754;  /* fondo claro tipo WhatsApp */
-          --bg-sidebar:     #F9F1F2;  /* gris muy suave */
-          --bg-chat:        #EFEAE2;  /* tono pastel para el chat */
-          /* Acentos y botones */
-          --accent:         #128C7E;  /* verde WhatsApp */
-          --accent-hover:   #075E54;  /* verde oscuro */
-          /* Burbujas de mensaje */
-          --bubble-user:    #C2FFEF;  /* mensajes entrantes */
-          --bubble-bot:     #F0F0F0;  /* mensajes del bot */
-          --bubble-asesor:  #DCF8C6;  /* mensajes del asesor */
-          /* Texto */
-          --text-main:      #000000;  /* texto oscuro */
-          --text-light:     #ffffff;  /* para texto sobre fondos oscuros */
-        }
+      --bg-page:        #E8F0EE;  /* fondo general, muy suave verdoso */
+      --bg-sidebar:     #FFFFFF;  /* blanco puro para la barra lateral */
+      --bg-chat:        #F5F9F8;  /* fondo del chat más claro aún */
+
+      --accent:         #00A884;  /* verde WhatsApp moderno */
+      --accent-hover:   #007C67;  /* verde más oscuro para hover */
+
+      --bubble-user:    #D2F5F0;  /* mensajes del cliente */
+      --bubble-bot:     #EEEEEE;  /* gris suave, para el bot */
+      --bubble-asesor:  #C0F2C9;  /* verde más claro, asesor */
+
+      --text-main:      #212121;  /* texto oscuro pero suave */
+      --text-light:     #ffffff;  /* texto sobre fondo oscuro */
+    }
 
 
     * { box-sizing: border-box; margin:0; padding:0; }
@@ -29,10 +28,14 @@
       background: var(--bg-page);
     }
     .container {
-      flex:1; display:flex; margin:16px;
-      border-radius:24px; overflow:hidden;
-      box-shadow:0 4px 12px rgba(0,0,0,0.1);
+      flex: 1;
+      display: flex;
+      margin: 16px;
+      border-radius: 24px;
+      overflow: hidden;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
       background: var(--bg-chat);
+      border: 2px solid var(--accent); /* ✅ Agrega borde */
     }
     /* Sidebar */
     .sidebar {
