@@ -82,9 +82,9 @@
     function fetchChat() {
       if (!currentChat) return;
       // Si hay un audio reproduciéndose, no recargamos para no interrumpirlo
-      const audios = document.querySelectorAll('#chatBox audio');
-      for (const audio of audios) {
-        if (!audio.paused) return;
+      const medias = document.querySelectorAll('#chatBox audio, #chatBox video');
+      for (const m of medias) {
+        if (!m.paused) return;
       }
 
       fetch(`/get_chat/${currentChat}`)
