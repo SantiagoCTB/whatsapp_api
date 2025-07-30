@@ -17,7 +17,10 @@
       --bubble-asesor:  #C0F2C9;  /* verde más claro, asesor */
 
       --text-main:      #212121;  /* texto oscuro pero suave */
-      --text-light:     #000000;  /* texto sobre fondo oscuro */
+      --text-light:     #ffffff;  /* texto sobre fondo oscuro */
+
+      --border-color: #B2DFDB; /* tono suave basado en el acento */
+      --timestamp-color: #666666; /* color sutil para hora */
     }
 
 
@@ -120,6 +123,20 @@
       flex:1; padding:20px; overflow-y:auto;
       display:flex; flex-direction:column; gap:10px;
     }
+
+    .sidebar, .chatWindow {
+      border-right: 1px solid var(--border-color);
+    }
+    #botonera, .inputArea {
+      border-top: 1px solid var(--border-color);
+    }
+    #chatBox .timestamp {
+      font-size: 11px;
+      color: var(--timestamp-color);
+      margin-top: 4px;
+      text-align: right;
+    }
+
     .message {
       animation:fadeIn 0.3s ease-out;
     }
@@ -322,6 +339,19 @@
                 const p = document.createElement('p');
                 p.textContent = txt;
                 div.appendChild(p);
+              }
+
+              // fecha y hora
+              if (ts) {
+                const date = new Date(ts);
+                const timeSpan = document.createElement('div');
+                const dia = String(date.getDate()).padStart(2, '0');
+                const mes = String(date.getMonth() + 1).padStart(2, '0');
+                const hora = String(date.getHours()).padStart(2, '0');
+                const min = String(date.getMinutes()).padStart(2, '0');
+                timeSpan.className = 'timestamp';
+                timeSpan.textContent = `${dia}/${mes} ${hora}:${min}`;
+                div.appendChild(timeSpan);
               }
 
               chatBoxEl.appendChild(div);
