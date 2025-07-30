@@ -301,7 +301,24 @@
             data.forEach(c => {
               const li = document.createElement('li');
               li.textContent = c.alias ? `${c.alias} (${c.numero})` : c.numero;
+
+              // Al hacer clic, seleccionar el chat
               li.onclick = () => selectChat(c.numero, li);
+
+              // ✅ Clic derecho para asignar alias
+              li.addEventListener('contextmenu', function (e) {
+                e.preventDefault(); // evita el menú del navegador
+
+                const nombre = prompt("Asignar alias a: " + c.numero, c.alias || "");
+                if (nombre !== null && nombre.trim() !== "") {
+                  fetch('/set_alias', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ numero: c.numero, nombre })
+                  }).then(() => fetchChatList());
+                }
+              });
+
               chatListEl.appendChild(li);
             });
           });
