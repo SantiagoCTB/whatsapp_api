@@ -5,3 +5,5 @@ requests
 gunicorn
 openpyxl
 mysql-connector-python
+cloud-sql-python-connector[pymysql]
+sqlalchemy
