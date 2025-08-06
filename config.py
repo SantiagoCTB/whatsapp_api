@@ -13,6 +13,7 @@ class Config:
     DB_USER     = os.getenv('DB_USER')
     DB_PASSWORD = os.getenv('DB_PASSWORD')
     DB_NAME     = os.getenv('DB_NAME')
+    INSTANCE_CONNECTION_NAME = os.getenv('INSTANCE_CONNECTION_NAME')
 
     BASEDIR       = os.path.dirname(os.path.abspath(__file__))
     UPLOAD_FOLDER = os.path.join(BASEDIR, 'static', 'uploads')
