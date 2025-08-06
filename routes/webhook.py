@@ -1,5 +1,6 @@
 import os
-from flask import Blueprint, request, jsonify, url_for
+import json
+from flask import Blueprint, request, jsonify, url_for, current_app as app
 from datetime import datetime
 from config import Config
 from services.db import get_connection, guardar_mensaje
@@ -24,29 +25,36 @@ def webhook():
             return challenge, 200
         return 'Forbidden', 403
 
-    data = request.get_json() or {}
-    if not data.get('object'):
-        return jsonify({'status': 'no_object'}), 400
+    try:
+        data = request.get_json() or {}
+        if not data.get('object'):
+            return jsonify({'status': 'no_object'}), 400
 
-    for entry in data.get('entry', []):
-        for change in entry.get('changes', []):
-            msgs = change.get('value', {}).get('messages', []) or []
-            if not msgs:
-                continue
+        for entry in data.get('entry', []):
+            for change in entry.get('changes', []):
+                msgs = change.get('value', {}).get('messages', []) or []
+                if not msgs:
+                    continue
 
-            msg         = msgs[0]
-            msg_type    = msg.get('type')
-            from_number = msg.get('from')
-            mensaje_id  = msg.get('id')
+                msg         = msgs[0]
+                msg_type    = msg.get('type')
+                from_number = msg.get('from')
+                mensaje_id  = msg.get('id')
 
-            # evitar duplicados
-            conn = get_connection(); c = conn.cursor()
-            c.execute("SELECT 1 FROM mensajes_procesados WHERE mensaje_id = %s", (mensaje_id,))
-            if c.fetchone():
-                conn.close()
-                return jsonify({'status':'duplicate'}), 200
-            c.execute("INSERT INTO mensajes_procesados (mensaje_id) VALUES (%s)", (mensaje_id,))
-            conn.commit(); conn.close()
+                # evitar duplicados
+                conn = get_connection(); c = conn.cursor()
+                c.execute("SELECT 1 FROM mensajes_procesados WHERE mensaje_id = %s", (mensaje_id,))
+                if c.fetchone():
+                    conn.close()
+                    return jsonify({'status':'duplicate'}), 200
+                c.execute("INSERT INTO mensajes_procesados (mensaje_id) VALUES (%s)", (mensaje_id,))
+                conn.commit(); conn.close()
+
+                app.logger.info(
+                    "Request body: %s, mensaje_id: %s",
+                    json.dumps(data),
+                    mensaje_id,
+                )
 
             # AUDIO
             if msg_type == 'audio':
@@ -208,7 +216,8 @@ def webhook():
                     )
                     user_steps[from_number] = 'esperando_confirmacion'
                     return jsonify({'status':'l_ok'}), 200
-            except:
+            except Exception:
+                app.logger.exception("Medida inválida para mensaje %s", mensaje_id)
                 enviar_mensaje(from_number, "Por favor ingresa la medida correcta.")
                 return jsonify({'status':'invalid_measure'}), 200
 
@@ -226,4 +235,7 @@ def webhook():
                     user_steps[from_number] = next_step
             else:
                 enviar_mensaje(from_number, "No entendí tu respuesta, intenta de nuevo.")
-    return jsonify({'status':'received'}), 200
+        return jsonify({'status':'received'}), 200
+    except Exception:
+        app.logger.exception('Error procesando webhook')
+        return jsonify({'status': 'error'}), 500
