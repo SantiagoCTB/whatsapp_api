@@ -5,19 +5,16 @@ from config import Config
 
 def get_connection():
     return mysql.connector.connect(
-        host     = Config.DB_HOST,
-        port     = Config.DB_PORT,
-        user     = Config.DB_USER,
-        password = Config.DB_PASSWORD,
-        database = Config.DB_NAME
+        host=Config.DB_HOST,
+        port=Config.DB_PORT,
+        user=Config.DB_USER,
+        password=Config.DB_PASSWORD,
+        database=Config.DB_NAME
     )
 
 def init_db():
     conn = get_connection()
-    c    = conn.cursor()
-
-    # Elimino la tabla si existe
-    #c.execute("DROP TABLE IF EXISTS mensajes;")
+    c = conn.cursor()
 
     # mensajes
     c.execute("""
@@ -30,14 +27,14 @@ def init_db():
       media_url  TEXT,
       mime_type  TEXT,
       timestamp  DATETIME
-    );
+    ) ENGINE=InnoDB;
     """)
 
     # mensajes procesados
     c.execute("""
     CREATE TABLE IF NOT EXISTS mensajes_procesados (
       mensaje_id VARCHAR(255) PRIMARY KEY
-    );
+    ) ENGINE=InnoDB;
     """)
 
     # usuarios
@@ -45,10 +42,57 @@ def init_db():
     CREATE TABLE IF NOT EXISTS usuarios (
       id INT AUTO_INCREMENT PRIMARY KEY,
       username VARCHAR(50) UNIQUE NOT NULL,
-      password VARCHAR(128) NOT NULL,
-      rol VARCHAR(20) NOT NULL
-    );
+      password VARCHAR(128) NOT NULL
+    ) ENGINE=InnoDB;
     """)
+
+    # roles (único esquema)
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS roles (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      name VARCHAR(50) NOT NULL,
+      keyword VARCHAR(20) UNIQUE NOT NULL
+    ) ENGINE=InnoDB;
+    """)
+
+    # user_roles (pivote con FKs)
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS user_roles (
+      user_id INT NOT NULL,
+      role_id INT NOT NULL,
+      PRIMARY KEY (user_id, role_id),
+      FOREIGN KEY (user_id) REFERENCES usuarios(id) ON DELETE CASCADE,
+      FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB;
+    """)
+
+    # Migración: si existe usuarios.rol => poblar roles/user_roles y DROP columna
+    c.execute("SHOW COLUMNS FROM usuarios LIKE 'rol';")
+    if c.fetchone():
+        c.execute("SELECT DISTINCT rol FROM usuarios;")
+        for (rol,) in c.fetchall():
+            if not rol:
+                continue
+            c.execute("""
+                INSERT INTO roles (name, keyword)
+                SELECT %s, %s FROM DUAL
+                WHERE NOT EXISTS (SELECT 1 FROM roles WHERE keyword=%s)
+            """, (rol.capitalize(), rol, rol))
+
+        c.execute("SELECT id, rol FROM usuarios;")
+        for user_id, rol in c.fetchall():
+            if not rol:
+                continue
+            c.execute("SELECT id FROM roles WHERE keyword=%s", (rol,))
+            row = c.fetchone()
+            if row:
+                role_id = row[0]
+                c.execute(
+                    "INSERT IGNORE INTO user_roles (user_id, role_id) VALUES (%s, %s)",
+                    (user_id, role_id)
+                )
+
+        c.execute("ALTER TABLE usuarios DROP COLUMN rol;")
 
     # reglas
     c.execute("""
@@ -60,7 +104,7 @@ def init_db():
       siguiente_step TEXT,
       tipo VARCHAR(20) NOT NULL DEFAULT 'texto',
       opciones TEXT
-    );
+    ) ENGINE=InnoDB;
     """)
 
     # botones
@@ -68,7 +112,7 @@ def init_db():
     CREATE TABLE IF NOT EXISTS botones (
       id INT AUTO_INCREMENT PRIMARY KEY,
       mensaje TEXT NOT NULL
-    );
+    ) ENGINE=InnoDB;
     """)
 
     # alias
@@ -76,32 +120,44 @@ def init_db():
     CREATE TABLE IF NOT EXISTS alias (
       numero VARCHAR(20) PRIMARY KEY,
       nombre VARCHAR(100)
-    );
+    ) ENGINE=InnoDB;
     """)
 
-    # chat_roles: relaciona cada número de chat con un rol
+    # chat_roles: relaciona cada número de chat con uno o varios roles
     c.execute("""
     CREATE TABLE IF NOT EXISTS chat_roles (
-      numero   VARCHAR(20) NOT NULL,
-      role_id  VARCHAR(20) NOT NULL,
-      PRIMARY KEY (numero, role_id)
-    );
+      numero  VARCHAR(20) NOT NULL,
+      role_id INT NOT NULL,
+      PRIMARY KEY (numero, role_id),
+      FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB;
     """)
 
-    # usuario admin inicial
+    # ---- SEED admin ----
+    import hashlib
     hashed = hashlib.sha256('admin123'.encode()).hexdigest()
     c.execute("""
-    INSERT INTO usuarios (username, password, rol)
-      SELECT %s, %s, 'admin'
-     FROM DUAL
-     WHERE NOT EXISTS (
-       SELECT 1 FROM usuarios WHERE username=%s
-     )
-     LIMIT 1;
+    INSERT INTO usuarios (username, password)
+      SELECT %s, %s FROM DUAL
+      WHERE NOT EXISTS (SELECT 1 FROM usuarios WHERE username=%s)
     """, ('admin', hashed, 'admin'))
+
+    c.execute("""
+    INSERT INTO roles (name, keyword)
+      SELECT %s, %s FROM DUAL
+      WHERE NOT EXISTS (SELECT 1 FROM roles WHERE keyword=%s)
+    """, ('Administrador', 'admin', 'admin'))
+
+    c.execute("""
+    INSERT IGNORE INTO user_roles (user_id, role_id)
+    SELECT u.id, r.id
+      FROM usuarios u, roles r
+     WHERE u.username=%s AND r.keyword=%s
+    """, ('admin', 'admin'))
 
     conn.commit()
     conn.close()
+
 
 
 def guardar_mensaje(numero, mensaje, tipo, media_id=None, media_url=None, mime_type=None):
@@ -170,5 +226,39 @@ def set_alias(numero, nombre):
       VALUES (%s, %s)
       ON DUPLICATE KEY UPDATE nombre = VALUES(nombre);
     """, (numero, nombre))
+    conn.commit()
+    conn.close()
+
+
+def get_roles_by_user(user_id):
+    """Retorna una lista de keywords de roles asignados a un usuario."""
+    conn = get_connection()
+    c    = conn.cursor()
+    c.execute("""
+      SELECT r.keyword
+        FROM roles r
+        JOIN user_roles ur ON r.id = ur.role_id
+       WHERE ur.user_id = %s
+    """, (user_id,))
+    roles = [row[0] for row in c.fetchall()]
+    conn.close()
+    return roles
+
+
+def assign_role_to_user(user_id, role_keyword, role_name=None):
+    """Asigna un rol (por keyword) a un usuario. Si el rol no existe se crea."""
+    conn = get_connection()
+    c    = conn.cursor()
+    # Obtener rol existente o crearlo
+    c.execute("SELECT id FROM roles WHERE keyword=%s", (role_keyword,))
+    row = c.fetchone()
+    if row:
+        role_id = row[0]
+    else:
+        name = role_name or role_keyword.capitalize()
+        c.execute("INSERT INTO roles (name, keyword) VALUES (%s, %s)", (name, role_keyword))
+        role_id = c.lastrowid
+    # Asignar rol al usuario
+    c.execute("INSERT IGNORE INTO user_roles (user_id, role_id) VALUES (%s, %s)", (user_id, role_id))
     conn.commit()
     conn.close()
