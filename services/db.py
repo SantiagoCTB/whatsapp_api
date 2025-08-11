@@ -45,10 +45,51 @@ def init_db():
     CREATE TABLE IF NOT EXISTS usuarios (
       id INT AUTO_INCREMENT PRIMARY KEY,
       username VARCHAR(50) UNIQUE NOT NULL,
-      password VARCHAR(128) NOT NULL,
-      rol VARCHAR(20) NOT NULL
+      password VARCHAR(128) NOT NULL
     );
     """)
+
+    # roles
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS roles (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      name VARCHAR(50) NOT NULL,
+      keyword VARCHAR(20) UNIQUE NOT NULL
+    );
+    """)
+
+    # user_roles (tabla pivote muchos-a-muchos)
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS user_roles (
+      user_id INT NOT NULL,
+      role_id INT NOT NULL,
+      PRIMARY KEY (user_id, role_id),
+      FOREIGN KEY (user_id) REFERENCES usuarios(id) ON DELETE CASCADE,
+      FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE CASCADE
+    );
+    """)
+
+    # Migración: pasar usuarios.rol a las nuevas tablas
+    c.execute("SHOW COLUMNS FROM usuarios LIKE 'rol';")
+    if c.fetchone():
+        # Crear roles desde valores existentes
+        c.execute("SELECT DISTINCT rol FROM usuarios;")
+        for (rol,) in c.fetchall():
+            c.execute("""
+                INSERT INTO roles (name, keyword)
+                SELECT %s, %s FROM DUAL
+                WHERE NOT EXISTS (SELECT 1 FROM roles WHERE keyword=%s)
+            """, (rol.capitalize(), rol, rol))
+
+        # Asignar roles a usuarios
+        c.execute("SELECT id, rol FROM usuarios;")
+        for user_id, rol in c.fetchall():
+            c.execute("SELECT id FROM roles WHERE keyword=%s", (rol,))
+            role_id = c.fetchone()[0]
+            c.execute("INSERT IGNORE INTO user_roles (user_id, role_id) VALUES (%s, %s)", (user_id, role_id))
+
+        # Eliminar columna antigua
+        c.execute("ALTER TABLE usuarios DROP COLUMN rol;")
 
     # reglas
     c.execute("""
@@ -81,15 +122,35 @@ def init_db():
 
     # usuario admin inicial
     hashed = hashlib.sha256('admin123'.encode()).hexdigest()
+    # crear usuario admin si no existe
     c.execute("""
-    INSERT INTO usuarios (username, password, rol)
-      SELECT %s, %s, 'admin'
+    INSERT INTO usuarios (username, password)
+      SELECT %s, %s
      FROM DUAL
      WHERE NOT EXISTS (
        SELECT 1 FROM usuarios WHERE username=%s
      )
      LIMIT 1;
     """, ('admin', hashed, 'admin'))
+
+    # crear rol admin si no existe
+    c.execute("""
+    INSERT INTO roles (name, keyword)
+      SELECT %s, %s
+     FROM DUAL
+     WHERE NOT EXISTS (
+       SELECT 1 FROM roles WHERE keyword=%s
+     )
+     LIMIT 1;
+    """, ('Administrador', 'admin', 'admin'))
+
+    # asignar rol admin al usuario admin
+    c.execute("""
+    INSERT IGNORE INTO user_roles (user_id, role_id)
+    SELECT u.id, r.id
+      FROM usuarios u, roles r
+     WHERE u.username = %s AND r.keyword = %s;
+    """, ('admin', 'admin'))
 
     conn.commit()
     conn.close()
@@ -161,5 +222,39 @@ def set_alias(numero, nombre):
       VALUES (%s, %s)
       ON DUPLICATE KEY UPDATE nombre = VALUES(nombre);
     """, (numero, nombre))
+    conn.commit()
+    conn.close()
+
+
+def get_roles_by_user(user_id):
+    """Retorna una lista de keywords de roles asignados a un usuario."""
+    conn = get_connection()
+    c    = conn.cursor()
+    c.execute("""
+      SELECT r.keyword
+        FROM roles r
+        JOIN user_roles ur ON r.id = ur.role_id
+       WHERE ur.user_id = %s
+    """, (user_id,))
+    roles = [row[0] for row in c.fetchall()]
+    conn.close()
+    return roles
+
+
+def assign_role_to_user(user_id, role_keyword, role_name=None):
+    """Asigna un rol (por keyword) a un usuario. Si el rol no existe se crea."""
+    conn = get_connection()
+    c    = conn.cursor()
+    # Obtener rol existente o crearlo
+    c.execute("SELECT id FROM roles WHERE keyword=%s", (role_keyword,))
+    row = c.fetchone()
+    if row:
+        role_id = row[0]
+    else:
+        name = role_name or role_keyword.capitalize()
+        c.execute("INSERT INTO roles (name, keyword) VALUES (%s, %s)", (name, role_keyword))
+        role_id = c.lastrowid
+    # Asignar rol al usuario
+    c.execute("INSERT IGNORE INTO user_roles (user_id, role_id) VALUES (%s, %s)", (user_id, role_id))
     conn.commit()
     conn.close()

@@ -7,7 +7,7 @@ config_bp = Blueprint('configuracion', __name__)
 @config_bp.route('/configuracion', methods=['GET', 'POST'])
 def configuracion():
     # Solo admin
-    if "user" not in session or session.get("rol") != "admin":
+    if "user" not in session or 'admin' not in session.get('roles', []):
         return redirect(url_for("auth.login"))
 
     conn = get_connection()
@@ -94,7 +94,7 @@ def configuracion():
 
 @config_bp.route('/eliminar_regla/<int:regla_id>', methods=['POST'])
 def eliminar_regla(regla_id):
-    if "user" not in session or session.get("rol") != "admin":
+    if "user" not in session or 'admin' not in session.get('roles', []):
         return redirect(url_for("auth.login"))
 
     conn = get_connection()
@@ -110,7 +110,7 @@ def eliminar_regla(regla_id):
 
 @config_bp.route('/botones', methods=['GET', 'POST'])
 def botones():
-    if "user" not in session or session.get("rol") != "admin":
+    if "user" not in session or 'admin' not in session.get('roles', []):
         return redirect(url_for("auth.login"))
 
     conn = get_connection()
@@ -147,7 +147,7 @@ def botones():
 
 @config_bp.route('/eliminar_boton/<int:boton_id>', methods=['POST'])
 def eliminar_boton(boton_id):
-    if "user" not in session or session.get("rol") != "admin":
+    if "user" not in session or 'admin' not in session.get('roles', []):
         return redirect(url_for("auth.login"))
 
     conn = get_connection()
