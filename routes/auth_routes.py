@@ -19,14 +19,22 @@ def login():
             (username, hashed)
         )
         user = c.fetchone()
-        conn.close()
 
         if user:
             # user tuple: (id, username, password, rol)
             session['user'] = user[1]
             session['rol'] = user[3]
+
+            # roles asignados
+            c.execute(
+                'SELECT r.nombre FROM roles r JOIN user_roles ur ON r.id = ur.role_id WHERE ur.user_id = %s',
+                (user[0],)
+            )
+            session['roles'] = [row[0] for row in c.fetchall()]
+            conn.close()
             return redirect(url_for('chat.index'))  # redirige a la ruta principal
         else:
+            conn.close()
             error = 'Usuario o contraseña incorrectos'
 
     return render_template('login.html', error=error)

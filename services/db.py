@@ -79,6 +79,24 @@ def init_db():
     );
     """)
 
+    # roles
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS roles (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      nombre VARCHAR(50) UNIQUE NOT NULL,
+      keywords TEXT
+    );
+    """)
+
+    # asignación usuario-rol
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS user_roles (
+      user_id INT NOT NULL,
+      role_id INT NOT NULL,
+      PRIMARY KEY (user_id, role_id)
+    );
+    """)
+
     # usuario admin inicial
     hashed = hashlib.sha256('admin123'.encode()).hexdigest()
     c.execute("""
@@ -90,6 +108,27 @@ def init_db():
      )
      LIMIT 1;
     """, ('admin', hashed, 'admin'))
+
+    # rol y asignación inicial de administrador
+    c.execute("""
+    INSERT INTO roles (nombre)
+      SELECT 'admin'
+      FROM DUAL
+      WHERE NOT EXISTS (
+        SELECT 1 FROM roles WHERE nombre='admin'
+      )
+      LIMIT 1;
+    """)
+    c.execute("""
+    INSERT INTO user_roles (user_id, role_id)
+      SELECT u.id, r.id
+      FROM usuarios u, roles r
+      WHERE u.username='admin' AND r.nombre='admin'
+        AND NOT EXISTS (
+          SELECT 1 FROM user_roles ur
+          WHERE ur.user_id = u.id AND ur.role_id = r.id
+        );
+    """)
 
     conn.commit()
     conn.close()
