@@ -123,7 +123,18 @@ def init_db():
     ) ENGINE=InnoDB;
     """)
 
+    # chat_roles: relaciona cada número de chat con uno o varios roles
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS chat_roles (
+      numero  VARCHAR(20) NOT NULL,
+      role_id INT NOT NULL,
+      PRIMARY KEY (numero, role_id),
+      FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB;
+    """)
+
     # ---- SEED admin ----
+    import hashlib
     hashed = hashlib.sha256('admin123'.encode()).hexdigest()
     c.execute("""
     INSERT INTO usuarios (username, password)
@@ -131,14 +142,12 @@ def init_db():
       WHERE NOT EXISTS (SELECT 1 FROM usuarios WHERE username=%s)
     """, ('admin', hashed, 'admin'))
 
-    # crear rol admin si no existe
     c.execute("""
     INSERT INTO roles (name, keyword)
       SELECT %s, %s FROM DUAL
       WHERE NOT EXISTS (SELECT 1 FROM roles WHERE keyword=%s)
     """, ('Administrador', 'admin', 'admin'))
 
-    # asignar admin al usuario admin
     c.execute("""
     INSERT IGNORE INTO user_roles (user_id, role_id)
     SELECT u.id, r.id
