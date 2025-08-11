@@ -16,7 +16,7 @@ def roles():
     conn = get_connection()
     c = conn.cursor()
 
-    c.execute('SELECT id, nombre, keywords FROM roles ORDER BY nombre')
+    c.execute('SELECT id, name, keyword FROM roles ORDER BY name')
     roles = c.fetchall()
 
     c.execute('''
@@ -39,11 +39,11 @@ def roles():
 def crear_rol():
     if not _is_admin():
         return redirect(url_for('auth.login'))
-    nombre = request.form['nombre']
-    keywords = request.form.get('keywords', '')
+    name = request.form['name']
+    keyword = request.form.get('keyword', '')
     conn = get_connection()
     c = conn.cursor()
-    c.execute('INSERT INTO roles (nombre, keywords) VALUES (%s, %s)', (nombre, keywords))
+    c.execute('INSERT INTO roles (name, keyword) VALUES (%s, %s)', (name, keyword))
     conn.commit()
     conn.close()
     return redirect(url_for('roles.roles'))
@@ -53,11 +53,11 @@ def crear_rol():
 def editar_rol(rol_id):
     if not _is_admin():
         return redirect(url_for('auth.login'))
-    nombre = request.form['nombre']
-    keywords = request.form.get('keywords', '')
+    name = request.form['name']
+    keyword = request.form.get('keyword', '')
     conn = get_connection()
     c = conn.cursor()
-    c.execute('UPDATE roles SET nombre=%s, keywords=%s WHERE id=%s', (nombre, keywords, rol_id))
+    c.execute('UPDATE roles SET name=%s, keyword=%s WHERE id=%s', (name, keyword, rol_id))
     conn.commit()
     conn.close()
     return redirect(url_for('roles.roles'))
