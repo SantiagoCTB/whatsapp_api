@@ -148,14 +148,21 @@ def webhook():
 
                 conn = get_connection(); c = conn.cursor()
                 c.execute(
-                    "SELECT respuesta, siguiente_step, tipo, opciones "
+                    "SELECT respuesta, siguiente_step, tipo, opciones, rol_keyword "
                     "FROM reglas WHERE step=%s AND input_text=%s",
                     ('menu_principal','iniciar')
                 )
                 row = c.fetchone(); conn.close()
                 if row:
-                    resp, next_step, tipo_resp, opts = row
+                    resp, next_step, tipo_resp, opts, rol_kw = row
                     enviar_mensaje(from_number, resp, tipo_respuesta=tipo_resp, opciones=opts)
+                    if rol_kw:
+                        conn2 = get_connection(); c2 = conn2.cursor()
+                        c2.execute(
+                            "INSERT IGNORE INTO chat_roles (numero, rol_keyword) VALUES (%s, %s)",
+                            (from_number, rol_kw)
+                        )
+                        conn2.commit(); conn2.close()
                     if next_step:
                         user_steps[from_number] = next_step
                 return jsonify({'status':'reiniciado'}), 200
@@ -166,14 +173,21 @@ def webhook():
                 user_steps[from_number] = step
                 conn = get_connection(); c = conn.cursor()
                 c.execute(
-                    "SELECT respuesta, siguiente_step, tipo, opciones "
+                    "SELECT respuesta, siguiente_step, tipo, opciones, rol_keyword "
                     "FROM reglas WHERE step=%s AND input_text=%s",
                     (step,'iniciar')
                 )
                 row = c.fetchone(); conn.close()
                 if row:
-                    resp, next_step, *_ = row
+                    resp, next_step, _, _, rol_kw = row
                     enviar_mensaje(from_number, resp)
+                    if rol_kw:
+                        conn2 = get_connection(); c2 = conn2.cursor()
+                        c2.execute(
+                            "INSERT IGNORE INTO chat_roles (numero, rol_keyword) VALUES (%s, %s)",
+                            (from_number, rol_kw)
+                        )
+                        conn2.commit(); conn2.close()
                     if next_step:
                         user_steps[from_number] = next_step
                 return jsonify({'status':'sent_welcome'}), 200
@@ -214,14 +228,21 @@ def webhook():
 
             conn = get_connection(); c = conn.cursor()
             c.execute(
-                "SELECT respuesta, siguiente_step, tipo, opciones "
+                "SELECT respuesta, siguiente_step, tipo, opciones, rol_keyword "
                 "FROM reglas WHERE step=%s AND input_text=%s",
                 (step, text)
             )
             row = c.fetchone(); conn.close()
             if row:
-                resp, next_step, tipo_resp, opts = row
+                resp, next_step, tipo_resp, opts, rol_kw = row
                 enviar_mensaje(from_number, resp, tipo_respuesta=tipo_resp, opciones=opts)
+                if rol_kw:
+                    conn2 = get_connection(); c2 = conn2.cursor()
+                    c2.execute(
+                        "INSERT IGNORE INTO chat_roles (numero, rol_keyword) VALUES (%s, %s)",
+                        (from_number, rol_kw)
+                    )
+                    conn2.commit(); conn2.close()
                 if next_step:
                     user_steps[from_number] = next_step
             else:

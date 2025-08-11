@@ -59,7 +59,8 @@ def init_db():
       respuesta TEXT NOT NULL,
       siguiente_step TEXT,
       tipo VARCHAR(20) NOT NULL DEFAULT 'texto',
-      opciones TEXT
+      opciones TEXT,
+      rol_keyword VARCHAR(50)
     );
     """)
 
@@ -76,6 +77,16 @@ def init_db():
     CREATE TABLE IF NOT EXISTS alias (
       numero VARCHAR(20) PRIMARY KEY,
       nombre VARCHAR(100)
+    );
+    """)
+
+    # chat_roles
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS chat_roles (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      numero VARCHAR(20) NOT NULL,
+      rol_keyword VARCHAR(50) NOT NULL,
+      UNIQUE KEY uniq_chat_roles (numero, rol_keyword)
     );
     """)
 

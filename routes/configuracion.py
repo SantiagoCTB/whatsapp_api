@@ -20,7 +20,8 @@ def configuracion():
             wb = load_workbook(archivo)
             hoja = wb.active
             for fila in hoja.iter_rows(min_row=2, values_only=True):
-                step, input_text, respuesta, siguiente_step, tipo, opciones = fila
+                datos = list(fila) + [None] * 7
+                step, input_text, respuesta, siguiente_step, tipo, opciones, rol_keyword = datos[:7]
                 c.execute(
                     "SELECT id FROM reglas WHERE step = %s AND input_text = %s",
                     (step, input_text)
@@ -34,16 +35,17 @@ def configuracion():
                            SET respuesta = %s,
                                siguiente_step = %s,
                                tipo = %s,
-                               opciones = %s
+                               opciones = %s,
+                               rol_keyword = %s
                          WHERE id = %s
                         """,
-                        (respuesta, siguiente_step, tipo, opciones, regla_id)
+                        (respuesta, siguiente_step, tipo, opciones, rol_keyword, regla_id)
                     )
                 else:
                     c.execute(
-                        "INSERT INTO reglas (step, input_text, respuesta, siguiente_step, tipo, opciones)"
-                        " VALUES (%s, %s, %s, %s, %s, %s)",
-                        (step, input_text, respuesta, siguiente_step, tipo, opciones)
+                        "INSERT INTO reglas (step, input_text, respuesta, siguiente_step, tipo, opciones, rol_keyword)"
+                        " VALUES (%s, %s, %s, %s, %s, %s, %s)",
+                        (step, input_text, respuesta, siguiente_step, tipo, opciones, rol_keyword)
                     )
             conn.commit()
         else:
@@ -54,6 +56,7 @@ def configuracion():
             siguiente_step = request.form.get('siguiente_step', None)
             tipo = request.form.get('tipo', 'texto')
             opciones = request.form.get('opciones', '')
+            rol_keyword = request.form.get('rol_keyword', None)
 
             c.execute(
                 "SELECT id FROM reglas WHERE step = %s AND input_text = %s",
@@ -68,22 +71,23 @@ def configuracion():
                        SET respuesta = %s,
                            siguiente_step = %s,
                            tipo = %s,
-                           opciones = %s
+                           opciones = %s,
+                           rol_keyword = %s
                      WHERE id = %s
                     """,
-                    (respuesta, siguiente_step, tipo, opciones, regla_id)
+                    (respuesta, siguiente_step, tipo, opciones, rol_keyword, regla_id)
                 )
             else:
                 c.execute(
-                    "INSERT INTO reglas (step, input_text, respuesta, siguiente_step, tipo, opciones)"
-                    " VALUES (%s, %s, %s, %s, %s, %s)",
-                    (step, input_text, respuesta, siguiente_step, tipo, opciones)
+                    "INSERT INTO reglas (step, input_text, respuesta, siguiente_step, tipo, opciones, rol_keyword)"
+                    " VALUES (%s, %s, %s, %s, %s, %s, %s)",
+                    (step, input_text, respuesta, siguiente_step, tipo, opciones, rol_keyword)
                 )
             conn.commit()
 
     # Listar todas las reglas
     c.execute(
-        "SELECT id, step, input_text, respuesta, siguiente_step, tipo, opciones"
+        "SELECT id, step, input_text, respuesta, siguiente_step, tipo, opciones, rol_keyword"
         " FROM reglas"
         " ORDER BY step, id"
     )
