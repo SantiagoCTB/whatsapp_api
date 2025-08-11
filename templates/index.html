@@ -249,6 +249,9 @@
       <div id="settingsMenu" class="attach-menu">
         <a href="{{ url_for('configuracion.configuracion') }}">Configuración</a>
         <a href="{{ url_for('configuracion.botones') }}">Botones</a>
+        {% if session.get('roles') and 'admin' in session['roles'] %}
+        <a href="{{ url_for('roles.roles') }}">Roles</a>
+        {% endif %}
         <a href="{{ url_for('auth.logout') }}">Cerrar sesión</a>
       </div>
       <input id="buscador" type="text" placeholder="Buscar número…">
@@ -281,6 +284,7 @@
       const chatListEl = document.getElementById('chatList');
       const chatBoxEl  = document.getElementById('chatBox');
       const botoneraEl = document.getElementById('botonera');
+      const userRole   = "{{ rol }}";
 
       // Mostrar u ocultar menú settings
       const settingsBtn = document.getElementById('settingsBtn');
@@ -299,6 +303,10 @@
             todosChats = data;
             chatListEl.innerHTML='';
             data.forEach(c => {
+              if (userRole !== 'admin') {
+                const roles = c.roles ? c.roles.split(',') : [];
+                if (!roles.includes(userRole)) return;
+              }
               const li = document.createElement('li');
               li.textContent = c.alias ? `${c.alias} (${c.numero})` : c.numero;
 

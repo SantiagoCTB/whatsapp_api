@@ -90,6 +90,9 @@
             <option value="lista">Lista</option> <!-- ✅ agrega esta -->
         </select>
 
+        <label for="rol_keyword">Rol keyword:</label>
+        <input type="text" id="rol_keyword" name="rol_keyword">
+
         <label for="opciones">Opciones (solo para listas, formato JSON):</label><br>
         <textarea name="opciones" rows="6" cols="60" placeholder='[{"title":"Rápido","rows":[{"id":"express","title":"Express","description":"1 día"}]}]'></textarea>
 
@@ -128,6 +131,7 @@
             <th>Respuesta</th>
             <th>Siguiente paso</th>
             <th>Tipo</th>
+            <th>Rol</th>
             <th>Opciones</th>
             <th>Acción</th>
         </tr>
@@ -139,6 +143,7 @@
             <td>{{ regla[3] }}</td>
             <td>{{ regla[4] or '-' }}</td>
             <td>{{ regla[5] }}</td>
+            <td>{{ regla[7] or '-' }}</td>
             <td><pre style="white-space: pre-wrap;">{{ regla[6] }}</pre></td>
             <td>
                 <form method="POST" action="{{ url_for('configuracion.eliminar_regla', regla_id=regla[0]) }}">
