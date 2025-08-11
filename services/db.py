@@ -1,6 +1,5 @@
 import mysql.connector
-from datetime import datetime
-import hashlib
+from werkzeug.security import generate_password_hash
 from config import Config
 
 def get_connection():
@@ -80,7 +79,7 @@ def init_db():
     """)
 
     # usuario admin inicial
-    hashed = hashlib.sha256('admin123'.encode()).hexdigest()
+    hashed = generate_password_hash('admin123')
     c.execute("""
     INSERT INTO usuarios (username, password, rol)
       SELECT %s, %s, 'admin'

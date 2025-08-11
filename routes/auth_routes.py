@@ -1,5 +1,5 @@
 from flask import Blueprint, render_template, request, redirect, session, url_for
-import hashlib
+from werkzeug.security import check_password_hash
 from services.db import get_connection
 
 auth_bp = Blueprint('auth', __name__)
@@ -10,18 +10,17 @@ def login():
     if request.method == 'POST':
         username = request.form.get('username')
         password = request.form.get('password')
-        hashed = hashlib.sha256(password.encode()).hexdigest()
 
         conn = get_connection()
         c = conn.cursor()
         c.execute(
-            'SELECT id, username, password, rol FROM usuarios WHERE username = %s AND password = %s',
-            (username, hashed)
+            'SELECT id, username, password, rol FROM usuarios WHERE username = %s',
+            (username,)
         )
         user = c.fetchone()
         conn.close()
 
-        if user:
+        if user and check_password_hash(user[2], password):
             # user tuple: (id, username, password, rol)
             session['user'] = user[1]
             session['rol'] = user[3]
