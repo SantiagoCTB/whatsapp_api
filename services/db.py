@@ -46,7 +46,7 @@ def init_db():
     ) ENGINE=InnoDB;
     """)
 
-    # roles (único esquema)
+    # roles
     c.execute("""
     CREATE TABLE IF NOT EXISTS roles (
       id INT AUTO_INCREMENT PRIMARY KEY,
@@ -94,7 +94,7 @@ def init_db():
 
         c.execute("ALTER TABLE usuarios DROP COLUMN rol;")
 
-    # reglas
+    # reglas (incluye rol_keyword, alineado a roles.keyword)
     c.execute("""
     CREATE TABLE IF NOT EXISTS reglas (
       id INT AUTO_INCREMENT PRIMARY KEY,
@@ -103,7 +103,8 @@ def init_db():
       respuesta TEXT NOT NULL,
       siguiente_step TEXT,
       tipo VARCHAR(20) NOT NULL DEFAULT 'texto',
-      opciones TEXT
+      opciones TEXT,
+      rol_keyword VARCHAR(20) NULL
     ) ENGINE=InnoDB;
     """)
 

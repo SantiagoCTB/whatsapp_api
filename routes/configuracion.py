@@ -16,6 +16,12 @@ def configuracion():
     conn = get_connection()
     c = conn.cursor()
     try:
+        # --- Migración defensiva: añadir rol_keyword si no existe ---
+        c.execute("SHOW COLUMNS FROM reglas LIKE 'rol_keyword';")
+        if not c.fetchone():
+            c.execute("ALTER TABLE reglas ADD COLUMN rol_keyword VARCHAR(20) NULL;")
+            conn.commit()
+
         if request.method == 'POST':
             # Importar desde Excel
             if 'archivo' in request.files and request.files['archivo']:
@@ -25,7 +31,10 @@ def configuracion():
                 for fila in hoja.iter_rows(min_row=2, values_only=True):
                     if not fila:
                         continue
-                    step, input_text, respuesta, siguiente_step, tipo, opciones = fila
+                    # Permitir archivos sin 7ma columna; rellenar con None
+                    datos = list(fila) + [None] * 7
+                    step, input_text, respuesta, siguiente_step, tipo, opciones, rol_keyword = datos[:7]
+
                     c.execute(
                         "SELECT id FROM reglas WHERE step = %s AND input_text = %s",
                         (step, input_text)
@@ -39,16 +48,17 @@ def configuracion():
                                SET respuesta = %s,
                                    siguiente_step = %s,
                                    tipo = %s,
-                                   opciones = %s
+                                   opciones = %s,
+                                   rol_keyword = %s
                              WHERE id = %s
                             """,
-                            (respuesta, siguiente_step, tipo, opciones, regla_id)
+                            (respuesta, siguiente_step, tipo, opciones, rol_keyword, regla_id)
                         )
                     else:
                         c.execute(
-                            "INSERT INTO reglas (step, input_text, respuesta, siguiente_step, tipo, opciones) "
-                            "VALUES (%s, %s, %s, %s, %s, %s)",
-                            (step, input_text, respuesta, siguiente_step, tipo, opciones)
+                            "INSERT INTO reglas (step, input_text, respuesta, siguiente_step, tipo, opciones, rol_keyword) "
+                            "VALUES (%s, %s, %s, %s, %s, %s, %s)",
+                            (step, input_text, respuesta, siguiente_step, tipo, opciones, rol_keyword)
                         )
                 conn.commit()
             else:
@@ -59,6 +69,7 @@ def configuracion():
                 siguiente_step = request.form.get('siguiente_step')
                 tipo = request.form.get('tipo', 'texto')
                 opciones = request.form.get('opciones', '')
+                rol_keyword = request.form.get('rol_keyword')  # puede venir None
 
                 c.execute(
                     "SELECT id FROM reglas WHERE step = %s AND input_text = %s",
@@ -73,22 +84,23 @@ def configuracion():
                            SET respuesta = %s,
                                siguiente_step = %s,
                                tipo = %s,
-                               opciones = %s
+                               opciones = %s,
+                               rol_keyword = %s
                          WHERE id = %s
                         """,
-                        (respuesta, siguiente_step, tipo, opciones, regla_id)
+                        (respuesta, siguiente_step, tipo, opciones, rol_keyword, regla_id)
                     )
                 else:
                     c.execute(
-                        "INSERT INTO reglas (step, input_text, respuesta, siguiente_step, tipo, opciones) "
-                        "VALUES (%s, %s, %s, %s, %s, %s)",
-                        (step, input_text, respuesta, siguiente_step, tipo, opciones)
+                        "INSERT INTO reglas (step, input_text, respuesta, siguiente_step, tipo, opciones, rol_keyword) "
+                        "VALUES (%s, %s, %s, %s, %s, %s, %s)",
+                        (step, input_text, respuesta, siguiente_step, tipo, opciones, rol_keyword)
                     )
                 conn.commit()
 
         # Listar todas las reglas
         c.execute(
-            "SELECT id, step, input_text, respuesta, siguiente_step, tipo, opciones "
+            "SELECT id, step, input_text, respuesta, siguiente_step, tipo, opciones, rol_keyword "
             "FROM reglas "
             "ORDER BY step, id"
         )
