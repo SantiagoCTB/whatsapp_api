@@ -7,6 +7,7 @@ from services.db import init_db
 from routes.auth_routes import auth_bp
 from routes.chat_routes import chat_bp
 from routes.configuracion import config_bp
+from routes.roles_routes import roles_bp
 from routes.webhook import webhook_bp
 
 # Carga .env y crea la app
@@ -22,6 +23,7 @@ init_db()
 app.register_blueprint(auth_bp)
 app.register_blueprint(chat_bp)
 app.register_blueprint(config_bp)
+app.register_blueprint(roles_bp)
 app.register_blueprint(webhook_bp)
 
 if __name__ == '__main__':
