@@ -9,12 +9,13 @@ def login():
     error = None
     if request.method == 'POST':
         username = request.form.get('username')
-        password = request.form.get('password') or ""
+        password = (request.form.get('password') or "").strip()
         hashed = hashlib.sha256(password.encode()).hexdigest()
 
         conn = get_connection()
         try:
             c = conn.cursor()
+            # Estándar: usuarios SIN columna 'rol' aquí; roles van por tabla relacional
             c.execute(
                 'SELECT id, username, password FROM usuarios WHERE username = %s AND password = %s',
                 (username, hashed)
@@ -25,7 +26,7 @@ def login():
                 # user -> (id, username, password)
                 session['user'] = user[1]
 
-                # Obtiene roles desde helper centralizado
+                # Roles centralizados
                 roles = get_roles_by_user(user[0]) or []
                 session['roles'] = roles
 
@@ -42,6 +43,5 @@ def login():
 
 @auth_bp.route('/logout')
 def logout():
-    # Limpia toda la sesión; si prefieres conservar algo, cambia por pops específicos
     session.clear()
     return redirect(url_for('auth.login'))
