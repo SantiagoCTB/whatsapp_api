@@ -2,7 +2,9 @@ from flask import Blueprint, render_template, request, redirect, session, url_fo
 import hashlib
 from services.db import get_connection
 
+
 auth_bp = Blueprint('auth', __name__)
+
 
 @auth_bp.route('/login', methods=['GET', 'POST'])
 def login():
@@ -15,23 +17,31 @@ def login():
         conn = get_connection()
         c = conn.cursor()
         c.execute(
-            'SELECT id, username, password, rol FROM usuarios WHERE username = %s AND password = %s',
+            'SELECT id, username, password FROM usuarios WHERE username = %s AND password = %s',
             (username, hashed)
         )
         user = c.fetchone()
-        conn.close()
 
         if user:
-            # user tuple: (id, username, password, rol)
+            c.execute(
+                'SELECT role_name FROM user_roles WHERE user_id = %s',
+                (user[0],)
+            )
+            roles = [r[0] for r in c.fetchall()]
+            conn.close()
             session['user'] = user[1]
-            session['rol'] = user[3]
-            return redirect(url_for('chat.index'))  # redirige a la ruta principal
+            session['roles'] = roles
+            return redirect(url_for('chat.index'))
         else:
+            conn.close()
             error = 'Usuario o contraseña incorrectos'
 
     return render_template('login.html', error=error)
 
+
 @auth_bp.route('/logout')
 def logout():
-    session.clear()
+    session.pop('user', None)
+    session.pop('roles', None)
     return redirect(url_for('auth.login'))
+
