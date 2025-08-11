@@ -1,6 +1,5 @@
 import mysql.connector
-from datetime import datetime
-import hashlib
+from werkzeug.security import generate_password_hash
 from config import Config
 
 def get_connection():
@@ -45,6 +44,13 @@ def init_db():
       password VARCHAR(128) NOT NULL
     ) ENGINE=InnoDB;
     """)
+
+    # Ampliar password para soportar hashes de Werkzeug
+    c.execute("SHOW COLUMNS FROM usuarios LIKE 'password';")
+    col = c.fetchone()
+    # col -> (Field, Type, Null, Key, Default, Extra)
+    if col and isinstance(col[1], str) and 'varchar(128)' in col[1].lower():
+        c.execute("ALTER TABLE usuarios MODIFY password VARCHAR(255) NOT NULL;")
 
     # roles
     c.execute("""
@@ -94,7 +100,7 @@ def init_db():
 
         c.execute("ALTER TABLE usuarios DROP COLUMN rol;")
 
-    # reglas (incluye rol_keyword, alineado a roles.keyword)
+    # reglas (incluye rol_keyword alineado a roles.keyword)
     c.execute("""
     CREATE TABLE IF NOT EXISTS reglas (
       id INT AUTO_INCREMENT PRIMARY KEY,
@@ -134,14 +140,13 @@ def init_db():
     ) ENGINE=InnoDB;
     """)
 
-    # ---- SEED admin ----
-    import hashlib
-    hashed = hashlib.sha256('admin123'.encode()).hexdigest()
+    # ---- SEED admin (con PBKDF2 de Werkzeug) ----
+    admin_hash = generate_password_hash('admin123')
     c.execute("""
     INSERT INTO usuarios (username, password)
       SELECT %s, %s FROM DUAL
       WHERE NOT EXISTS (SELECT 1 FROM usuarios WHERE username=%s)
-    """, ('admin', hashed, 'admin'))
+    """, ('admin', admin_hash, 'admin'))
 
     c.execute("""
     INSERT INTO roles (name, keyword)
