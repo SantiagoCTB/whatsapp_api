@@ -281,6 +281,7 @@
       const chatListEl = document.getElementById('chatList');
       const chatBoxEl  = document.getElementById('chatBox');
       const botoneraEl = document.getElementById('botonera');
+      const userRole   = "{{ rol }}";
 
       // Mostrar u ocultar menú settings
       const settingsBtn = document.getElementById('settingsBtn');
@@ -299,6 +300,10 @@
             todosChats = data;
             chatListEl.innerHTML='';
             data.forEach(c => {
+              if (userRole !== 'admin') {
+                const roles = c.roles ? c.roles.split(',') : [];
+                if (!roles.includes(userRole)) return;
+              }
               const li = document.createElement('li');
               li.textContent = c.alias ? `${c.alias} (${c.numero})` : c.numero;
 

@@ -79,6 +79,15 @@ def init_db():
     );
     """)
 
+    # chat_roles: relaciona cada número de chat con un rol
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS chat_roles (
+      numero   VARCHAR(20) NOT NULL,
+      role_id  VARCHAR(20) NOT NULL,
+      PRIMARY KEY (numero, role_id)
+    );
+    """)
+
     # usuario admin inicial
     hashed = hashlib.sha256('admin123'.encode()).hexdigest()
     c.execute("""
