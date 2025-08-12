@@ -158,11 +158,15 @@ def webhook():
                     enviar_mensaje(from_number, resp, tipo_respuesta=tipo_resp, opciones=opts)
                     if rol_kw:
                         conn2 = get_connection(); c2 = conn2.cursor()
-                        c2.execute(
-                            "INSERT IGNORE INTO chat_roles (numero, rol_keyword) VALUES (%s, %s)",
-                            (from_number, rol_kw)
-                        )
-                        conn2.commit(); conn2.close()
+                        c2.execute("SELECT id FROM roles WHERE keyword=%s", (rol_kw,))
+                        role = c2.fetchone()
+                        if role:
+                            c2.execute(
+                                "INSERT IGNORE INTO chat_roles (numero, role_id) VALUES (%s, %s)",
+                                (from_number, role[0])
+                            )
+                            conn2.commit()
+                        conn2.close()
                     if next_step:
                         user_steps[from_number] = next_step
                 return jsonify({'status':'reiniciado'}), 200
@@ -183,11 +187,15 @@ def webhook():
                     enviar_mensaje(from_number, resp)
                     if rol_kw:
                         conn2 = get_connection(); c2 = conn2.cursor()
-                        c2.execute(
-                            "INSERT IGNORE INTO chat_roles (numero, rol_keyword) VALUES (%s, %s)",
-                            (from_number, rol_kw)
-                        )
-                        conn2.commit(); conn2.close()
+                        c2.execute("SELECT id FROM roles WHERE keyword=%s", (rol_kw,))
+                        role = c2.fetchone()
+                        if role:
+                            c2.execute(
+                                "INSERT IGNORE INTO chat_roles (numero, role_id) VALUES (%s, %s)",
+                                (from_number, role[0])
+                            )
+                            conn2.commit()
+                        conn2.close()
                     if next_step:
                         user_steps[from_number] = next_step
                 return jsonify({'status':'sent_welcome'}), 200
@@ -238,11 +246,15 @@ def webhook():
                 enviar_mensaje(from_number, resp, tipo_respuesta=tipo_resp, opciones=opts)
                 if rol_kw:
                     conn2 = get_connection(); c2 = conn2.cursor()
-                    c2.execute(
-                        "INSERT IGNORE INTO chat_roles (numero, rol_keyword) VALUES (%s, %s)",
-                        (from_number, rol_kw)
-                    )
-                    conn2.commit(); conn2.close()
+                    c2.execute("SELECT id FROM roles WHERE keyword=%s", (rol_kw,))
+                    role = c2.fetchone()
+                    if role:
+                        c2.execute(
+                            "INSERT IGNORE INTO chat_roles (numero, role_id) VALUES (%s, %s)",
+                            (from_number, role[0])
+                        )
+                        conn2.commit()
+                    conn2.close()
                 if next_step:
                     user_steps[from_number] = next_step
             else:
