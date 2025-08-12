@@ -8,6 +8,8 @@ class Config:
     DB_PATH = 'database.db'
     SESSION_TIMEOUT = 600
 
+    MAX_TRANSCRIPTION_DURATION_MS = int(os.getenv('MAX_TRANSCRIPTION_DURATION_MS', 60000))
+
     DB_HOST     = os.getenv('DB_HOST')
     DB_PORT     = int(os.getenv('DB_PORT', 3306))
     DB_USER     = os.getenv('DB_USER')
