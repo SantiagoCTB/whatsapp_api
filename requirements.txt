@@ -6,3 +6,6 @@ gunicorn
 openpyxl
 mysql-connector-python
 vosk
+
+redis
+rq

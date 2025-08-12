@@ -10,8 +10,8 @@ from services.db import (
     delete_chat_state,
 )
 from services.whatsapp_api import download_audio, get_media_url, enviar_mensaje
-from services.transcripcion import transcribir
 from services.global_commands import handle_global_command
+from services.job_queue import enqueue_transcription
 
 webhook_bp = Blueprint('webhook', __name__)
 
@@ -142,7 +142,6 @@ def webhook():
                 ext        = mime_clean.split('/')[-1]
 
                 audio_bytes = download_audio(media_id)
-                texto = transcribir(audio_bytes)
                 filename = f"{media_id}.{ext}"
                 path = os.path.join(Config.UPLOAD_FOLDER, filename)
                 with open(path, 'wb') as f:
@@ -150,23 +149,8 @@ def webhook():
 
                 public_url = url_for('static', filename=f'uploads/{filename}', _external=True)
 
-                guardar_mensaje(
-                    from_number,
-                    texto,
-                    'audio',
-                    media_id=media_id,
-                    media_url=public_url,
-                    mime_type=mime_clean
-                )
-
-                if texto:
-                    enviar_mensaje(from_number, "Audio recibido correctamente.", tipo='bot')
-                else:
-                    enviar_mensaje(
-                        from_number,
-                        "Audio recibido. No se realizó transcripción por exceder la duración permitida.",
-                        tipo='bot'
-                    )
+                enqueue_transcription(path, from_number, media_id, mime_clean, public_url)
+                enviar_mensaje(from_number, "Tu audio está siendo procesado.", tipo='bot')
                 continue
 
             if msg_type == 'video':
