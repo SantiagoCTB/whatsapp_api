@@ -168,12 +168,12 @@ def webhook():
                             conn2.commit()
                         conn2.close()
                     if next_step:
-                        user_steps[from_number] = next_step
+                        user_steps[from_number] = next_step.strip().lower()
                 return jsonify({'status':'reiniciado'}), 200
 
             step = user_steps.get(from_number)
             if not step:
-                step = 'menu_principal'
+                step = 'menu_principal'.strip().lower()
                 user_steps[from_number] = step
                 conn = get_connection(); c = conn.cursor()
                 c.execute(
@@ -197,8 +197,11 @@ def webhook():
                             conn2.commit()
                         conn2.close()
                     if next_step:
-                        user_steps[from_number] = next_step
+                        user_steps[from_number] = next_step.strip().lower()
                 return jsonify({'status':'sent_welcome'}), 200
+
+            step = step.strip().lower()
+            user_steps[from_number] = step
 
             try:
                 if step == 'barra_medida':
@@ -234,6 +237,8 @@ def webhook():
                 enviar_mensaje(from_number, "Por favor ingresa la medida correcta.")
                 return jsonify({'status':'invalid_measure'}), 200
 
+            step = step.strip().lower()
+            text = text.strip().lower()
             conn = get_connection(); c = conn.cursor()
             c.execute(
                 "SELECT respuesta, siguiente_step, tipo, opciones, rol_keyword "
@@ -256,7 +261,7 @@ def webhook():
                         conn2.commit()
                     conn2.close()
                 if next_step:
-                    user_steps[from_number] = next_step
+                    user_steps[from_number] = next_step.strip().lower()
             else:
                 enviar_mensaje(from_number, "No entendí tu respuesta, intenta de nuevo.")
     return jsonify({'status':'received'}), 200
