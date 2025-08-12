@@ -198,6 +198,20 @@ def guardar_mensaje(numero, mensaje, tipo, media_id=None, media_url=None, mime_t
         "VALUES (%s, %s, %s, %s, %s, %s, NOW())",
         (numero, mensaje, tipo, media_id, media_url, mime_type)
     )
+    mensaje_id = c.lastrowid
+    conn.commit()
+    conn.close()
+    return mensaje_id
+
+
+def update_mensaje_texto(id_mensaje, texto):
+    """Actualiza el campo `mensaje` de un registro existente."""
+    conn = get_connection()
+    c    = conn.cursor()
+    c.execute(
+        "UPDATE mensajes SET mensaje=%s WHERE id=%s",
+        (texto, id_mensaje),
+    )
     conn.commit()
     conn.close()
 

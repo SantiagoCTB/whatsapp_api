@@ -149,7 +149,16 @@ def webhook():
 
                 public_url = url_for('static', filename=f'uploads/{filename}', _external=True)
 
-                enqueue_transcription(path, from_number, media_id, mime_clean, public_url)
+                mensaje_id = guardar_mensaje(
+                    from_number,
+                    "",
+                    'audio',
+                    media_id=media_id,
+                    media_url=public_url,
+                    mime_type=mime_clean,
+                )
+
+                enqueue_transcription(path, from_number, media_id, mime_clean, public_url, mensaje_id)
                 enviar_mensaje(from_number, "Tu audio está siendo procesado.", tipo='bot')
                 continue
 
