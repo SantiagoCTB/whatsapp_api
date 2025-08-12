@@ -34,6 +34,10 @@ def configuracion():
                     # Permitir archivos sin 7ma columna; rellenar con None
                     datos = list(fila) + [None] * 7
                     step, input_text, respuesta, siguiente_step, tipo, opciones, rol_keyword = datos[:7]
+                    # Normalizar campos clave
+                    step = (step or '').strip().lower()
+                    input_text = (input_text or '').strip().lower()
+                    siguiente_step = (siguiente_step or '').strip().lower() or None
 
                     c.execute(
                         "SELECT id FROM reglas WHERE step = %s AND input_text = %s",
@@ -63,10 +67,10 @@ def configuracion():
                 conn.commit()
             else:
                 # Entrada manual desde formulario
-                step = request.form['step']
-                input_text = request.form['input_text']
+                step = (request.form['step'] or '').strip().lower() or None
+                input_text = (request.form['input_text'] or '').strip().lower() or None
                 respuesta = request.form['respuesta']
-                siguiente_step = request.form.get('siguiente_step')
+                siguiente_step = (request.form.get('siguiente_step') or '').strip().lower() or None
                 tipo = request.form.get('tipo', 'texto')
                 opciones = request.form.get('opciones', '')
                 rol_keyword = request.form.get('rol_keyword')  # puede venir None
