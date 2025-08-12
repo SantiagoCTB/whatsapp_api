@@ -83,3 +83,15 @@ Administración visual de botones y reglas
 Sistema de login y logout
 
 División completa en módulos con Blueprints y servicios
+
+## Comandos globales
+
+El bot cuenta con comandos globales que se ejecutan antes del flujo principal.
+Para agregar un nuevo comando:
+
+1. Edita `services/global_commands.py`.
+2. Crea una función que reciba el número del usuario y realice la acción deseada.
+3. Registra la función en el diccionario `GLOBAL_COMMANDS` asociándola a la palabra clave.
+
+La función `handle_global_command` es llamada desde `routes/webhook.py` y detiene el
+procesamiento normal cuando un comando es reconocido.

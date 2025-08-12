@@ -10,6 +10,7 @@ from services.db import (
     delete_chat_state,
 )
 from services.whatsapp_api import download_audio, get_media_url, enviar_mensaje
+from services.global_commands import handle_global_command
 
 webhook_bp = Blueprint('webhook', __name__)
 
@@ -227,33 +228,8 @@ def webhook():
                 delete_chat_state(from_number)
             user_last_activity[from_number] = now
 
-            if text in ['reiniciar', 'volver al inicio', 'inicio', 'menú', 'menu', 'ayuda']:
-                set_user_step(from_number, 'menu_principal')
-                enviar_mensaje(from_number, "Perfecto, volvamos a empezar.")
-
-                conn = get_connection(); c = conn.cursor()
-                c.execute(
-                    "SELECT respuesta, siguiente_step, tipo, opciones, rol_keyword "
-                    "FROM reglas WHERE step=%s AND input_text=%s",
-                    ('menu_principal','iniciar')
-                )
-                row = c.fetchone(); conn.close()
-                if row:
-                    resp, next_step, tipo_resp, opts, rol_kw = row
-                    enviar_mensaje(from_number, resp, tipo_respuesta=tipo_resp, opciones=opts)
-                    if rol_kw:
-                        conn2 = get_connection(); c2 = conn2.cursor()
-                        c2.execute("SELECT id FROM roles WHERE keyword=%s", (rol_kw,))
-                        role = c2.fetchone()
-                        if role:
-                            c2.execute(
-                                "INSERT IGNORE INTO chat_roles (numero, role_id) VALUES (%s, %s)",
-                                (from_number, role[0])
-                            )
-                            conn2.commit()
-                        conn2.close()
-                    set_user_step(from_number, next_step.strip().lower() if next_step else '')
-                return jsonify({'status':'reiniciado'}), 200
+            if handle_global_command(from_number, text):
+                return jsonify({'status': 'handled_global'}), 200
 
             is_new_user = from_number not in user_steps
             stored_step = user_steps.get(from_number, '')
