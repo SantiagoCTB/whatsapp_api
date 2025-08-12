@@ -10,6 +10,7 @@ from services.db import (
     delete_chat_state,
 )
 from services.whatsapp_api import download_audio, get_media_url, enviar_mensaje
+from services.transcripcion import transcribir
 from services.global_commands import handle_global_command
 
 webhook_bp = Blueprint('webhook', __name__)
@@ -141,8 +142,9 @@ def webhook():
                 ext        = mime_clean.split('/')[-1]
 
                 audio_bytes = download_audio(media_id)
-                filename    = f"{media_id}.{ext}"
-                path        = os.path.join(Config.UPLOAD_FOLDER, filename)
+                texto = transcribir(audio_bytes)
+                filename = f"{media_id}.{ext}"
+                path = os.path.join(Config.UPLOAD_FOLDER, filename)
                 with open(path, 'wb') as f:
                     f.write(audio_bytes)
 
@@ -150,7 +152,7 @@ def webhook():
 
                 guardar_mensaje(
                     from_number,
-                    "",
+                    texto,
                     'audio',
                     media_id=media_id,
                     media_url=public_url,
