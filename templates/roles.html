@@ -3,15 +3,81 @@
 <head>
     <meta charset="UTF-8">
     <title>Roles</title>
+    <style>
+        body {
+            background-color: #f4f6f9;
+            font-family: 'Segoe UI', sans-serif;
+            padding: 20px;
+        }
+        h2, h3 {
+            color: #2c3e50;
+        }
+        form, table {
+            background-color: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        input, select, textarea {
+            width: 100%;
+            padding: 8px;
+            margin: 6px 0 16px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        button {
+            background-color: #27ae60;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 10px 20px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #219150;
+        }
+        .delete-btn {
+            background-color: #e74c3c;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        table th, table td {
+            text-align: left;
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+        }
+    </style>
 </head>
 <body>
+    <div style="position: absolute; top: 20px; right: 20px;">
+        <a href="{{ url_for('chat.index') }}">
+            <button style="
+                background-color: #3498db;
+                color: white;
+                border: none;
+                border-radius: 6px;
+                padding: 10px 20px;
+                font-size: 14px;
+                cursor: pointer;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            ">
+                Volver al inicio
+            </button>
+        </a>
+    </div>
+
     <h2>Roles</h2>
     <form action="{{ url_for('roles.crear_rol') }}" method="post">
+        <h3>Crear rol</h3>
         <input type="text" name="name" placeholder="Nombre" required>
         <input type="text" name="keyword" placeholder="Palabra clave">
         <button type="submit">Crear</button>
     </form>
-    <table border="1" cellpadding="5" cellspacing="0">
+
+    <table>
         <tr>
             <th>Nombre</th>
             <th>Palabra clave</th>
@@ -24,20 +90,20 @@
             <td>{{ rol[2] }}</td>
             <td>{{ ', '.join(asignaciones.get(rol[0], [])) }}</td>
             <td>
-                <form action="{{ url_for('roles.eliminar_rol', rol_id=rol[0]) }}" method="post" style="display:inline;">
-                    <button type="submit">Eliminar</button>
+                <form action="{{ url_for('roles.eliminar_rol', rol_id=rol[0]) }}" method="post" style="display:inline; background:none; box-shadow:none; padding:0; margin:0;">
+                    <button type="submit" class="delete-btn">Eliminar</button>
                 </form>
-                <form action="{{ url_for('roles.editar_rol', rol_id=rol[0]) }}" method="post" style="display:inline;">
-                    <input type="text" name="name" value="{{ rol[1] }}" required>
-                    <input type="text" name="keyword" value="{{ rol[2] }}">
+                <form action="{{ url_for('roles.editar_rol', rol_id=rol[0]) }}" method="post" style="display:inline; background:none; box-shadow:none; padding:0; margin:0;">
+                    <input type="text" name="name" value="{{ rol[1] }}" required style="width:auto; padding:4px; margin:0 4px 0 0;">
+                    <input type="text" name="keyword" value="{{ rol[2] }}" style="width:auto; padding:4px; margin:0 4px 0 0;">
                     <button type="submit">Actualizar</button>
                 </form>
             </td>
         </tr>
         {% endfor %}
     </table>
-    <h3>Asignar rol a usuario</h3>
     <form action="{{ url_for('roles.asignar_rol') }}" method="post">
+        <h3>Asignar rol a usuario</h3>
         <select name="user_id">
         {% for u in usuarios %}
             <option value="{{ u[0] }}">{{ u[1] }}</option>
@@ -50,8 +116,9 @@
         </select>
         <button type="submit">Asignar</button>
     </form>
-    <h3>Quitar rol de usuario</h3>
+
     <form action="{{ url_for('roles.quitar_rol') }}" method="post">
+        <h3>Quitar rol de usuario</h3>
         <select name="user_id">
         {% for u in usuarios %}
             <option value="{{ u[0] }}">{{ u[1] }}</option>
