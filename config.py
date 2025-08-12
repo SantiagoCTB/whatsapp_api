@@ -9,6 +9,7 @@ class Config:
     SESSION_TIMEOUT = 600
 
     MAX_TRANSCRIPTION_DURATION_MS = int(os.getenv('MAX_TRANSCRIPTION_DURATION_MS', 60000))
+    TRANSCRIPTION_MAX_AVG_TIME_SEC = float(os.getenv('TRANSCRIPTION_MAX_AVG_TIME_SEC', 10))
 
     DB_HOST     = os.getenv('DB_HOST')
     DB_PORT     = int(os.getenv('DB_PORT', 3306))
