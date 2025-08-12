@@ -68,6 +68,7 @@
 </head>
 <body>
     <h2>Configuración de Reglas</h2>
+    <p>Para reglas de medición usa "*" en <em>Texto del usuario</em> y define la fórmula en <em>Cálculo</em> con variables como <code>medida</code>, <code>p1</code> o <code>p2</code>. Opcionalmente indica un <em>Handler</em> para delegar el cálculo a código externo.</p>
 
     <form method="POST">
         <h3>Agregar o actualizar regla</h3>
@@ -92,6 +93,12 @@
 
         <label for="rol_keyword">Rol keyword:</label>
         <input type="text" id="rol_keyword" name="rol_keyword">
+
+        <label for="calculo">Cálculo:</label>
+        <input type="text" id="calculo" name="calculo">
+
+        <label for="handler">Handler externo:</label>
+        <input type="text" id="handler" name="handler">
 
         <label for="opciones">Opciones (solo para listas, formato JSON):</label><br>
         <textarea name="opciones" rows="6" cols="60" placeholder='[{"title":"Rápido","rows":[{"id":"express","title":"Express","description":"1 día"}]}]'></textarea>
@@ -133,6 +140,8 @@
             <th>Tipo</th>
             <th>Rol</th>
             <th>Opciones</th>
+            <th>Cálculo</th>
+            <th>Handler</th>
             <th>Acción</th>
         </tr>
         {% for regla in reglas %}
@@ -145,6 +154,8 @@
             <td>{{ regla[5] }}</td>
             <td>{{ regla[7] or '-' }}</td>
             <td><pre style="white-space: pre-wrap;">{{ regla[6] }}</pre></td>
+            <td>{{ regla[8] or '-' }}</td>
+            <td>{{ regla[9] or '-' }}</td>
             <td>
                 <form method="POST" action="{{ url_for('configuracion.eliminar_regla', regla_id=regla[0]) }}">
                     <button class="delete-btn" type="submit">Eliminar</button>

@@ -19,6 +19,23 @@ SESSION_TIMEOUT = Config.SESSION_TIMEOUT
 user_last_activity = {}
 user_steps         = {}
 
+STEP_HANDLERS = {}
+EXTERNAL_HANDLERS = {}
+
+
+def register_handler(step):
+    def decorator(func):
+        STEP_HANDLERS[step] = func
+        return func
+    return decorator
+
+
+def register_external(name):
+    def decorator(func):
+        EXTERNAL_HANDLERS[name] = func
+        return func
+    return decorator
+
 
 def set_user_step(numero, step):
     """Actualiza el paso en memoria y en la tabla chat_state."""
@@ -26,6 +43,54 @@ def set_user_step(numero, step):
     update_chat_state(numero, step)
 
 os.makedirs(Config.UPLOAD_FOLDER, exist_ok=True)
+
+
+@register_handler('barra_medida')
+@register_handler('meson_recto_medida')
+@register_handler('meson_l_medida')
+def handle_medicion(numero, texto):
+    step_actual = user_steps.get(numero, '').strip().lower()
+    conn = get_connection(); c = conn.cursor()
+    c.execute(
+        "SELECT respuesta, siguiente_step, tipo, opciones, rol_keyword, calculo, handler "
+        "FROM reglas WHERE step=%s AND input_text='*'",
+        (step_actual,)
+    )
+    row = c.fetchone(); conn.close()
+    if not row:
+        return False
+    resp, next_step, tipo_resp, opts, rol_kw, calculo, handler_name = row
+    try:
+        if handler_name:
+            func = EXTERNAL_HANDLERS.get(handler_name)
+            if not func:
+                raise ValueError('handler no encontrado')
+            total = func(texto)
+        else:
+            contexto = {}
+            if calculo and 'p1' in calculo and 'p2' in calculo:
+                p1, p2 = map(int, texto.replace(' ', '').split('x'))
+                contexto.update({'p1': p1, 'p2': p2})
+            else:
+                contexto['medida'] = int(texto)
+            total = eval(calculo, {}, contexto) if calculo else 0
+        enviar_mensaje(numero, resp.format(total=total), tipo_respuesta=tipo_resp, opciones=opts)
+        if rol_kw:
+            conn2 = get_connection(); c2 = conn2.cursor()
+            c2.execute("SELECT id FROM roles WHERE keyword=%s", (rol_kw,))
+            role = c2.fetchone()
+            if role:
+                c2.execute(
+                    "INSERT IGNORE INTO chat_roles (numero, role_id) VALUES (%s, %s)",
+                    (numero, role[0])
+                )
+                conn2.commit()
+            conn2.close()
+        if next_step:
+            set_user_step(numero, next_step.strip().lower())
+    except Exception:
+        enviar_mensaje(numero, "Por favor ingresa la medida correcta.")
+    return True
 
 @webhook_bp.route('/webhook', methods=['GET', 'POST'])
 def webhook():
@@ -224,43 +289,11 @@ def webhook():
                     else:
                         set_user_step(from_number, 'menu_principal')
             step = user_steps.get(from_number, '').strip().lower()
-
-            try:
-                if step == 'barra_medida':
-                    medida = int(text)
-                    total  = medida * 1700
-                    enviar_mensaje(
-                        from_number,
-                        f"Valor estimado: {total:,} $ Pesos.\nENVÍA 2 para asesor."
-                    )
-                    set_user_step(from_number, 'esperando_confirmacion')
-                    return jsonify({'status':'barra_ok'}), 200
-
-                if step == 'meson_recto_medida':
-                    medida = int(text)
-                    total  = (medida + 100) * 1700
-                    enviar_mensaje(
-                        from_number,
-                        f"Valor estimado: {total:,} $ Pesos.\nENVÍA 2 para asesor."
-                    )
-                    set_user_step(from_number, 'esperando_confirmacion')
-                    return jsonify({'status':'recto_ok'}), 200
-
-                if step == 'meson_l_medida':
-                    p1, p2 = map(int, text.replace(" ","").split("x"))
-                    total  = (p1 + p2 + 40) * 1700
-                    enviar_mensaje(
-                        from_number,
-                        f"Valor estimado: {total:,} $ Pesos.\nENVÍA 2 para asesor."
-                    )
-                    set_user_step(from_number, 'esperando_confirmacion')
-                    return jsonify({'status':'l_ok'}), 200
-            except:
-                enviar_mensaje(from_number, "Por favor ingresa la medida correcta.")
-                return jsonify({'status':'invalid_measure'}), 200
-
-            step = step.strip().lower()
             text = text.strip().lower()
+
+            handler = STEP_HANDLERS.get(step)
+            if handler and handler(from_number, text):
+                return jsonify({'status':'handled'}), 200
             conn = get_connection(); c = conn.cursor()
             c.execute(
                 "SELECT respuesta, siguiente_step, tipo, opciones, rol_keyword "
