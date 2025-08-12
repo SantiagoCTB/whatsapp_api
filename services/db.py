@@ -140,6 +140,15 @@ def init_db():
     ) ENGINE=InnoDB;
     """)
 
+    # chat_state: almacena el paso actual y última actividad por número
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS chat_state (
+      numero VARCHAR(20) PRIMARY KEY,
+      step TEXT,
+      last_activity DATETIME
+    ) ENGINE=InnoDB;
+    """)
+
     # ---- SEED admin (con PBKDF2 de Werkzeug) ----
     admin_hash = generate_password_hash('admin123')
     c.execute("""
@@ -179,6 +188,41 @@ def guardar_mensaje(numero, mensaje, tipo, media_id=None, media_url=None, mime_t
         "VALUES (%s, %s, %s, %s, %s, %s, NOW())",
         (numero, mensaje, tipo, media_id, media_url, mime_type)
     )
+    conn.commit()
+    conn.close()
+
+
+def get_chat_state(numero):
+    """Obtiene el step y last_activity almacenados para un número."""
+    conn = get_connection()
+    c    = conn.cursor()
+    c.execute(
+        "SELECT step, last_activity FROM chat_state WHERE numero=%s",
+        (numero,),
+    )
+    row = c.fetchone()
+    conn.close()
+    return row
+
+
+def update_chat_state(numero, step):
+    """Inserta o actualiza el estado del chat y la última actividad."""
+    conn = get_connection()
+    c    = conn.cursor()
+    c.execute(
+        "INSERT INTO chat_state (numero, step, last_activity) VALUES (%s, %s, NOW()) "
+        "ON DUPLICATE KEY UPDATE step=VALUES(step), last_activity=VALUES(last_activity)",
+        (numero, step),
+    )
+    conn.commit()
+    conn.close()
+
+
+def delete_chat_state(numero):
+    """Elimina el registro de estado para un número."""
+    conn = get_connection()
+    c    = conn.cursor()
+    c.execute("DELETE FROM chat_state WHERE numero=%s", (numero,))
     conn.commit()
     conn.close()
 

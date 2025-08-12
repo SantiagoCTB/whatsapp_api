@@ -2,7 +2,13 @@ import os
 from flask import Blueprint, request, jsonify, url_for
 from datetime import datetime
 from config import Config
-from services.db import get_connection, guardar_mensaje
+from services.db import (
+    get_connection,
+    guardar_mensaje,
+    get_chat_state,
+    update_chat_state,
+    delete_chat_state,
+)
 from services.whatsapp_api import download_audio, get_media_url, enviar_mensaje
 
 webhook_bp = Blueprint('webhook', __name__)
@@ -12,6 +18,12 @@ SESSION_TIMEOUT = Config.SESSION_TIMEOUT
 
 user_last_activity = {}
 user_steps         = {}
+
+
+def set_user_step(numero, step):
+    """Actualiza el paso en memoria y en la tabla chat_state."""
+    user_steps[numero] = step
+    update_chat_state(numero, step)
 
 os.makedirs(Config.UPLOAD_FOLDER, exist_ok=True)
 
@@ -38,6 +50,14 @@ def webhook():
             msg_type    = msg.get('type')
             from_number = msg.get('from')
             mensaje_id  = msg.get('id')
+
+            if from_number not in user_steps:
+                row = get_chat_state(from_number)
+                if row:
+                    step_db, last_act = row
+                    user_steps[from_number] = step_db or ''
+                    if last_act:
+                        user_last_activity[from_number] = last_act
 
             # evitar duplicados
             conn = get_connection(); c = conn.cursor()
@@ -140,10 +160,11 @@ def webhook():
                     "Muchas gracias por comunicarte. La sesión terminó por inactividad."
                 )
                 user_steps.pop(from_number, None)
+                delete_chat_state(from_number)
             user_last_activity[from_number] = now
 
             if text in ['reiniciar', 'volver al inicio', 'inicio', 'menú', 'menu', 'ayuda']:
-                user_steps[from_number] = 'menu_principal'
+                set_user_step(from_number, 'menu_principal')
                 enviar_mensaje(from_number, "Perfecto, volvamos a empezar.")
 
                 conn = get_connection(); c = conn.cursor()
@@ -168,11 +189,14 @@ def webhook():
                             conn2.commit()
                         conn2.close()
                     if next_step:
-                        user_steps[from_number] = next_step.strip().lower()
+                        set_user_step(from_number, next_step.strip().lower())
                 return jsonify({'status':'reiniciado'}), 200
 
             is_new_user = from_number not in user_steps
-            step = user_steps.setdefault(from_number, 'menu_principal').strip().lower()
+            stored_step = user_steps.get(from_number, '')
+            if not is_new_user:
+                update_chat_state(from_number, stored_step)
+            step = stored_step.strip().lower() if stored_step else 'menu_principal'
             if is_new_user:
                 conn = get_connection(); c = conn.cursor()
                 c.execute(
@@ -196,10 +220,9 @@ def webhook():
                             conn2.commit()
                         conn2.close()
                     if next_step:
-                        user_steps[from_number] = next_step.strip().lower()
-                # After sending the welcome message, continue with the
-                # original text instead of returning early.
-
+                        set_user_step(from_number, next_step.strip().lower())
+                    else:
+                        set_user_step(from_number, 'menu_principal')
             step = user_steps.get(from_number, '').strip().lower()
 
             try:
@@ -210,7 +233,7 @@ def webhook():
                         from_number,
                         f"Valor estimado: {total:,} $ Pesos.\nENVÍA 2 para asesor."
                     )
-                    user_steps[from_number] = 'esperando_confirmacion'
+                    set_user_step(from_number, 'esperando_confirmacion')
                     return jsonify({'status':'barra_ok'}), 200
 
                 if step == 'meson_recto_medida':
@@ -220,7 +243,7 @@ def webhook():
                         from_number,
                         f"Valor estimado: {total:,} $ Pesos.\nENVÍA 2 para asesor."
                     )
-                    user_steps[from_number] = 'esperando_confirmacion'
+                    set_user_step(from_number, 'esperando_confirmacion')
                     return jsonify({'status':'recto_ok'}), 200
 
                 if step == 'meson_l_medida':
@@ -230,7 +253,7 @@ def webhook():
                         from_number,
                         f"Valor estimado: {total:,} $ Pesos.\nENVÍA 2 para asesor."
                     )
-                    user_steps[from_number] = 'esperando_confirmacion'
+                    set_user_step(from_number, 'esperando_confirmacion')
                     return jsonify({'status':'l_ok'}), 200
             except:
                 enviar_mensaje(from_number, "Por favor ingresa la medida correcta.")
@@ -260,7 +283,7 @@ def webhook():
                         conn2.commit()
                     conn2.close()
                 if next_step:
-                    user_steps[from_number] = next_step.strip().lower()
+                    set_user_step(from_number, next_step.strip().lower())
             else:
                 enviar_mensaje(from_number, "No entendí tu respuesta, intenta de nuevo.")
     return jsonify({'status':'received'}), 200
