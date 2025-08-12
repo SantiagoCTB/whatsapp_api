@@ -158,8 +158,26 @@ def webhook():
                     mime_type=mime_clean,
                 )
 
-                enqueue_transcription(path, from_number, media_id, mime_clean, public_url, mensaje_id)
-                enviar_mensaje(from_number, "Tu audio está siendo procesado.", tipo='bot')
+                queued = enqueue_transcription(
+                    path,
+                    from_number,
+                    media_id,
+                    mime_clean,
+                    public_url,
+                    mensaje_id,
+                )
+                if queued:
+                    enviar_mensaje(
+                        from_number,
+                        "Tu audio está siendo procesado.",
+                        tipo='bot'
+                    )
+                else:
+                    enviar_mensaje(
+                        from_number,
+                        "El servicio está temporalmente fuera de línea. Inténtalo más tarde.",
+                        tipo='bot'
+                    )
                 continue
 
             if msg_type == 'video':
