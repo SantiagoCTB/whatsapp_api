@@ -159,7 +159,14 @@ def webhook():
                     mime_type=mime_clean
                 )
 
-                enviar_mensaje(from_number, "Audio recibido correctamente.", tipo='bot')
+                if texto:
+                    enviar_mensaje(from_number, "Audio recibido correctamente.", tipo='bot')
+                else:
+                    enviar_mensaje(
+                        from_number,
+                        "Audio recibido. No se realizó transcripción por exceder la duración permitida.",
+                        tipo='bot'
+                    )
                 continue
 
             if msg_type == 'video':

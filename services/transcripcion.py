@@ -6,6 +6,7 @@ import wave
 from typing import Optional
 
 from vosk import Model, KaldiRecognizer
+from config import Config
 
 _MODEL: Optional[Model] = None
 
@@ -44,10 +45,21 @@ def _normalize_audio(input_bytes: bytes) -> str:
 
 
 def transcribir(audio_bytes: bytes) -> str:
-    """Normaliza el audio y devuelve el texto transcrito."""
+    """Normaliza el audio y devuelve el texto transcrito.
+
+    Si la duración del audio excede el máximo permitido, retorna una cadena
+    vacía sin pasar por el modelo de Vosk.
+    """
     wav_path = _normalize_audio(audio_bytes)
-    model = _get_model()
     wf = wave.open(wav_path, "rb")
+
+    duracion_ms = (wf.getnframes() / wf.getframerate()) * 1000
+    if duracion_ms > Config.MAX_TRANSCRIPTION_DURATION_MS:
+        wf.close()
+        os.remove(wav_path)
+        return ""
+
+    model = _get_model()
     rec = KaldiRecognizer(model, wf.getframerate())
     texto = []
     while True:
