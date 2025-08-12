@@ -198,9 +198,10 @@ def webhook():
                         conn2.close()
                     if next_step:
                         user_steps[from_number] = next_step.strip().lower()
-                return jsonify({'status':'sent_welcome'}), 200
+                # After sending the welcome message, continue with the
+                # original text instead of returning early.
 
-            step = step.strip().lower()
+            step = user_steps.get(from_number, '').strip().lower()
             user_steps[from_number] = step
 
             try:
