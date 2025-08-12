@@ -21,6 +21,11 @@ def index():
     conn = get_connection()
     c    = conn.cursor()
     rol  = session.get('rol')
+    role_id = None
+    if rol != 'admin':
+        c.execute("SELECT id FROM roles WHERE keyword=%s", (rol,))
+        row = c.fetchone()
+        role_id = row[0] if row else None
 
     # Lista de chats únicos filtrados por rol
     if rol == 'admin':
@@ -33,7 +38,7 @@ def index():
             INNER JOIN chat_roles cr ON m.numero = cr.numero
             WHERE cr.role_id = %s
             """,
-            (rol,)
+            (role_id,)
         )
     numeros = [row[0] for row in c.fetchall()]
 
@@ -65,12 +70,17 @@ def get_chat(numero):
     conn = get_connection()
     c    = conn.cursor()
     rol  = session.get('rol')
+    role_id = None
+    if rol != 'admin':
+        c.execute("SELECT id FROM roles WHERE keyword=%s", (rol,))
+        row = c.fetchone()
+        role_id = row[0] if row else None
 
     # Verificar que el usuario tenga acceso al número
     if rol != 'admin':
         c.execute(
             "SELECT 1 FROM chat_roles WHERE numero = %s AND role_id = %s",
-            (numero, rol)
+            (numero, role_id)
         )
         if not c.fetchone():
             conn.close()
@@ -97,10 +107,14 @@ def send_message():
     conn = get_connection()
     c    = conn.cursor()
     rol  = session.get('rol')
+    role_id = None
     if rol != 'admin':
+        c.execute("SELECT id FROM roles WHERE keyword=%s", (rol,))
+        row = c.fetchone()
+        role_id = row[0] if row else None
         c.execute(
             "SELECT 1 FROM chat_roles WHERE numero = %s AND role_id = %s",
-            (numero, rol)
+            (numero, role_id)
         )
         autorizado = c.fetchone()
     else:
@@ -121,6 +135,11 @@ def get_chat_list():
     conn = get_connection()
     c    = conn.cursor()
     rol  = session.get('rol')
+    role_id = None
+    if rol != 'admin':
+        c.execute("SELECT id FROM roles WHERE keyword=%s", (rol,))
+        row = c.fetchone()
+        role_id = row[0] if row else None
 
     # Únicos números filtrados por rol
     if rol == 'admin':
@@ -133,7 +152,7 @@ def get_chat_list():
             INNER JOIN chat_roles cr ON m.numero = cr.numero
             WHERE cr.role_id = %s
             """,
-            (rol,)
+            (role_id,)
         )
     numeros = [row[0] for row in c.fetchall()]
 
@@ -204,7 +223,10 @@ def send_image():
     if rol != 'admin':
         conn = get_connection()
         c = conn.cursor()
-        c.execute("SELECT 1 FROM chat_roles WHERE numero = %s AND role_id = %s", (numero, rol))
+        c.execute("SELECT id FROM roles WHERE keyword=%s", (rol,))
+        row = c.fetchone()
+        role_id = row[0] if row else None
+        c.execute("SELECT 1 FROM chat_roles WHERE numero = %s AND role_id = %s", (numero, role_id))
         autorizado = c.fetchone()
         conn.close()
         if not autorizado:
@@ -247,7 +269,10 @@ def send_audio():
     if rol != 'admin':
         conn = get_connection()
         c = conn.cursor()
-        c.execute("SELECT 1 FROM chat_roles WHERE numero = %s AND role_id = %s", (numero, rol))
+        c.execute("SELECT id FROM roles WHERE keyword=%s", (rol,))
+        row = c.fetchone()
+        role_id = row[0] if row else None
+        c.execute("SELECT 1 FROM chat_roles WHERE numero = %s AND role_id = %s", (numero, role_id))
         autorizado = c.fetchone()
         conn.close()
         if not autorizado:
@@ -286,7 +311,10 @@ def send_video():
     if rol != 'admin':
         conn = get_connection()
         c = conn.cursor()
-        c.execute("SELECT 1 FROM chat_roles WHERE numero = %s AND role_id = %s", (numero, rol))
+        c.execute("SELECT id FROM roles WHERE keyword=%s", (rol,))
+        row = c.fetchone()
+        role_id = row[0] if row else None
+        c.execute("SELECT 1 FROM chat_roles WHERE numero = %s AND role_id = %s", (numero, role_id))
         autorizado = c.fetchone()
         conn.close()
         if not autorizado:
