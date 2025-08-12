@@ -21,11 +21,9 @@ def index():
     conn = get_connection()
     c    = conn.cursor()
     rol  = session.get('rol')
-    role_id = None
-    if rol != 'admin':
-        c.execute("SELECT id FROM roles WHERE keyword=%s", (rol,))
-        row = c.fetchone()
-        role_id = row[0] if row else None
+    c.execute("SELECT id FROM roles WHERE keyword=%s", (rol,))
+    row = c.fetchone()
+    role_id = row[0] if row else None
 
     # Lista de chats únicos filtrados por rol
     if rol == 'admin':
@@ -60,7 +58,7 @@ def index():
     botones = c.fetchall()
 
     conn.close()
-    return render_template('index.html', chats=chats, botones=botones, rol=rol)
+    return render_template('index.html', chats=chats, botones=botones, rol=rol, role_id=role_id)
 
 @chat_bp.route('/get_chat/<numero>')
 def get_chat(numero):
