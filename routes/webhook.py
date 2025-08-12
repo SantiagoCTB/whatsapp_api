@@ -183,8 +183,8 @@ def webhook():
                 )
                 row = c.fetchone(); conn.close()
                 if row:
-                    resp, next_step, _, _, rol_kw = row
-                    enviar_mensaje(from_number, resp)
+                    resp, next_step, tipo_resp, opts, rol_kw = row
+                    enviar_mensaje(from_number, resp, tipo_respuesta=tipo_resp, opciones=opts)
                     if rol_kw:
                         conn2 = get_connection(); c2 = conn2.cursor()
                         c2.execute("SELECT id FROM roles WHERE keyword=%s", (rol_kw,))
