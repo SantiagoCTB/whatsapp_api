@@ -2,13 +2,21 @@ import json
 import os
 import subprocess
 import tempfile
+import time
 import wave
+import logging
 from typing import Optional
 
 from vosk import Model, KaldiRecognizer
 from config import Config
 
 _MODEL: Optional[Model] = None
+
+logger = logging.getLogger(__name__)
+
+_TOTAL_TIME = 0.0
+_CALL_COUNT = 0
+_TRANSCRIPTION_ENABLED = True
 
 
 def _get_model() -> Model:
@@ -50,27 +58,54 @@ def transcribir(audio_bytes: bytes) -> str:
     Si la duración del audio excede el máximo permitido, retorna una cadena
     vacía sin pasar por el modelo de Vosk.
     """
+    if not _TRANSCRIPTION_ENABLED:
+        logger.warning("Transcription disabled due to high average runtime")
+        return ""
+
+    start = time.perf_counter()
     wav_path = _normalize_audio(audio_bytes)
     wf = wave.open(wav_path, "rb")
 
-    duracion_ms = (wf.getnframes() / wf.getframerate()) * 1000
-    if duracion_ms > Config.MAX_TRANSCRIPTION_DURATION_MS:
+    try:
+        duracion_ms = (wf.getnframes() / wf.getframerate()) * 1000
+        if duracion_ms > Config.MAX_TRANSCRIPTION_DURATION_MS:
+            return ""
+
+        model = _get_model()
+        rec = KaldiRecognizer(model, wf.getframerate())
+        texto = []
+        while True:
+            data = wf.readframes(4000)
+            if len(data) == 0:
+                break
+            if rec.AcceptWaveform(data):
+                res = json.loads(rec.Result())
+                texto.append(res.get("text", ""))
+        res = json.loads(rec.FinalResult())
+        texto.append(res.get("text", ""))
+        return " ".join(t for t in texto if t).strip()
+    finally:
         wf.close()
         os.remove(wav_path)
-        return ""
+        elapsed = time.perf_counter() - start
+        _record_transcription_time(elapsed)
 
-    model = _get_model()
-    rec = KaldiRecognizer(model, wf.getframerate())
-    texto = []
-    while True:
-        data = wf.readframes(4000)
-        if len(data) == 0:
-            break
-        if rec.AcceptWaveform(data):
-            res = json.loads(rec.Result())
-            texto.append(res.get("text", ""))
-    res = json.loads(rec.FinalResult())
-    texto.append(res.get("text", ""))
-    wf.close()
-    os.remove(wav_path)
-    return " ".join(t for t in texto if t).strip()
+
+def _record_transcription_time(elapsed: float) -> None:
+    global _TOTAL_TIME, _CALL_COUNT, _TRANSCRIPTION_ENABLED
+    _TOTAL_TIME += elapsed
+    _CALL_COUNT += 1
+    average = _TOTAL_TIME / _CALL_COUNT
+    logger.info(
+        "Transcription took %.3f s (avg %.3f s over %d calls)",
+        elapsed,
+        average,
+        _CALL_COUNT,
+    )
+    if average > Config.TRANSCRIPTION_MAX_AVG_TIME_SEC:
+        logger.warning(
+            "Average transcription time %.3f s exceeds threshold %.3f s; disabling transcription",
+            average,
+            Config.TRANSCRIPTION_MAX_AVG_TIME_SEC,
+        )
+        _TRANSCRIPTION_ENABLED = False
