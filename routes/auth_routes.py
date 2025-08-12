@@ -22,6 +22,16 @@ def _verify_password(stored_hash: str, plain: str) -> bool:
 def login():
     error = None
     if request.method == 'POST':
+        # Selección de rol posterior al login
+        if 'rol' in request.form and not request.form.get('username'):
+            selected_role = request.form.get('rol')
+            roles = session.get('roles', [])
+            if selected_role in roles:
+                session['rol'] = selected_role
+                return redirect(url_for('chat.index'))
+            error = 'Rol inválido'
+            return render_template('select_role.html', roles=roles, error=error)
+
         username = (request.form.get('username') or "").strip()
         password = (request.form.get('password') or "")
 
@@ -31,20 +41,21 @@ def login():
             # Trae solo por username; la verificación del hash se hace en app
             c.execute(
                 'SELECT id, username, password FROM usuarios WHERE username = %s',
-                (username,)
+                (username,),
             )
             user = c.fetchone()
 
             if user and _verify_password(user[2], password):
-                # user -> (id, username, password)
-                session['user'] = user[1]
-
-                # Roles centralizados
                 roles = get_roles_by_user(user[0]) or []
-                session['roles'] = roles
-                session['rol'] = roles[0] if roles else None  # compatibilidad
-
-                return redirect(url_for('chat.index'))
+                if not roles:
+                    error = 'Usuario sin rol asignado'
+                else:
+                    session['user'] = user[1]
+                    session['roles'] = roles
+                    if len(roles) == 1:
+                        session['rol'] = roles[0]
+                        return redirect(url_for('chat.index'))
+                    return render_template('select_role.html', roles=roles)
             else:
                 error = 'Usuario o contraseña incorrectos'
         finally:
