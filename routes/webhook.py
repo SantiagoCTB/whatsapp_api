@@ -86,8 +86,7 @@ def handle_medicion(numero, texto):
                 )
                 conn2.commit()
             conn2.close()
-        if next_step:
-            set_user_step(numero, next_step.strip().lower())
+        set_user_step(numero, next_step.strip().lower() if next_step else '')
     except Exception:
         enviar_mensaje(numero, "Por favor ingresa la medida correcta.")
     return True
@@ -253,8 +252,7 @@ def webhook():
                             )
                             conn2.commit()
                         conn2.close()
-                    if next_step:
-                        set_user_step(from_number, next_step.strip().lower())
+                    set_user_step(from_number, next_step.strip().lower() if next_step else '')
                 return jsonify({'status':'reiniciado'}), 200
 
             is_new_user = from_number not in user_steps
@@ -284,10 +282,7 @@ def webhook():
                             )
                             conn2.commit()
                         conn2.close()
-                    if next_step:
-                        set_user_step(from_number, next_step.strip().lower())
-                    else:
-                        set_user_step(from_number, 'menu_principal')
+                    set_user_step(from_number, next_step.strip().lower() if next_step else '')
             step = user_steps.get(from_number, '').strip().lower()
             text = text.strip().lower()
 
@@ -315,8 +310,7 @@ def webhook():
                         )
                         conn2.commit()
                     conn2.close()
-                if next_step:
-                    set_user_step(from_number, next_step.strip().lower())
+                set_user_step(from_number, next_step.strip().lower() if next_step else '')
             else:
                 enviar_mensaje(from_number, "No entendí tu respuesta, intenta de nuevo.")
     return jsonify({'status':'received'}), 200
