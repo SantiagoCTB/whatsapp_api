@@ -171,10 +171,9 @@ def webhook():
                         user_steps[from_number] = next_step.strip().lower()
                 return jsonify({'status':'reiniciado'}), 200
 
-            step = user_steps.get(from_number)
-            if not step:
-                step = 'menu_principal'.strip().lower()
-                user_steps[from_number] = step
+            is_new_user = from_number not in user_steps
+            step = user_steps.setdefault(from_number, 'menu_principal').strip().lower()
+            if is_new_user:
                 conn = get_connection(); c = conn.cursor()
                 c.execute(
                     "SELECT respuesta, siguiente_step, tipo, opciones, rol_keyword "
@@ -202,7 +201,6 @@ def webhook():
                 # original text instead of returning early.
 
             step = user_steps.get(from_number, '').strip().lower()
-            user_steps[from_number] = step
 
             try:
                 if step == 'barra_medida':
