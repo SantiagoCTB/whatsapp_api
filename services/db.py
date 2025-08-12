@@ -110,9 +110,19 @@ def init_db():
       siguiente_step TEXT,
       tipo VARCHAR(20) NOT NULL DEFAULT 'texto',
       opciones TEXT,
-      rol_keyword VARCHAR(20) NULL
+      rol_keyword VARCHAR(20) NULL,
+      calculo TEXT,
+      handler VARCHAR(50)
     ) ENGINE=InnoDB;
     """)
+
+    # Migración defensiva de columnas calculo y handler
+    c.execute("SHOW COLUMNS FROM reglas LIKE 'calculo';")
+    if not c.fetchone():
+        c.execute("ALTER TABLE reglas ADD COLUMN calculo TEXT NULL;")
+    c.execute("SHOW COLUMNS FROM reglas LIKE 'handler';")
+    if not c.fetchone():
+        c.execute("ALTER TABLE reglas ADD COLUMN handler VARCHAR(50) NULL;")
 
     # botones
     c.execute("""
