@@ -1,7 +1,8 @@
-import os
 import logging
-import redis
-from rq import Queue
+from concurrent.futures import ThreadPoolExecutor
+from services.tasks import process_audio
+
+executor = ThreadPoolExecutor(max_workers=2)
 
 
 def enqueue_transcription(
@@ -14,11 +15,8 @@ def enqueue_transcription(
 ) -> bool:
     """Enqueue an audio transcription job."""
     try:
-        redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-        redis_conn = redis.Redis.from_url(redis_url)
-        queue = Queue("default", connection=redis_conn)
-        queue.enqueue(
-            "services.tasks.process_audio",
+        executor.submit(
+            process_audio,
             audio_path,
             from_number,
             media_id,
@@ -27,6 +25,6 @@ def enqueue_transcription(
             mensaje_id,
         )
         return True
-    except redis.exceptions.ConnectionError as exc:
-        logging.error("Redis connection error: %s", exc)
+    except Exception as exc:
+        logging.error("Error encolando la transcripción: %s", exc)
         return False
