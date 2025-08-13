@@ -14,8 +14,7 @@ def _require_admin():
     # Debe haber usuario logueado y el rol 'admin' en la lista de roles
     return "user" in session and 'admin' in (session.get('roles') or [])
 
-@config_bp.route('/configuracion', methods=['GET', 'POST'])
-def configuracion():
+def _reglas_view(template_name):
     if not _require_admin():
         return redirect(url_for("auth.login"))
 
@@ -151,9 +150,17 @@ def configuracion():
             "ORDER BY step, id"
         )
         reglas = c.fetchall()
-        return render_template('configuracion.html', reglas=reglas)
+        return render_template(template_name, reglas=reglas)
     finally:
         conn.close()
+
+@config_bp.route('/configuracion', methods=['GET', 'POST'])
+def configuracion():
+    return _reglas_view('configuracion.html')
+
+@config_bp.route('/reglas', methods=['GET', 'POST'])
+def reglas():
+    return _reglas_view('reglas.html')
 
 @config_bp.route('/eliminar_regla/<int:regla_id>', methods=['POST'])
 def eliminar_regla(regla_id):
@@ -165,7 +172,7 @@ def eliminar_regla(regla_id):
     try:
         c.execute("DELETE FROM reglas WHERE id = %s", (regla_id,))
         conn.commit()
-        return redirect(url_for('configuracion.configuracion'))
+        return redirect(url_for('configuracion.reglas'))
     finally:
         conn.close()
 
