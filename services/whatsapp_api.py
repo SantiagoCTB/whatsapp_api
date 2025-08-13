@@ -129,12 +129,15 @@ def enviar_mensaje(numero, mensaje, tipo='bot', tipo_respuesta='texto', opciones
 
     resp = requests.post(url, headers=headers, json=data)
     print(f"[WA API] {resp.status_code} — {resp.text}")
+    tipo_db = tipo
+    if tipo_respuesta in {"image", "audio", "video", "document"} and "_" not in tipo:
+        tipo_db = f"{tipo}_{tipo_respuesta}"
 
     if tipo_respuesta == 'video':
         guardar_mensaje(
             numero,
             mensaje,
-            tipo,
+            tipo_db,
             media_id=None,
             media_url=video_obj.get("link")
         )
@@ -143,7 +146,7 @@ def enviar_mensaje(numero, mensaje, tipo='bot', tipo_respuesta='texto', opciones
         guardar_mensaje(
             numero,
             mensaje,
-            tipo,
+            tipo_db,
             media_id=None,
             media_url=audio_obj.get("link")
         )
@@ -151,7 +154,7 @@ def enviar_mensaje(numero, mensaje, tipo='bot', tipo_respuesta='texto', opciones
         guardar_mensaje(
             numero,
             mensaje,
-            tipo,
+            tipo_db,
             media_id=None,
             media_url=opciones
         )
