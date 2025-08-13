@@ -434,13 +434,17 @@
               const btn = document.createElement('button');
               btn.textContent = i+1;
               btn.onclick = () => {
-                fetch('/send_message',{
+                if (!currentChat) return;
+                fetch('/send_message', {
                   method:'POST',
                   headers:{'Content-Type':'application/json'},
-                  body:JSON.stringify({numero:currentChat,mensaje:b.mensaje})
-                }).then(()=>{
-                  loadMessages(); fetchChatList();
-                });
+                  body:JSON.stringify({
+                    numero: currentChat,
+                    mensaje: b.mensaje,
+                    tipo_respuesta: b.tipo,
+                    opciones: b.media_url
+                  })
+                }).then(()=>{ loadMessages(); fetchChatList(); });
               };
               botoneraEl.appendChild(btn);
             });
