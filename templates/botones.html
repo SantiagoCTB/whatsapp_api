@@ -57,9 +57,18 @@
 <body>
     <h2>Botones rápidos para el chat</h2>
 
-    <form method="POST">
+    <form method="POST" enctype="multipart/form-data">
         <label for="mensaje">Nuevo mensaje:</label>
         <input type="text" name="mensaje" required>
+        <label for="tipo">Tipo de medio:</label>
+        <select name="tipo">
+            <option value="texto">Texto</option>
+            <option value="image">Imagen</option>
+            <option value="video">Video</option>
+            <option value="audio">Audio</option>
+            <option value="document">PDF</option>
+        </select>
+        <input type="file" name="media">
         <button type="submit">Agregar botón</button>
     </form>
 

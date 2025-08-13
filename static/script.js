@@ -256,7 +256,12 @@ function fetchBotones() {
           fetch('/send_message', {
             method: 'POST',
             headers: {'Content-Type':'application/json'},
-            body: JSON.stringify({ numero: currentChat, mensaje: b.mensaje })
+            body: JSON.stringify({
+              numero: currentChat,
+              mensaje: b.mensaje,
+              tipo_respuesta: b.tipo,
+              opciones: b.media_url
+            })
           }).then(() => {
             fetchChat();
             fetchChatList();
