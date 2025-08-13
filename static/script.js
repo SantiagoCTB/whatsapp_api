@@ -164,6 +164,12 @@ document.addEventListener('click', e => {
 const imageInput = document.getElementById('imageInput');
 const audioInput = document.getElementById('audioInput');
 const videoInput = document.getElementById('videoInput');
+const documentInput = document.createElement('input');
+documentInput.type = 'file';
+documentInput.accept = 'application/pdf';
+documentInput.style.display = 'none';
+documentInput.id = 'documentInput';
+document.querySelector('.inputArea').appendChild(documentInput);
 
 // Botones del menú
 document.getElementById('attachImage')
@@ -172,6 +178,13 @@ document.getElementById('attachAudio')
   .addEventListener('click', () => audioInput.click());
 document.getElementById('attachVideo')
   .addEventListener('click', () => videoInput.click());
+const attachDocument = document.createElement('div');
+attachDocument.id = 'attachDocument';
+attachDocument.className = 'attach-item';
+attachDocument.title = 'Enviar documento';
+attachDocument.textContent = '📄';
+attachMenu.appendChild(attachDocument);
+attachDocument.addEventListener('click', () => documentInput.click());
 
 // Envío de imagen
 imageInput.addEventListener('change', async () => {
@@ -236,6 +249,28 @@ videoInput.addEventListener('change', async () => {
   } catch(err) {
     console.error('Error enviando video:', err);
     alert('Error enviando video');
+  }
+});
+
+// Envío de documento
+documentInput.addEventListener('change', async () => {
+  if (!currentChat) return alert("Selecciona un chat");
+  const file = documentInput.files[0];
+  if (!file) return;
+  const form = new FormData();
+  form.append('document', file);
+  form.append('caption','');
+  form.append('numero', currentChat);
+  try {
+    const resp = await fetch('/send_document', { method:'POST', body:form });
+    if (!resp.ok) throw new Error(await resp.text());
+    documentInput.value = '';
+    attachMenu.classList.remove('show');
+    fetchChat();
+    fetchChatList();
+  } catch(err) {
+    console.error('Error enviando documento:', err);
+    alert('Error enviando documento');
   }
 });
 

@@ -255,6 +255,49 @@ def send_image():
 
     return jsonify({'status':'sent_image'}), 200
 
+@chat_bp.route('/send_document', methods=['POST'])
+def send_document():
+    # Validación de sesión
+    if 'user' not in session:
+        return jsonify({'error':'No autorizado'}), 401
+
+    numero   = request.form.get('numero')
+    caption  = request.form.get('caption','')
+    document = request.files.get('document')
+
+    rol = session.get('rol')
+    if rol != 'admin':
+        conn = get_connection()
+        c    = conn.cursor()
+        c.execute("SELECT id FROM roles WHERE keyword=%s", (rol,))
+        row = c.fetchone()
+        role_id = row[0] if row else None
+        c.execute("SELECT 1 FROM chat_roles WHERE numero = %s AND role_id = %s", (numero, role_id))
+        autorizado = c.fetchone()
+        conn.close()
+        if not autorizado:
+            return jsonify({'error':'No autorizado'}), 403
+
+    if not numero or not document or not document.filename.lower().endswith('.pdf'):
+        return jsonify({'error':'Falta número o documento PDF'}), 400
+
+    filename = secure_filename(document.filename)
+    unique   = f"{uuid.uuid4().hex}_{filename}"
+    path     = os.path.join(UPLOAD_FOLDER, unique)
+    document.save(path)
+
+    doc_url = url_for('static', filename=f'uploads/{unique}', _external=True)
+
+    enviar_mensaje(
+        numero,
+        caption,
+        tipo='bot_document',
+        tipo_respuesta='document',
+        opciones=doc_url
+    )
+
+    return jsonify({'status':'sent_document'}), 200
+
 @chat_bp.route('/send_audio', methods=['POST'])
 def send_audio():
     # Validación de sesión

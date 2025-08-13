@@ -108,6 +108,17 @@ def enviar_mensaje(numero, mensaje, tipo='bot', tipo_respuesta='texto', opciones
             "video": video_obj
         }
 
+    elif tipo_respuesta == 'document':
+        data = {
+            "messaging_product": "whatsapp",
+            "to": numero,
+            "type": "document",
+            "document": {
+                "link": opciones,
+                "caption": mensaje
+            }
+        }
+
     else:
         data = {
             "messaging_product": "whatsapp",
