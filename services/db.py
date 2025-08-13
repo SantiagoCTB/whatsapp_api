@@ -112,17 +112,25 @@ def init_db():
       opciones TEXT,
       rol_keyword VARCHAR(20) NULL,
       calculo TEXT,
-      handler VARCHAR(50)
+      handler VARCHAR(50),
+      media_url TEXT,
+      media_tipo VARCHAR(20)
     ) ENGINE=InnoDB;
     """)
 
-    # Migración defensiva de columnas calculo y handler
+    # Migración defensiva de columnas calculo, handler y medios
     c.execute("SHOW COLUMNS FROM reglas LIKE 'calculo';")
     if not c.fetchone():
         c.execute("ALTER TABLE reglas ADD COLUMN calculo TEXT NULL;")
     c.execute("SHOW COLUMNS FROM reglas LIKE 'handler';")
     if not c.fetchone():
         c.execute("ALTER TABLE reglas ADD COLUMN handler VARCHAR(50) NULL;")
+    c.execute("SHOW COLUMNS FROM reglas LIKE 'media_url';")
+    if not c.fetchone():
+        c.execute("ALTER TABLE reglas ADD COLUMN media_url TEXT NULL;")
+    c.execute("SHOW COLUMNS FROM reglas LIKE 'media_tipo';")
+    if not c.fetchone():
+        c.execute("ALTER TABLE reglas ADD COLUMN media_tipo VARCHAR(20) NULL;")
 
     # botones
     c.execute("""

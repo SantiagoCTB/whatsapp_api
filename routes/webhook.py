@@ -54,14 +54,14 @@ def handle_medicion(numero, texto):
     step_actual = user_steps.get(numero, '').strip().lower()
     conn = get_connection(); c = conn.cursor()
     c.execute(
-        "SELECT respuesta, siguiente_step, tipo, opciones, rol_keyword, calculo, handler "
+        "SELECT respuesta, siguiente_step, tipo, media_url, opciones, rol_keyword, calculo, handler "
         "FROM reglas WHERE step=%s AND input_text='*'",
         (step_actual,)
     )
     row = c.fetchone(); conn.close()
     if not row:
         return False
-    resp, next_step, tipo_resp, opts, rol_kw, calculo, handler_name = row
+    resp, next_step, tipo_resp, media_url, opts, rol_kw, calculo, handler_name = row
     try:
         if handler_name:
             func = EXTERNAL_HANDLERS.get(handler_name)
@@ -76,7 +76,8 @@ def handle_medicion(numero, texto):
             else:
                 contexto['medida'] = int(texto)
             total = eval(calculo, {}, contexto) if calculo else 0
-        enviar_mensaje(numero, resp.format(total=total), tipo_respuesta=tipo_resp, opciones=opts)
+        media_opt = media_url if tipo_resp in ['image', 'video', 'audio', 'document'] else opts
+        enviar_mensaje(numero, resp.format(total=total), tipo_respuesta=tipo_resp, opciones=media_opt)
         if rol_kw:
             conn2 = get_connection(); c2 = conn2.cursor()
             c2.execute("SELECT id FROM roles WHERE keyword=%s", (rol_kw,))
@@ -259,14 +260,15 @@ def webhook():
             if is_new_user:
                 conn = get_connection(); c = conn.cursor()
                 c.execute(
-                    "SELECT respuesta, siguiente_step, tipo, opciones, rol_keyword "
+                    "SELECT respuesta, siguiente_step, tipo, media_url, opciones, rol_keyword "
                     "FROM reglas WHERE step=%s AND input_text=%s",
                     (step,'iniciar')
                 )
                 row = c.fetchone(); conn.close()
                 if row:
-                    resp, next_step, tipo_resp, opts, rol_kw = row
-                    enviar_mensaje(from_number, resp, tipo_respuesta=tipo_resp, opciones=opts)
+                    resp, next_step, tipo_resp, media_url, opts, rol_kw = row
+                    media_opt = media_url if tipo_resp in ['image', 'video', 'audio', 'document'] else opts
+                    enviar_mensaje(from_number, resp, tipo_respuesta=tipo_resp, opciones=media_opt)
                     if rol_kw:
                         conn2 = get_connection(); c2 = conn2.cursor()
                         c2.execute("SELECT id FROM roles WHERE keyword=%s", (rol_kw,))
@@ -287,14 +289,15 @@ def webhook():
                 return jsonify({'status':'handled'}), 200
             conn = get_connection(); c = conn.cursor()
             c.execute(
-                "SELECT respuesta, siguiente_step, tipo, opciones, rol_keyword "
+                "SELECT respuesta, siguiente_step, tipo, media_url, opciones, rol_keyword "
                 "FROM reglas WHERE step=%s AND input_text=%s",
                 (step, text)
             )
             row = c.fetchone(); conn.close()
             if row:
-                resp, next_step, tipo_resp, opts, rol_kw = row
-                enviar_mensaje(from_number, resp, tipo_respuesta=tipo_resp, opciones=opts)
+                resp, next_step, tipo_resp, media_url, opts, rol_kw = row
+                media_opt = media_url if tipo_resp in ['image', 'video', 'audio', 'document'] else opts
+                enviar_mensaje(from_number, resp, tipo_respuesta=tipo_resp, opciones=media_opt)
                 if rol_kw:
                     conn2 = get_connection(); c2 = conn2.cursor()
                     c2.execute("SELECT id FROM roles WHERE keyword=%s", (rol_kw,))
