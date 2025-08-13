@@ -5,6 +5,7 @@ import tempfile
 import time
 import wave
 import logging
+import shutil
 from typing import Optional
 
 from vosk import Model, KaldiRecognizer
@@ -29,6 +30,11 @@ def _get_model() -> Model:
 
 def _normalize_audio(input_bytes: bytes) -> str:
     """Convierte los bytes de audio a un wav mono 16k usando ffmpeg."""
+    ffmpeg_path = shutil.which("ffmpeg")
+    if ffmpeg_path is None:
+        raise RuntimeError(
+            "ffmpeg no está instalado o no se encuentra en el PATH"
+        )
     with tempfile.NamedTemporaryFile(delete=False, suffix=".input") as in_f:
         in_f.write(input_bytes)
         input_path = in_f.name
@@ -37,7 +43,7 @@ def _normalize_audio(input_bytes: bytes) -> str:
     output_path = out_f.name
 
     cmd = [
-        "ffmpeg",
+        ffmpeg_path,
         "-y",
         "-i",
         input_path,

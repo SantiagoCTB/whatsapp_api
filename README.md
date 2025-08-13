@@ -76,6 +76,30 @@ dotenv para manejar tokens y credenciales
 ThreadPoolExecutor para procesar transcripciones de audio en segundo plano (sin necesidad de Redis)
 ffmpeg (binario del sistema) para normalizar los audios antes de la transcripción (instalar manualmente)
 
+## Requisitos
+
+Para ejecutar la aplicación necesitas tener instalado **ffmpeg** en el sistema.
+
+### Linux (Ubuntu/Debian)
+
+```bash
+sudo apt-get update && sudo apt-get install -y ffmpeg
+```
+
+### macOS (Homebrew)
+
+```bash
+brew install ffmpeg
+```
+
+### Docker
+
+Si usas Docker, asegúrate de añadir ffmpeg en la imagen:
+
+```dockerfile
+RUN apt-get update && apt-get install -y ffmpeg
+```
+
 ✅ Estado actual
 La app ya está funcionando con:
 
