@@ -217,6 +217,7 @@ def send_image():
     numero  = request.form.get('numero')
     caption = request.form.get('caption','')
     img     = request.files.get('image')
+    origen  = request.form.get('origen', 'asesor')
 
     # Verificar rol
     rol = session.get('rol')
@@ -245,10 +246,11 @@ def send_image():
     image_url = url_for('static', filename=f'uploads/{unique}', _external=True)
 
     # Envía la imagen por la API
+    tipo_envio = 'bot_image' if origen == 'bot' else 'asesor'
     enviar_mensaje(
         numero,
         caption,
-        tipo='bot_image',
+        tipo=tipo_envio,
         tipo_respuesta='image',
         opciones=image_url
     )
@@ -307,6 +309,7 @@ def send_audio():
     numero  = request.form.get('numero')
     caption = request.form.get('caption','')
     audio   = request.files.get('audio')
+    origen  = request.form.get('origen', 'asesor')
 
     rol = session.get('rol')
     if rol != 'admin':
@@ -331,10 +334,11 @@ def send_audio():
     audio.save(path)
 
     # Envía el audio por la API
+    tipo_envio = 'bot_audio' if origen == 'bot' else 'asesor'
     enviar_mensaje(
         numero,
         caption,
-        tipo='bot_audio',
+        tipo=tipo_envio,
         tipo_respuesta='audio',
         opciones=path
     )
@@ -349,6 +353,7 @@ def send_video():
     numero  = request.form.get('numero')
     caption = request.form.get('caption','')
     video   = request.files.get('video')
+    origen  = request.form.get('origen', 'asesor')
 
     rol = session.get('rol')
     if rol != 'admin':
@@ -371,10 +376,11 @@ def send_video():
     path     = os.path.join(UPLOAD_FOLDER, unique)
     video.save(path)
 
+    tipo_envio = 'bot_video' if origen == 'bot' else 'asesor'
     enviar_mensaje(
         numero,
         caption,
-        tipo='bot_video',
+        tipo=tipo_envio,
         tipo_respuesta='video',
         opciones=path
     )
