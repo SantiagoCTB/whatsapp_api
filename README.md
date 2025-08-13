@@ -74,6 +74,7 @@ openpyxl para cargar reglas desde archivos Excel
 dotenv para manejar tokens y credenciales
 
 ThreadPoolExecutor para procesar transcripciones de audio en segundo plano (sin necesidad de Redis)
+ffmpeg (binario del sistema) para normalizar los audios antes de la transcripción (instalar manualmente)
 
 ✅ Estado actual
 La app ya está funcionando con:
