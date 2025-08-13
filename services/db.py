@@ -128,9 +128,18 @@ def init_db():
     c.execute("""
     CREATE TABLE IF NOT EXISTS botones (
       id INT AUTO_INCREMENT PRIMARY KEY,
-      mensaje TEXT NOT NULL
+      mensaje   TEXT NOT NULL,
+      tipo      VARCHAR(50),
+      media_url TEXT
     ) ENGINE=InnoDB;
     """)
+    # Migración defensiva para columnas nuevas
+    c.execute("SHOW COLUMNS FROM botones LIKE 'tipo';")
+    if not c.fetchone():
+        c.execute("ALTER TABLE botones ADD COLUMN tipo VARCHAR(50) NULL;")
+    c.execute("SHOW COLUMNS FROM botones LIKE 'media_url';")
+    if not c.fetchone():
+        c.execute("ALTER TABLE botones ADD COLUMN media_url TEXT NULL;")
 
     # alias
     c.execute("""

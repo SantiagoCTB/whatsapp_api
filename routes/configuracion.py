@@ -1,8 +1,14 @@
 from flask import Blueprint, render_template, request, redirect, session, url_for, jsonify
 from services.db import get_connection
 from openpyxl import load_workbook
+from werkzeug.utils import secure_filename
+from config import Config
+import os
+import uuid
 
 config_bp = Blueprint('configuracion', __name__)
+UPLOAD_FOLDER = Config.UPLOAD_FOLDER
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 def _require_admin():
     # Debe haber usuario logueado y el rol 'admin' en la lista de roles
@@ -159,17 +165,34 @@ def botones():
                     if not fila:
                         continue
                     mensaje = fila[0]
+                    tipo = fila[1] if len(fila) > 1 else None
+                    media_url = fila[2] if len(fila) > 2 else None
                     if mensaje:
-                        c.execute("INSERT INTO botones (mensaje) VALUES (%s)", (mensaje,))
+                        c.execute(
+                            "INSERT INTO botones (mensaje, tipo, media_url) VALUES (%s, %s, %s)",
+                            (mensaje, tipo, media_url)
+                        )
                 conn.commit()
             # Agregar botón manual
             elif 'mensaje' in request.form:
                 nuevo_mensaje = request.form['mensaje']
+                tipo = request.form.get('tipo')
+                media_file = request.files.get('media')
+                media_url = None
+                if media_file and media_file.filename:
+                    filename = secure_filename(media_file.filename)
+                    unique = f"{uuid.uuid4().hex}_{filename}"
+                    path = os.path.join(UPLOAD_FOLDER, unique)
+                    media_file.save(path)
+                    media_url = url_for('static', filename=f'uploads/{unique}', _external=True)
                 if nuevo_mensaje:
-                    c.execute("INSERT INTO botones (mensaje) VALUES (%s)", (nuevo_mensaje,))
+                    c.execute(
+                        "INSERT INTO botones (mensaje, tipo, media_url) VALUES (%s, %s, %s)",
+                        (nuevo_mensaje, tipo, media_url)
+                    )
                     conn.commit()
 
-        c.execute("SELECT id, mensaje FROM botones ORDER BY id")
+        c.execute("SELECT id, mensaje, tipo, media_url FROM botones ORDER BY id")
         botones = c.fetchall()
         return render_template('botones.html', botones=botones)
     finally:
@@ -194,8 +217,11 @@ def get_botones():
     conn = get_connection()
     c = conn.cursor()
     try:
-        c.execute("SELECT id, mensaje FROM botones ORDER BY id")
+        c.execute("SELECT id, mensaje, tipo, media_url FROM botones ORDER BY id")
         rows = c.fetchall()
-        return jsonify([{'id': r[0], 'mensaje': r[1]} for r in rows])
+        return jsonify([
+            {'id': r[0], 'mensaje': r[1], 'tipo': r[2], 'media_url': r[3]}
+            for r in rows
+        ])
     finally:
         conn.close()

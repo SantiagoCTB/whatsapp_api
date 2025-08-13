@@ -54,7 +54,7 @@ def index():
         chats.append((numero, requiere_asesor))
 
     # Botones configurados
-    c.execute("SELECT id, mensaje FROM botones ORDER BY id")
+    c.execute("SELECT id, mensaje, tipo, media_url FROM botones ORDER BY id")
     botones = c.fetchall()
 
     conn.close()
@@ -101,6 +101,8 @@ def send_message():
     data   = request.get_json()
     numero = data.get('numero')
     texto  = data.get('mensaje')
+    tipo_respuesta = data.get('tipo_respuesta', 'texto')
+    opciones = data.get('opciones')
 
     conn = get_connection()
     c    = conn.cursor()
@@ -122,7 +124,7 @@ def send_message():
         return jsonify({'error': 'No autorizado'}), 403
 
     # Envía por la API y guarda internamente
-    enviar_mensaje(numero, texto, tipo='asesor')
+    enviar_mensaje(numero, texto, tipo='asesor', tipo_respuesta=tipo_respuesta, opciones=opciones)
     return jsonify({'status': 'success'}), 200
 
 @chat_bp.route('/get_chat_list')
