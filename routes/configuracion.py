@@ -35,6 +35,14 @@ def configuracion():
         if not c.fetchone():
             c.execute("ALTER TABLE reglas ADD COLUMN handler VARCHAR(50) NULL;")
             conn.commit()
+        c.execute("SHOW COLUMNS FROM reglas LIKE 'media_url';")
+        if not c.fetchone():
+            c.execute("ALTER TABLE reglas ADD COLUMN media_url TEXT NULL;")
+            conn.commit()
+        c.execute("SHOW COLUMNS FROM reglas LIKE 'media_tipo';")
+        if not c.fetchone():
+            c.execute("ALTER TABLE reglas ADD COLUMN media_tipo VARCHAR(20) NULL;")
+            conn.commit()
 
         if request.method == 'POST':
             # Importar desde Excel
@@ -46,8 +54,8 @@ def configuracion():
                     if not fila:
                         continue
                     # Permitir archivos con columnas opcionales
-                    datos = list(fila) + [None] * 9
-                    step, input_text, respuesta, siguiente_step, tipo, opciones, rol_keyword, calculo, handler = datos[:9]
+                    datos = list(fila) + [None] * 11
+                    step, input_text, respuesta, siguiente_step, tipo, media_url, media_tipo, opciones, rol_keyword, calculo, handler = datos[:11]
                     # Normalizar campos clave
                     step = (step or '').strip().lower()
                     input_text = (input_text or '').strip().lower()
@@ -66,19 +74,21 @@ def configuracion():
                                SET respuesta = %s,
                                    siguiente_step = %s,
                                    tipo = %s,
+                                   media_url = %s,
+                                   media_tipo = %s,
                                    opciones = %s,
                                    rol_keyword = %s,
                                    calculo = %s,
                                    handler = %s
                              WHERE id = %s
                             """,
-                            (respuesta, siguiente_step, tipo, opciones, rol_keyword, calculo, handler, regla_id)
+                            (respuesta, siguiente_step, tipo, media_url, media_tipo, opciones, rol_keyword, calculo, handler, regla_id)
                         )
                     else:
                         c.execute(
-                            "INSERT INTO reglas (step, input_text, respuesta, siguiente_step, tipo, opciones, rol_keyword, calculo, handler) "
-                            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
-                            (step, input_text, respuesta, siguiente_step, tipo, opciones, rol_keyword, calculo, handler)
+                            "INSERT INTO reglas (step, input_text, respuesta, siguiente_step, tipo, media_url, media_tipo, opciones, rol_keyword, calculo, handler) "
+                            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                            (step, input_text, respuesta, siguiente_step, tipo, media_url, media_tipo, opciones, rol_keyword, calculo, handler)
                         )
                 conn.commit()
             else:
@@ -88,6 +98,16 @@ def configuracion():
                 respuesta = request.form['respuesta']
                 siguiente_step = (request.form.get('siguiente_step') or '').strip().lower() or None
                 tipo = request.form.get('tipo', 'texto')
+                media_file = request.files.get('media')
+                media_url = request.form.get('media_url')
+                media_tipo = None
+                if media_file and media_file.filename:
+                    filename = secure_filename(media_file.filename)
+                    unique = f"{uuid.uuid4().hex}_{filename}"
+                    path = os.path.join(UPLOAD_FOLDER, unique)
+                    media_file.save(path)
+                    media_url = url_for('static', filename=f'uploads/{unique}', _external=True)
+                    media_tipo = media_file.mimetype
                 opciones = request.form.get('opciones', '')
                 rol_keyword = request.form.get('rol_keyword')
                 calculo = request.form.get('calculo')
@@ -106,25 +126,27 @@ def configuracion():
                            SET respuesta = %s,
                                siguiente_step = %s,
                                tipo = %s,
+                               media_url = %s,
+                               media_tipo = %s,
                                opciones = %s,
                                rol_keyword = %s,
                                calculo = %s,
                                handler = %s
                          WHERE id = %s
                         """,
-                        (respuesta, siguiente_step, tipo, opciones, rol_keyword, calculo, handler, regla_id)
+                        (respuesta, siguiente_step, tipo, media_url, media_tipo, opciones, rol_keyword, calculo, handler, regla_id)
                     )
                 else:
                     c.execute(
-                        "INSERT INTO reglas (step, input_text, respuesta, siguiente_step, tipo, opciones, rol_keyword, calculo, handler) "
-                        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
-                        (step, input_text, respuesta, siguiente_step, tipo, opciones, rol_keyword, calculo, handler),
+                        "INSERT INTO reglas (step, input_text, respuesta, siguiente_step, tipo, media_url, media_tipo, opciones, rol_keyword, calculo, handler) "
+                        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                        (step, input_text, respuesta, siguiente_step, tipo, media_url, media_tipo, opciones, rol_keyword, calculo, handler),
                     )
                 conn.commit()
 
         # Listar todas las reglas
         c.execute(
-            "SELECT id, step, input_text, respuesta, siguiente_step, tipo, opciones, rol_keyword, calculo, handler "
+            "SELECT id, step, input_text, respuesta, siguiente_step, tipo, opciones, rol_keyword, calculo, handler, media_url, media_tipo "
             "FROM reglas "
             "ORDER BY step, id"
         )

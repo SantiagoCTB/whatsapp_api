@@ -70,7 +70,7 @@
     <h2>Configuración de Reglas</h2>
     <p>Para reglas de medición usa "*" en <em>Texto del usuario</em> y define la fórmula en <em>Cálculo</em> con variables como <code>medida</code>, <code>p1</code> o <code>p2</code>. Opcionalmente indica un <em>Handler</em> para delegar el cálculo a código externo.</p>
 
-    <form method="POST">
+    <form method="POST" enctype="multipart/form-data">
         <h3>Agregar o actualizar regla</h3>
         <label for="step">Paso actual:</label>
         <input type="text" id="step" name="step" required>
@@ -85,11 +85,21 @@
         <input type="text" id="siguiente_step" name="siguiente_step">
 
         <label for="tipo">Tipo:</label>
-        <select name="tipo" class="form-control">
+        <select name="tipo" id="tipo" class="form-control">
             <option value="texto">Texto</option>
             <option value="boton">Botón</option>
-            <option value="lista">Lista</option> <!-- ✅ agrega esta -->
+            <option value="lista">Lista</option>
+            <option value="image">Imagen</option>
+            <option value="document">Documento</option>
+            <option value="video">Video</option>
+            <option value="audio">Audio</option>
         </select>
+
+        <label for="media" id="label_media_file" style="display:none;">Subir archivo:</label>
+        <input type="file" id="media" name="media" style="display:none;">
+
+        <label for="media_url" id="label_media_url" style="display:none;">o URL del archivo:</label>
+        <input type="text" id="media_url" name="media_url" style="display:none;">
 
         <label for="rol_keyword">Rol keyword:</label>
         <input type="text" id="rol_keyword" name="rol_keyword">
@@ -138,6 +148,8 @@
             <th>Respuesta</th>
             <th>Siguiente paso</th>
             <th>Tipo</th>
+            <th>Media URL</th>
+            <th>Media Tipo</th>
             <th>Rol</th>
             <th>Opciones</th>
             <th>Cálculo</th>
@@ -152,10 +164,12 @@
             <td>{{ regla[3] }}</td>
             <td>{{ regla[4] or '-' }}</td>
             <td>{{ regla[5] }}</td>
+            <td>{{ regla[6] or '-' }}</td>
             <td>{{ regla[7] or '-' }}</td>
-            <td><pre style="white-space: pre-wrap;">{{ regla[6] }}</pre></td>
-            <td>{{ regla[8] or '-' }}</td>
             <td>{{ regla[9] or '-' }}</td>
+            <td><pre style="white-space: pre-wrap;">{{ regla[8] }}</pre></td>
+            <td>{{ regla[10] or '-' }}</td>
+            <td>{{ regla[11] or '-' }}</td>
             <td>
                 <form method="POST" action="{{ url_for('configuracion.eliminar_regla', regla_id=regla[0]) }}">
                     <button class="delete-btn" type="submit">Eliminar</button>
@@ -164,5 +178,18 @@
         </tr>
         {% endfor %}
     </table>
+
+    <script>
+    function toggleMediaFields() {
+        const tipo = document.getElementById('tipo').value;
+        const show = tipo !== 'texto';
+        document.getElementById('media').style.display = show ? 'block' : 'none';
+        document.getElementById('label_media_file').style.display = show ? 'block' : 'none';
+        document.getElementById('media_url').style.display = show ? 'block' : 'none';
+        document.getElementById('label_media_url').style.display = show ? 'block' : 'none';
+    }
+    document.getElementById('tipo').addEventListener('change', toggleMediaFields);
+    window.addEventListener('DOMContentLoaded', toggleMediaFields);
+    </script>
 </body>
 </html>
