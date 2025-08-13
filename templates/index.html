@@ -240,6 +240,15 @@
     button:active:after {
       transform:scale(1); opacity:1; transition:0s;
     }
+
+    .role-indicator {
+      position: fixed;
+      bottom: 8px;
+      right: 8px;
+      font-size: 12px;
+      color: rgba(0, 0, 0, 0.4);
+      pointer-events: none;
+    }
   </style>
 </head>
 <body>
@@ -281,6 +290,8 @@
       </div>
     </div>
   </div>
+
+  <div class="role-indicator">{{ rol }}</div>
 
   <script>
     document.addEventListener('DOMContentLoaded', () => {
