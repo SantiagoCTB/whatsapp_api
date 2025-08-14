@@ -84,14 +84,15 @@ def get_chat(numero):
             conn.close()
             return jsonify({'error': 'No autorizado'}), 403
     c.execute("""
-      SELECT mensaje, tipo, media_url, timestamp
+      SELECT mensaje, tipo, media_url, timestamp,
+             link_url, link_title, link_body, link_thumb
       FROM mensajes
       WHERE numero = %s
       ORDER BY timestamp
     """, (numero,))
     mensajes = c.fetchall()
     conn.close()
-    return jsonify({'mensajes': mensajes})
+    return jsonify({'mensajes': [list(m) for m in mensajes]})
 
 @chat_bp.route('/send_message', methods=['POST'])
 def send_message():
