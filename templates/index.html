@@ -384,7 +384,18 @@
               div.className = `bubble ${bubble} message`;
 
               // insertar media o texto
-              if (tipo.endsWith('_image') && url) {
+              if (tipo === 'referral' && linkUrl) {
+                const a = document.createElement('a');
+                a.href = linkUrl; a.target = '_blank'; a.style.textDecoration = 'none';
+                const card = document.createElement('div');
+                card.style.display = 'flex';
+                const img = document.createElement('img');
+                img.src = linkThumb; img.style.width = '100px'; img.style.marginRight = '8px';
+                const textBox = document.createElement('div');
+                textBox.innerHTML = `<strong>${linkTitle}</strong><br>${linkBody}`;
+                card.appendChild(img); card.appendChild(textBox); a.appendChild(card);
+                div.appendChild(a);
+              } else if (tipo.endsWith('_image') && url) {
                 const img = document.createElement('img');
                 img.src = url; img.style.maxWidth='200px';
                 div.appendChild(img);
