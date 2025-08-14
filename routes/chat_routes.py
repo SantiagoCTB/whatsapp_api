@@ -85,7 +85,8 @@ def get_chat(numero):
             return jsonify({'error': 'No autorizado'}), 403
     c.execute("""
       SELECT mensaje, tipo, media_url, timestamp,
-             link_url, link_title, link_body, link_thumb
+             link_url, link_title, link_body, link_thumb,
+             wa_id, reply_to_wa_id
       FROM mensajes
       WHERE numero = %s
       ORDER BY timestamp

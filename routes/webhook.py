@@ -117,7 +117,8 @@ def webhook():
             msg         = msgs[0]
             msg_type    = msg.get('type')
             from_number = msg.get('from')
-            mensaje_id  = msg.get('id')
+            wa_id       = msg.get('id')
+            reply_to_id = msg.get('context', {}).get('id')
 
             if from_number not in user_steps:
                 row = get_chat_state(from_number)
@@ -129,17 +130,21 @@ def webhook():
 
             # evitar duplicados
             conn = get_connection(); c = conn.cursor()
-            c.execute("SELECT 1 FROM mensajes_procesados WHERE mensaje_id = %s", (mensaje_id,))
+            c.execute("SELECT 1 FROM mensajes_procesados WHERE mensaje_id = %s", (wa_id,))
             if c.fetchone():
                 conn.close()
                 return jsonify({'status':'duplicate'}), 200
-            c.execute("INSERT INTO mensajes_procesados (mensaje_id) VALUES (%s)", (mensaje_id,))
+            c.execute("INSERT INTO mensajes_procesados (mensaje_id) VALUES (%s)", (wa_id,))
             conn.commit(); conn.close()
 
             if msg.get("referral"):
                 ref = msg["referral"]
                 guardar_mensaje(
-                    from_number, "", "referral",
+                    from_number,
+                    "",
+                    "referral",
+                    wa_id=wa_id,
+                    reply_to_wa_id=reply_to_id,
                     link_url=ref.get("source_url"),
                     link_title=ref.get("headline"),
                     link_body=ref.get("body"),
@@ -162,10 +167,12 @@ def webhook():
 
                 public_url = url_for('static', filename=f'uploads/{filename}', _external=True)
 
-                mensaje_id = guardar_mensaje(
+                db_id = guardar_mensaje(
                     from_number,
                     "",
                     'audio',
+                    wa_id=wa_id,
+                    reply_to_wa_id=reply_to_id,
                     media_id=media_id,
                     media_url=public_url,
                     mime_type=mime_clean,
@@ -177,7 +184,7 @@ def webhook():
                     media_id,
                     mime_clean,
                     public_url,
-                    mensaje_id,
+                    db_id,
                 )
                 if queued:
                     enviar_mensaje(
@@ -214,6 +221,8 @@ def webhook():
                     from_number,
                     "",               # sin texto
                     'video',
+                    wa_id=wa_id,
+                    reply_to_wa_id=reply_to_id,
                     media_id=media_id,
                     media_url=public_url,
                     mime_type=mime_clean
@@ -231,6 +240,8 @@ def webhook():
                     from_number,
                     "",
                     'cliente_image',
+                    wa_id=wa_id,
+                    reply_to_wa_id=reply_to_id,
                     media_id=media_id,
                     media_url=media_url
                 )
@@ -248,7 +259,13 @@ def webhook():
             else:
                 continue
 
-            guardar_mensaje(from_number, text, 'cliente')
+            guardar_mensaje(
+                from_number,
+                text,
+                'cliente',
+                wa_id=wa_id,
+                reply_to_wa_id=reply_to_id,
+            )
 
             now       = datetime.now()
             last_time = user_last_activity.get(from_number)
