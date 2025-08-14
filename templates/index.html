@@ -109,6 +109,7 @@
       cursor:pointer; transition:background 0.3s,transform 0.2s;
       color:var(--text-main);
       padding-left:12px;
+      padding-right: calc(2cm + 20px);
     }
     #chatList li:hover {
       background:var(--accent-hover); color:var(--text-light);
@@ -119,7 +120,7 @@
     }
     #chatList li .badge {
       position: absolute;
-      left: 30px;                /* mueve la bolita a la posición deseada */
+      right: 2cm;                /* mueve la bolita a la posición deseada */
       top: 50%;
       transform: translateY(-50%);
       width: 20px;
@@ -128,10 +129,9 @@
       background: var(--accent);
       color: var(--text-light);
       font-size: 12px;
-      padding-right: 3px;        /* espacio interno a la derecha */
       display: flex;
       align-items: center;       /* centra verticalmente */
-      justify-content: flex-end; /* letra al borde derecho */
+      justify-content: center;   /* centra el contenido */
       pointer-events: none;
     }
     .estado-sin_regla { background-color: orange; color: var(--text-light); }
