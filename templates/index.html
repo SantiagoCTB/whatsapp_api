@@ -201,6 +201,33 @@
       border-left:3px solid var(--accent);
       padding-left:6px; margin-bottom:4px;
     }
+    .context-menu {
+      position:absolute;
+      background:var(--text-light);
+      border:1px solid #ccc;
+      border-radius:4px;
+      box-shadow:0 2px 6px rgba(0,0,0,0.1);
+      display:none;
+      z-index:20;
+    }
+    .context-menu.show { display:block; }
+    .context-menu div {
+      padding:8px 12px; cursor:pointer;
+    }
+    .context-menu div:hover {
+      background:var(--accent); color:var(--text-light);
+    }
+    .reply-preview {
+      margin:8px 12px; padding:4px 8px;
+      border-left:3px solid var(--accent);
+      background:var(--text-light);
+      display:none;
+    }
+    .reply-preview img,
+    .reply-preview video,
+    .reply-preview audio {
+      max-width:100px; display:block; margin-bottom:4px;
+    }
     .cliente { align-self:flex-start; background:var(--bubble-user); color:var(--text-main); }
     .bot     { align-self:flex-end;   background:var(--bubble-bot);  color:var(--text-main); }
     .asesor  { align-self:flex-end;   background:var(--bubble-asesor); color:var(--text-main); font-weight:bold; }
@@ -302,32 +329,69 @@
     <div class="chatWindow">
       <div id="botonera"></div>
       <div id="chatBox"></div>
+      <div id="replyPreview" class="reply-preview"></div>
       <div class="inputArea">
         <button id="attachBtn">+</button>
-        <div id="attachMenu" class="attach-menu">
-          <div id="attachImage" class="attach-item" title="Enviar imagen">📷</div>
-          <div id="attachAudio" class="attach-item" title="Enviar audio">🎤</div>
-          <div id="attachVideo" class="attach-item" title="Enviar video">🎥</div>
-        </div>
-        <input id="messageInput" type="text" placeholder="Escribe un mensaje…">
-        <button id="sendBtn">Enviar</button>
-        <input id="imageInput" type="file" accept="image/*" style="display:none;">
-        <input id="audioInput" type="file" accept="audio/*" style="display:none;">
-        <input id="videoInput" type="file" accept="video/*" style="display:none;">
+      <div id="attachMenu" class="attach-menu">
+        <div id="attachImage" class="attach-item" title="Enviar imagen">📷</div>
+        <div id="attachAudio" class="attach-item" title="Enviar audio">🎤</div>
+        <div id="attachVideo" class="attach-item" title="Enviar video">🎥</div>
       </div>
+      <input id="messageInput" type="text" placeholder="Escribe un mensaje…">
+      <button id="sendBtn">Enviar</button>
+      <input id="imageInput" type="file" accept="image/*" style="display:none;">
+      <input id="audioInput" type="file" accept="audio/*" style="display:none;">
+      <input id="videoInput" type="file" accept="video/*" style="display:none;">
     </div>
   </div>
+</div>
+
+  <div id="contextMenu" class="context-menu"><div id="replyAction">Responder</div></div>
 
   <div class="role-indicator">{{ rol }}</div>
 
   <script>
     document.addEventListener('DOMContentLoaded', () => {
-      let currentChat = null, autoRefresh = null, todosChats = [], lastCount = 0;
+      let currentChat = null, autoRefresh = null, todosChats = [], lastCount = 0, replyTo = null;
+      let selectedBubble = null;
       const chatListEl = document.getElementById('chatList');
       const chatBoxEl  = document.getElementById('chatBox');
       const botoneraEl = document.getElementById('botonera');
+      const replyPreviewEl = document.getElementById('replyPreview');
+      const contextMenu = document.getElementById('contextMenu');
+      const replyAction = document.getElementById('replyAction');
       const userRole   = "{{ rol }}";
       const userRoleId = {{ role_id | tojson }};
+
+      document.addEventListener('click', () => contextMenu.classList.remove('show'));
+
+      replyAction.onclick = () => {
+        if (!selectedBubble) return;
+        replyTo = selectedBubble.dataset.waId;
+        replyPreviewEl.innerHTML = '';
+        const tipo = selectedBubble.dataset.tipo || '';
+        const url  = selectedBubble.dataset.url;
+        const text = selectedBubble.dataset.text;
+        if (url && tipo.endsWith('_image')) {
+          const img = document.createElement('img');
+          img.src = url; replyPreviewEl.appendChild(img);
+        } else if (url && tipo.includes('audio')) {
+          const a = document.createElement('audio'); a.controls=true; a.src=url; replyPreviewEl.appendChild(a);
+        } else if (url && tipo.includes('video')) {
+          const v = document.createElement('video'); v.controls=true; v.src=url; replyPreviewEl.appendChild(v);
+        }
+        if (text) {
+          const p = document.createElement('p'); p.textContent = text; replyPreviewEl.appendChild(p);
+        }
+        replyPreviewEl.style.display = 'block';
+        contextMenu.classList.remove('show');
+      };
+
+      replyPreviewEl.onclick = () => {
+        replyTo = null;
+        replyPreviewEl.style.display = 'none';
+        replyPreviewEl.innerHTML = '';
+      };
 
       // Mostrar u ocultar menú settings
       const settingsBtn = document.getElementById('settingsBtn');
@@ -427,6 +491,13 @@
                   img.src = replyUrl;
                   img.style.maxWidth = '100px';
                   replyDiv.appendChild(img);
+                } else if (replyTipo && replyTipo.includes('audio') && replyUrl) {
+                  const a = document.createElement('audio');
+                  a.controls = true; a.src = replyUrl; replyDiv.appendChild(a);
+                } else if (replyTipo && replyTipo.includes('video') && replyUrl) {
+                  const v = document.createElement('video');
+                  v.controls = true; v.src = replyUrl; v.style.maxWidth = '100px';
+                  replyDiv.appendChild(v);
                 }
                 if (replyText) {
                   const p = document.createElement('p');
@@ -481,6 +552,21 @@
                 div.appendChild(timeSpan);
               }
 
+              if (waId) {
+                div.dataset.waId = waId;
+                if (txt) div.dataset.text = txt;
+                if (url) div.dataset.url = url;
+                div.dataset.tipo = tipo;
+                div.addEventListener('contextmenu', e => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  selectedBubble = div;
+                  contextMenu.style.top = e.pageY + 'px';
+                  contextMenu.style.left = e.pageX + 'px';
+                  contextMenu.classList.add('show');
+                });
+              }
+
               chatBoxEl.appendChild(div);
             }
             lastCount = total;
@@ -506,9 +592,15 @@
                     numero: currentChat,
                     mensaje: b.mensaje,
                     tipo_respuesta: b.tipo,
-                    opciones: b.media_url
+                    opciones: b.media_url,
+                    reply_to_wa_id: replyTo
                   })
-                }).then(()=>{ loadMessages(); fetchChatList(); });
+                }).then(()=>{
+                  replyTo=null;
+                  replyPreviewEl.style.display='none';
+                  replyPreviewEl.innerHTML='';
+                  loadMessages(); fetchChatList();
+                });
               };
               botoneraEl.appendChild(btn);
             });
@@ -523,9 +615,13 @@
         fetch('/send_message',{
           method:'POST',
           headers:{'Content-Type':'application/json'},
-          body:JSON.stringify({numero:currentChat,mensaje:txt})
+          body:JSON.stringify({numero:currentChat,mensaje:txt,reply_to_wa_id:replyTo})
         }).then(()=>{
-          inp.value=''; loadMessages(); fetchChatList();
+          inp.value='';
+          replyTo=null;
+          replyPreviewEl.style.display='none';
+          replyPreviewEl.innerHTML='';
+          loadMessages(); fetchChatList();
         });
       };
 

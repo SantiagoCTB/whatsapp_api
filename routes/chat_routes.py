@@ -107,6 +107,7 @@ def send_message():
     texto  = data.get('mensaje')
     tipo_respuesta = data.get('tipo_respuesta', 'texto')
     opciones = data.get('opciones')
+    reply_to_wa_id = data.get('reply_to_wa_id')
 
     conn = get_connection()
     c    = conn.cursor()
@@ -128,7 +129,14 @@ def send_message():
         return jsonify({'error': 'No autorizado'}), 403
 
     # Envía por la API y guarda internamente
-    enviar_mensaje(numero, texto, tipo='asesor', tipo_respuesta=tipo_respuesta, opciones=opciones)
+    enviar_mensaje(
+        numero,
+        texto,
+        tipo='asesor',
+        tipo_respuesta=tipo_respuesta,
+        opciones=opciones,
+        reply_to_wa_id=reply_to_wa_id,
+    )
     row = get_chat_state(numero)
     step = row[0] if row else ''
     update_chat_state(numero, step, 'asesor')
