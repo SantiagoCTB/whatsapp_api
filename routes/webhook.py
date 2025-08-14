@@ -136,6 +136,17 @@ def webhook():
             c.execute("INSERT INTO mensajes_procesados (mensaje_id) VALUES (%s)", (mensaje_id,))
             conn.commit(); conn.close()
 
+            if msg.get("referral"):
+                ref = msg["referral"]
+                guardar_mensaje(
+                    from_number, "", "referral",
+                    link_url=ref.get("source_url"),
+                    link_title=ref.get("headline"),
+                    link_body=ref.get("body"),
+                    link_thumb=ref.get("thumbnail_url"),
+                )
+                continue
+
             # AUDIO
             if msg_type == 'audio':
                 media_id   = msg['audio']['id']
