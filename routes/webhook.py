@@ -40,10 +40,10 @@ def register_external(name):
     return decorator
 
 
-def set_user_step(numero, step):
+def set_user_step(numero, step, estado='espera_usuario'):
     """Actualiza el paso en memoria y en la tabla chat_state."""
     user_steps[numero] = step
-    update_chat_state(numero, step)
+    update_chat_state(numero, step, estado)
 
 os.makedirs(Config.UPLOAD_FOLDER, exist_ok=True)
 
@@ -338,4 +338,5 @@ def webhook():
                 set_user_step(from_number, next_step.strip().lower() if next_step else '')
             else:
                 enviar_mensaje(from_number, "No entendí tu respuesta, intenta de nuevo.")
+                update_chat_state(from_number, step, 'sin_regla')
     return jsonify({'status':'received'}), 200
