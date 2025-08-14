@@ -9,7 +9,7 @@ from services.db import guardar_mensaje
 TOKEN    = Config.META_TOKEN
 PHONE_ID = Config.PHONE_NUMBER_ID
 
-def enviar_mensaje(numero, mensaje, tipo='bot', tipo_respuesta='texto', opciones=None):
+def enviar_mensaje(numero, mensaje, tipo='bot', tipo_respuesta='texto', opciones=None, reply_to_wa_id=None):
     url = f"https://graph.facebook.com/v19.0/{PHONE_ID}/messages"
     headers = {
         "Authorization": f"Bearer {TOKEN}",
@@ -127,6 +127,9 @@ def enviar_mensaje(numero, mensaje, tipo='bot', tipo_respuesta='texto', opciones
             "text": {"body": mensaje}
         }
 
+    if reply_to_wa_id:
+        data["context"] = {"message_id": reply_to_wa_id}
+
     resp = requests.post(url, headers=headers, json=data)
     print(f"[WA API] {resp.status_code} — {resp.text}")
     try:
@@ -143,6 +146,7 @@ def enviar_mensaje(numero, mensaje, tipo='bot', tipo_respuesta='texto', opciones
             mensaje,
             tipo_db,
             wa_id=wa_id,
+            reply_to_wa_id=reply_to_wa_id,
             media_id=None,
             media_url=video_obj.get("link")
         )
@@ -153,6 +157,7 @@ def enviar_mensaje(numero, mensaje, tipo='bot', tipo_respuesta='texto', opciones
             mensaje,
             tipo_db,
             wa_id=wa_id,
+            reply_to_wa_id=reply_to_wa_id,
             media_id=None,
             media_url=audio_obj.get("link")
         )
@@ -162,6 +167,7 @@ def enviar_mensaje(numero, mensaje, tipo='bot', tipo_respuesta='texto', opciones
             mensaje,
             tipo_db,
             wa_id=wa_id,
+            reply_to_wa_id=reply_to_wa_id,
             media_id=None,
             media_url=opciones
         )
