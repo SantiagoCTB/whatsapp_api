@@ -177,9 +177,26 @@ def get_chat_list():
         ultimo = fila[0] if fila else ""
         requiere_asesor = "asesor" in ultimo.lower()
 
-        # Roles asociados al número
-        c.execute("SELECT GROUP_CONCAT(role_id) FROM chat_roles WHERE numero = %s", (numero,))
-        roles = c.fetchone()[0]
+        # Roles asociados al número y nombre/keyword
+        c.execute(
+            """
+            SELECT GROUP_CONCAT(cr.role_id) AS ids,
+                   GROUP_CONCAT(COALESCE(r.keyword, r.name) ORDER BY r.id) AS nombres
+            FROM chat_roles cr
+            LEFT JOIN roles r ON cr.role_id = r.id
+            WHERE cr.numero = %s
+            """,
+            (numero,),
+        )
+        fila_roles = c.fetchone()
+        roles = fila_roles[0] if fila_roles else None
+        nombres_roles = fila_roles[1] if fila_roles else None
+        inicial_rol = None
+        if nombres_roles:
+            primer_nombre = nombres_roles.split(',')[0]
+            if primer_nombre:
+                inicial_rol = primer_nombre[0].upper()
+
         # Estado actual del chat
         c.execute("SELECT estado FROM chat_state WHERE numero = %s", (numero,))
         fila = c.fetchone()
@@ -190,7 +207,8 @@ def get_chat_list():
             "alias":  alias,
             "asesor": requiere_asesor,
             "roles": roles,
-            "estado": estado
+            "inicial_rol": inicial_rol,
+            "estado": estado,
         })
 
     conn.close()
