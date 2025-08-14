@@ -19,6 +19,8 @@ def init_db():
     c.execute("""
     CREATE TABLE IF NOT EXISTS mensajes (
       id INT AUTO_INCREMENT PRIMARY KEY,
+      wa_id VARCHAR(255),
+      reply_to_wa_id VARCHAR(255),
       numero     VARCHAR(20),
       mensaje    TEXT,
       tipo       VARCHAR(50),
@@ -46,6 +48,14 @@ def init_db():
     c.execute("SHOW COLUMNS FROM mensajes LIKE 'link_thumb';")
     if not c.fetchone():
         c.execute("ALTER TABLE mensajes ADD COLUMN link_thumb TEXT NULL;")
+
+    # Migración defensiva de columnas wa_id y reply_to_wa_id
+    c.execute("SHOW COLUMNS FROM mensajes LIKE 'wa_id';")
+    if not c.fetchone():
+        c.execute("ALTER TABLE mensajes ADD COLUMN wa_id VARCHAR(255) NULL;")
+    c.execute("SHOW COLUMNS FROM mensajes LIKE 'reply_to_wa_id';")
+    if not c.fetchone():
+        c.execute("ALTER TABLE mensajes ADD COLUMN reply_to_wa_id VARCHAR(255) NULL;")
 
     # mensajes procesados
     c.execute("""
@@ -230,6 +240,8 @@ def guardar_mensaje(
     numero,
     mensaje,
     tipo,
+    wa_id=None,
+    reply_to_wa_id=None,
     media_id=None,
     media_url=None,
     mime_type=None,
@@ -240,8 +252,9 @@ def guardar_mensaje(
 ):
     """Guarda un mensaje en la tabla ``mensajes``.
 
-    Admite campos opcionales para medios (``media_id``, ``media_url``, ``mime_type``)
-    y, sólo para mensajes de tipo ``referral``, datos de enlaces
+    Admite campos opcionales para los identificadores de WhatsApp
+    (``wa_id`` y ``reply_to_wa_id``), para medios (``media_id``, ``media_url``,
+    ``mime_type``) y, sólo para mensajes de tipo ``referral``, datos de enlaces
     (``link_url``, ``link_title``, ``link_body``, ``link_thumb``).
     """
     if tipo != 'referral':
@@ -251,13 +264,15 @@ def guardar_mensaje(
     c = conn.cursor()
     c.execute(
         "INSERT INTO mensajes "
-        "(numero, mensaje, tipo, media_id, media_url, mime_type, "
+        "(numero, mensaje, tipo, wa_id, reply_to_wa_id, media_id, media_url, mime_type, "
         "link_url, link_title, link_body, link_thumb, timestamp) "
-        "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW())",
+        "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW())",
         (
             numero,
             mensaje,
             tipo,
+            wa_id,
+            reply_to_wa_id,
             media_id,
             media_url,
             mime_type,
