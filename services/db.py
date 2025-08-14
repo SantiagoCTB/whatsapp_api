@@ -190,9 +190,15 @@ def init_db():
     CREATE TABLE IF NOT EXISTS chat_state (
       numero VARCHAR(20) PRIMARY KEY,
       step TEXT,
+      estado VARCHAR(20),
       last_activity DATETIME
     ) ENGINE=InnoDB;
     """)
+
+    # Migración defensiva de la columna estado
+    c.execute("SHOW COLUMNS FROM chat_state LIKE 'estado';")
+    if not c.fetchone():
+        c.execute("ALTER TABLE chat_state ADD COLUMN estado VARCHAR(20);")
 
     # ---- SEED admin (con PBKDF2 de Werkzeug) ----
     admin_hash = generate_password_hash('admin123')
@@ -292,14 +298,14 @@ def get_chat_state(numero):
     return row
 
 
-def update_chat_state(numero, step):
+def update_chat_state(numero, step, estado=None):
     """Inserta o actualiza el estado del chat y la última actividad."""
     conn = get_connection()
     c    = conn.cursor()
     c.execute(
-        "INSERT INTO chat_state (numero, step, last_activity) VALUES (%s, %s, NOW()) "
-        "ON DUPLICATE KEY UPDATE step=VALUES(step), last_activity=VALUES(last_activity)",
-        (numero, step),
+        "INSERT INTO chat_state (numero, step, estado, last_activity) VALUES (%s, %s, %s, NOW()) "
+        "ON DUPLICATE KEY UPDATE step=VALUES(step), estado=COALESCE(VALUES(estado), estado), last_activity=VALUES(last_activity)",
+        (numero, step, estado),
     )
     conn.commit()
     conn.close()

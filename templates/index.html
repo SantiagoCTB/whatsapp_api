@@ -115,6 +115,9 @@
     #chatList li.active {
       background:var(--accent); color:var(--text-light);
     }
+    .estado-sin_regla { border-left:4px solid orange; }
+    .estado-espera_usuario { border-left:4px solid green; }
+    .estado-asesor { border-left:4px solid yellow; }
 
     /* Chat window */
     .chatWindow { flex:1; display:flex; flex-direction:column; }
@@ -325,6 +328,7 @@
               }
               const li = document.createElement('li');
               li.textContent = c.alias ? `${c.alias} (${c.numero})` : c.numero;
+              if (c.estado) li.classList.add('estado-' + c.estado);
 
               // Al hacer clic, seleccionar el chat
               li.onclick = () => selectChat(c.numero, li);

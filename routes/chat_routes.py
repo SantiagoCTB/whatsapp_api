@@ -4,7 +4,7 @@ from flask import Blueprint, render_template, request, redirect, session, url_fo
 from werkzeug.utils import secure_filename
 from config import Config
 from services.whatsapp_api import enviar_mensaje
-from services.db import get_connection
+from services.db import get_connection, get_chat_state, update_chat_state
 
 chat_bp = Blueprint('chat', __name__)
 
@@ -126,6 +126,9 @@ def send_message():
 
     # Envía por la API y guarda internamente
     enviar_mensaje(numero, texto, tipo='asesor', tipo_respuesta=tipo_respuesta, opciones=opciones)
+    row = get_chat_state(numero)
+    step = row[0] if row else ''
+    update_chat_state(numero, step, 'asesor')
     return jsonify({'status': 'success'}), 200
 
 @chat_bp.route('/get_chat_list')
@@ -177,12 +180,17 @@ def get_chat_list():
         # Roles asociados al número
         c.execute("SELECT GROUP_CONCAT(role_id) FROM chat_roles WHERE numero = %s", (numero,))
         roles = c.fetchone()[0]
+        # Estado actual del chat
+        c.execute("SELECT estado FROM chat_state WHERE numero = %s", (numero,))
+        fila = c.fetchone()
+        estado = fila[0] if fila else None
 
         chats.append({
             "numero": numero,
             "alias":  alias,
             "asesor": requiere_asesor,
-            "roles": roles
+            "roles": roles,
+            "estado": estado
         })
 
     conn.close()
@@ -255,6 +263,10 @@ def send_image():
         tipo_respuesta='image',
         opciones=image_url
     )
+    if origen != 'bot':
+        row = get_chat_state(numero)
+        step = row[0] if row else ''
+        update_chat_state(numero, step, 'asesor')
 
     return jsonify({'status':'sent_image'}), 200
 
@@ -298,6 +310,9 @@ def send_document():
         tipo_respuesta='document',
         opciones=doc_url
     )
+    row = get_chat_state(numero)
+    step = row[0] if row else ''
+    update_chat_state(numero, step, 'asesor')
 
     return jsonify({'status':'sent_document'}), 200
 
@@ -343,6 +358,10 @@ def send_audio():
         tipo_respuesta='audio',
         opciones=path
     )
+    if origen != 'bot':
+        row = get_chat_state(numero)
+        step = row[0] if row else ''
+        update_chat_state(numero, step, 'asesor')
 
     return jsonify({'status':'sent_audio'}), 200
 
@@ -385,5 +404,9 @@ def send_video():
         tipo_respuesta='video',
         opciones=path
     )
+    if origen != 'bot':
+        row = get_chat_state(numero)
+        step = row[0] if row else ''
+        update_chat_state(numero, step, 'asesor')
 
     return jsonify({'status':'sent_video'}), 200
