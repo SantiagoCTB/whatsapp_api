@@ -196,6 +196,11 @@
       max-width:70%; padding:10px 14px; border-radius:16px;
       word-wrap:break-word; box-shadow:0 2px 4px rgba(0,0,0,0.1);
     }
+    .reply {
+      font-size:0.85em; opacity:0.8;
+      border-left:3px solid var(--accent);
+      padding-left:6px; margin-bottom:4px;
+    }
     .cliente { align-self:flex-start; background:var(--bubble-user); color:var(--text-main); }
     .bot     { align-self:flex-end;   background:var(--bubble-bot);  color:var(--text-main); }
     .asesor  { align-self:flex-end;   background:var(--bubble-asesor); color:var(--text-main); font-weight:bold; }
@@ -406,13 +411,30 @@
               chatBoxEl.innerHTML = ''; lastCount = 0;
             }
             for (let i=lastCount; i<total; i++){
-              const [txt, tipo, url, ts, linkUrl, linkTitle, linkBody, linkThumb] = msgs[i];
+              const [txt, tipo, url, ts, linkUrl, linkTitle, linkBody, linkThumb, waId, replyWaId, replyText, replyTipo, replyUrl] = msgs[i];
               const div = document.createElement('div');
               // map tipo a bubble class
               let bubble = 'cliente';
               if (tipo.startsWith('bot'))    bubble='bot';
               if (tipo.startsWith('asesor')) bubble='asesor';
               div.className = `bubble ${bubble} message`;
+
+              if (replyWaId) {
+                const replyDiv = document.createElement('div');
+                replyDiv.className = 'reply';
+                if (replyTipo && replyTipo.endsWith('_image') && replyUrl) {
+                  const img = document.createElement('img');
+                  img.src = replyUrl;
+                  img.style.maxWidth = '100px';
+                  replyDiv.appendChild(img);
+                }
+                if (replyText) {
+                  const p = document.createElement('p');
+                  p.textContent = replyText;
+                  replyDiv.appendChild(p);
+                }
+                div.appendChild(replyDiv);
+              }
 
               // insertar media o texto
               if (tipo === 'referral' && linkUrl) {

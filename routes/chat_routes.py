@@ -84,12 +84,14 @@ def get_chat(numero):
             conn.close()
             return jsonify({'error': 'No autorizado'}), 403
     c.execute("""
-      SELECT mensaje, tipo, media_url, timestamp,
-             link_url, link_title, link_body, link_thumb,
-             wa_id, reply_to_wa_id
-      FROM mensajes
-      WHERE numero = %s
-      ORDER BY timestamp
+      SELECT m.mensaje, m.tipo, m.media_url, m.timestamp,
+             m.link_url, m.link_title, m.link_body, m.link_thumb,
+             m.wa_id, m.reply_to_wa_id,
+             r.mensaje AS reply_text, r.tipo AS reply_tipo, r.media_url AS reply_media_url
+      FROM mensajes m
+      LEFT JOIN mensajes r ON r.wa_id = m.reply_to_wa_id
+      WHERE m.numero = %s
+      ORDER BY m.timestamp
     """, (numero,))
     mensajes = c.fetchall()
     conn.close()
