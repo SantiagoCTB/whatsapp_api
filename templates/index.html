@@ -118,17 +118,21 @@
       background:var(--accent); color:var(--text-light);
     }
     #chatList li .badge {
-      position:absolute;
-      left:30x;
-      top:50%;
-      transform:translateY(-50%);
-      width:20px; height:20px;
-      border-radius:50%;
-      background:var(--accent);
-      color:var(--text-light);
-      font-size:12px;
-      display:flex; align-items:center; justify-content:center;
-      pointer-events:none;
+      position: absolute;
+      left: 30px;                /* mueve la bolita a la posición deseada */
+      top: 50%;
+      transform: translateY(-50%);
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: var(--accent);
+      color: var(--text-light);
+      font-size: 12px;
+      padding-right: 3px;        /* espacio interno a la derecha */
+      display: flex;
+      align-items: center;       /* centra verticalmente */
+      justify-content: flex-end; /* letra al borde derecho */
+      pointer-events: none;
     }
     .estado-sin_regla { background-color: orange; color: var(--text-light); }
     .estado-espera_usuario { background-color: green; color: var(--text-light); }
