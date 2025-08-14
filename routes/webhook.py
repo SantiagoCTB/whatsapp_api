@@ -1,6 +1,7 @@
 import os
 from flask import Blueprint, request, jsonify, url_for
 from datetime import datetime
+from difflib import SequenceMatcher
 from config import Config
 from services.db import (
     get_connection,
@@ -290,10 +291,24 @@ def webhook():
             conn = get_connection(); c = conn.cursor()
             c.execute(
                 "SELECT respuesta, siguiente_step, tipo, media_url, opciones, rol_keyword "
-                "FROM reglas WHERE step=%s AND input_text=%s",
+                "FROM reglas WHERE step=%s AND %s LIKE CONCAT('%', input_text, '%')",
                 (step, text)
             )
-            row = c.fetchone(); conn.close()
+            row = c.fetchone()
+            if not row:
+                c.execute(
+                    "SELECT respuesta, siguiente_step, tipo, media_url, opciones, rol_keyword, input_text "
+                    "FROM reglas WHERE step=%s",
+                    (step,)
+                )
+                for resp, next_step, tipo_resp, media_url, opts, rol_kw, input_db in c.fetchall():
+                    for word in text.split():
+                        if SequenceMatcher(None, word, input_db).ratio() >= 0.8:
+                            row = (resp, next_step, tipo_resp, media_url, opts, rol_kw)
+                            break
+                    if row:
+                        break
+            conn.close()
             if row:
                 resp, next_step, tipo_resp, media_url, opts, rol_kw = row
                 media_opt = media_url if tipo_resp in ['image', 'video', 'audio', 'document'] else opts
