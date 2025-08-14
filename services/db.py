@@ -25,9 +25,27 @@ def init_db():
       media_id   VARCHAR(255),
       media_url  TEXT,
       mime_type  TEXT,
+      link_url   TEXT,
+      link_title TEXT,
+      link_body  TEXT,
+      link_thumb TEXT,
       timestamp  DATETIME
     ) ENGINE=InnoDB;
     """)
+
+    # Migración defensiva de columnas link_*
+    c.execute("SHOW COLUMNS FROM mensajes LIKE 'link_url';")
+    if not c.fetchone():
+        c.execute("ALTER TABLE mensajes ADD COLUMN link_url TEXT NULL;")
+    c.execute("SHOW COLUMNS FROM mensajes LIKE 'link_title';")
+    if not c.fetchone():
+        c.execute("ALTER TABLE mensajes ADD COLUMN link_title TEXT NULL;")
+    c.execute("SHOW COLUMNS FROM mensajes LIKE 'link_body';")
+    if not c.fetchone():
+        c.execute("ALTER TABLE mensajes ADD COLUMN link_body TEXT NULL;")
+    c.execute("SHOW COLUMNS FROM mensajes LIKE 'link_thumb';")
+    if not c.fetchone():
+        c.execute("ALTER TABLE mensajes ADD COLUMN link_thumb TEXT NULL;")
 
     # mensajes procesados
     c.execute("""
@@ -202,18 +220,46 @@ def init_db():
 
 
 
-def guardar_mensaje(numero, mensaje, tipo, media_id=None, media_url=None, mime_type=None):
+def guardar_mensaje(
+    numero,
+    mensaje,
+    tipo,
+    media_id=None,
+    media_url=None,
+    mime_type=None,
+    link_url=None,
+    link_title=None,
+    link_body=None,
+    link_thumb=None,
+):
+    """Guarda un mensaje en la tabla ``mensajes``.
+
+    Admite campos opcionales para medios (``media_id``, ``media_url``, ``mime_type``)
+    y, sólo para mensajes de tipo ``referral``, datos de enlaces
+    (``link_url``, ``link_title``, ``link_body``, ``link_thumb``).
     """
-    Guarda un mensaje en la tabla 'mensajes'.
-    Ahora admite un campo opcional mime_type para audio/video.
-    """
+    if tipo != 'referral':
+        link_url = link_title = link_body = link_thumb = None
+
     conn = get_connection()
-    c    = conn.cursor()
+    c = conn.cursor()
     c.execute(
         "INSERT INTO mensajes "
-        "(numero, mensaje, tipo, media_id, media_url, mime_type, timestamp) "
-        "VALUES (%s, %s, %s, %s, %s, %s, NOW())",
-        (numero, mensaje, tipo, media_id, media_url, mime_type)
+        "(numero, mensaje, tipo, media_id, media_url, mime_type, "
+        "link_url, link_title, link_body, link_thumb, timestamp) "
+        "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW())",
+        (
+            numero,
+            mensaje,
+            tipo,
+            media_id,
+            media_url,
+            mime_type,
+            link_url,
+            link_title,
+            link_body,
+            link_thumb,
+        ),
     )
     mensaje_id = c.lastrowid
     conn.commit()
