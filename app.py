@@ -9,6 +9,7 @@ from routes.chat_routes import chat_bp
 from routes.configuracion import config_bp
 from routes.roles_routes import roles_bp
 from routes.webhook import webhook_bp
+from routes.tablero_routes import tablero_bp
 
 # Carga .env y crea la app
 load_dotenv()
@@ -25,6 +26,7 @@ app.register_blueprint(chat_bp)
 app.register_blueprint(config_bp)
 app.register_blueprint(roles_bp)
 app.register_blueprint(webhook_bp)
+app.register_blueprint(tablero_bp)
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)

@@ -8,3 +8,4 @@ mysql-connector-python
 vosk
 ffmpeg-python
 concurrent-futures; python_version < "3.2"
+streamlit

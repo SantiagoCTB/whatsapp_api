@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Tablero</title>
+    <style>
+        body { margin: 0; font-family: 'Segoe UI', sans-serif; }
+        iframe { border: none; width: 100%; height: 100vh; }
+        .back-btn { position: absolute; top: 20px; right: 20px; }
+        .back-btn button {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            padding: 10px 20px;
+            font-size: 14px;
+            cursor: pointer;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+    </style>
+</head>
+<body>
+    <div class="back-btn">
+        <a href="{{ url_for('chat.index') }}"><button>Volver al inicio</button></a>
+    </div>
+    <iframe src="http://localhost:8501"></iframe>
+</body>
+</html>
