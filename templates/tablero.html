@@ -5,7 +5,7 @@
     <title>Tablero</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        body { margin: 0; font-family: 'Segoe UI', sans-serif; }
+        body { margin: 0; font-family: 'Segoe UI', sans-serif; background: #f4f4f4; }
         .back-btn { position: absolute; top: 20px; right: 20px; }
         .back-btn button {
             background-color: #3498db;
@@ -17,33 +17,40 @@
             cursor: pointer;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
-        .card {
-            max-width: 400px;
-            margin: 80px auto;
+        .dashboard {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
             padding: 20px;
-            border-radius: 6px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .card {
+            background: #fff;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            padding: 20px;
             text-align: center;
         }
-        .card canvas { margin-top: 20px; }
-        #grafico, #grafico_palabras, #grafico_roles, #graficoTopNumeros { max-width: 800px; margin: 80px auto; }
+        .card canvas { margin-top: 20px; width: 100%; height: auto; }
     </style>
 </head>
 <body>
-    <div class="back-btn">
-        <a href="{{ url_for('chat.index') }}"><button>Volver al inicio</button></a>
+    <div class="dashboard">
+        <div class="back-btn">
+            <a href="{{ url_for('chat.index') }}"><button>Volver al inicio</button></a>
+        </div>
+        <div class="card" id="totalesCard">
+            <h3>Totales de mensajes</h3>
+            <p>Enviados: <span id="totalEnviados">0</span></p>
+            <p>Recibidos: <span id="totalRecibidos">0</span></p>
+            <canvas id="graficoTotales"></canvas>
+        </div>
+        <div class="card"><canvas id="grafico"></canvas></div>
+        <div class="card"><canvas id="graficoTopNumeros"></canvas></div>
+        <div class="card"><canvas id="grafico_palabras"></canvas></div>
+        <div class="card"><canvas id="grafico_roles"></canvas></div>
     </div>
-    <div class="card" id="totalesCard">
-        <h3>Totales de mensajes</h3>
-        <p>Enviados: <span id="totalEnviados">0</span></p>
-        <p>Recibidos: <span id="totalRecibidos">0</span></p>
-        <canvas id="graficoTotales"></canvas>
-    </div>
-    <canvas id="grafico"></canvas>
-    <canvas id="graficoTopNumeros"></canvas>
-    <canvas id="grafico_palabras"></canvas>
-    <canvas id="grafico_roles"></canvas>
     <script>
+    document.addEventListener('DOMContentLoaded', () => {
         fetch("{{ url_for('tablero.datos_totales') }}")
             .then(response => response.json())
             .then(data => {
@@ -70,8 +77,7 @@
                     }
                 });
             });
-    </script>
-    <script>
+
         fetch("{{ url_for('tablero.datos_tablero') }}")
             .then(response => response.json())
             .then(data => {
@@ -97,8 +103,7 @@
                     }
                 });
             });
-    </script>
-    <script>
+
         fetch("{{ url_for('tablero.datos_top_numeros') }}")
             .then(response => response.json())
             .then(data => {
@@ -125,8 +130,7 @@
                     }
                 });
             });
-    </script>
-    <script>
+
         fetch("{{ url_for('tablero.datos_palabras') }}")
             .then(response => response.json())
             .then(data => {
@@ -152,8 +156,7 @@
                     }
                 });
             });
-    </script>
-    <script>
+
         fetch("{{ url_for('tablero.datos_roles') }}")
             .then(response => response.json())
             .then(data => {
@@ -172,6 +175,7 @@
                     }
                 });
             });
+    });
     </script>
 </body>
 </html>
