@@ -17,7 +17,7 @@
             cursor: pointer;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
-        #grafico { max-width: 800px; margin: 80px auto; }
+        #grafico, #graficoPalabras { max-width: 800px; margin: 80px auto; }
     </style>
 </head>
 <body>
@@ -25,6 +25,7 @@
         <a href="{{ url_for('chat.index') }}"><button>Volver al inicio</button></a>
     </div>
     <canvas id="grafico"></canvas>
+    <canvas id="graficoPalabras"></canvas>
     <script>
         fetch("{{ url_for('tablero.datos_tablero') }}")
             .then(response => response.json())
@@ -41,6 +42,33 @@
                             data: values,
                             backgroundColor: 'rgba(54, 162, 235, 0.5)',
                             borderColor: 'rgba(54, 162, 235, 1)',
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        scales: {
+                            y: { beginAtZero: true }
+                        }
+                    }
+                });
+            });
+    </script>
+    <script>
+        fetch("{{ url_for('tablero.datos_palabras') }}")
+            .then(response => response.json())
+            .then(data => {
+                const labels = data.map(item => item.palabra);
+                const values = data.map(item => item.frecuencia);
+                const ctx = document.getElementById('graficoPalabras').getContext('2d');
+                new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: 'Palabras más frecuentes',
+                            data: values,
+                            backgroundColor: 'rgba(255, 159, 64, 0.5)',
+                            borderColor: 'rgba(255, 159, 64, 1)',
                             borderWidth: 1
                         }]
                     },
