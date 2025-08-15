@@ -17,7 +17,7 @@
             cursor: pointer;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
-        #grafico, #graficoPalabras { max-width: 800px; margin: 80px auto; }
+        #grafico, #graficoPalabras, #graficoRoles { max-width: 800px; margin: 80px auto; }
     </style>
 </head>
 <body>
@@ -26,6 +26,7 @@
     </div>
     <canvas id="grafico"></canvas>
     <canvas id="graficoPalabras"></canvas>
+    <canvas id="graficoRoles"></canvas>
     <script>
         fetch("{{ url_for('tablero.datos_tablero') }}")
             .then(response => response.json())
@@ -76,6 +77,26 @@
                         scales: {
                             y: { beginAtZero: true }
                         }
+                    }
+                });
+            });
+    </script>
+    <script>
+        fetch("{{ url_for('tablero.datos_roles') }}")
+            .then(response => response.json())
+            .then(data => {
+                const labels = data.map(item => item.rol);
+                const values = data.map(item => item.mensajes);
+                const ctx = document.getElementById('graficoRoles').getContext('2d');
+                const colors = ['#FF6384','#36A2EB','#FFCE56','#4BC0C0','#9966FF','#FF9F40'];
+                new Chart(ctx, {
+                    type: 'pie',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            data: values,
+                            backgroundColor: labels.map((_, i) => colors[i % colors.length])
+                        }]
                     }
                 });
             });
