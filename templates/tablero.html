@@ -17,7 +17,7 @@
             cursor: pointer;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
-        #grafico, #graficoPalabras, #graficoRoles { max-width: 800px; margin: 80px auto; }
+        #grafico, #graficoPalabras, #graficoRoles, #graficoTopNumeros { max-width: 800px; margin: 80px auto; }
     </style>
 </head>
 <body>
@@ -25,6 +25,7 @@
         <a href="{{ url_for('chat.index') }}"><button>Volver al inicio</button></a>
     </div>
     <canvas id="grafico"></canvas>
+    <canvas id="graficoTopNumeros"></canvas>
     <canvas id="graficoPalabras"></canvas>
     <canvas id="graficoRoles"></canvas>
     <script>
@@ -49,6 +50,34 @@
                     options: {
                         scales: {
                             y: { beginAtZero: true }
+                        }
+                    }
+                });
+            });
+    </script>
+    <script>
+        fetch("{{ url_for('tablero.datos_top_numeros') }}")
+            .then(response => response.json())
+            .then(data => {
+                const labels = data.map(item => item.numero);
+                const values = data.map(item => item.mensajes);
+                const ctx = document.getElementById('graficoTopNumeros').getContext('2d');
+                new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: 'Mensajes por número',
+                            data: values,
+                            backgroundColor: 'rgba(75, 192, 192, 0.5)',
+                            borderColor: 'rgba(75, 192, 192, 1)',
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        indexAxis: 'y',
+                        scales: {
+                            x: { beginAtZero: true }
                         }
                     }
                 });
