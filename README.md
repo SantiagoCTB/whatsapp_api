@@ -122,3 +122,8 @@ Para agregar un nuevo comando:
 
 La función `handle_global_command` es llamada desde `routes/webhook.py` y detiene el
 procesamiento normal cuando un comando es reconocido.
+
+## Configuración de Streamlit
+
+Para apuntar a una URL de Streamlit distinta a la predeterminada, define la variable de entorno `STREAMLIT_URL` durante el despliegue.
+Si no se establece, la aplicación usará `http://localhost:8501`.
