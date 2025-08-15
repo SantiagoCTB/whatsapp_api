@@ -58,3 +58,28 @@ def datos_palabras():
     palabras_comunes = contador.most_common(limite)
     data = [{"palabra": palabra, "frecuencia": frecuencia} for palabra, frecuencia in palabras_comunes]
     return jsonify(data)
+
+
+@tablero_bp.route('/datos_roles')
+def datos_roles():
+    """Devuelve la cantidad de mensajes de clientes agrupados por rol."""
+    if "user" not in session:
+        return redirect(url_for('auth.login'))
+
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute(
+        """
+        SELECT COALESCE(r.keyword, r.name) AS rol, COUNT(*) AS mensajes
+          FROM mensajes m
+          INNER JOIN chat_roles cr ON m.numero = cr.numero
+          INNER JOIN roles r ON cr.role_id = r.id
+         WHERE m.tipo LIKE 'cliente%'
+         GROUP BY r.keyword, r.name
+        """
+    )
+    rows = cur.fetchall()
+    conn.close()
+
+    data = [{"rol": rol, "mensajes": count} for rol, count in rows]
+    return jsonify(data)
