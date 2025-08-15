@@ -73,11 +73,11 @@ def datos_roles():
     cur.execute(
         """
         SELECT COALESCE(r.keyword, r.name) AS rol, COUNT(*) AS mensajes
-          FROM mensajes m
-          INNER JOIN chat_roles cr ON m.numero = cr.numero
-          INNER JOIN roles r ON cr.role_id = r.id
+          FROM mensajes AS m
+          JOIN chat_roles AS cr ON m.numero = cr.numero
+          JOIN roles AS r ON cr.role_id = r.id
          WHERE m.tipo LIKE 'cliente%'
-         GROUP BY r.keyword, r.name
+         GROUP BY rol
         """
     )
     rows = cur.fetchall()
