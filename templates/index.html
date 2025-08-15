@@ -319,6 +319,7 @@
         {% if session.get('roles') and 'admin' in session['roles'] %}
         <a href="{{ url_for('roles.roles') }}">Roles</a>
         {% endif %}
+        <a href="{{ url_for('tablero.tablero') }}">Tablero</a>
         <a href="{{ url_for('auth.logout') }}">Cerrar sesión</a>
       </div>
       <input id="buscador" type="text" placeholder="Buscar número…">
