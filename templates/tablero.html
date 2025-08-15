@@ -17,7 +17,7 @@
             cursor: pointer;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
-        #grafico, #graficoPalabras, #graficoRoles, #graficoTopNumeros, #graficoTotales { max-width: 800px; margin: 80px auto; }
+        #grafico, #grafico_palabras, #graficoRoles, #graficoTopNumeros, #graficoTotales { max-width: 800px; margin: 80px auto; }
     </style>
 </head>
 <body>
@@ -27,7 +27,7 @@
     <canvas id="graficoTotales"></canvas>
     <canvas id="grafico"></canvas>
     <canvas id="graficoTopNumeros"></canvas>
-    <canvas id="graficoPalabras"></canvas>
+    <canvas id="grafico_palabras"></canvas>
     <canvas id="graficoRoles"></canvas>
     <script>
         fetch("{{ url_for('tablero.datos_totales') }}")
@@ -115,7 +115,7 @@
             .then(data => {
                 const labels = data.map(item => item.palabra);
                 const values = data.map(item => item.frecuencia);
-                const ctx = document.getElementById('graficoPalabras').getContext('2d');
+                const ctx = document.getElementById('grafico_palabras').getContext('2d');
                 new Chart(ctx, {
                     type: 'bar',
                     data: {

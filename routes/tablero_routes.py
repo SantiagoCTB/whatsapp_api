@@ -1,5 +1,6 @@
 from flask import Blueprint, render_template, session, redirect, url_for, jsonify, request
 from collections import Counter
+import re
 
 from services.db import get_connection
 
@@ -53,7 +54,8 @@ def datos_palabras():
     contador = Counter()
     for (mensaje,) in rows:
         if mensaje:
-            contador.update(mensaje.split())
+            palabras = re.findall(r"\w+", mensaje.lower())
+            contador.update(palabras)
 
     palabras_comunes = contador.most_common(limite)
     data = [{"palabra": palabra, "frecuencia": frecuencia} for palabra, frecuencia in palabras_comunes]
