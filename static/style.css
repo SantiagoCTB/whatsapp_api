@@ -172,3 +172,17 @@ button:active:after {
 .attach-menu {
   transition: opacity 0.2s, transform 0.2s;
 }
+
+@media (max-width: 768px) {
+    .container {
+        flex-direction: column;
+    }
+
+    .sidebar {
+        width: 100%;
+    }
+
+    .chatWindow {
+        width: 100%;
+    }
+}
