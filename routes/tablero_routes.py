@@ -111,3 +111,28 @@ def datos_top_numeros():
 
     data = [{"numero": numero, "mensajes": total} for numero, total in rows]
     return jsonify(data)
+
+
+@tablero_bp.route('/datos_totales')
+def datos_totales():
+    """Devuelve el total de mensajes enviados y recibidos."""
+    if "user" not in session:
+        return redirect(url_for('auth.login'))
+
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute(
+        """
+        SELECT
+            SUM(CASE WHEN tipo LIKE 'bot%' OR tipo LIKE 'asesor%' THEN 1 ELSE 0 END) AS enviados,
+            SUM(CASE WHEN tipo LIKE 'cliente%' OR tipo IN (
+                'audio', 'video', 'cliente_image', 'cliente_audio', 'cliente_video', 'cliente_document', 'referral'
+            ) THEN 1 ELSE 0 END) AS recibidos
+        FROM mensajes
+        """
+    )
+    row = cur.fetchone()
+    conn.close()
+
+    enviados, recibidos = row if row else (0, 0)
+    return jsonify({"enviados": enviados, "recibidos": recibidos})

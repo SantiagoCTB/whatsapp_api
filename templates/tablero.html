@@ -17,17 +17,43 @@
             cursor: pointer;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
-        #grafico, #graficoPalabras, #graficoRoles, #graficoTopNumeros { max-width: 800px; margin: 80px auto; }
+        #grafico, #graficoPalabras, #graficoRoles, #graficoTopNumeros, #graficoTotales { max-width: 800px; margin: 80px auto; }
     </style>
 </head>
 <body>
     <div class="back-btn">
         <a href="{{ url_for('chat.index') }}"><button>Volver al inicio</button></a>
     </div>
+    <canvas id="graficoTotales"></canvas>
     <canvas id="grafico"></canvas>
     <canvas id="graficoTopNumeros"></canvas>
     <canvas id="graficoPalabras"></canvas>
     <canvas id="graficoRoles"></canvas>
+    <script>
+        fetch("{{ url_for('tablero.datos_totales') }}")
+            .then(response => response.json())
+            .then(data => {
+                const ctx = document.getElementById('graficoTotales').getContext('2d');
+                new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: ['Enviados', 'Recibidos'],
+                        datasets: [{
+                            label: 'Mensajes',
+                            data: [data.enviados, data.recibidos],
+                            backgroundColor: ['rgba(54, 162, 235, 0.5)', 'rgba(255, 99, 132, 0.5)'],
+                            borderColor: ['rgba(54, 162, 235, 1)', 'rgba(255, 99, 132, 1)'],
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        scales: {
+                            y: { beginAtZero: true }
+                        }
+                    }
+                });
+            });
+    </script>
     <script>
         fetch("{{ url_for('tablero.datos_tablero') }}")
             .then(response => response.json())
