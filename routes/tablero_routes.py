@@ -123,18 +123,19 @@ def datos_totales():
 
     conn = get_connection()
     cur = conn.cursor()
-    cur.execute(
-        """
-        SELECT
-            SUM(CASE WHEN tipo LIKE 'bot%' OR tipo LIKE 'asesor%' THEN 1 ELSE 0 END) AS enviados,
-            SUM(CASE WHEN tipo LIKE 'cliente%' OR tipo IN (
-                'audio', 'video', 'cliente_image', 'cliente_audio', 'cliente_video', 'cliente_document', 'referral'
-            ) THEN 1 ELSE 0 END) AS recibidos
-        FROM mensajes
-        """
-    )
-    row = cur.fetchone()
+    cur.execute("SELECT tipo, COUNT(*) FROM mensajes GROUP BY tipo")
+    rows = cur.fetchall()
     conn.close()
 
-    enviados, recibidos = row if row else (0, 0)
+    enviados = sum(
+        count
+        for tipo, count in rows
+        if tipo and (tipo.startswith('bot') or tipo.startswith('asesor'))
+    )
+    recibidos = sum(
+        count
+        for tipo, count in rows
+        if not (tipo and (tipo.startswith('bot') or tipo.startswith('asesor')))
+    )
+
     return jsonify({"enviados": enviados, "recibidos": recibidos})

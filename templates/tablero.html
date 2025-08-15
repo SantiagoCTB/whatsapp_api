@@ -17,14 +17,28 @@
             cursor: pointer;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
-        #grafico, #grafico_palabras, #grafico_roles, #graficoTopNumeros, #graficoTotales { max-width: 800px; margin: 80px auto; }
+        .card {
+            max-width: 400px;
+            margin: 80px auto;
+            padding: 20px;
+            border-radius: 6px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+        .card canvas { margin-top: 20px; }
+        #grafico, #grafico_palabras, #grafico_roles, #graficoTopNumeros { max-width: 800px; margin: 80px auto; }
     </style>
 </head>
 <body>
     <div class="back-btn">
         <a href="{{ url_for('chat.index') }}"><button>Volver al inicio</button></a>
     </div>
-    <canvas id="graficoTotales"></canvas>
+    <div class="card" id="totalesCard">
+        <h3>Totales de mensajes</h3>
+        <p>Enviados: <span id="totalEnviados">0</span></p>
+        <p>Recibidos: <span id="totalRecibidos">0</span></p>
+        <canvas id="graficoTotales"></canvas>
+    </div>
     <canvas id="grafico"></canvas>
     <canvas id="graficoTopNumeros"></canvas>
     <canvas id="grafico_palabras"></canvas>
@@ -33,6 +47,9 @@
         fetch("{{ url_for('tablero.datos_totales') }}")
             .then(response => response.json())
             .then(data => {
+                document.getElementById('totalEnviados').textContent = data.enviados;
+                document.getElementById('totalRecibidos').textContent = data.recibidos;
+
                 const ctx = document.getElementById('graficoTotales').getContext('2d');
                 new Chart(ctx, {
                     type: 'bar',
