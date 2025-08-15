@@ -9,4 +9,5 @@ def tablero():
     """Renderiza la página del tablero con gráficos de Streamlit."""
     if "user" not in session:
         return redirect(url_for('auth.login'))
-    return render_template('tablero.html', streamlit_url=current_app.config["STREAMLIT_URL"])
+    streamlit_url = current_app.config["STREAMLIT_URL"]
+    return render_template('tablero.html', streamlit_url=streamlit_url)
