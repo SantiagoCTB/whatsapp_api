@@ -83,3 +83,31 @@ def datos_roles():
 
     data = [{"rol": rol, "mensajes": count} for rol, count in rows]
     return jsonify(data)
+
+
+@tablero_bp.route('/datos_top_numeros')
+def datos_top_numeros():
+    """Devuelve los números con más mensajes de clientes."""
+    if "user" not in session:
+        return redirect(url_for('auth.login'))
+
+    limite = request.args.get('limit', 5, type=int)
+
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute(
+        """
+        SELECT numero, COUNT(*) AS total
+          FROM mensajes
+         WHERE tipo LIKE 'cliente%'
+         GROUP BY numero
+         ORDER BY total DESC
+         LIMIT ?
+        """,
+        (limite,),
+    )
+    rows = cur.fetchall()
+    conn.close()
+
+    data = [{"numero": numero, "mensajes": total} for numero, total in rows]
+    return jsonify(data)
