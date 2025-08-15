@@ -1,4 +1,5 @@
-from flask import Blueprint, render_template, session, redirect, url_for, jsonify
+from flask import Blueprint, render_template, session, redirect, url_for, jsonify, request
+from collections import Counter
 
 from services.db import get_connection
 
@@ -32,4 +33,28 @@ def datos_tablero():
         metrics[numero] = metrics.get(numero, 0) + palabras
 
     data = [{"numero": num, "palabras": count} for num, count in metrics.items()]
+    return jsonify(data)
+
+
+@tablero_bp.route('/datos_palabras')
+def datos_palabras():
+    """Devuelve las palabras más frecuentes en los mensajes."""
+    if "user" not in session:
+        return redirect(url_for('auth.login'))
+
+    limite = request.args.get('limit', 10, type=int)
+
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT mensaje FROM mensajes")
+    rows = cur.fetchall()
+    conn.close()
+
+    contador = Counter()
+    for (mensaje,) in rows:
+        if mensaje:
+            contador.update(mensaje.split())
+
+    palabras_comunes = contador.most_common(limite)
+    data = [{"palabra": palabra, "frecuencia": frecuencia} for palabra, frecuencia in palabras_comunes]
     return jsonify(data)
