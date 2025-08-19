@@ -313,27 +313,33 @@ def webhook():
                 handler = STEP_HANDLERS.get(step)
                 if handler and handler(from_number, text):
                     return jsonify({'status':'handled'}), 200
+
                 conn = get_connection(); c = conn.cursor()
                 c.execute(
-                    "SELECT respuesta, siguiente_step, tipo, media_url, opciones, rol_keyword "
-                    "FROM reglas WHERE step=%s AND %s LIKE CONCAT('%', input_text, '%')",
-                    (step, text)
+                    "SELECT respuesta, siguiente_step, tipo, media_url, opciones, rol_keyword, input_text "
+                    "FROM reglas WHERE step=%s",
+                    (step,)
                 )
-                row = c.fetchone()
+                reglas = c.fetchall(); conn.close()
+
+                row = None
+                for resp, next_step, tipo_resp, media_url, opts, rol_kw, input_db in reglas:
+                    triggers = [t.strip() for t in (input_db or '').split(',')]
+                    if any(trigger and trigger in text for trigger in triggers):
+                        row = (resp, next_step, tipo_resp, media_url, opts, rol_kw)
+                        break
+
                 if not row:
-                    c.execute(
-                        "SELECT respuesta, siguiente_step, tipo, media_url, opciones, rol_keyword, input_text "
-                        "FROM reglas WHERE step=%s",
-                        (step,)
-                    )
-                    for resp, next_step, tipo_resp, media_url, opts, rol_kw, input_db in c.fetchall():
-                        for word in text.split():
-                            if SequenceMatcher(None, word, input_db).ratio() >= 0.8:
-                                row = (resp, next_step, tipo_resp, media_url, opts, rol_kw)
+                    for resp, next_step, tipo_resp, media_url, opts, rol_kw, input_db in reglas:
+                        for trigger in (t.strip() for t in (input_db or '').split(',')):
+                            for word in text.split():
+                                if SequenceMatcher(None, word, trigger).ratio() >= 0.8:
+                                    row = (resp, next_step, tipo_resp, media_url, opts, rol_kw)
+                                    break
+                            if row:
                                 break
                         if row:
                             break
-                conn.close()
                 if row:
                     resp, next_step, tipo_resp, media_url, opts, rol_kw = row
                     media_opt = media_url if tipo_resp in ['image', 'video', 'audio', 'document'] else opts
