@@ -14,6 +14,11 @@ def _require_admin():
     # Debe haber usuario logueado y el rol 'admin' en la lista de roles
     return "user" in session and 'admin' in (session.get('roles') or [])
 
+
+def _normalize_input(text):
+    """Normaliza una lista separada por comas."""
+    return ','.join(t.strip().lower() for t in (text or '').split(',') if t.strip())
+
 def _reglas_view(template_name):
     if not _require_admin():
         return redirect(url_for("auth.login"))
@@ -57,7 +62,7 @@ def _reglas_view(template_name):
                     step, input_text, respuesta, siguiente_step, tipo, media_url, media_tipo, opciones, rol_keyword, calculo, handler = datos[:11]
                     # Normalizar campos clave
                     step = (step or '').strip().lower()
-                    input_text = (input_text or '').strip().lower()
+                    input_text = _normalize_input(input_text)
                     siguiente_step = (siguiente_step or '').strip().lower() or None
 
                     c.execute(
@@ -93,7 +98,7 @@ def _reglas_view(template_name):
             else:
                 # Entrada manual desde formulario
                 step = (request.form['step'] or '').strip().lower() or None
-                input_text = (request.form['input_text'] or '').strip().lower() or None
+                input_text = _normalize_input(request.form['input_text']) or None
                 respuesta = request.form['respuesta']
                 siguiente_step = (request.form.get('siguiente_step') or '').strip().lower() or None
                 tipo = request.form.get('tipo', 'texto')
