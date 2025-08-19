@@ -587,17 +587,19 @@
               btn.textContent = i+1;
               btn.onclick = () => {
                 if (!currentChat) return;
-                fetch('/send_message', {
+                const urls = (b.media_urls && b.media_urls.length) ? b.media_urls : [null];
+                const envios = urls.map(url => fetch('/send_message', {
                   method:'POST',
                   headers:{'Content-Type':'application/json'},
                   body:JSON.stringify({
                     numero: currentChat,
                     mensaje: b.mensaje,
                     tipo_respuesta: b.tipo,
-                    opciones: b.media_url,
+                    opciones: url,
                     reply_to_wa_id: replyTo
                   })
-                }).then(()=>{
+                }));
+                Promise.all(envios).then(()=>{
                   replyTo=null;
                   replyPreviewEl.style.display='none';
                   replyPreviewEl.innerHTML='';

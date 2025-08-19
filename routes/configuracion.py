@@ -114,7 +114,7 @@ def _reglas_view(template_name):
                 respuesta = request.form['respuesta']
                 siguiente_step = (request.form.get('siguiente_step') or '').strip().lower() or None
                 tipo = request.form.get('tipo', 'texto')
-                media_files = request.files.getlist('media')
+                media_files = request.files.getlist('media') or request.files.getlist('media[]')
                 media_url_field = request.form.get('media_url')
                 medias = []
                 for media_file in media_files:
@@ -240,30 +240,53 @@ def botones():
                     media_url = fila[2] if len(fila) > 2 else None
                     if mensaje:
                         c.execute(
-                            "INSERT INTO botones (mensaje, tipo, media_url) VALUES (%s, %s, %s)",
-                            (mensaje, tipo, media_url)
+                            "INSERT INTO botones (mensaje, tipo) VALUES (%s, %s)",
+                            (mensaje, tipo)
                         )
+                        boton_id = c.lastrowid
+                        if media_url:
+                            c.execute(
+                                "INSERT INTO boton_medias (boton_id, media_url, media_tipo) VALUES (%s, %s, %s)",
+                                (boton_id, media_url, None)
+                            )
                 conn.commit()
             # Agregar botón manual
             elif 'mensaje' in request.form:
                 nuevo_mensaje = request.form['mensaje']
                 tipo = request.form.get('tipo')
-                media_file = request.files.get('media')
-                media_url = None
-                if media_file and media_file.filename:
-                    filename = secure_filename(media_file.filename)
-                    unique = f"{uuid.uuid4().hex}_{filename}"
-                    path = os.path.join(UPLOAD_FOLDER, unique)
-                    media_file.save(path)
-                    media_url = url_for('static', filename=f'uploads/{unique}', _external=True)
+                media_files = request.files.getlist('media')
+                medias = []
+                for media_file in media_files:
+                    if media_file and media_file.filename:
+                        filename = secure_filename(media_file.filename)
+                        unique = f"{uuid.uuid4().hex}_{filename}"
+                        path = os.path.join(UPLOAD_FOLDER, unique)
+                        media_file.save(path)
+                        url = url_for('static', filename=f'uploads/{unique}', _external=True)
+                        medias.append((url, media_file.mimetype))
                 if nuevo_mensaje:
                     c.execute(
-                        "INSERT INTO botones (mensaje, tipo, media_url) VALUES (%s, %s, %s)",
-                        (nuevo_mensaje, tipo, media_url)
+                        "INSERT INTO botones (mensaje, tipo) VALUES (%s, %s)",
+                        (nuevo_mensaje, tipo)
                     )
+                    boton_id = c.lastrowid
+                    for url, mime in medias:
+                        c.execute(
+                            "INSERT INTO boton_medias (boton_id, media_url, media_tipo) VALUES (%s, %s, %s)",
+                            (boton_id, url, mime)
+                        )
                     conn.commit()
 
-        c.execute("SELECT id, mensaje, tipo, media_url FROM botones ORDER BY id")
+        c.execute(
+            """
+            SELECT b.id, b.mensaje, b.tipo,
+                   GROUP_CONCAT(m.media_url SEPARATOR '||') AS media_urls
+              FROM botones b
+              LEFT JOIN boton_medias m ON b.id = m.boton_id
+             GROUP BY b.id
+             ORDER BY b.id
+            """
+        )
         botones = c.fetchall()
         return render_template('botones.html', botones=botones)
     finally:
@@ -288,10 +311,24 @@ def get_botones():
     conn = get_connection()
     c = conn.cursor()
     try:
-        c.execute("SELECT id, mensaje, tipo, media_url FROM botones ORDER BY id")
+        c.execute(
+            """
+            SELECT b.id, b.mensaje, b.tipo,
+                   GROUP_CONCAT(m.media_url SEPARATOR '||') AS media_urls
+              FROM botones b
+              LEFT JOIN boton_medias m ON b.id = m.boton_id
+             GROUP BY b.id
+             ORDER BY b.id
+            """
+        )
         rows = c.fetchall()
         return jsonify([
-            {'id': r[0], 'mensaje': r[1], 'tipo': r[2], 'media_url': r[3]}
+            {
+                'id': r[0],
+                'mensaje': r[1],
+                'tipo': r[2],
+                'media_urls': r[3].split('||') if r[3] else []
+            }
             for r in rows
         ])
     finally:
