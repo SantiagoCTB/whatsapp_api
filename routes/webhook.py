@@ -55,14 +55,22 @@ def handle_medicion(numero, texto):
     step_actual = user_steps.get(numero, '').strip().lower()
     conn = get_connection(); c = conn.cursor()
     c.execute(
-        "SELECT respuesta, siguiente_step, tipo, media_url, opciones, rol_keyword, calculo, handler "
-        "FROM reglas WHERE step=%s AND input_text='*'",
+        """
+        SELECT r.respuesta, r.siguiente_step, r.tipo,
+               GROUP_CONCAT(m.media_url SEPARATOR '||') AS media_urls,
+               r.opciones, r.rol_keyword, r.calculo, r.handler
+          FROM reglas r
+          LEFT JOIN regla_medias m ON r.id = m.regla_id
+         WHERE r.step=%s AND r.input_text='*'
+         GROUP BY r.id
+        """,
         (step_actual,)
     )
     row = c.fetchone(); conn.close()
     if not row:
         return False
-    resp, next_step, tipo_resp, media_url, opts, rol_kw, calculo, handler_name = row
+    resp, next_step, tipo_resp, media_urls, opts, rol_kw, calculo, handler_name = row
+    media_list = media_urls.split('||') if media_urls else []
     try:
         if handler_name:
             func = EXTERNAL_HANDLERS.get(handler_name)
@@ -77,8 +85,12 @@ def handle_medicion(numero, texto):
             else:
                 contexto['medida'] = int(texto)
             total = eval(calculo, {}, contexto) if calculo else 0
-        media_opt = media_url if tipo_resp in ['image', 'video', 'audio', 'document'] else opts
-        enviar_mensaje(numero, resp.format(total=total), tipo_respuesta=tipo_resp, opciones=media_opt)
+        if tipo_resp in ['image', 'video', 'audio', 'document'] and media_list:
+            enviar_mensaje(numero, resp.format(total=total), tipo_respuesta=tipo_resp, opciones=media_list[0])
+            for extra in media_list[1:]:
+                enviar_mensaje(numero, '', tipo_respuesta=tipo_resp, opciones=extra)
+        else:
+            enviar_mensaje(numero, resp.format(total=total), tipo_respuesta=tipo_resp, opciones=opts)
         if rol_kw:
             conn2 = get_connection(); c2 = conn2.cursor()
             c2.execute("SELECT id FROM roles WHERE keyword=%s", (rol_kw,))
@@ -286,15 +298,27 @@ def webhook():
                 if is_new_user:
                     conn = get_connection(); c = conn.cursor()
                     c.execute(
-                        "SELECT respuesta, siguiente_step, tipo, media_url, opciones, rol_keyword "
-                        "FROM reglas WHERE step=%s AND input_text=%s",
+                        """
+                        SELECT r.respuesta, r.siguiente_step, r.tipo,
+                               GROUP_CONCAT(m.media_url SEPARATOR '||') AS media_urls,
+                               r.opciones, r.rol_keyword
+                          FROM reglas r
+                          LEFT JOIN regla_medias m ON r.id = m.regla_id
+                         WHERE r.step=%s AND r.input_text=%s
+                         GROUP BY r.id
+                        """,
                         (step,'iniciar')
                     )
                     row = c.fetchone(); conn.close()
                     if row:
-                        resp, next_step, tipo_resp, media_url, opts, rol_kw = row
-                        media_opt = media_url if tipo_resp in ['image', 'video', 'audio', 'document'] else opts
-                        enviar_mensaje(from_number, resp, tipo_respuesta=tipo_resp, opciones=media_opt)
+                        resp, next_step, tipo_resp, media_urls, opts, rol_kw = row
+                        media_list = media_urls.split('||') if media_urls else []
+                        if tipo_resp in ['image', 'video', 'audio', 'document'] and media_list:
+                            enviar_mensaje(from_number, resp, tipo_respuesta=tipo_resp, opciones=media_list[0])
+                            for extra in media_list[1:]:
+                                enviar_mensaje(from_number, '', tipo_respuesta=tipo_resp, opciones=extra)
+                        else:
+                            enviar_mensaje(from_number, resp, tipo_respuesta=tipo_resp, opciones=opts)
                         if rol_kw:
                             conn2 = get_connection(); c2 = conn2.cursor()
                             c2.execute("SELECT id FROM roles WHERE keyword=%s", (rol_kw,))
@@ -316,34 +340,47 @@ def webhook():
 
                 conn = get_connection(); c = conn.cursor()
                 c.execute(
-                    "SELECT respuesta, siguiente_step, tipo, media_url, opciones, rol_keyword, input_text "
-                    "FROM reglas WHERE step=%s",
+                    """
+                    SELECT r.respuesta, r.siguiente_step, r.tipo,
+                           GROUP_CONCAT(m.media_url SEPARATOR '||') AS media_urls,
+                           r.opciones, r.rol_keyword, r.input_text
+                      FROM reglas r
+                      LEFT JOIN regla_medias m ON r.id = m.regla_id
+                     WHERE r.step=%s
+                     GROUP BY r.id
+                    """,
                     (step,)
                 )
                 reglas = c.fetchall(); conn.close()
 
                 row = None
-                for resp, next_step, tipo_resp, media_url, opts, rol_kw, input_db in reglas:
+                for resp, next_step, tipo_resp, media_urls, opts, rol_kw, input_db in reglas:
+                    media_list = media_urls.split('||') if media_urls else []
                     triggers = [t.strip() for t in (input_db or '').split(',')]
                     if any(trigger and trigger in text for trigger in triggers):
-                        row = (resp, next_step, tipo_resp, media_url, opts, rol_kw)
+                        row = (resp, next_step, tipo_resp, media_list, opts, rol_kw)
                         break
 
                 if not row:
-                    for resp, next_step, tipo_resp, media_url, opts, rol_kw, input_db in reglas:
+                    for resp, next_step, tipo_resp, media_urls, opts, rol_kw, input_db in reglas:
+                        media_list = media_urls.split('||') if media_urls else []
                         for trigger in (t.strip() for t in (input_db or '').split(',')):
                             for word in text.split():
                                 if SequenceMatcher(None, word, trigger).ratio() >= 0.8:
-                                    row = (resp, next_step, tipo_resp, media_url, opts, rol_kw)
+                                    row = (resp, next_step, tipo_resp, media_list, opts, rol_kw)
                                     break
                             if row:
                                 break
                         if row:
                             break
                 if row:
-                    resp, next_step, tipo_resp, media_url, opts, rol_kw = row
-                    media_opt = media_url if tipo_resp in ['image', 'video', 'audio', 'document'] else opts
-                    enviar_mensaje(from_number, resp, tipo_respuesta=tipo_resp, opciones=media_opt)
+                    resp, next_step, tipo_resp, media_list, opts, rol_kw = row
+                    if tipo_resp in ['image', 'video', 'audio', 'document'] and media_list:
+                        enviar_mensaje(from_number, resp, tipo_respuesta=tipo_resp, opciones=media_list[0])
+                        for extra in media_list[1:]:
+                            enviar_mensaje(from_number, '', tipo_respuesta=tipo_resp, opciones=extra)
+                    else:
+                        enviar_mensaje(from_number, resp, tipo_respuesta=tipo_resp, opciones=opts)
                     if rol_kw:
                         conn2 = get_connection(); c2 = conn2.cursor()
                         c2.execute("SELECT id FROM roles WHERE keyword=%s", (rol_kw,))

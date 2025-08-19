@@ -160,6 +160,31 @@ def init_db():
     if not c.fetchone():
         c.execute("ALTER TABLE reglas ADD COLUMN media_tipo VARCHAR(20) NULL;")
 
+    # regla_medias: soporta múltiples archivos por regla
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS regla_medias (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      regla_id INT NOT NULL,
+      media_url TEXT NOT NULL,
+      media_tipo VARCHAR(20),
+      FOREIGN KEY (regla_id) REFERENCES reglas(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB;
+    """)
+
+    # Migración defensiva: copiar datos desde reglas.media_* si existen
+    c.execute("SELECT id, media_url, media_tipo FROM reglas WHERE media_url IS NOT NULL")
+    for rid, url, tipo in c.fetchall() or []:
+        c.execute(
+            """
+            INSERT INTO regla_medias (regla_id, media_url, media_tipo)
+            SELECT %s, %s, %s FROM DUAL
+            WHERE NOT EXISTS (
+                SELECT 1 FROM regla_medias WHERE regla_id=%s AND media_url=%s
+            )
+            """,
+            (rid, url, tipo, rid, url),
+        )
+
     # botones
     c.execute("""
     CREATE TABLE IF NOT EXISTS botones (

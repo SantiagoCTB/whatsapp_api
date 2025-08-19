@@ -97,7 +97,7 @@
         </select>
 
         <label for="media" id="label_media_file" style="display:none;">Subir archivo:</label>
-        <input type="file" id="media" name="media" style="display:none;">
+        <input type="file" id="media" name="media[]" multiple style="display:none;">
 
         <label for="media_url" id="label_media_url" style="display:none;">o URL del archivo:</label>
         <input type="text" id="media_url" name="media_url" style="display:none;">
@@ -165,8 +165,8 @@
             <td>{{ regla[3] }}</td>
             <td>{{ regla[4] or '-' }}</td>
             <td>{{ regla[5] }}</td>
-            <td>{{ regla[6] or '-' }}</td>
-            <td>{{ regla[7] or '-' }}</td>
+            <td><pre style="white-space: pre-wrap;">{{ (regla[6] or '-')|replace('||','\n') }}</pre></td>
+            <td><pre style="white-space: pre-wrap;">{{ (regla[7] or '-')|replace('||','\n') }}</pre></td>
             <td>{{ regla[9] or '-' }}</td>
             <td><pre style="white-space: pre-wrap;">{{ regla[8] }}</pre></td>
             <td>{{ regla[10] or '-' }}</td>
@@ -184,10 +184,16 @@
     function toggleMediaFields() {
         const tipo = document.getElementById('tipo').value;
         const show = ['image', 'video', 'audio', 'document'].includes(tipo);
-        document.getElementById('media').style.display = show ? 'block' : 'none';
+        const mediaInput = document.getElementById('media');
+        const mediaUrl   = document.getElementById('media_url');
+        mediaInput.style.display = show ? 'block' : 'none';
         document.getElementById('label_media_file').style.display = show ? 'block' : 'none';
-        document.getElementById('media_url').style.display = show ? 'block' : 'none';
+        mediaUrl.style.display = show ? 'block' : 'none';
         document.getElementById('label_media_url').style.display = show ? 'block' : 'none';
+        if (!show) {
+            mediaInput.value = '';
+            mediaUrl.value = '';
+        }
     }
     document.getElementById('tipo').addEventListener('change', toggleMediaFields);
     window.addEventListener('DOMContentLoaded', toggleMediaFields);

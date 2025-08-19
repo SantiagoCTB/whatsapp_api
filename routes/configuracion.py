@@ -88,12 +88,24 @@ def _reglas_view(template_name):
                             """,
                             (respuesta, siguiente_step, tipo, media_url, media_tipo, opciones, rol_keyword, calculo, handler, regla_id)
                         )
+                        c.execute("DELETE FROM regla_medias WHERE regla_id=%s", (regla_id,))
+                        if media_url:
+                            c.execute(
+                                "INSERT INTO regla_medias (regla_id, media_url, media_tipo) VALUES (%s, %s, %s)",
+                                (regla_id, media_url, media_tipo),
+                            )
                     else:
                         c.execute(
                             "INSERT INTO reglas (step, input_text, respuesta, siguiente_step, tipo, media_url, media_tipo, opciones, rol_keyword, calculo, handler) "
                             "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
                             (step, input_text, respuesta, siguiente_step, tipo, media_url, media_tipo, opciones, rol_keyword, calculo, handler)
                         )
+                        regla_id = c.lastrowid
+                        if media_url:
+                            c.execute(
+                                "INSERT INTO regla_medias (regla_id, media_url, media_tipo) VALUES (%s, %s, %s)",
+                                (regla_id, media_url, media_tipo),
+                            )
                 conn.commit()
             else:
                 # Entrada manual desde formulario
@@ -102,16 +114,22 @@ def _reglas_view(template_name):
                 respuesta = request.form['respuesta']
                 siguiente_step = (request.form.get('siguiente_step') or '').strip().lower() or None
                 tipo = request.form.get('tipo', 'texto')
-                media_file = request.files.get('media')
-                media_url = request.form.get('media_url')
-                media_tipo = None
-                if media_file and media_file.filename:
-                    filename = secure_filename(media_file.filename)
-                    unique = f"{uuid.uuid4().hex}_{filename}"
-                    path = os.path.join(UPLOAD_FOLDER, unique)
-                    media_file.save(path)
-                    media_url = url_for('static', filename=f'uploads/{unique}', _external=True)
-                    media_tipo = media_file.mimetype
+                media_files = request.files.getlist('media')
+                media_url_field = request.form.get('media_url')
+                medias = []
+                for media_file in media_files:
+                    if media_file and media_file.filename:
+                        filename = secure_filename(media_file.filename)
+                        unique = f"{uuid.uuid4().hex}_{filename}"
+                        path = os.path.join(UPLOAD_FOLDER, unique)
+                        media_file.save(path)
+                        url = url_for('static', filename=f'uploads/{unique}', _external=True)
+                        medias.append((url, media_file.mimetype))
+                if media_url_field:
+                    for url in [u.strip() for u in media_url_field.split(',') if u.strip()]:
+                        medias.append((url, None))
+                media_url = medias[0][0] if medias else None
+                media_tipo = medias[0][1] if medias else None
                 opciones = request.form.get('opciones', '')
                 rol_keyword = request.form.get('rol_keyword')
                 calculo = request.form.get('calculo')
@@ -140,19 +158,38 @@ def _reglas_view(template_name):
                         """,
                         (respuesta, siguiente_step, tipo, media_url, media_tipo, opciones, rol_keyword, calculo, handler, regla_id)
                     )
+                    c.execute("DELETE FROM regla_medias WHERE regla_id=%s", (regla_id,))
+                    for url, tipo_media in medias:
+                        c.execute(
+                            "INSERT INTO regla_medias (regla_id, media_url, media_tipo) VALUES (%s, %s, %s)",
+                            (regla_id, url, tipo_media),
+                        )
                 else:
                     c.execute(
                         "INSERT INTO reglas (step, input_text, respuesta, siguiente_step, tipo, media_url, media_tipo, opciones, rol_keyword, calculo, handler) "
                         "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
                         (step, input_text, respuesta, siguiente_step, tipo, media_url, media_tipo, opciones, rol_keyword, calculo, handler),
                     )
+                    regla_id = c.lastrowid
+                    for url, tipo_media in medias:
+                        c.execute(
+                            "INSERT INTO regla_medias (regla_id, media_url, media_tipo) VALUES (%s, %s, %s)",
+                            (regla_id, url, tipo_media),
+                        )
                 conn.commit()
 
         # Listar todas las reglas
         c.execute(
-            "SELECT id, step, input_text, respuesta, siguiente_step, tipo, opciones, rol_keyword, calculo, handler, media_url, media_tipo "
-            "FROM reglas "
-            "ORDER BY step, id"
+            """
+            SELECT r.id, r.step, r.input_text, r.respuesta, r.siguiente_step, r.tipo,
+                   GROUP_CONCAT(m.media_url SEPARATOR '||') AS media_urls,
+                   GROUP_CONCAT(m.media_tipo SEPARATOR '||') AS media_tipos,
+                   r.opciones, r.rol_keyword, r.calculo, r.handler
+              FROM reglas r
+              LEFT JOIN regla_medias m ON r.id = m.regla_id
+             GROUP BY r.id
+             ORDER BY r.step, r.id
+            """
         )
         reglas = c.fetchall()
         return render_template(template_name, reglas=reglas)
