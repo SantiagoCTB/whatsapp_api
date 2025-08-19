@@ -202,6 +202,31 @@ def init_db():
     if not c.fetchone():
         c.execute("ALTER TABLE botones ADD COLUMN media_url TEXT NULL;")
 
+    # boton_medias: soporta múltiples archivos por botón
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS boton_medias (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      boton_id INT NOT NULL,
+      media_url TEXT NOT NULL,
+      media_tipo VARCHAR(20),
+      FOREIGN KEY (boton_id) REFERENCES botones(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB;
+    """)
+
+    # Migración defensiva: copiar datos desde botones.media_url si existen
+    c.execute("SELECT id, media_url FROM botones WHERE media_url IS NOT NULL")
+    for bid, url in c.fetchall() or []:
+        c.execute(
+            """
+            INSERT INTO boton_medias (boton_id, media_url, media_tipo)
+            SELECT %s, %s, NULL FROM DUAL
+            WHERE NOT EXISTS (
+                SELECT 1 FROM boton_medias WHERE boton_id=%s AND media_url=%s
+            )
+            """,
+            (bid, url, bid, url),
+        )
+
     # alias
     c.execute("""
     CREATE TABLE IF NOT EXISTS alias (

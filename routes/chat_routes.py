@@ -54,7 +54,16 @@ def index():
         chats.append((numero, requiere_asesor))
 
     # Botones configurados
-    c.execute("SELECT id, mensaje, tipo, media_url FROM botones ORDER BY id")
+    c.execute(
+        """
+        SELECT b.id, b.mensaje, b.tipo,
+               GROUP_CONCAT(m.media_url SEPARATOR '||') AS media_urls
+          FROM botones b
+          LEFT JOIN boton_medias m ON b.id = m.boton_id
+         GROUP BY b.id
+         ORDER BY b.id
+        """
+    )
     botones = c.fetchall()
 
     conn.close()
