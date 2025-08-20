@@ -3,6 +3,7 @@ import logging
 from services.transcripcion import transcribir
 from services.db import update_mensaje_texto
 from services.whatsapp_api import enviar_mensaje
+from services.message_processor import handle_text_message
 
 
 def process_audio(
@@ -22,7 +23,7 @@ def process_audio(
         update_mensaje_texto(mensaje_id, texto)
 
         if texto:
-            enviar_mensaje(from_number, f"Transcripción lista: {texto}", tipo='bot')
+            handle_text_message(from_number, texto)
         else:
             enviar_mensaje(
                 from_number,
