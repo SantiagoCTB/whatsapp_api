@@ -26,11 +26,38 @@ const ChatList: React.FC<{ chats: ChatSummary[]; current: string | null; onSelec
 
 const MessageList: React.FC<{ messages: any[] }> = ({ messages }) => (
   <div className="messages">
-    {messages.map((m, i) => (
-      <div key={i} className="bubble">{m[0]}</div>
-    ))}
+    {messages.map((m, i) => {
+      const [text, tipo, mediaUrl] = m;
+      return (
+        <div key={i} className={`bubble ${tipo}`}>
+          {text && <span>{text}</span>}
+          {mediaUrl && <MediaContent tipo={tipo} url={mediaUrl} />}
+        </div>
+      );
+    })}
   </div>
 );
+
+const MediaContent: React.FC<{ tipo: string; url: string }> = ({ tipo, url }) => {
+  const [error, setError] = useState(false);
+  if (error) {
+    return <div className="media-error">No se pudo cargar el archivo</div>;
+  }
+  if (tipo && tipo.includes('image')) {
+    return <img src={url} className="media-image" onError={() => setError(true)} alt="imagen" />;
+  }
+  if (tipo && tipo.includes('audio')) {
+    return <audio controls src={url} className="media-audio" onError={() => setError(true)} />;
+  }
+  if (tipo && tipo.includes('video')) {
+    return <video controls src={url} className="media-video" onError={() => setError(true)} />;
+  }
+  return (
+    <a href={url} target="_blank" rel="noopener noreferrer" className="media-link">
+      {url}
+    </a>
+  );
+};
 
 const QuickButtons: React.FC<{ buttons: QuickButton[]; onSend: (b: QuickButton) => void }> = ({ buttons, onSend }) => (
   <div className="quick-buttons">
