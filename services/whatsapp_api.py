@@ -133,6 +133,8 @@ def enviar_mensaje(numero, mensaje, tipo='bot', tipo_respuesta='texto', opciones
 
     resp = requests.post(url, headers=headers, json=data)
     print(f"[WA API] {resp.status_code} — {resp.text}")
+    if not resp.ok:
+        return False
     try:
         wa_id = resp.json().get("messages", [{}])[0].get("id")
     except Exception:
@@ -172,6 +174,7 @@ def enviar_mensaje(numero, mensaje, tipo='bot', tipo_respuesta='texto', opciones
             media_id=None,
             media_url=opciones
         )
+    return True
 
 def get_media_url(media_id):
     resp1 = requests.get(

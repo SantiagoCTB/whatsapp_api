@@ -599,11 +599,15 @@
                     reply_to_wa_id: replyTo
                   })
                 }));
-                Promise.all(envios).then(()=>{
-                  replyTo=null;
-                  replyPreviewEl.style.display='none';
-                  replyPreviewEl.innerHTML='';
-                  loadMessages(); fetchChatList();
+                Promise.all(envios).then(responses => {
+                  if (responses.every(r => r.ok)) {
+                    replyTo=null;
+                    replyPreviewEl.style.display='none';
+                    replyPreviewEl.innerHTML='';
+                    loadMessages(); fetchChatList();
+                  } else {
+                    alert('No se pudo enviar el mensaje');
+                  }
                 });
               };
               botoneraEl.appendChild(btn);
@@ -620,7 +624,11 @@
           method:'POST',
           headers:{'Content-Type':'application/json'},
           body:JSON.stringify({numero:currentChat,mensaje:txt,reply_to_wa_id:replyTo})
-        }).then(()=>{
+        }).then(res=>{
+          if(!res.ok){
+            alert('No se pudo enviar el mensaje');
+            return;
+          }
           inp.value='';
           replyTo=null;
           replyPreviewEl.style.display='none';
