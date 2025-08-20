@@ -1,6 +1,7 @@
 import os
 import re
 import logging
+import threading
 from flask import Blueprint, request, jsonify, url_for
 from datetime import datetime
 from difflib import SequenceMatcher
@@ -24,6 +25,8 @@ SESSION_TIMEOUT = Config.SESSION_TIMEOUT
 
 user_last_activity = {}
 user_steps         = {}
+pending_texts      = {}
+pending_timers     = {}
 
 STEP_HANDLERS = {}
 EXTERNAL_HANDLERS = {}
@@ -109,6 +112,146 @@ def handle_medicion(numero, texto):
     except Exception:
         enviar_mensaje(numero, "Por favor ingresa la medida correcta.")
     return True
+
+
+def handle_text_message(numero, texto):
+    now           = datetime.now()
+    last_time     = user_last_activity.get(numero)
+    session_reset = False
+    if last_time and (now - last_time).total_seconds() > SESSION_TIMEOUT:
+        user_steps.pop(numero, None)
+        delete_chat_state(numero)
+        session_reset = True
+    user_last_activity[numero] = now
+
+    if handle_global_command(numero, texto):
+        return
+
+    is_new_user = numero not in user_steps
+    stored_step = user_steps.get(numero, '')
+    if not is_new_user:
+        update_chat_state(numero, stored_step)
+    step = stored_step.strip().lower() if stored_step else 'menu_principal'
+    if is_new_user:
+        conn = get_connection(); c = conn.cursor()
+        c.execute(
+            """
+            SELECT r.respuesta, r.siguiente_step, r.tipo,
+                   GROUP_CONCAT(m.media_url SEPARATOR '||') AS media_urls,
+                   r.opciones, r.rol_keyword
+              FROM reglas r
+              LEFT JOIN regla_medias m ON r.id = m.regla_id
+             WHERE r.step=%s AND r.input_text=%s
+             GROUP BY r.id
+            """,
+            (step,'iniciar')
+        )
+        row = c.fetchone(); conn.close()
+        if row:
+            resp, next_step, tipo_resp, media_urls, opts, rol_kw = row
+            media_list = media_urls.split('||') if media_urls else []
+            if tipo_resp in ['image', 'video', 'audio', 'document'] and media_list:
+                enviar_mensaje(numero, resp, tipo_respuesta=tipo_resp, opciones=media_list[0])
+                for extra in media_list[1:]:
+                    enviar_mensaje(numero, '', tipo_respuesta=tipo_resp, opciones=extra)
+            else:
+                enviar_mensaje(numero, resp, tipo_respuesta=tipo_resp, opciones=opts)
+            if rol_kw:
+                conn2 = get_connection(); c2 = conn2.cursor()
+                c2.execute("SELECT id FROM roles WHERE keyword=%s", (rol_kw,))
+                role = c2.fetchone()
+                if role:
+                    c2.execute(
+                        "INSERT IGNORE INTO chat_roles (numero, role_id) VALUES (%s, %s)",
+                        (numero, role[0])
+                    )
+                    conn2.commit()
+                conn2.close()
+            set_user_step(numero, next_step.strip().lower() if next_step else '')
+    if session_reset:
+        return
+    step = user_steps.get(numero, '').strip().lower()
+
+    handler = STEP_HANDLERS.get(step)
+    if handler and handler(numero, texto):
+        return
+
+    conn = get_connection(); c = conn.cursor()
+    c.execute(
+        """
+        SELECT r.respuesta, r.siguiente_step, r.tipo,
+               GROUP_CONCAT(m.media_url SEPARATOR '||') AS media_urls,
+               r.opciones, r.rol_keyword, r.input_text
+          FROM reglas r
+          LEFT JOIN regla_medias m ON r.id = m.regla_id
+         WHERE r.step=%s
+         GROUP BY r.id
+        """,
+        (step,)
+    )
+    reglas = c.fetchall(); conn.close()
+
+    row = None
+    for resp, next_step, tipo_resp, media_urls, opts, rol_kw, input_db in reglas:
+        media_list = media_urls.split('||') if media_urls else []
+        triggers = [normalize_text(t.strip()) for t in (input_db or '').split(',')]
+        if any(trigger and re.search(rf"\b{re.escape(trigger)}\b", texto) for trigger in triggers):
+            row = (resp, next_step, tipo_resp, media_list, opts, rol_kw)
+            break
+
+    if not row:
+        for resp, next_step, tipo_resp, media_urls, opts, rol_kw, input_db in reglas:
+            media_list = media_urls.split('||') if media_urls else []
+            triggers = [normalize_text(t.strip()) for t in (input_db or '').split(',')]
+            for trigger in triggers:
+                for word in texto.split():
+                    if SequenceMatcher(None, word, trigger).ratio() >= 0.8:
+                        row = (resp, next_step, tipo_resp, media_list, opts, rol_kw)
+                        break
+                if row:
+                    break
+            if row:
+                break
+    if row:
+        resp, next_step, tipo_resp, media_list, opts, rol_kw = row
+        if tipo_resp in ['image', 'video', 'audio', 'document'] and media_list:
+            enviar_mensaje(numero, resp, tipo_respuesta=tipo_resp, opciones=media_list[0])
+            for extra in media_list[1:]:
+                enviar_mensaje(numero, '', tipo_respuesta=tipo_resp, opciones=extra)
+        else:
+            enviar_mensaje(numero, resp, tipo_respuesta=tipo_resp, opciones=opts)
+        if rol_kw:
+            conn2 = get_connection(); c2 = conn2.cursor()
+            c2.execute("SELECT id FROM roles WHERE keyword=%s", (rol_kw,))
+            role = c2.fetchone()
+            if role:
+                c2.execute(
+                    "INSERT IGNORE INTO chat_roles (numero, role_id) VALUES (%s, %s)",
+                    (numero, role[0])
+                )
+                conn2.commit()
+            conn2.close()
+        set_user_step(numero, next_step.strip().lower() if next_step else '')
+    else:
+        guardar_mensaje(
+            numero,
+            "No entendí tu respuesta, intenta de nuevo.",
+            "bot"
+        )
+        update_chat_state(numero, step, 'sin_regla')
+
+
+def process_buffered_messages(numero):
+    textos = pending_texts.get(numero)
+    if not textos:
+        return
+    combined = " ".join(textos)
+    normalized = normalize_text(combined)
+    handle_text_message(numero, normalized)
+    pending_texts.pop(numero, None)
+    timer = pending_timers.pop(numero, None)
+    if timer:
+        timer.cancel()
 
 @webhook_bp.route('/webhook', methods=['GET', 'POST'])
 def webhook():
@@ -272,129 +415,11 @@ def webhook():
                     wa_id=wa_id,
                     reply_to_wa_id=reply_to_id,
                 )
-
-                now           = datetime.now()
-                last_time     = user_last_activity.get(from_number)
-                session_reset = False
-                if last_time and (now - last_time).total_seconds() > SESSION_TIMEOUT:
-                    user_steps.pop(from_number, None)
-                    delete_chat_state(from_number)
-                    session_reset = True
-                user_last_activity[from_number] = now
-
-                if handle_global_command(from_number, normalized_text):
-                    return jsonify({'status': 'handled_global'}), 200
-
-                is_new_user = from_number not in user_steps
-                stored_step = user_steps.get(from_number, '')
-                if not is_new_user:
-                    update_chat_state(from_number, stored_step)
-                step = stored_step.strip().lower() if stored_step else 'menu_principal'
-                if is_new_user:
-                    conn = get_connection(); c = conn.cursor()
-                    c.execute(
-                        """
-                        SELECT r.respuesta, r.siguiente_step, r.tipo,
-                               GROUP_CONCAT(m.media_url SEPARATOR '||') AS media_urls,
-                               r.opciones, r.rol_keyword
-                          FROM reglas r
-                          LEFT JOIN regla_medias m ON r.id = m.regla_id
-                         WHERE r.step=%s AND r.input_text=%s
-                         GROUP BY r.id
-                        """,
-                        (step,'iniciar')
-                    )
-                    row = c.fetchone(); conn.close()
-                    if row:
-                        resp, next_step, tipo_resp, media_urls, opts, rol_kw = row
-                        media_list = media_urls.split('||') if media_urls else []
-                        if tipo_resp in ['image', 'video', 'audio', 'document'] and media_list:
-                            enviar_mensaje(from_number, resp, tipo_respuesta=tipo_resp, opciones=media_list[0])
-                            for extra in media_list[1:]:
-                                enviar_mensaje(from_number, '', tipo_respuesta=tipo_resp, opciones=extra)
-                        else:
-                            enviar_mensaje(from_number, resp, tipo_respuesta=tipo_resp, opciones=opts)
-                        if rol_kw:
-                            conn2 = get_connection(); c2 = conn2.cursor()
-                            c2.execute("SELECT id FROM roles WHERE keyword=%s", (rol_kw,))
-                            role = c2.fetchone()
-                            if role:
-                                c2.execute(
-                                    "INSERT IGNORE INTO chat_roles (numero, role_id) VALUES (%s, %s)",
-                                    (from_number, role[0])
-                                )
-                                conn2.commit()
-                            conn2.close()
-                        set_user_step(from_number, next_step.strip().lower() if next_step else '')
-                if session_reset:
-                    continue
-                step = user_steps.get(from_number, '').strip().lower()
-
-                handler = STEP_HANDLERS.get(step)
-                if handler and handler(from_number, normalized_text):
-                    return jsonify({'status':'handled'}), 200
-
-                conn = get_connection(); c = conn.cursor()
-                c.execute(
-                    """
-                    SELECT r.respuesta, r.siguiente_step, r.tipo,
-                           GROUP_CONCAT(m.media_url SEPARATOR '||') AS media_urls,
-                           r.opciones, r.rol_keyword, r.input_text
-                      FROM reglas r
-                      LEFT JOIN regla_medias m ON r.id = m.regla_id
-                     WHERE r.step=%s
-                     GROUP BY r.id
-                    """,
-                    (step,)
-                )
-                reglas = c.fetchall(); conn.close()
-
-                row = None
-                for resp, next_step, tipo_resp, media_urls, opts, rol_kw, input_db in reglas:
-                    media_list = media_urls.split('||') if media_urls else []
-                    triggers = [normalize_text(t.strip()) for t in (input_db or '').split(',')]
-                    if any(trigger and re.search(rf"\b{re.escape(trigger)}\b", normalized_text) for trigger in triggers):
-                        row = (resp, next_step, tipo_resp, media_list, opts, rol_kw)
-                        break
-
-                if not row:
-                    for resp, next_step, tipo_resp, media_urls, opts, rol_kw, input_db in reglas:
-                        media_list = media_urls.split('||') if media_urls else []
-                        triggers = [normalize_text(t.strip()) for t in (input_db or '').split(',')]
-                        for trigger in triggers:
-                            for word in normalized_text.split():
-                                if SequenceMatcher(None, word, trigger).ratio() >= 0.8:
-                                    row = (resp, next_step, tipo_resp, media_list, opts, rol_kw)
-                                    break
-                            if row:
-                                break
-                        if row:
-                            break
-                if row:
-                    resp, next_step, tipo_resp, media_list, opts, rol_kw = row
-                    if tipo_resp in ['image', 'video', 'audio', 'document'] and media_list:
-                        enviar_mensaje(from_number, resp, tipo_respuesta=tipo_resp, opciones=media_list[0])
-                        for extra in media_list[1:]:
-                            enviar_mensaje(from_number, '', tipo_respuesta=tipo_resp, opciones=extra)
-                    else:
-                        enviar_mensaje(from_number, resp, tipo_respuesta=tipo_resp, opciones=opts)
-                    if rol_kw:
-                        conn2 = get_connection(); c2 = conn2.cursor()
-                        c2.execute("SELECT id FROM roles WHERE keyword=%s", (rol_kw,))
-                        role = c2.fetchone()
-                        if role:
-                            c2.execute(
-                                "INSERT IGNORE INTO chat_roles (numero, role_id) VALUES (%s, %s)",
-                                (from_number, role[0])
-                            )
-                            conn2.commit()
-                        conn2.close()
-                    set_user_step(from_number, next_step.strip().lower() if next_step else '')
-                else:
-                    guardar_mensaje(
-                        from_number,
-                        "No entendí tu respuesta, intenta de nuevo.",
-                        "bot"
-                    )
-                    update_chat_state(from_number, step, 'sin_regla')
+                pending_texts.setdefault(from_number, []).append(normalized_text)
+                if from_number in pending_timers:
+                    pending_timers[from_number].cancel()
+                timer = threading.Timer(60, process_buffered_messages, args=(from_number,))
+                pending_timers[from_number] = timer
+                timer.start()
+                return jsonify({'status': 'buffered'}), 200
     return jsonify({'status':'received'}), 200
