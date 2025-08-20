@@ -57,7 +57,8 @@ def index():
     c.execute(
         """
         SELECT b.id, b.mensaje, b.tipo,
-               GROUP_CONCAT(m.media_url SEPARATOR '||') AS media_urls
+               GROUP_CONCAT(m.media_url SEPARATOR '||') AS media_urls,
+               GROUP_CONCAT(m.media_tipo SEPARATOR '||') AS media_tipos
           FROM botones b
           LEFT JOIN boton_medias m ON b.id = m.boton_id
          GROUP BY b.id
