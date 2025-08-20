@@ -9,8 +9,8 @@ from services.db import get_connection, get_chat_state, update_chat_state
 chat_bp = Blueprint('chat', __name__)
 
 # Carpeta de subida debe coincidir con la de whatsapp_api
-UPLOAD_FOLDER = Config.UPLOAD_FOLDER
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+MEDIA_ROOT = Config.MEDIA_ROOT
+os.makedirs(Config.MEDIA_ROOT, exist_ok=True)
 
 @chat_bp.route('/')
 def index():
@@ -286,7 +286,7 @@ def send_image():
     # Guarda archivo en disco
     filename = secure_filename(img.filename)
     unique   = f"{uuid.uuid4().hex}_{filename}"
-    path = os.path.join(UPLOAD_FOLDER, unique)
+    path = os.path.join(MEDIA_ROOT, unique)
     img.save(path)
 
     # URL pública
@@ -336,7 +336,7 @@ def send_document():
 
     filename = secure_filename(document.filename)
     unique   = f"{uuid.uuid4().hex}_{filename}"
-    path     = os.path.join(UPLOAD_FOLDER, unique)
+    path     = os.path.join(MEDIA_ROOT, unique)
     document.save(path)
 
     doc_url = url_for('static', filename=f'uploads/{unique}', _external=True)
@@ -384,7 +384,7 @@ def send_audio():
     # Guarda archivo en disco
     filename = secure_filename(audio.filename)
     unique   = f"{uuid.uuid4().hex}_{filename}"
-    path = os.path.join(UPLOAD_FOLDER, unique)
+    path = os.path.join(MEDIA_ROOT, unique)
     audio.save(path)
 
     # Envía el audio por la API
@@ -431,7 +431,7 @@ def send_video():
 
     filename = secure_filename(video.filename)
     unique   = f"{uuid.uuid4().hex}_{filename}"
-    path     = os.path.join(UPLOAD_FOLDER, unique)
+    path     = os.path.join(MEDIA_ROOT, unique)
     video.save(path)
 
     tipo_envio = 'bot_video' if origen == 'bot' else 'asesor'

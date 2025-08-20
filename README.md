@@ -130,4 +130,6 @@ Si no se establece, la aplicación usará `http://localhost:8501`.
 
 ## Almacenamiento de medios subidos por el usuario
 
-Los archivos generados por los usuarios (por ejemplo, en `static/uploads/` u otras carpetas de medios) no deben versionarse en Git. Durante los despliegues, mantén estas rutas en un volumen persistente o en un almacenamiento externo para evitar su borrado accidental.
+Los archivos generados por los usuarios se guardan en la ruta indicada por la variable de entorno `MEDIA_ROOT`. Esta ruta debe apuntar a un volumen externo o a un directorio persistente fuera del repositorio. Si no se define, la aplicación usará `static/uploads` dentro del proyecto.
+
+Estos archivos no deben versionarse en Git; durante los despliegues, mantén `MEDIA_ROOT` en un volumen persistente o en un almacenamiento externo para evitar su borrado accidental.

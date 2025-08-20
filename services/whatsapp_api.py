@@ -8,6 +8,7 @@ from services.db import guardar_mensaje
 
 TOKEN    = Config.META_TOKEN
 PHONE_ID = Config.PHONE_NUMBER_ID
+os.makedirs(Config.MEDIA_ROOT, exist_ok=True)
 
 def enviar_mensaje(numero, mensaje, tipo='bot', tipo_respuesta='texto', opciones=None, reply_to_wa_id=None):
     url = f"https://graph.facebook.com/v19.0/{PHONE_ID}/messages"
@@ -185,7 +186,7 @@ def get_media_url(media_id):
 
     ext = resp2.headers.get("Content-Type", "").split("/")[-1] or "bin"
     filename = f"{media_id}.{ext}"
-    path     = os.path.join(Config.UPLOAD_FOLDER, filename)
+    path     = os.path.join(Config.MEDIA_ROOT, filename)
     with open(path, "wb") as f:
         f.write(resp2.content)
 

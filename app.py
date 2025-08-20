@@ -13,7 +13,7 @@ from routes.tablero_routes import tablero_bp
 
 # Carga .env y crea la app
 load_dotenv()
-os.makedirs(Config.UPLOAD_FOLDER, exist_ok=True)
+os.makedirs(Config.MEDIA_ROOT, exist_ok=True)
 app = Flask(__name__)
 app.config.from_object(Config)
 app.secret_key = os.getenv('SECRET_KEY')

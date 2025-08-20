@@ -7,8 +7,8 @@ import os
 import uuid
 
 config_bp = Blueprint('configuracion', __name__)
-UPLOAD_FOLDER = Config.UPLOAD_FOLDER
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+MEDIA_ROOT = Config.MEDIA_ROOT
+os.makedirs(Config.MEDIA_ROOT, exist_ok=True)
 
 def _require_admin():
     # Debe haber usuario logueado y el rol 'admin' en la lista de roles
@@ -121,7 +121,7 @@ def _reglas_view(template_name):
                     if media_file and media_file.filename:
                         filename = secure_filename(media_file.filename)
                         unique = f"{uuid.uuid4().hex}_{filename}"
-                        path = os.path.join(UPLOAD_FOLDER, unique)
+                        path = os.path.join(MEDIA_ROOT, unique)
                         media_file.save(path)
                         url = url_for('static', filename=f'uploads/{unique}', _external=True)
                         medias.append((url, media_file.mimetype))
@@ -260,7 +260,7 @@ def botones():
                     if media_file and media_file.filename:
                         filename = secure_filename(media_file.filename)
                         unique = f"{uuid.uuid4().hex}_{filename}"
-                        path = os.path.join(UPLOAD_FOLDER, unique)
+                        path = os.path.join(MEDIA_ROOT, unique)
                         media_file.save(path)
                         url = url_for('static', filename=f'uploads/{unique}', _external=True)
                         medias.append((url, media_file.mimetype))
