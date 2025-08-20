@@ -6,6 +6,7 @@ from config import Config
 import os
 import uuid
 import re
+import requests
 
 config_bp = Blueprint('configuracion', __name__)
 MEDIA_ROOT = Config.MEDIA_ROOT
@@ -19,6 +20,13 @@ def _require_admin():
 def _normalize_input(text):
     """Normaliza una lista separada por comas."""
     return ','.join(t.strip().lower() for t in (text or '').split(',') if t.strip())
+
+def _url_ok(url):
+    try:
+        r = requests.head(url, allow_redirects=True, timeout=5)
+        return r.status_code == 200
+    except requests.RequestException:
+        return False
 
 def _reglas_view(template_name):
     if not _require_admin():
@@ -61,6 +69,8 @@ def _reglas_view(template_name):
                     # Permitir archivos con columnas opcionales
                     datos = list(fila) + [None] * 11
                     step, input_text, respuesta, siguiente_step, tipo, media_url, media_tipo, opciones, rol_keyword, calculo, handler = datos[:11]
+                    if media_url and not _url_ok(str(media_url)):
+                        media_url = None
                     # Normalizar campos clave
                     step = (step or '').strip().lower()
                     input_text = _normalize_input(input_text)
@@ -90,7 +100,7 @@ def _reglas_view(template_name):
                             (respuesta, siguiente_step, tipo, media_url, media_tipo, opciones, rol_keyword, calculo, handler, regla_id)
                         )
                         c.execute("DELETE FROM regla_medias WHERE regla_id=%s", (regla_id,))
-                        if media_url:
+                        if media_url and _url_ok(media_url):
                             c.execute(
                                 "INSERT INTO regla_medias (regla_id, media_url, media_tipo) VALUES (%s, %s, %s)",
                                 (regla_id, media_url, media_tipo),
@@ -102,7 +112,7 @@ def _reglas_view(template_name):
                             (step, input_text, respuesta, siguiente_step, tipo, media_url, media_tipo, opciones, rol_keyword, calculo, handler)
                         )
                         regla_id = c.lastrowid
-                        if media_url:
+                        if media_url and _url_ok(media_url):
                             c.execute(
                                 "INSERT INTO regla_medias (regla_id, media_url, media_tipo) VALUES (%s, %s, %s)",
                                 (regla_id, media_url, media_tipo),
@@ -128,6 +138,8 @@ def _reglas_view(template_name):
                         medias.append((url, media_file.mimetype))
                 if media_url_field:
                     for url in [u.strip() for u in re.split(r'[\n,]+', media_url_field) if u.strip()]:
+                        if not _url_ok(url):
+                            return f"URL no válida: {url}", 400
                         medias.append((url, None))
                 media_url = medias[0][0] if medias else None
                 media_tipo = medias[0][1] if medias else None

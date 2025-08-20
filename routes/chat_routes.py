@@ -147,7 +147,7 @@ def send_message():
         reply_to_wa_id=reply_to_wa_id,
     )
     if not ok:
-        return jsonify({'error': 'No se pudo enviar el mensaje'}), 500
+        return jsonify({'error': 'URL no válida'}), 400
     row = get_chat_state(numero)
     step = row[0] if row else ''
     update_chat_state(numero, step, 'asesor')
