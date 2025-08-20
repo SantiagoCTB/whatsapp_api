@@ -18,6 +18,7 @@ export default defineConfig({
   },
   build: {
     outDir: '../static',
+    manifest: true,
     rollupOptions: {
       input: resolve(__dirname, 'index.html')
     }
