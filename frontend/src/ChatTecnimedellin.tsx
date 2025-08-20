@@ -40,7 +40,13 @@ const QuickButtons: React.FC<{ buttons: QuickButton[]; onSend: (b: QuickButton) 
   </div>
 );
 
-const ChatTecnimedellin: React.FC = () => {
+interface ChatTecnimedellinProps {
+  role: string | null;
+  roleId: number | null;
+  sessionRoles: string[];
+}
+
+const ChatTecnimedellin: React.FC<ChatTecnimedellinProps> = ({ role, roleId, sessionRoles }) => {
   const [chats, setChats] = useState<ChatSummary[]>([]);
   const [currentChat, setCurrentChat] = useState<string | null>(null);
   const [messages, setMessages] = useState<any[]>([]);
