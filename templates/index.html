@@ -584,7 +584,7 @@
             botoneraEl.innerHTML='';
             btns.forEach((b,i) => {
               const btn = document.createElement('button');
-              btn.textContent = i+1;
+              btn.textContent = b.nombre || i+1;
               btn.onclick = () => {
                 if (!currentChat) return;
                 const urls = (b.media_urls && b.media_urls.length) ? b.media_urls : [null];

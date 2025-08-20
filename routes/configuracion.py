@@ -260,9 +260,10 @@ def botones():
                 for fila in hoja.iter_rows(min_row=2, values_only=True):
                     if not fila:
                         continue
-                    mensaje = fila[0]
-                    tipo = fila[1] if len(fila) > 1 else None
-                    media_url = fila[2] if len(fila) > 2 else None
+                    nombre = fila[0]
+                    mensaje = fila[1] if len(fila) > 1 else None
+                    tipo = fila[2] if len(fila) > 2 else None
+                    media_url = fila[3] if len(fila) > 3 else None
                     medias = []
                     if media_url:
                         urls = [u.strip() for u in re.split(r'[\n,]+', str(media_url)) if u and u.strip()]
@@ -272,8 +273,8 @@ def botones():
                                 medias.append((url, mime))
                     if mensaje:
                         c.execute(
-                            "INSERT INTO botones (mensaje, tipo) VALUES (%s, %s)",
-                            (mensaje, tipo)
+                            "INSERT INTO botones (nombre, mensaje, tipo) VALUES (%s, %s, %s)",
+                            (nombre, mensaje, tipo)
                         )
                         boton_id = c.lastrowid
                         for url, mime in medias:
@@ -284,6 +285,7 @@ def botones():
                 conn.commit()
             # Agregar botón manual
             elif 'mensaje' in request.form:
+                nombre = request.form.get('nombre')
                 nuevo_mensaje = request.form['mensaje']
                 tipo = request.form.get('tipo')
                 media_files = request.files.getlist('media')
@@ -304,8 +306,8 @@ def botones():
                         medias.append((url, mime))
                 if nuevo_mensaje:
                     c.execute(
-                        "INSERT INTO botones (mensaje, tipo) VALUES (%s, %s)",
-                        (nuevo_mensaje, tipo)
+                        "INSERT INTO botones (nombre, mensaje, tipo) VALUES (%s, %s, %s)",
+                        (nombre, nuevo_mensaje, tipo)
                     )
                     boton_id = c.lastrowid
                     for url, mime in medias:
@@ -317,7 +319,7 @@ def botones():
 
         c.execute(
             """
-            SELECT b.id, b.mensaje, b.tipo,
+            SELECT b.id, b.mensaje, b.tipo, b.nombre,
                    GROUP_CONCAT(m.media_url SEPARATOR '||') AS media_urls,
                    GROUP_CONCAT(m.media_tipo SEPARATOR '||') AS media_tipos
               FROM botones b
@@ -352,7 +354,7 @@ def get_botones():
     try:
         c.execute(
             """
-            SELECT b.id, b.mensaje, b.tipo,
+            SELECT b.id, b.mensaje, b.tipo, b.nombre,
                    GROUP_CONCAT(m.media_url SEPARATOR '||') AS media_urls,
                    GROUP_CONCAT(m.media_tipo SEPARATOR '||') AS media_tipos
               FROM botones b
@@ -367,8 +369,9 @@ def get_botones():
                 'id': r[0],
                 'mensaje': r[1],
                 'tipo': r[2],
-                'media_urls': r[3].split('||') if r[3] else [],
-                'media_tipos': r[4].split('||') if r[4] else []
+                'nombre': r[3],
+                'media_urls': r[4].split('||') if r[4] else [],
+                'media_tipos': r[5].split('||') if r[5] else []
             }
             for r in rows
         ])
