@@ -150,8 +150,9 @@
       margin: 8px;         /* Opcional: separación visual */
     }
     #botonera button {
-      flex:0 0 auto; width:36px; height:36px;
-      border:none; border-radius:50%; background:var(--accent);
+      flex:0 0 auto; padding: 8px 16px; min-width: fit-content;
+      border:none; border-radius:8px; background:var(--accent);
+      white-space: nowrap;
       color:var(--text-light); cursor:pointer;
       transition:transform 0.2s,background 0.3s;
     }
