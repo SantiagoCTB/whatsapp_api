@@ -110,6 +110,17 @@ const ChatTecnimedellin: React.FC<ChatTecnimedellinProps> = ({ role, roleId, ses
       .catch(() => setError('Error al obtener los botones'));
   }, [currentChat]);
 
+  const refreshMessages = () => {
+    if (!currentChat) return;
+    fetch(`/get_chat/${currentChat}`)
+      .then(r => r.json())
+      .then(data => {
+        setMessages(data.mensajes || []);
+        setError(null);
+      })
+      .catch(() => setError('Error al cargar el chat'));
+  };
+
   const sendText = () => {
     if (!currentChat || !text.trim()) return;
     fetch('/send_message', {
@@ -120,13 +131,7 @@ const ChatTecnimedellin: React.FC<ChatTecnimedellinProps> = ({ role, roleId, ses
       .then(res => {
         if (res.ok) {
           setText('');
-          fetch(`/get_chat/${currentChat}`)
-            .then(r => r.json())
-            .then(data => {
-              setMessages(data.mensajes || []);
-              setError(null);
-            })
-            .catch(() => setError('Error al cargar el chat'));
+          refreshMessages();
         } else {
           setError('Error al enviar el mensaje');
         }
@@ -153,15 +158,33 @@ const ChatTecnimedellin: React.FC<ChatTecnimedellinProps> = ({ role, roleId, ses
     );
     Promise.all(requests)
       .then(() => {
-        fetch(`/get_chat/${currentChat}`)
-          .then(r => r.json())
-          .then(data => {
-            setMessages(data.mensajes || []);
-            setError(null);
-          })
-          .catch(() => setError('Error al cargar el chat'));
+        refreshMessages();
       })
       .catch(() => setError('Error al enviar el mensaje'));
+  };
+
+  const sendMedia = (
+    e: React.ChangeEvent<HTMLInputElement>,
+    tipo: 'image' | 'audio' | 'video'
+  ) => {
+    if (!currentChat || !e.target.files || !e.target.files.length) return;
+    const file = e.target.files[0];
+    const formData = new FormData();
+    formData.append('numero', currentChat);
+    formData.append(tipo, file);
+    fetch(`/send_${tipo}`, {
+      method: 'POST',
+      body: formData
+    })
+      .then(res => {
+        if (res.ok) {
+          e.target.value = '';
+          refreshMessages();
+        } else {
+          setError('Error al enviar el archivo');
+        }
+      })
+      .catch(() => setError('Error al enviar el archivo'));
   };
 
   return (
@@ -172,6 +195,9 @@ const ChatTecnimedellin: React.FC<ChatTecnimedellinProps> = ({ role, roleId, ses
         <MessageList messages={messages} />
         <QuickButtons buttons={buttons} onSend={sendButton} />
         <div className="input-row">
+          <input type="file" accept="image/*" onChange={e => sendMedia(e, 'image')} />
+          <input type="file" accept="audio/*" onChange={e => sendMedia(e, 'audio')} />
+          <input type="file" accept="video/*" onChange={e => sendMedia(e, 'video')} />
           <input value={text} onChange={e => setText(e.target.value)} placeholder="Mensaje" />
           <button onClick={sendText}>Enviar</button>
         </div>
