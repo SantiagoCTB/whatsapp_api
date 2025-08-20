@@ -17,34 +17,40 @@ def reiniciar_handler(numero, text):
 
     conn = get_connection(); c = conn.cursor()
     c.execute(
-        "SELECT input_text, respuesta, siguiente_step, tipo, opciones, rol_keyword "
-        "FROM reglas WHERE step=%s",
-        ('menu_principal',)
+        """
+        SELECT r.respuesta, r.siguiente_step, r.tipo,
+               GROUP_CONCAT(m.media_url SEPARATOR '||') AS media_urls,
+               r.opciones, r.rol_keyword
+          FROM reglas r
+          LEFT JOIN regla_medias m ON r.id = m.regla_id
+         WHERE r.step=%s AND r.input_text=%s
+         GROUP BY r.id
+        """,
+        ('menu_principal', 'iniciar')
     )
-    reglas = c.fetchall(); conn.close()
+    row = c.fetchone(); conn.close()
 
-    normalized_text = normalize_text(text)
-    for input_db, resp, next_step, tipo_resp, opts, rol_kw in reglas:
-        triggers = [normalize_text(t.strip()) for t in (input_db or '').split(',')]
-        for trigger in triggers:
-            if re.search(rf"\b{re.escape(trigger)}\b", normalized_text):
-                enviar_mensaje(numero, resp, tipo_respuesta=tipo_resp, opciones=opts)
-                if rol_kw:
-                    conn2 = get_connection(); c2 = conn2.cursor()
-                    c2.execute("SELECT id FROM roles WHERE keyword=%s", (rol_kw,))
-                    role = c2.fetchone()
-                    if role:
-                        c2.execute(
-                            "INSERT IGNORE INTO chat_roles (numero, role_id) VALUES (%s, %s)",
-                            (numero, role[0])
-                        )
-                        conn2.commit()
-                    conn2.close()
-                set_user_step(numero, next_step.strip().lower() if next_step else '')
-                break
+    if row:
+        resp, next_step, tipo_resp, media_urls, opts, rol_kw = row
+        media_list = media_urls.split('||') if media_urls else []
+        if tipo_resp in ['image', 'video', 'audio', 'document'] and media_list:
+            enviar_mensaje(numero, resp, tipo_respuesta=tipo_resp, opciones=media_list[0])
+            for extra in media_list[1:]:
+                enviar_mensaje(numero, '', tipo_respuesta=tipo_resp, opciones=extra)
         else:
-            continue
-        break
+            enviar_mensaje(numero, resp, tipo_respuesta=tipo_resp, opciones=opts)
+        if rol_kw:
+            conn2 = get_connection(); c2 = conn2.cursor()
+            c2.execute("SELECT id FROM roles WHERE keyword=%s", (rol_kw,))
+            role = c2.fetchone()
+            if role:
+                c2.execute(
+                    "INSERT IGNORE INTO chat_roles (numero, role_id) VALUES (%s, %s)",
+                    (numero, role[0])
+                )
+                conn2.commit()
+            conn2.close()
+        set_user_step(numero, next_step.strip().lower() if next_step else '')
 
 
 # Registrar comandos por defecto
