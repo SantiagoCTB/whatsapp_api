@@ -5,6 +5,7 @@ from werkzeug.utils import secure_filename
 from config import Config
 import os
 import uuid
+import re
 
 config_bp = Blueprint('configuracion', __name__)
 MEDIA_ROOT = Config.MEDIA_ROOT
@@ -126,7 +127,7 @@ def _reglas_view(template_name):
                         url = url_for('static', filename=f'uploads/{unique}', _external=True)
                         medias.append((url, media_file.mimetype))
                 if media_url_field:
-                    for url in [u.strip() for u in media_url_field.split(',') if u.strip()]:
+                    for url in [u.strip() for u in re.split(r'[\n,]+', media_url_field) if u.strip()]:
                         medias.append((url, None))
                 media_url = medias[0][0] if medias else None
                 media_tipo = medias[0][1] if medias else None
