@@ -1,0 +1,23 @@
+# nixpacks.toml
+providers = ["python", "node"]  # <-- instala ambos toolchains
+
+[phases.setup]
+# Python 3.11 y Node 20 (ajústalo si usas otra versión)
+nixPkgs = ["pkgs.python311", "pkgs.nodejs-20_x"]
+
+[phases.install]
+# Instala dependencias de backend y frontend
+cmds = [
+  "pip install -r requirements.txt",
+  "npm ci --prefix frontend || npm install --prefix frontend"
+]
+
+[phases.build]
+# Compila el React (Vite) en /frontend
+cmds = [
+  "npm run build --prefix frontend"
+]
+
+[start]
+# Arranca tu app (usa $PORT de Railway)
+cmd = "gunicorn app:app --bind 0.0.0.0:$PORT --workers 4"
