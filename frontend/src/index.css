@@ -2,3 +2,27 @@ body {
   margin: 0;
   font-family: sans-serif;
 }
+
+.media-image,
+.media-video {
+  max-width: 200px;
+  border-radius: 4px;
+  display: block;
+}
+
+.media-audio,
+.media-video {
+  width: 100%;
+  max-width: 250px;
+  margin-top: 4px;
+}
+
+.media-link {
+  color: #0066cc;
+  word-break: break-all;
+}
+
+.media-error {
+  color: #d00;
+  font-size: 0.9em;
+}
