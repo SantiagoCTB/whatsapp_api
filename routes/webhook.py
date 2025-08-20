@@ -418,7 +418,7 @@ def webhook():
                 pending_texts.setdefault(from_number, []).append(normalized_text)
                 if from_number in pending_timers:
                     pending_timers[from_number].cancel()
-                timer = threading.Timer(60, process_buffered_messages, args=(from_number,))
+                timer = threading.Timer(15, process_buffered_messages, args=(from_number,))
                 pending_timers[from_number] = timer
                 timer.start()
                 return jsonify({'status': 'buffered'}), 200
