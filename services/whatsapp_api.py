@@ -16,6 +16,7 @@ def enviar_mensaje(numero, mensaje, tipo='bot', tipo_respuesta='texto', opciones
         "Authorization": f"Bearer {TOKEN}",
         "Content-Type": "application/json"
     }
+    media_link = None
 
     if tipo_respuesta == 'texto':
         data = {
@@ -26,6 +27,7 @@ def enviar_mensaje(numero, mensaje, tipo='bot', tipo_respuesta='texto', opciones
         }
 
     elif tipo_respuesta == 'image':
+        media_link = opciones
         data = {
             "messaging_product": "whatsapp",
             "to": numero,
@@ -84,6 +86,7 @@ def enviar_mensaje(numero, mensaje, tipo='bot', tipo_respuesta='texto', opciones
         if mensaje:
             audio_obj["caption"] = mensaje
 
+        media_link = audio_obj.get("link")
         data = {
             "messaging_product": "whatsapp",
             "to": numero,
@@ -102,6 +105,7 @@ def enviar_mensaje(numero, mensaje, tipo='bot', tipo_respuesta='texto', opciones
         if mensaje:
             video_obj["caption"] = mensaje
 
+        media_link = video_obj.get("link")
         data = {
             "messaging_product": "whatsapp",
             "to": numero,
@@ -110,6 +114,7 @@ def enviar_mensaje(numero, mensaje, tipo='bot', tipo_respuesta='texto', opciones
         }
 
     elif tipo_respuesta == 'document':
+        media_link = opciones
         data = {
             "messaging_product": "whatsapp",
             "to": numero,
@@ -131,6 +136,14 @@ def enviar_mensaje(numero, mensaje, tipo='bot', tipo_respuesta='texto', opciones
     if reply_to_wa_id:
         data["context"] = {"message_id": reply_to_wa_id}
 
+    # Validar URLs externas antes de enviar a la API de WhatsApp
+    if media_link and isinstance(media_link, str) and media_link.startswith(('http://', 'https://')):
+        try:
+            check = requests.head(media_link, allow_redirects=True, timeout=5)
+        except requests.RequestException:
+            return False
+        if check.status_code != 200:
+            return False
     resp = requests.post(url, headers=headers, json=data)
     print(f"[WA API] {resp.status_code} — {resp.text}")
     if not resp.ok:
