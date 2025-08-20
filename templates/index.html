@@ -7,8 +7,12 @@
     <script id="session-data" type="application/json">
       {{ session_data | tojson }}
     </script>
-    <script type="module" crossorigin src="{{ url_for('static', filename='assets/index-8254f1bd.js') }}"></script>
-    <link rel="stylesheet" href="{{ url_for('static', filename='assets/index-9bbf22be.css') }}">
+    {% if js_file %}
+    <script type="module" crossorigin src="{{ url_for('static', filename=js_file) }}"></script>
+    {% endif %}
+    {% if css_file %}
+    <link rel="stylesheet" href="{{ url_for('static', filename=css_file) }}">
+    {% endif %}
   </head>
   <body>
     <div id="root"></div>

@@ -1,6 +1,7 @@
 import os
 import uuid
-from flask import Blueprint, render_template, request, redirect, session, url_for, jsonify
+import json
+from flask import Blueprint, render_template, request, redirect, session, url_for, jsonify, current_app
 from werkzeug.utils import secure_filename
 from config import Config
 from services.whatsapp_api import enviar_mensaje
@@ -31,7 +32,16 @@ def index():
         'roleId': role_id,
         'sessionRoles': roles,
     }
-    return render_template('index.html', session_data=session_data)
+
+    manifest_path = os.path.join(current_app.static_folder, 'manifest.json')
+    with open(manifest_path) as f:
+        manifest = json.load(f)
+    entry = manifest.get('index.html', {})
+    js_file = entry.get('file', '')
+    css_files = entry.get('css', [])
+    css_file = css_files[0] if css_files else ''
+
+    return render_template('index.html', session_data=session_data, js_file=js_file, css_file=css_file)
 
 @chat_bp.route('/get_chat/<numero>')
 def get_chat(numero):

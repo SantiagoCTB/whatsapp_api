@@ -23,3 +23,4 @@ node_modules/
 static/assets/
 frontend/dist/
 static/index.html
+static/manifest.json
