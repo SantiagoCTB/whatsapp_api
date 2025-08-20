@@ -316,7 +316,8 @@ def botones():
         c.execute(
             """
             SELECT b.id, b.mensaje, b.tipo,
-                   GROUP_CONCAT(m.media_url SEPARATOR '||') AS media_urls
+                   GROUP_CONCAT(m.media_url SEPARATOR '||') AS media_urls,
+                   GROUP_CONCAT(m.media_tipo SEPARATOR '||') AS media_tipos
               FROM botones b
               LEFT JOIN boton_medias m ON b.id = m.boton_id
              GROUP BY b.id
@@ -350,7 +351,8 @@ def get_botones():
         c.execute(
             """
             SELECT b.id, b.mensaje, b.tipo,
-                   GROUP_CONCAT(m.media_url SEPARATOR '||') AS media_urls
+                   GROUP_CONCAT(m.media_url SEPARATOR '||') AS media_urls,
+                   GROUP_CONCAT(m.media_tipo SEPARATOR '||') AS media_tipos
               FROM botones b
               LEFT JOIN boton_medias m ON b.id = m.boton_id
              GROUP BY b.id
@@ -363,7 +365,8 @@ def get_botones():
                 'id': r[0],
                 'mensaje': r[1],
                 'tipo': r[2],
-                'media_urls': r[3].split('||') if r[3] else []
+                'media_urls': r[3].split('||') if r[3] else [],
+                'media_tipos': r[4].split('||') if r[4] else []
             }
             for r in rows
         ])
