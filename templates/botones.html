@@ -62,14 +62,19 @@
         <label for="mensaje">Nuevo mensaje:</label>
         <input type="text" name="mensaje" required>
         <label for="tipo">Tipo de medio:</label>
-        <select name="tipo">
+        <select name="tipo" id="tipo">
             <option value="texto">Texto</option>
             <option value="image">Imagen</option>
             <option value="video">Video</option>
             <option value="audio">Audio</option>
             <option value="document">PDF</option>
         </select>
-        <input type="file" name="media[]" multiple>
+
+        <label for="media" id="label_media_file" style="display:none;">Subir archivo:</label>
+        <input type="file" id="media" name="media[]" multiple style="display:none;">
+
+        <label for="media_url" id="label_media_url" style="display:none;">URLs de archivos (separadas por comas o saltos de línea):</label>
+        <textarea id="media_url" name="media_url" style="display:none;" placeholder="URL1, URL2&#10;URL3"></textarea>
         <button type="submit">Agregar botón</button>
     </form>
 
@@ -111,5 +116,23 @@
         </tr>
         {% endfor %}
     </table>
+    <script>
+    function toggleMediaFields() {
+        const tipo = document.getElementById('tipo').value;
+        const show = ['image', 'video', 'audio', 'document'].includes(tipo);
+        const mediaInput = document.getElementById('media');
+        const mediaUrl   = document.getElementById('media_url');
+        mediaInput.style.display = show ? 'block' : 'none';
+        document.getElementById('label_media_file').style.display = show ? 'block' : 'none';
+        mediaUrl.style.display = show ? 'block' : 'none';
+        document.getElementById('label_media_url').style.display = show ? 'block' : 'none';
+        if (!show) {
+            mediaInput.value = '';
+            mediaUrl.value = '';
+        }
+    }
+    document.getElementById('tipo').addEventListener('change', toggleMediaFields);
+    window.addEventListener('DOMContentLoaded', toggleMediaFields);
+    </script>
 </body>
 </html>
