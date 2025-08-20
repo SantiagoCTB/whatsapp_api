@@ -25,7 +25,7 @@ def _url_ok(url):
     try:
         r = requests.head(url, allow_redirects=True, timeout=5)
         ok = r.status_code == 200
-        mime = r.headers.get('Content-Type') if ok else None
+        mime = r.headers.get('Content-Type', '').split(';', 1)[0] if ok else None
         return ok, mime
     except requests.RequestException:
         return False, None
@@ -80,6 +80,8 @@ def _reglas_view(template_name):
                             media_tipo = None
                         else:
                             media_tipo = media_tipo or detected_type
+                    if media_tipo:
+                        media_tipo = str(media_tipo).split(';', 1)[0]
                     # Normalizar campos clave
                     step = (step or '').strip().lower()
                     input_text = _normalize_input(input_text)
@@ -144,7 +146,7 @@ def _reglas_view(template_name):
                         path = os.path.join(MEDIA_ROOT, unique)
                         media_file.save(path)
                         url = url_for('static', filename=f'uploads/{unique}', _external=True)
-                        medias.append((url, media_file.mimetype))
+                        medias.append((url, media_file.mimetype.split(';', 1)[0]))
                 if media_url_field:
                     for url in [u.strip() for u in re.split(r'[\n,]+', media_url_field) if u.strip()]:
                         ok, content_type = _url_ok(url)
@@ -293,7 +295,7 @@ def botones():
                         path = os.path.join(MEDIA_ROOT, unique)
                         media_file.save(path)
                         url = url_for('static', filename=f'uploads/{unique}', _external=True)
-                        medias.append((url, media_file.mimetype))
+                        medias.append((url, media_file.mimetype.split(';', 1)[0]))
                 media_url = request.form.get('media_url', '')
                 urls = [u.strip() for u in re.split(r'[\n,]+', media_url) if u and u.strip()]
                 for url in urls:
