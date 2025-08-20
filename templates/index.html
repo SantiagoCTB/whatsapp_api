@@ -4,9 +4,13 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Chat Tecnimedellín</title>
+    <script id="session-data" type="application/json">
+      {{ session_data | tojson }}
+    </script>
+    <script type="module" crossorigin src="{{ url_for('static', filename='assets/index-8254f1bd.js') }}"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='assets/index-9bbf22be.css') }}">
   </head>
   <body>
     <div id="root"></div>
-    <!-- La aplicación React generada por Vite se montará en este elemento -->
   </body>
 </html>

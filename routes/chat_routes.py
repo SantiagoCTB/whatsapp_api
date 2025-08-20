@@ -16,7 +16,22 @@ os.makedirs(Config.MEDIA_ROOT, exist_ok=True)
 def index():
     if "user" not in session:
         return redirect(url_for("auth.login"))
-    return render_template('index.html')
+    rol = session.get('rol')
+    roles = session.get('roles', [])
+    role_id = None
+    if rol and rol != 'admin':
+        conn = get_connection()
+        c = conn.cursor()
+        c.execute("SELECT id FROM roles WHERE keyword=%s", (rol,))
+        row = c.fetchone()
+        conn.close()
+        role_id = row[0] if row else None
+    session_data = {
+        'role': rol,
+        'roleId': role_id,
+        'sessionRoles': roles,
+    }
+    return render_template('index.html', session_data=session_data)
 
 @chat_bp.route('/get_chat/<numero>')
 def get_chat(numero):
