@@ -14,61 +14,9 @@ os.makedirs(Config.MEDIA_ROOT, exist_ok=True)
 
 @chat_bp.route('/')
 def index():
-    # Autenticación
     if "user" not in session:
         return redirect(url_for("auth.login"))
-
-    conn = get_connection()
-    c    = conn.cursor()
-    rol  = session.get('rol')
-    c.execute("SELECT id FROM roles WHERE keyword=%s", (rol,))
-    row = c.fetchone()
-    role_id = row[0] if row else None
-
-    # Lista de chats únicos filtrados por rol
-    if rol == 'admin':
-        c.execute("SELECT DISTINCT numero FROM mensajes")
-    else:
-        c.execute(
-            """
-            SELECT DISTINCT m.numero
-            FROM mensajes m
-            INNER JOIN chat_roles cr ON m.numero = cr.numero
-            WHERE cr.role_id = %s
-            """,
-            (role_id,)
-        )
-    numeros = [row[0] for row in c.fetchall()]
-
-    chats = []
-    for numero in numeros:
-        # Último mensaje para determinar si requiere asesor
-        c.execute(
-            "SELECT mensaje FROM mensajes WHERE numero = %s "
-            "ORDER BY timestamp DESC LIMIT 1",
-            (numero,)
-        )
-        fila = c.fetchone()
-        ultimo = fila[0] if fila else ""
-        requiere_asesor = "asesor" in ultimo.lower()
-        chats.append((numero, requiere_asesor))
-
-    # Botones configurados
-    c.execute(
-        """
-        SELECT b.id, b.mensaje, b.tipo,
-               GROUP_CONCAT(m.media_url SEPARATOR '||') AS media_urls,
-               GROUP_CONCAT(m.media_tipo SEPARATOR '||') AS media_tipos
-          FROM botones b
-          LEFT JOIN boton_medias m ON b.id = m.boton_id
-         GROUP BY b.id
-         ORDER BY b.id
-        """
-    )
-    botones = c.fetchall()
-
-    conn.close()
-    return render_template('index.html', chats=chats, botones=botones, rol=rol, role_id=role_id)
+    return render_template('index.html')
 
 @chat_bp.route('/get_chat/<numero>')
 def get_chat(numero):
