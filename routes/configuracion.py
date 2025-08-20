@@ -24,9 +24,9 @@ def _normalize_input(text):
 def _url_ok(url):
     try:
         r = requests.head(url, allow_redirects=True, timeout=5)
-        if r.status_code == 200:
-            return True, r.headers.get('Content-Type')
-        return False, None
+        ok = r.status_code == 200
+        mime = r.headers.get('Content-Type') if ok else None
+        return ok, mime
     except requests.RequestException:
         return False, None
 
@@ -261,16 +261,23 @@ def botones():
                     mensaje = fila[0]
                     tipo = fila[1] if len(fila) > 1 else None
                     media_url = fila[2] if len(fila) > 2 else None
+                    medias = []
+                    if media_url:
+                        urls = [u.strip() for u in re.split(r'[\n,]+', str(media_url)) if u and u.strip()]
+                        for url in urls:
+                            ok, mime = _url_ok(url)
+                            if ok:
+                                medias.append((url, mime))
                     if mensaje:
                         c.execute(
                             "INSERT INTO botones (mensaje, tipo) VALUES (%s, %s)",
                             (mensaje, tipo)
                         )
                         boton_id = c.lastrowid
-                        if media_url:
+                        for url, mime in medias:
                             c.execute(
                                 "INSERT INTO boton_medias (boton_id, media_url, media_tipo) VALUES (%s, %s, %s)",
-                                (boton_id, media_url, None)
+                                (boton_id, url, mime)
                             )
                 conn.commit()
             # Agregar botón manual
@@ -287,6 +294,12 @@ def botones():
                         media_file.save(path)
                         url = url_for('static', filename=f'uploads/{unique}', _external=True)
                         medias.append((url, media_file.mimetype))
+                media_url = request.form.get('media_url', '')
+                urls = [u.strip() for u in re.split(r'[\n,]+', media_url) if u and u.strip()]
+                for url in urls:
+                    ok, mime = _url_ok(url)
+                    if ok:
+                        medias.append((url, mime))
                 if nuevo_mensaje:
                     c.execute(
                         "INSERT INTO botones (mensaje, tipo) VALUES (%s, %s)",
