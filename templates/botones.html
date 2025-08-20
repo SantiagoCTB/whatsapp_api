@@ -60,7 +60,7 @@
 
     <form method="POST" enctype="multipart/form-data">
         <label for="mensaje">Nuevo mensaje:</label>
-        <input type="text" name="mensaje" required>
+        <textarea name="mensaje" rows="3" required></textarea>
         <label for="tipo">Tipo de medio:</label>
         <select name="tipo" id="tipo">
             <option value="texto">Texto</option>
@@ -103,11 +103,12 @@
 
     <h3>Botones actuales</h3>
     <table>
-        <tr><th>ID</th><th>Mensaje</th><th>Acción</th></tr>
+        <tr><th>ID</th><th>Mensaje</th><th>URLs</th><th>Acción</th></tr>
         {% for b in botones %}
         <tr>
             <td>{{ b[0] }}</td>
-            <td>{{ b[1] }}</td>
+            <td style="white-space: pre-line;">{{ b[1] }}</td>
+            <td style="word-break: break-all;">{{ b[3]|default('')|replace('||', '<br>')|safe }}</td>
             <td>
                 <form method="POST" action="{{ url_for('configuracion.eliminar_boton', boton_id=b[0]) }}">
                     <button class="delete-btn" type="submit">Eliminar</button>
