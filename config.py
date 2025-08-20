@@ -18,5 +18,5 @@ class Config:
     DB_PASSWORD = os.getenv('DB_PASSWORD')
     DB_NAME     = os.getenv('DB_NAME')
 
-    BASEDIR       = os.path.dirname(os.path.abspath(__file__))
-    UPLOAD_FOLDER = os.path.join(BASEDIR, 'static', 'uploads')
+    BASEDIR    = os.path.dirname(os.path.abspath(__file__))
+    MEDIA_ROOT = os.getenv("MEDIA_ROOT", os.path.join(BASEDIR, "static", "uploads"))

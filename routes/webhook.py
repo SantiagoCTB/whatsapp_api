@@ -48,7 +48,7 @@ def set_user_step(numero, step, estado='espera_usuario'):
     user_steps[numero] = step
     update_chat_state(numero, step, estado)
 
-os.makedirs(Config.UPLOAD_FOLDER, exist_ok=True)
+os.makedirs(Config.MEDIA_ROOT, exist_ok=True)
 
 
 @register_handler('barra_medida')
@@ -173,7 +173,7 @@ def webhook():
 
                     audio_bytes = download_audio(media_id)
                     filename = f"{media_id}.{ext}"
-                    path = os.path.join(Config.UPLOAD_FOLDER, filename)
+                    path = os.path.join(Config.MEDIA_ROOT, filename)
                     with open(path, 'wb') as f:
                         f.write(audio_bytes)
 
@@ -213,7 +213,7 @@ def webhook():
                     # 1) Descarga bytes y guardar en static/uploads
                     media_bytes = download_audio(media_id)
                     filename    = f"{media_id}.{ext}"
-                    path        = os.path.join(Config.UPLOAD_FOLDER, filename)
+                    path        = os.path.join(Config.MEDIA_ROOT, filename)
                     with open(path, 'wb') as f:
                         f.write(media_bytes)
 
