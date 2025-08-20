@@ -191,7 +191,8 @@ def init_db():
       id INT AUTO_INCREMENT PRIMARY KEY,
       mensaje   TEXT NOT NULL,
       tipo      VARCHAR(50),
-      media_url TEXT
+      media_url TEXT,
+      nombre    VARCHAR(100)
     ) ENGINE=InnoDB;
     """)
     # Migración defensiva para columnas nuevas
@@ -201,6 +202,9 @@ def init_db():
     c.execute("SHOW COLUMNS FROM botones LIKE 'media_url';")
     if not c.fetchone():
         c.execute("ALTER TABLE botones ADD COLUMN media_url TEXT NULL;")
+    c.execute("SHOW COLUMNS FROM botones LIKE 'nombre';")
+    if not c.fetchone():
+        c.execute("ALTER TABLE botones ADD COLUMN nombre VARCHAR(100) NULL;")
 
     # boton_medias: soporta múltiples archivos por botón
     c.execute("""
