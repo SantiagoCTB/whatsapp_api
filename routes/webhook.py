@@ -1,4 +1,5 @@
 import os
+import re
 from flask import Blueprint, request, jsonify, url_for
 from datetime import datetime
 from difflib import SequenceMatcher
@@ -13,6 +14,7 @@ from services.db import (
 from services.whatsapp_api import download_audio, get_media_url, enviar_mensaje
 from services.global_commands import handle_global_command
 from services.job_queue import enqueue_transcription
+from services.normalize_text import normalize_text
 
 webhook_bp = Blueprint('webhook', __name__)
 
@@ -259,14 +261,16 @@ def webhook():
 
                 # TEXTO / INTERACTIVO
                 if 'text' in msg:
-                    text = msg['text']['body'].strip().lower()
+                    text = msg['text']['body'].strip()
                 elif 'interactive' in msg:
                     text = (
                         msg['interactive'].get('list_reply', {}).get('title') or
                         msg['interactive'].get('button_reply', {}).get('title') or ''
-                    ).strip().lower()
+                    ).strip()
                 else:
                     continue
+
+                normalized_text = normalize_text(text)
 
                 guardar_mensaje(
                     from_number,
@@ -287,7 +291,7 @@ def webhook():
                     delete_chat_state(from_number)
                 user_last_activity[from_number] = now
 
-                if handle_global_command(from_number, text):
+                if handle_global_command(from_number, normalized_text):
                     return jsonify({'status': 'handled_global'}), 200
 
                 is_new_user = from_number not in user_steps
@@ -332,10 +336,9 @@ def webhook():
                             conn2.close()
                         set_user_step(from_number, next_step.strip().lower() if next_step else '')
                 step = user_steps.get(from_number, '').strip().lower()
-                text = text.strip().lower()
 
                 handler = STEP_HANDLERS.get(step)
-                if handler and handler(from_number, text):
+                if handler and handler(from_number, normalized_text):
                     return jsonify({'status':'handled'}), 200
 
                 conn = get_connection(); c = conn.cursor()
@@ -356,16 +359,17 @@ def webhook():
                 row = None
                 for resp, next_step, tipo_resp, media_urls, opts, rol_kw, input_db in reglas:
                     media_list = media_urls.split('||') if media_urls else []
-                    triggers = [t.strip() for t in (input_db or '').split(',')]
-                    if any(trigger and trigger in text for trigger in triggers):
+                    triggers = [normalize_text(t.strip()) for t in (input_db or '').split(',')]
+                    if any(trigger and re.search(rf"\b{re.escape(trigger)}\b", normalized_text) for trigger in triggers):
                         row = (resp, next_step, tipo_resp, media_list, opts, rol_kw)
                         break
 
                 if not row:
                     for resp, next_step, tipo_resp, media_urls, opts, rol_kw, input_db in reglas:
                         media_list = media_urls.split('||') if media_urls else []
-                        for trigger in (t.strip() for t in (input_db or '').split(',')):
-                            for word in text.split():
+                        triggers = [normalize_text(t.strip()) for t in (input_db or '').split(',')]
+                        for trigger in triggers:
+                            for word in normalized_text.split():
                                 if SequenceMatcher(None, word, trigger).ratio() >= 0.8:
                                     row = (resp, next_step, tipo_resp, media_list, opts, rol_kw)
                                     break
