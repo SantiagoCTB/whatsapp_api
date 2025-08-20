@@ -15,3 +15,11 @@ __pycache__/
 static/uploads/
 uploads/
 media/
+
+# Dependencias de Node.js
+node_modules/
+
+# Artefactos de build del frontend
+static/assets/
+frontend/dist/
+static/index.html
