@@ -273,15 +273,13 @@ def webhook():
                     reply_to_wa_id=reply_to_id,
                 )
 
-                now       = datetime.now()
-                last_time = user_last_activity.get(from_number)
+                now           = datetime.now()
+                last_time     = user_last_activity.get(from_number)
+                session_reset = False
                 if last_time and (now - last_time).total_seconds() > SESSION_TIMEOUT:
-                    enviar_mensaje(
-                        from_number,
-                        "Muchas gracias por comunicarte. La sesión terminó por inactividad."
-                    )
                     user_steps.pop(from_number, None)
                     delete_chat_state(from_number)
+                    session_reset = True
                 user_last_activity[from_number] = now
 
                 if handle_global_command(from_number, normalized_text):
@@ -328,6 +326,8 @@ def webhook():
                                 conn2.commit()
                             conn2.close()
                         set_user_step(from_number, next_step.strip().lower() if next_step else '')
+                if session_reset:
+                    continue
                 step = user_steps.get(from_number, '').strip().lower()
 
                 handler = STEP_HANDLERS.get(step)
