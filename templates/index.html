@@ -588,12 +588,12 @@
               btn.onclick = () => {
                 if (!currentChat) return;
                 const urls = (b.media_urls && b.media_urls.length) ? b.media_urls : [null];
-                const envios = urls.map(url => fetch('/send_message', {
+                const envios = urls.map((url, index) => fetch('/send_message', {
                   method:'POST',
                   headers:{'Content-Type':'application/json'},
                   body:JSON.stringify({
                     numero: currentChat,
-                    mensaje: b.mensaje,
+                    mensaje: index === 0 ? b.mensaje : '',
                     tipo_respuesta: b.tipo,
                     opciones: url,
                     reply_to_wa_id: replyTo
