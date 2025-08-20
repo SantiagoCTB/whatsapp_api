@@ -28,8 +28,9 @@ const MessageList: React.FC<{ messages: any[] }> = ({ messages }) => (
   <div className="messages">
     {messages.map((m, i) => {
       const [text, tipo, mediaUrl] = m;
+      const waId = m[8];
       return (
-        <div key={i} className={`bubble ${tipo}`}>
+        <div key={waId ?? i} className={`bubble ${tipo}`}>
           {text && <span>{text}</span>}
           {mediaUrl && <MediaContent tipo={tipo} url={mediaUrl} />}
         </div>
