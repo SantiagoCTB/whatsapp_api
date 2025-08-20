@@ -127,3 +127,7 @@ procesamiento normal cuando un comando es reconocido.
 
 Para apuntar a una URL de Streamlit distinta a la predeterminada, define la variable de entorno `STREAMLIT_URL` durante el despliegue.
 Si no se establece, la aplicación usará `http://localhost:8501`.
+
+## Almacenamiento de medios subidos por el usuario
+
+Los archivos generados por los usuarios (por ejemplo, en `static/uploads/` u otras carpetas de medios) no deben versionarse en Git. Durante los despliegues, mantén estas rutas en un volumen persistente o en un almacenamiento externo para evitar su borrado accidental.
