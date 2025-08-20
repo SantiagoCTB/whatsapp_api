@@ -65,7 +65,7 @@ Python 3 y Flask
 
 WhatsApp Cloud API (v17+)
 
-SQLite como base de datos ligera local
+MySQL como base de datos principal (SQLite opcional para desarrollo)
 
 HTML + Jinja2 + JavaScript en el frontend
 
@@ -127,6 +127,12 @@ procesamiento normal cuando un comando es reconocido.
 
 Para apuntar a una URL de Streamlit distinta a la predeterminada, define la variable de entorno `STREAMLIT_URL` durante el despliegue.
 Si no se establece, la aplicación usará `http://localhost:8501`.
+
+## Ubicación de la base de datos
+
+La aplicación almacena los datos en un servidor MySQL. Los antiguos archivos de SQLite (`database.db` y `chat_support.db`) se crean en la raíz del proyecto y están excluidos del repositorio.
+
+Si se utilizan para pruebas locales, realiza copias de seguridad en un almacenamiento externo y evita versionarlos.
 
 ## Almacenamiento de medios subidos por el usuario
 
