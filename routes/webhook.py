@@ -391,6 +391,10 @@ def webhook():
                         conn2.close()
                     set_user_step(from_number, next_step.strip().lower() if next_step else '')
                 else:
-                    enviar_mensaje(from_number, "No entendí tu respuesta, intenta de nuevo.")
+                    guardar_mensaje(
+                        from_number,
+                        "No entendí tu respuesta, intenta de nuevo.",
+                        "bot"
+                    )
                     update_chat_state(from_number, step, 'sin_regla')
     return jsonify({'status':'received'}), 200
