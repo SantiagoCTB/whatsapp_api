@@ -118,7 +118,7 @@ Para agregar un nuevo comando:
 
 1. Edita `services/global_commands.py`.
 2. Crea una función que reciba el número del usuario y realice la acción deseada.
-3. Registra la función en el diccionario `GLOBAL_COMMANDS` asociándola a la palabra clave.
+3. Registra la función en el diccionario `GLOBAL_COMMANDS` usando la palabra clave normalizada con `normalize_text`.
 
 La función `handle_global_command` es llamada desde `routes/webhook.py` y detiene el
 procesamiento normal cuando un comando es reconocido.
