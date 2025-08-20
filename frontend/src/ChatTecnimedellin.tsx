@@ -80,21 +80,34 @@ const ChatTecnimedellin: React.FC<ChatTecnimedellinProps> = ({ role, roleId, ses
   const [messages, setMessages] = useState<any[]>([]);
   const [text, setText] = useState('');
   const [buttons, setButtons] = useState<QuickButton[]>([]);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     fetch('/get_chat_list')
       .then(r => r.json())
-      .then(setChats);
+      .then(data => {
+        setChats(data);
+        setError(null);
+      })
+      .catch(() => setError('Error al obtener la lista de chats'));
   }, []);
 
   useEffect(() => {
     if (!currentChat) return;
     fetch(`/get_chat/${currentChat}`)
       .then(r => r.json())
-      .then(data => setMessages(data.mensajes || []));
+      .then(data => {
+        setMessages(data.mensajes || []);
+        setError(null);
+      })
+      .catch(() => setError('Error al cargar el chat'));
     fetch('/get_botones')
       .then(r => r.json())
-      .then(setButtons);
+      .then(data => {
+        setButtons(data);
+        setError(null);
+      })
+      .catch(() => setError('Error al obtener los botones'));
   }, [currentChat]);
 
   const sendText = () => {
@@ -103,37 +116,57 @@ const ChatTecnimedellin: React.FC<ChatTecnimedellinProps> = ({ role, roleId, ses
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ numero: currentChat, mensaje: text })
-    }).then(res => {
-      if (res.ok) {
-        setText('');
-        fetch(`/get_chat/${currentChat}`)
-          .then(r => r.json())
-          .then(data => setMessages(data.mensajes || []));
-      }
-    });
+    })
+      .then(res => {
+        if (res.ok) {
+          setText('');
+          fetch(`/get_chat/${currentChat}`)
+            .then(r => r.json())
+            .then(data => {
+              setMessages(data.mensajes || []);
+              setError(null);
+            })
+            .catch(() => setError('Error al cargar el chat'));
+        } else {
+          setError('Error al enviar el mensaje');
+        }
+      })
+      .catch(() => setError('Error al enviar el mensaje'));
   };
 
   const sendButton = (b: QuickButton) => {
     if (!currentChat) return;
     const urls = b.media_urls && b.media_urls.length ? b.media_urls : [null];
-    Promise.all(urls.map((url, index) => fetch('/send_message', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        numero: currentChat,
-        mensaje: index === 0 ? b.mensaje : '',
-        tipo_respuesta: b.tipo,
-        opciones: url
+    const requests = urls.map((url, index) =>
+      fetch('/send_message', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          numero: currentChat,
+          mensaje: index === 0 ? b.mensaje : '',
+          tipo_respuesta: b.tipo,
+          opciones: url
+        })
+      }).catch(() => {
+        throw new Error('send error');
       })
-    }))).then(() => {
-      fetch(`/get_chat/${currentChat}`)
-        .then(r => r.json())
-        .then(data => setMessages(data.mensajes || []));
-    });
+    );
+    Promise.all(requests)
+      .then(() => {
+        fetch(`/get_chat/${currentChat}`)
+          .then(r => r.json())
+          .then(data => {
+            setMessages(data.mensajes || []);
+            setError(null);
+          })
+          .catch(() => setError('Error al cargar el chat'));
+      })
+      .catch(() => setError('Error al enviar el mensaje'));
   };
 
   return (
     <div className="chat-container">
+      {error && <div className="error-notification">{error}</div>}
       <ChatList chats={chats} current={currentChat} onSelect={setCurrentChat} />
       <div className="chat-area">
         <MessageList messages={messages} />
