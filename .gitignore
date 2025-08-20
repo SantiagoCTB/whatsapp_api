@@ -10,3 +10,8 @@
 *.log
 __pycache__/
 *.pyc
+
+# Medios generados por los usuarios
+static/uploads/
+uploads/
+media/
