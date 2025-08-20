@@ -1,5 +1,6 @@
 import os
 import re
+import logging
 from flask import Blueprint, request, jsonify, url_for
 from datetime import datetime
 from difflib import SequenceMatcher
@@ -198,17 +199,9 @@ def webhook():
                         db_id,
                     )
                     if queued:
-                        enviar_mensaje(
-                            from_number,
-                            "Tu audio está siendo procesado.",
-                            tipo='bot'
-                        )
+                        logging.info("Audio encolado para transcripción: %s", media_id)
                     else:
-                        enviar_mensaje(
-                            from_number,
-                            "El servicio está temporalmente fuera de línea. Inténtalo más tarde.",
-                            tipo='bot'
-                        )
+                        logging.warning("No se pudo encolar audio %s para transcripción", media_id)
                     continue
 
                 if msg_type == 'video':
@@ -239,8 +232,8 @@ def webhook():
                         mime_type=mime_clean
                     )
 
-                    # 4) Confirmación al cliente
-                    enviar_mensaje(from_number, "Video recibido correctamente.", tipo='bot')
+                    # 4) Registro interno
+                    logging.info("Video recibido: %s", media_id)
                     continue
 
                 # IMAGEN
@@ -256,7 +249,7 @@ def webhook():
                         media_id=media_id,
                         media_url=media_url
                     )
-                    enviar_mensaje(from_number, "Imagen recibida correctamente.", tipo='bot')
+                    logging.info("Imagen recibida: %s", media_id)
                     continue
 
                 # TEXTO / INTERACTIVO
