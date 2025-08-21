@@ -1,13 +1,11 @@
 import React from 'react';
+import QuickActions from './QuickActions';
 
 interface MessageInputProps {
   text: string;
   onTextChange: (value: string) => void;
   onSendText: () => void;
-  onSendMedia: (
-    e: React.ChangeEvent<HTMLInputElement>,
-    tipo: 'image' | 'audio' | 'video'
-  ) => void;
+  onSendMedia: (file: File, tipo: 'image' | 'audio' | 'video') => Promise<void>;
 }
 
 const MessageInput: React.FC<MessageInputProps> = ({
@@ -17,9 +15,7 @@ const MessageInput: React.FC<MessageInputProps> = ({
   onSendMedia,
 }) => (
   <div className="flex items-center gap-2 p-2 border-t">
-    <input type="file" accept="image/*" onChange={e => onSendMedia(e, 'image')} />
-    <input type="file" accept="audio/*" onChange={e => onSendMedia(e, 'audio')} />
-    <input type="file" accept="video/*" onChange={e => onSendMedia(e, 'video')} />
+    <QuickActions onSendMedia={onSendMedia} />
     <input
       value={text}
       onChange={e => onTextChange(e.target.value)}
