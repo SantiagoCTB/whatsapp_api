@@ -35,14 +35,20 @@ const MessageList: React.FC<MessageListProps> = ({ messages }) => {
   return (
     <div className="flex-1 p-2 overflow-y-auto">
       {messages.map((m, i) => {
+        const base = 'max-w-[70%] p-2 my-1 rounded-lg break-words transition-opacity duration-300 animate-fade-in';
+        const isBot =
+          m.tipo === 'bot' ||
+          m.tipo === 'asesor' ||
+          m.tipo?.startsWith('bot_') ||
+          m.tipo?.startsWith('asesor_');
+        const isAdmin = m.tipo === 'admin' || m.tipo?.startsWith('admin_');
         const bubbleClass = [
-          'max-w-[70%] p-2 my-1 rounded-lg break-words',
-          (m.tipo === 'bot' || m.tipo === 'asesor' || m.tipo?.startsWith('bot_') || m.tipo?.startsWith('asesor_'))
-            ? 'bg-primary self-end text-white'
-            : 'bg-white border self-start'
+          base,
+          isBot ? 'bg-bubble-bot self-end' : isAdmin ? 'bg-bubble-admin self-end' : 'bg-bubble-user self-start'
         ].join(' ');
+        const label = isBot ? 'bot' : isAdmin ? 'admin' : 'usuario';
         return (
-          <div key={m.waId ?? i} className={bubbleClass}>
+          <div key={m.waId ?? i} className={bubbleClass} role="status" aria-label={`Mensaje de ${label}`}>
             {m.text && <span>{m.text}</span>}
             {m.mediaUrl && <MediaContent tipo={m.tipo} url={m.mediaUrl} />}
           </div>
