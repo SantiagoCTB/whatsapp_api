@@ -1,3 +1,13 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --color-primary: #22c55e;
+  --color-secondary: #16a34a;
+  --shadow-elegant: 0 4px 6px rgba(0, 0, 0, 0.1), 0 2px 4px rgba(0, 0, 0, 0.06);
+}
+
 body {
   margin: 0;
   font-family: sans-serif;

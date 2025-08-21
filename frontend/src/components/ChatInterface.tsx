@@ -13,10 +13,14 @@ interface QuickButton {
 }
 
 const ChatList: React.FC<{ chats: ChatSummary[]; current: string | null; onSelect: (n: string) => void }> = ({ chats, current, onSelect }) => (
-  <aside className="chat-list">
+  <aside className="flex flex-col w-64 bg-secondary shadow-elegant overflow-y-auto">
     <ul>
       {chats.map(c => (
-        <li key={c.numero} className={current === c.numero ? 'active' : ''} onClick={() => onSelect(c.numero)}>
+        <li
+          key={c.numero}
+          className={`p-2 cursor-pointer ${current === c.numero ? 'bg-primary text-white' : ''}`}
+          onClick={() => onSelect(c.numero)}
+        >
           {c.alias ? `${c.alias} (${c.numero})` : c.numero}
         </li>
       ))}
@@ -52,12 +56,18 @@ const MessageList: React.FC<{ messages: any[] }> = ({ messages }) => {
   }, [messages]);
 
   return (
-    <div className="messages">
+    <div className="flex-1 p-2 overflow-y-auto">
       {messages.map((m, i) => {
         const [text, tipo, mediaUrl] = m;
         const waId = m[8];
+        const bubbleClass = [
+          'max-w-[70%] p-2 my-1 rounded-lg break-words',
+          (tipo === 'bot' || tipo === 'asesor' || tipo?.startsWith('bot_') || tipo?.startsWith('asesor_'))
+            ? 'bg-primary self-end text-white'
+            : 'bg-white border self-start'
+        ].join(' ');
         return (
-          <div key={waId ?? i} className={`bubble ${tipo}`}>
+          <div key={waId ?? i} className={bubbleClass}>
             {text && <span>{text}</span>}
             {mediaUrl && <MediaContent tipo={tipo} url={mediaUrl} />}
           </div>
@@ -69,9 +79,15 @@ const MessageList: React.FC<{ messages: any[] }> = ({ messages }) => {
 };
 
 const QuickButtons: React.FC<{ buttons: QuickButton[]; onSend: (b: QuickButton) => void }> = ({ buttons, onSend }) => (
-  <div className="quick-buttons">
+  <div className="flex gap-2 p-2 border-t bg-gray-50">
     {buttons.map((b, i) => (
-      <button key={i} onClick={() => onSend(b)}>{b.nombre || i + 1}</button>
+      <button
+        key={i}
+        className="px-3 py-1 border rounded bg-white shadow-elegant"
+        onClick={() => onSend(b)}
+      >
+        {b.nombre || i + 1}
+      </button>
     ))}
   </div>
 );
@@ -190,18 +206,25 @@ const ChatInterface: React.FC = () => {
   };
 
   return (
-    <div className="chat-container">
+    <div className="flex h-screen bg-gradient-primary">
       {error && <div className="error-container">{error}</div>}
       <ChatList chats={chats} current={currentChat} onSelect={setCurrentChat} />
-      <div className="chat-area">
+      <div className="flex flex-1 flex-col bg-white">
         <MessageList messages={messages} />
         <QuickButtons buttons={buttons} onSend={sendButton} />
-        <div className="input-row">
+        <div className="flex items-center gap-2 p-2 border-t">
           <input type="file" accept="image/*" onChange={e => sendMedia(e, 'image')} />
           <input type="file" accept="audio/*" onChange={e => sendMedia(e, 'audio')} />
           <input type="file" accept="video/*" onChange={e => sendMedia(e, 'video')} />
-          <input value={text} onChange={e => setText(e.target.value)} placeholder="Mensaje" />
-          <button onClick={sendText}>Enviar</button>
+          <input
+            value={text}
+            onChange={e => setText(e.target.value)}
+            placeholder="Mensaje"
+            className="flex-1 p-1 border rounded"
+          />
+          <button onClick={sendText} className="px-3 py-1 rounded bg-primary text-white shadow-elegant">
+            Enviar
+          </button>
         </div>
       </div>
     </div>
