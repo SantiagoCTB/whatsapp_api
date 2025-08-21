@@ -26,7 +26,7 @@ const Dropdown: React.FC<DropdownProps> = ({ trigger, children }) => {
         onClick={() => setOpen(o => !o)}
         aria-haspopup="menu"
         aria-expanded={open}
-        className="p-2"
+        className="p-2 focus:outline-none focus:ring-2 focus:ring-primary"
       >
         {trigger}
       </button>
