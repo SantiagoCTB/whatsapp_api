@@ -106,28 +106,20 @@ const ChatInterface: React.FC = () => {
       .catch(() => setError('Error al enviar el mensaje'));
   };
 
-  const sendMedia = (
-    e: React.ChangeEvent<HTMLInputElement>,
-    tipo: 'image' | 'audio' | 'video'
-  ) => {
-    if (!currentChat || !e.target.files || !e.target.files.length) return;
-    const file = e.target.files[0];
+  const sendMedia = async (file: File, tipo: 'image' | 'audio' | 'video') => {
+    if (!currentChat) throw new Error('No chat seleccionado');
     const formData = new FormData();
     formData.append('numero', currentChat);
     formData.append(tipo, file);
-    fetch(`/send_${tipo}`, {
+    const res = await fetch(`/send_${tipo}`, {
       method: 'POST',
-      body: formData
-    })
-      .then(res => {
-        if (res.ok) {
-          e.target.value = '';
-          refreshMessages();
-        } else {
-          setError('Error al enviar el archivo');
-        }
-      })
-      .catch(() => setError('Error al enviar el archivo'));
+      body: formData,
+    });
+    if (!res.ok) {
+      setError('Error al enviar el archivo');
+      throw new Error('upload failed');
+    }
+    refreshMessages();
   };
 
   return (
