@@ -35,7 +35,14 @@ def index():
 
     manifest_path = os.path.join(current_app.static_folder, 'manifest.json')
     if not os.path.exists(manifest_path):
-        return render_template('index.html', session_data=session_data, js_file=None, css_file=None)
+        message = (
+            "No se encontró manifest.json. Compila el frontend ejecutando "
+            "'cd frontend && npm install && npm run build'."
+        )
+        current_app.logger.warning(message)
+        if request.accept_mimetypes.accept_json and not request.accept_mimetypes.accept_html:
+            return jsonify({"error": message}), 500
+        return f"<p>{message}</p>", 500
     with open(manifest_path) as f:
         manifest = json.load(f)
     entry = manifest.get('index.html', {})
