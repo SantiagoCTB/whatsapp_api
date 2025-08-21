@@ -4,17 +4,17 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Chat Tecnimedellín</title>
-    <script id="session-data" type="application/json">
-      {{ session_data | tojson }}
-    </script>
-    {% if js_file %}
-    <script type="module" crossorigin src="{{ url_for('static', filename=js_file) }}"></script>
-    {% endif %}
     {% if css_file %}
     <link rel="stylesheet" href="{{ url_for('static', filename=css_file) }}">
     {% endif %}
   </head>
   <body>
     <div id="root"></div>
+    <script id="session-data" type="application/json">
+      {{ session_data | tojson }}
+    </script>
+    {% if js_file %}
+    <script type="module" crossorigin src="{{ url_for('static', filename=js_file) }}"></script>
+    {% endif %}
   </body>
 </html>
