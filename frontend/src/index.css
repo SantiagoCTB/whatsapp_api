@@ -134,3 +134,27 @@ body {
     @apply text-xs font-semibold px-2 py-0.5 rounded;
   }
 }
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@layer utilities {
+  .bg-bubble-user {
+    @apply bg-white border text-black;
+  }
+  .bg-bubble-bot {
+    @apply bg-primary text-white;
+  }
+  .bg-bubble-admin {
+    @apply bg-secondary text-white;
+  }
+  .animate-fade-in {
+    animation: fade-in 0.3s ease-in-out;
+  }
+}
