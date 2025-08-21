@@ -20,9 +20,14 @@ const MessageInput: React.FC<MessageInputProps> = ({
       value={text}
       onChange={e => onTextChange(e.target.value)}
       placeholder="Mensaje"
-      className="flex-1 p-1 border rounded"
+      aria-label="Escribir mensaje"
+      className="flex-1 p-1 border rounded focus:outline-none focus:ring-2 focus:ring-primary"
     />
-    <button onClick={onSendText} className="px-3 py-1 rounded bg-primary text-white shadow-elegant">
+    <button
+      onClick={onSendText}
+      aria-label="Enviar mensaje"
+      className="px-3 py-1 rounded bg-primary text-white shadow-elegant focus:outline-none focus:ring-2 focus:ring-primary"
+    >
       Enviar
     </button>
   </div>

@@ -118,7 +118,7 @@ const QuickActions: React.FC<QuickActionsProps> = ({ onSendMedia }) => {
       >
         <button
           onClick={() => imageRef.current?.click()}
-          className="flex items-center gap-2 px-3 py-2 hover:bg-gray-100"
+          className="flex items-center gap-2 px-3 py-2 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-primary"
           role="menuitem"
           aria-describedby="image-tip"
         >
@@ -129,7 +129,7 @@ const QuickActions: React.FC<QuickActionsProps> = ({ onSendMedia }) => {
         </button>
         <button
           onClick={() => audioRef.current?.click()}
-          className="flex items-center gap-2 px-3 py-2 hover:bg-gray-100"
+          className="flex items-center gap-2 px-3 py-2 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-primary"
           role="menuitem"
           aria-describedby="audio-tip"
         >
@@ -140,7 +140,7 @@ const QuickActions: React.FC<QuickActionsProps> = ({ onSendMedia }) => {
         </button>
         <button
           onClick={() => videoRef.current?.click()}
-          className="flex items-center gap-2 px-3 py-2 hover:bg-gray-100"
+          className="flex items-center gap-2 px-3 py-2 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-primary"
           role="menuitem"
           aria-describedby="video-tip"
         >

@@ -22,12 +22,16 @@ const Sidebar: React.FC<SidebarProps> = ({ contacts, currentChat, onSelect }) =>
   });
 
   return (
-    <aside className="flex flex-col w-64 bg-secondary text-white shadow-elegant">
+    <nav
+      className="flex flex-col w-full sm:w-56 md:w-64 lg:w-72 bg-secondary text-white shadow-elegant"
+      aria-label="Lista de chats"
+    >
       <div className="p-2">
         <input
           type="text"
           placeholder="Buscar..."
-          className="w-full p-2 rounded text-black"
+          aria-label="Buscar chats"
+          className="w-full p-2 rounded text-black focus:outline-none focus:ring-2 focus:ring-primary"
           value={query}
           onChange={e => setQuery(e.target.value)}
         />
@@ -36,10 +40,13 @@ const Sidebar: React.FC<SidebarProps> = ({ contacts, currentChat, onSelect }) =>
         {filtered.map(c => (
           <li
             key={c.numero}
-            className={`flex items-center gap-2 p-2 cursor-pointer hover:bg-primary/10 ${
+            role="button"
+            tabIndex={0}
+            className={`flex items-center gap-2 p-2 cursor-pointer hover:bg-primary/10 focus:outline-none focus:ring-2 focus:ring-primary ${
               currentChat === c.numero ? 'bg-primary/10' : ''
             }`}
             onClick={() => onSelect(c.numero)}
+            onKeyDown={e => e.key === 'Enter' && onSelect(c.numero)}
           >
             <Avatar name={c.alias || c.numero} photoUrl={c.avatarUrl} />
             <div className="flex flex-col">
@@ -52,7 +59,7 @@ const Sidebar: React.FC<SidebarProps> = ({ contacts, currentChat, onSelect }) =>
           </li>
         ))}
       </ul>
-    </aside>
+    </nav>
   );
 };
 

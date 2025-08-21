@@ -11,7 +11,7 @@ const QuickButtons: React.FC<QuickButtonsProps> = ({ buttons, onSend }) => (
     {buttons.map((b, i) => (
       <button
         key={i}
-        className="px-3 py-1 border rounded bg-white shadow-elegant"
+        className="px-3 py-1 border rounded bg-white shadow-elegant focus:outline-none focus:ring-2 focus:ring-primary"
         onClick={() => onSend(b)}
       >
         {b.nombre || i + 1}

@@ -123,10 +123,10 @@ const ChatInterface: React.FC = () => {
   };
 
   return (
-    <div className="flex h-screen bg-gradient-primary">
+    <div className="flex h-screen flex-col bg-gradient-primary md:flex-row">
       {error && <div className="error-container">{error}</div>}
       <Sidebar contacts={chats} currentChat={currentChat} onSelect={setCurrentChat} />
-      <div className="flex flex-1 flex-col bg-white">
+      <main className="flex flex-1 flex-col bg-white">
         <MessageList messages={messages} />
         <QuickButtons buttons={buttons} onSend={sendButton} />
         <MessageInput
@@ -135,7 +135,7 @@ const ChatInterface: React.FC = () => {
           onSendText={sendText}
           onSendMedia={sendMedia}
         />
-      </div>
+      </main>
     </div>
   );
 };
