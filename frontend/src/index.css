@@ -128,3 +128,9 @@ body {
   border-radius: 4px;
   cursor: pointer;
 }
+
+@layer components {
+  .badge-role {
+    @apply text-xs font-semibold px-2 py-0.5 rounded;
+  }
+}
