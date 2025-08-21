@@ -1,8 +1,9 @@
 # Stage frontend
 FROM node:20 AS frontend
-WORKDIR /app
-COPY frontend/ ./frontend/
-RUN npm ci --prefix frontend && npm run build --prefix frontend
+WORKDIR /app/frontend
+COPY frontend/ .
+RUN npm ci
+RUN npm run build
 
 # Stage backend
 FROM python:3.11-slim
