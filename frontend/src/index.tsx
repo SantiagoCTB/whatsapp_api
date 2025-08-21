@@ -10,10 +10,15 @@ interface SessionData {
 }
 
 const dataEl = document.getElementById('session-data');
-const sessionData: SessionData = dataEl ? JSON.parse(dataEl.textContent || '{}') : { role: null, roleId: null, sessionRoles: [] };
+const sessionData: SessionData = dataEl
+  ? JSON.parse(dataEl.textContent || '{}')
+  : { role: null, roleId: null, sessionRoles: [] };
+
+(window as any).sessionData = sessionData;
 
 ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
   <React.StrictMode>
-    <ChatInterface role={sessionData.role} roleId={sessionData.roleId} sessionRoles={sessionData.sessionRoles} />
-  </React.StrictMode>
+    <ChatInterface />
+  </React.StrictMode>,
 );
+
