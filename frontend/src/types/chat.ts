@@ -1,6 +1,8 @@
 export interface Contact {
   numero: string;
   alias?: string;
+  role?: 'usuario' | 'bot' | 'admin';
+  avatarUrl?: string;
 }
 
 export interface Message {
