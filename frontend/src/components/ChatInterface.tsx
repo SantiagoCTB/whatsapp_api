@@ -1,101 +1,14 @@
-import React, { useEffect, useRef, useState } from 'react';
-
-interface ChatSummary {
-  numero: string;
-  alias?: string;
-}
-
-interface QuickButton {
-  nombre?: string;
-  mensaje: string;
-  tipo: string;
-  media_urls?: string[];
-}
-
-const ChatList: React.FC<{ chats: ChatSummary[]; current: string | null; onSelect: (n: string) => void }> = ({ chats, current, onSelect }) => (
-  <aside className="flex flex-col w-64 bg-secondary shadow-elegant overflow-y-auto">
-    <ul>
-      {chats.map(c => (
-        <li
-          key={c.numero}
-          className={`p-2 cursor-pointer ${current === c.numero ? 'bg-primary text-white' : ''}`}
-          onClick={() => onSelect(c.numero)}
-        >
-          {c.alias ? `${c.alias} (${c.numero})` : c.numero}
-        </li>
-      ))}
-    </ul>
-  </aside>
-);
-
-const MediaContent: React.FC<{ tipo: string; url: string }> = ({ tipo, url }) => {
-  const [error, setError] = useState(false);
-  if (error) {
-    return <div className="media-error">No se pudo cargar el archivo</div>;
-  }
-  if (tipo && tipo.includes('image')) {
-    return <img src={url} className="media-image" onError={() => setError(true)} alt="imagen" />;
-  }
-  if (tipo && tipo.includes('audio')) {
-    return <audio controls src={url} className="media-audio" onError={() => setError(true)} />;
-  }
-  if (tipo && tipo.includes('video')) {
-    return <video controls src={url} className="media-video" onError={() => setError(true)} />;
-  }
-  return (
-    <a href={url} target="_blank" rel="noopener noreferrer" className="media-link">
-      {url}
-    </a>
-  );
-};
-
-const MessageList: React.FC<{ messages: any[] }> = ({ messages }) => {
-  const endRef = useRef<HTMLDivElement | null>(null);
-  useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
-
-  return (
-    <div className="flex-1 p-2 overflow-y-auto">
-      {messages.map((m, i) => {
-        const [text, tipo, mediaUrl] = m;
-        const waId = m[8];
-        const bubbleClass = [
-          'max-w-[70%] p-2 my-1 rounded-lg break-words',
-          (tipo === 'bot' || tipo === 'asesor' || tipo?.startsWith('bot_') || tipo?.startsWith('asesor_'))
-            ? 'bg-primary self-end text-white'
-            : 'bg-white border self-start'
-        ].join(' ');
-        return (
-          <div key={waId ?? i} className={bubbleClass}>
-            {text && <span>{text}</span>}
-            {mediaUrl && <MediaContent tipo={tipo} url={mediaUrl} />}
-          </div>
-        );
-      })}
-      <div ref={endRef} />
-    </div>
-  );
-};
-
-const QuickButtons: React.FC<{ buttons: QuickButton[]; onSend: (b: QuickButton) => void }> = ({ buttons, onSend }) => (
-  <div className="flex gap-2 p-2 border-t bg-gray-50">
-    {buttons.map((b, i) => (
-      <button
-        key={i}
-        className="px-3 py-1 border rounded bg-white shadow-elegant"
-        onClick={() => onSend(b)}
-      >
-        {b.nombre || i + 1}
-      </button>
-    ))}
-  </div>
-);
+import React, { useEffect, useState } from 'react';
+import Sidebar from './Sidebar';
+import MessageList from './MessageList';
+import MessageInput from './MessageInput';
+import QuickButtons from './QuickButtons';
+import { Contact, Message, QuickButton } from '../types/chat';
 
 const ChatInterface: React.FC = () => {
-  const [chats, setChats] = useState<ChatSummary[]>([]);
+  const [chats, setChats] = useState<Contact[]>([]);
   const [currentChat, setCurrentChat] = useState<string | null>(null);
-  const [messages, setMessages] = useState<any[]>([]);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [text, setText] = useState('');
   const [buttons, setButtons] = useState<QuickButton[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -103,7 +16,7 @@ const ChatInterface: React.FC = () => {
   useEffect(() => {
     fetch('/get_chat_list')
       .then(r => r.json())
-      .then(data => {
+      .then((data: Contact[]) => {
         setChats(data);
         setError(null);
       })
@@ -115,13 +28,19 @@ const ChatInterface: React.FC = () => {
     fetch(`/get_chat/${currentChat}`)
       .then(r => r.json())
       .then(data => {
-        setMessages(data.mensajes || []);
+        const mapped: Message[] = (data.mensajes || []).map((m: any[]) => ({
+          text: m[0],
+          tipo: m[1],
+          mediaUrl: m[2],
+          waId: m[8],
+        }));
+        setMessages(mapped);
         setError(null);
       })
       .catch(() => setError('Error al cargar el chat'));
     fetch('/get_botones')
       .then(r => r.json())
-      .then(data => {
+      .then((data: QuickButton[]) => {
         setButtons(data);
         setError(null);
       })
@@ -133,7 +52,13 @@ const ChatInterface: React.FC = () => {
     fetch(`/get_chat/${currentChat}`)
       .then(r => r.json())
       .then(data => {
-        setMessages(data.mensajes || []);
+        const mapped: Message[] = (data.mensajes || []).map((m: any[]) => ({
+          text: m[0],
+          tipo: m[1],
+          mediaUrl: m[2],
+          waId: m[8],
+        }));
+        setMessages(mapped);
         setError(null);
       })
       .catch(() => setError('Error al cargar el chat'));
@@ -208,28 +133,19 @@ const ChatInterface: React.FC = () => {
   return (
     <div className="flex h-screen bg-gradient-primary">
       {error && <div className="error-container">{error}</div>}
-      <ChatList chats={chats} current={currentChat} onSelect={setCurrentChat} />
+      <Sidebar contacts={chats} currentChat={currentChat} onSelect={setCurrentChat} />
       <div className="flex flex-1 flex-col bg-white">
         <MessageList messages={messages} />
         <QuickButtons buttons={buttons} onSend={sendButton} />
-        <div className="flex items-center gap-2 p-2 border-t">
-          <input type="file" accept="image/*" onChange={e => sendMedia(e, 'image')} />
-          <input type="file" accept="audio/*" onChange={e => sendMedia(e, 'audio')} />
-          <input type="file" accept="video/*" onChange={e => sendMedia(e, 'video')} />
-          <input
-            value={text}
-            onChange={e => setText(e.target.value)}
-            placeholder="Mensaje"
-            className="flex-1 p-1 border rounded"
-          />
-          <button onClick={sendText} className="px-3 py-1 rounded bg-primary text-white shadow-elegant">
-            Enviar
-          </button>
-        </div>
+        <MessageInput
+          text={text}
+          onTextChange={setText}
+          onSendText={sendText}
+          onSendMedia={sendMedia}
+        />
       </div>
     </div>
   );
 };
 
 export default ChatInterface;
-
