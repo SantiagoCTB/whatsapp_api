@@ -34,6 +34,8 @@ def index():
     }
 
     manifest_path = os.path.join(current_app.static_folder, 'manifest.json')
+    if not os.path.exists(manifest_path):
+        return render_template('index.html', session_data=session_data, js_file=None, css_file=None)
     with open(manifest_path) as f:
         manifest = json.load(f)
     entry = manifest.get('index.html', {})
