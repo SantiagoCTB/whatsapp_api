@@ -2,10 +2,6 @@
 .env
 .env.*
 
-# Bases de datos SQLite
-*.db
-*.db-journal
-
 # Archivos de log o temporales
 *.log
 __pycache__/

@@ -4,36 +4,37 @@ Estoy desarrollando una aplicación web en Flask conectada a la API de WhatsApp 
 📦 Estructura modular actual
 El proyecto está dividido en carpetas y archivos para mayor claridad y mantenibilidad:
 
-bash
-Copiar
-Editar
+```
 / (raíz)
 │
 ├── app.py                         # Archivo principal que inicia Flask y registra blueprints
 ├── config.py                      # Configuración de tokens y constantes del sistema
 ├── .env                           # Variables de entorno sensibles (token, phone ID, etc.)
 │
-├── /routes/                       # Blueprints con rutas
+├── routes/                        # Blueprints con rutas
 │   ├── auth_routes.py             # Login, logout, sesión
 │   ├── chat_routes.py             # Vista principal del chat, mensajes, listado de chats
 │   ├── configuracion.py           # Gestión de reglas y botones del chatbot
 │   └── webhook.py                 # Endpoint que recibe mensajes de WhatsApp y responde
 │
-├── /services/                     # Lógica de negocio reutilizable
-│   ├── db.py                      # Conexión y funciones sobre la base de datos SQLite
+├── services/                      # Lógica de negocio reutilizable
+│   ├── db.py                      # Conexión y funciones sobre la base de datos MySQL
 │   ├── whatsapp_api.py            # Funciones para enviar mensajes con texto, botones y listas
 │   └── utils.py                   # (Reservado para funciones auxiliares si es necesario)
 │
-├── /templates/                    # Archivos HTML (Jinja2)
+├── templates/                     # Archivos HTML (Jinja2)
 │   ├── index.html                 # Vista del chat entre clientes y asesores
 │   ├── login.html                 # Formulario de inicio de sesión
 │   ├── configuracion.html         # Administración de reglas del chatbot
 │   └── botones.html               # Administración de botones predefinidos
 │
-├── /static/                       # Archivos CSS/JS si los hay
+├── static/                        # Archivos CSS/JS si los hay
 │   └── style.css                  # Estilos generales
 │
 ├── requirements.txt               # Librerías necesarias para correr el proyecto
+├── frontend/                      # Código React de la interfaz
+└── scripts/                       # Scripts auxiliares
+```
 
 🔄 Funcionalidades implementadas
 Gestión de usuarios y autenticación (admin)
@@ -65,7 +66,7 @@ Python 3 y Flask
 
 WhatsApp Cloud API (v17+)
 
-MySQL como base de datos principal (SQLite opcional para desarrollo)
+MySQL como base de datos principal
 
 HTML + Jinja2 + JavaScript en el frontend
 
@@ -136,16 +137,9 @@ Para agregar un nuevo comando:
 La función `handle_global_command` es llamada desde `routes/webhook.py` y detiene el
 procesamiento normal cuando un comando es reconocido.
 
-## Configuración de Streamlit
-
-Para apuntar a una URL de Streamlit distinta a la predeterminada, define la variable de entorno `STREAMLIT_URL` durante el despliegue.
-Si no se establece, la aplicación usará `http://localhost:8501`.
-
 ## Ubicación de la base de datos
 
-La aplicación almacena los datos en un servidor MySQL. Los antiguos archivos de SQLite (`database.db` y `chat_support.db`) se crean en la raíz del proyecto y están excluidos del repositorio.
-
-Si se utilizan para pruebas locales, realiza copias de seguridad en un almacenamiento externo y evita versionarlos.
+La aplicación almacena los datos en un servidor MySQL.
 
 ## Almacenamiento de medios subidos por el usuario
 
