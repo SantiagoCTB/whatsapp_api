@@ -100,6 +100,19 @@ Si usas Docker, asegúrate de añadir ffmpeg en la imagen:
 RUN apt-get update && apt-get install -y ffmpeg
 ```
 
+## Compilación del frontend
+
+Para generar la versión de producción de la interfaz React, ejecuta:
+
+```bash
+npm ci --prefix frontend
+npm run build --prefix frontend
+```
+
+También puedes usar el script `scripts/build_frontend.sh` para realizar estos pasos automáticamente.
+
+El archivo `static/manifest.json` es obligatorio; sin él, la interfaz React no se cargará correctamente.
+
 ✅ Estado actual
 La app ya está funcionando con:
 
