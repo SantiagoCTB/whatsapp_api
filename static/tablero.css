@@ -1,3 +1,30 @@
+:root {
+  --bg-page: #434343;
+  --bg-sidebar: #F5F9F8;
+  --bg-chat: #F5F9F8;
+  --accent: #00A884;
+  --accent-hover: #007C67;
+  --bubble-user: #D2F5F0;
+  --bubble-bot: #F7F3B7;
+  --bubble-asesor: #C0F2C9;
+  --text-main: #212121;
+  --text-light: #ffffff;
+  --border-color: #B2DFDB;
+  --timestamp-color: #666666;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Segoe UI', sans-serif;
+  background: var(--bg-page) url('/static/fondo_general.jpeg') center/cover repeat;
+  color: var(--text-main);
+}
+
 .header {
   position: fixed;
   top: 0;
@@ -19,6 +46,19 @@
   color: var(--text-light);
   font-size: 1.5rem;
   cursor: pointer;
+}
+
+.back-btn {
+  background: var(--accent);
+  color: var(--text-light);
+  text-decoration: none;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  transition: background 0.3s;
+}
+
+.back-btn:hover {
+  background: var(--accent-hover);
 }
 
 .sidebar {
@@ -69,8 +109,7 @@
 }
 
 .card {
-  background: var(--text-light);
-  color: var(--text-main);
+  background: rgba(255, 255, 255, 0.9);
   border-radius: 8px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   padding: 20px;
