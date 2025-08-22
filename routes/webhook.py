@@ -115,9 +115,10 @@ def handle_medicion(numero, texto):
 
 
 def handle_text_message(numero, texto):
-    now           = datetime.now()
-    last_time     = user_last_activity.get(numero)
-    session_reset = False
+    normalized_text = normalize_text(texto)
+    now             = datetime.now()
+    last_time       = user_last_activity.get(numero)
+    session_reset   = False
     if last_time and (now - last_time).total_seconds() > SESSION_TIMEOUT:
         user_steps.pop(numero, None)
         delete_chat_state(numero)
@@ -195,7 +196,7 @@ def handle_text_message(numero, texto):
     for resp, next_step, tipo_resp, media_urls, opts, rol_kw, input_db in reglas:
         media_list = media_urls.split('||') if media_urls else []
         triggers = [normalize_text(t.strip()) for t in (input_db or '').split(',')]
-        if any(trigger and re.search(rf"\b{re.escape(trigger)}\b", texto) for trigger in triggers):
+        if any(trigger and re.search(rf"\b{re.escape(trigger)}\b", normalized_text) for trigger in triggers):
             row = (resp, next_step, tipo_resp, media_list, opts, rol_kw)
             break
 
@@ -204,7 +205,7 @@ def handle_text_message(numero, texto):
             media_list = media_urls.split('||') if media_urls else []
             triggers = [normalize_text(t.strip()) for t in (input_db or '').split(',')]
             for trigger in triggers:
-                for word in texto.split():
+                for word in normalized_text.split():
                     if SequenceMatcher(None, word, trigger).ratio() >= 0.8:
                         row = (resp, next_step, tipo_resp, media_list, opts, rol_kw)
                         break
