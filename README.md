@@ -139,3 +139,25 @@ Si se utilizan para pruebas locales, realiza copias de seguridad en un almacenam
 Los archivos generados por los usuarios se guardan en la ruta indicada por la variable de entorno `MEDIA_ROOT`. Esta ruta debe apuntar a un volumen externo o a un directorio persistente fuera del repositorio. Si no se define, la aplicación usará `static/uploads` dentro del proyecto.
 
 Estos archivos no deben versionarse en Git; durante los despliegues, mantén `MEDIA_ROOT` en un volumen persistente o en un almacenamiento externo para evitar su borrado accidental.
+
+## Ejecución con Docker
+
+### Construir la imagen
+
+```bash
+docker build -t whatsapp-aceros .
+```
+
+### Ejecutar con `docker run`
+
+```bash
+docker run -p 5000:5000 -p 8501:8501 --env-file .env whatsapp-aceros
+```
+
+### Ejecutar con `docker-compose`
+
+```bash
+docker-compose up
+```
+
+El archivo `Procfile` ya no es necesario cuando se utiliza Docker para el despliegue.
