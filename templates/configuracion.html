@@ -4,7 +4,7 @@
 {% block content %}
 <div class="top-right">
     <a href="{{ url_for('chat.index') }}">
-        <button class="back-btn">Volver al inicio</button>
+        <button class="back-btn btn-primary">Volver al inicio</button>
     </a>
 </div>
 
@@ -54,13 +54,13 @@
     <label for="opciones">Opciones (solo para listas, formato JSON):</label><br>
     <textarea name="opciones" rows="6" cols="60" placeholder='[{"title":"Rápido","rows":[{"id":"express","title":"Express","description":"1 día"}]}]'></textarea>
 
-    <button type="submit">Guardar regla</button>
+    <button type="submit" class="btn-primary">Guardar regla</button>
 </form>
 
 <form method="POST" enctype="multipart/form-data">
     <h3>Importar reglas desde archivo Excel (.xlsx)</h3>
     <input type="file" name="archivo" accept=".xlsx" required>
-    <button type="submit">Importar reglas</button>
+    <button type="submit" class="btn-primary">Importar reglas</button>
 </form>
 
 <h3>Reglas existentes</h3>
@@ -96,7 +96,7 @@
         <td>{{ regla[11] or '-' }}</td>
         <td>
             <form method="POST" action="{{ url_for('configuracion.eliminar_regla', regla_id=regla[0]) }}">
-                <button class="delete-btn" type="submit">Eliminar</button>
+                <button class="delete-btn btn-primary" type="submit">Eliminar</button>
             </form>
         </td>
     </tr>

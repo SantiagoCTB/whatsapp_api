@@ -4,7 +4,7 @@
 {% block content %}
 <div class="top-right">
     <a href="{{ url_for('chat.index') }}">
-        <button class="back-btn">Volver al inicio</button>
+        <button class="back-btn btn-primary">Volver al inicio</button>
     </a>
 </div>
 
@@ -13,7 +13,7 @@
     <h3>Crear rol</h3>
     <input type="text" name="name" placeholder="Nombre" required>
     <input type="text" name="keyword" placeholder="Palabra clave">
-    <button type="submit">Crear</button>
+    <button type="submit" class="btn-primary">Crear</button>
 </form>
 
 <table>
@@ -30,12 +30,12 @@
         <td>{{ ', '.join(asignaciones.get(rol[0], [])) }}</td>
         <td>
             <form action="{{ url_for('roles.eliminar_rol', rol_id=rol[0]) }}" method="post" style="display:inline; background:none; box-shadow:none; padding:0; margin:0;">
-                <button type="submit" class="delete-btn">Eliminar</button>
+                <button type="submit" class="delete-btn btn-primary">Eliminar</button>
             </form>
             <form action="{{ url_for('roles.editar_rol', rol_id=rol[0]) }}" method="post" style="display:inline; background:none; box-shadow:none; padding:0; margin:0;">
                 <input type="text" name="name" value="{{ rol[1] }}" required style="width:auto; padding:4px; margin:0 4px 0 0;">
                 <input type="text" name="keyword" value="{{ rol[2] }}" style="width:auto; padding:4px; margin:0 4px 0 0;">
-                <button type="submit">Actualizar</button>
+                <button type="submit" class="btn-primary">Actualizar</button>
             </form>
         </td>
     </tr>
@@ -54,7 +54,7 @@
         <option value="{{ rol[0] }}">{{ rol[1] }}</option>
     {% endfor %}
     </select>
-    <button type="submit">Asignar</button>
+    <button type="submit" class="btn-primary">Asignar</button>
 </form>
 
 <form action="{{ url_for('roles.quitar_rol') }}" method="post">
@@ -69,6 +69,6 @@
         <option value="{{ rol[0] }}">{{ rol[1] }}</option>
     {% endfor %}
     </select>
-    <button type="submit">Quitar</button>
+    <button type="submit" class="btn-primary">Quitar</button>
 </form>
 {% endblock %}

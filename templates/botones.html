@@ -4,7 +4,7 @@
 {% block content %}
 <div class="top-right">
     <a href="{{ url_for('chat.index') }}">
-        <button class="back-btn">Volver al inicio</button>
+        <button class="back-btn btn-primary">Volver al inicio</button>
     </a>
 </div>
 
@@ -32,13 +32,13 @@
     <label for="media_url" id="label_media_url" style="display:none;">URLs de archivos (separadas por comas o saltos de línea):</label>
     <textarea id="media_url" name="media_url" style="display:none;" placeholder="URL1, URL2&#10;URL3"></textarea>
 
-    <button type="submit">Agregar botón</button>
+    <button type="submit" class="btn-primary">Agregar botón</button>
 </form>
 
 <form method="POST" enctype="multipart/form-data">
     <label for="archivo">Importar botones desde Excel:</label>
     <input type="file" name="archivo" accept=".xlsx" required>
-    <button type="submit">Importar</button>
+    <button type="submit" class="btn-primary">Importar</button>
 </form>
 
 <h3>Botones actuales</h3>
@@ -52,7 +52,7 @@
         <td style="word-break: break-all;">{{ b[4]|default('')|replace('||', '<br>')|safe }}</td>
         <td>
             <form method="POST" action="{{ url_for('configuracion.eliminar_boton', boton_id=b[0]) }}">
-                <button class="delete-btn" type="submit">Eliminar</button>
+                <button class="delete-btn btn-primary" type="submit">Eliminar</button>
             </form>
         </td>
     </tr>
