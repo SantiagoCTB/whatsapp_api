@@ -14,7 +14,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . /app
 
 # Expose ports for Flask and Streamlit
-EXPOSE 5000 8501
+EXPOSE 8080 8501
 
 # Copy and set permissions for start script
 COPY start.sh /start.sh
