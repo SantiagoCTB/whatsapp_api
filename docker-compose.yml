@@ -1,0 +1,19 @@
+version: '3.9'
+services:
+  web:
+    build: .
+    image: whatsapp-aceros
+    command: gunicorn app:app --bind 0.0.0.0:5000 --workers 4
+    ports:
+      - "5000:5000"
+    env_file:
+      - .env
+  streamlit:
+    image: whatsapp-aceros
+    depends_on:
+      - web
+    command: streamlit run scripts/tablero.py --server.address 0.0.0.0 --server.enableCORS=false --server.enableXsrfProtection=false
+    ports:
+      - "8501:8501"
+    env_file:
+      - .env
