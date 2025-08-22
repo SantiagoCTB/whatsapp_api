@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Chat Tecnimedellín{% endblock %}</title>
+  <style>
+    :root {
+      --bg-page:        #434343;  /* fondo general, muy suave verdoso */
+      --bg-sidebar:     #F5F9F8;  /* blanco puro para la barra lateral */
+      --bg-chat:        #F5F9F8;  /* fondo del chat más claro aún */
+
+      --accent:         #00A884;  /* verde WhatsApp moderno */
+      --accent-hover:   #007C67;  /* verde más oscuro para hover */
+
+      --bubble-user:    #D2F5F0;  /* mensajes del cliente */
+      --bubble-bot:     #F7F3B7;  /* gris suave, para el bot */
+      --bubble-asesor:  #C0F2C9;  /* verde más claro, asesor */
+
+      --text-main:      #212121;  /* texto oscuro pero suave */
+      --text-light:     #ffffff;  /* texto sobre fondo oscuro */
+
+      --border-color: #B2DFDB; /* tono suave basado en el acento */
+      --timestamp-color: #666666; /* color sutil para hora */
+      --font-base: 'Segoe UI', sans-serif;
+    }
+  </style>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body class="{% block body_class %}{% endblock %}">
+  {% block content %}{% endblock %}
+</body>
+</html>

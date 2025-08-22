@@ -1,146 +1,81 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Botones</title>
-    <style>
-        body {
-            font-family: 'Segoe UI', sans-serif;
-            background-color: #f4f6f8;
-            margin: 0;
-            padding: 20px;
-        }
-        form, table {
-            background-color: white;
-            border-radius: 8px;
-            padding: 20px;
-            margin-bottom: 20px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        }
-        input, select, textarea {
-            width: 100%;
-            padding: 8px;
-            margin-top: 6px;
-            margin-bottom: 16px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-        }
-        button {
-            background-color: #27ae60;
-            color: white;
-            padding: 10px 20px;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-        }
-        button:hover {
-            background-color: #1e8449;
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-        th, td {
-            padding: 10px;
-            text-align: left;
-        }
-        .delete-btn {
-            background-color: #e74c3c;
-            color: white;
-            border: none;
-            padding: 6px 12px;
-            border-radius: 4px;
-            cursor: pointer;
-        }
-    </style>
-</head>
-<body>
-    <h2>Botones rápidos para el chat</h2>
+{% extends 'base.html' %}
+{% block title %}Botones{% endblock %}
+{% block body_class %}page{% endblock %}
+{% block content %}
+<div class="top-right">
+    <a href="{{ url_for('chat.index') }}">
+        <button class="back-btn">Volver al inicio</button>
+    </a>
+</div>
 
-    <form method="POST" enctype="multipart/form-data">
-        <label for="nombre">Nombre del botón:</label>
-        <input type="text" name="nombre" id="nombre">
+<h2>Botones rápidos para el chat</h2>
 
-        <label for="mensaje">Nuevo mensaje:</label>
-        <textarea name="mensaje" rows="3" required></textarea>
+<form method="POST" enctype="multipart/form-data">
+    <label for="nombre">Nombre del botón:</label>
+    <input type="text" name="nombre" id="nombre">
 
-        <label for="tipo">Tipo de medio:</label>
-        <select name="tipo" id="tipo">
-            <option value="texto">Texto</option>
-            <option value="image">Imagen</option>
-            <option value="video">Video</option>
-            <option value="audio">Audio</option>
-            <option value="document">PDF</option>
-        </select>
+    <label for="mensaje">Nuevo mensaje:</label>
+    <textarea name="mensaje" rows="3" required></textarea>
 
-        <label for="media" id="label_media_file" style="display:none;">Subir archivo:</label>
-        <input type="file" id="media" name="media[]" multiple style="display:none;">
+    <label for="tipo">Tipo de medio:</label>
+    <select name="tipo" id="tipo">
+        <option value="texto">Texto</option>
+        <option value="image">Imagen</option>
+        <option value="video">Video</option>
+        <option value="audio">Audio</option>
+        <option value="document">PDF</option>
+    </select>
 
-        <label for="media_url" id="label_media_url" style="display:none;">URLs de archivos (separadas por comas o saltos de línea):</label>
-        <textarea id="media_url" name="media_url" style="display:none;" placeholder="URL1, URL2&#10;URL3"></textarea>
+    <label for="media" id="label_media_file" style="display:none;">Subir archivo:</label>
+    <input type="file" id="media" name="media[]" multiple style="display:none;">
 
-        <button type="submit">Agregar botón</button>
-    </form>
+    <label for="media_url" id="label_media_url" style="display:none;">URLs de archivos (separadas por comas o saltos de línea):</label>
+    <textarea id="media_url" name="media_url" style="display:none;" placeholder="URL1, URL2&#10;URL3"></textarea>
 
-    <form method="POST" enctype="multipart/form-data">
-        <label for="archivo">Importar botones desde Excel:</label>
-        <input type="file" name="archivo" accept=".xlsx" required>
-        <button type="submit">Importar</button>
-    </form>
+    <button type="submit">Agregar botón</button>
+</form>
 
-    <div style="position: absolute; top: 20px; right: 20px;">
-        <a href="{{ url_for('chat.index') }}">
-            <button style="
-                background-color: #3498db;
-                color: white;
-                border: none;
-                border-radius: 6px;
-                padding: 10px 20px;
-                font-size: 14px;
-                cursor: pointer;
-                box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-                Volver al inicio
-            </button>
-        </a>
-    </div>
+<form method="POST" enctype="multipart/form-data">
+    <label for="archivo">Importar botones desde Excel:</label>
+    <input type="file" name="archivo" accept=".xlsx" required>
+    <button type="submit">Importar</button>
+</form>
 
-    <h3>Botones actuales</h3>
-    <table>
-        <tr><th>ID</th><th>Nombre</th><th>Mensaje</th><th>URLs</th><th>Acción</th></tr>
-        {% for b in botones %}
-        <tr>
-            <td>{{ b[0] }}</td>
-            <td>{{ b[3]|default('') }}</td>
-            <td style="white-space: pre-line;">{{ b[1] }}</td>
-            <td style="word-break: break-all;">{{ b[4]|default('')|replace('||', '<br>')|safe }}</td>
-            <td>
-                <form method="POST" action="{{ url_for('configuracion.eliminar_boton', boton_id=b[0]) }}">
-                    <button class="delete-btn" type="submit">Eliminar</button>
-                </form>
-            </td>
-        </tr>
-        {% endfor %}
-    </table>
+<h3>Botones actuales</h3>
+<table>
+    <tr><th>ID</th><th>Nombre</th><th>Mensaje</th><th>URLs</th><th>Acción</th></tr>
+    {% for b in botones %}
+    <tr>
+        <td>{{ b[0] }}</td>
+        <td>{{ b[3]|default('') }}</td>
+        <td style="white-space: pre-line;">{{ b[1] }}</td>
+        <td style="word-break: break-all;">{{ b[4]|default('')|replace('||', '<br>')|safe }}</td>
+        <td>
+            <form method="POST" action="{{ url_for('configuracion.eliminar_boton', boton_id=b[0]) }}">
+                <button class="delete-btn" type="submit">Eliminar</button>
+            </form>
+        </td>
+    </tr>
+    {% endfor %}
+</table>
 
-    <script>
-    function toggleMediaFields() {
-        const tipo = document.getElementById('tipo').value;
-        const show = ['image', 'video', 'audio', 'document'].includes(tipo);
-        const mediaInput = document.getElementById('media');
-        const mediaUrl   = document.getElementById('media_url');
-        mediaInput.style.display = show ? 'block' : 'none';
-        document.getElementById('label_media_file').style.display = show ? 'block' : 'none';
-        mediaUrl.style.display = show ? 'block' : 'none';
-        document.getElementById('label_media_url').style.display = show ? 'block' : 'none';
-        if (!show) {
-            mediaInput.value = '';
-            mediaUrl.value = '';
-        }
+<script>
+function toggleMediaFields() {
+    const tipo = document.getElementById('tipo').value;
+    const show = ['image', 'video', 'audio', 'document'].includes(tipo);
+    const mediaInput = document.getElementById('media');
+    const mediaUrl   = document.getElementById('media_url');
+    mediaInput.style.display = show ? 'block' : 'none';
+    document.getElementById('label_media_file').style.display = show ? 'block' : 'none';
+    mediaUrl.style.display = show ? 'block' : 'none';
+    document.getElementById('label_media_url').style.display = show ? 'block' : 'none';
+    if (!show) {
+        mediaInput.value = '';
+        mediaUrl.value = '';
     }
-    document.getElementById('tipo').addEventListener('change', toggleMediaFields);
-    window.addEventListener('DOMContentLoaded', toggleMediaFields);
-    </script>
-</body>
-</html>
+}
 
+document.getElementById('tipo').addEventListener('change', toggleMediaFields);
+window.addEventListener('DOMContentLoaded', toggleMediaFields);
+</script>
+{% endblock %}

@@ -1,196 +1,119 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Configuración de Reglas</title>
-    <style>
-        body {
-            font-family: 'Segoe UI', sans-serif;
-            background-color: #f4f6f9;
-            margin: 0;
-            padding: 20px;
-        }
-        h2, h3 {
-            color: #2c3e50;
-        }
-        form, table {
-            background-color: white;
-            border-radius: 8px;
-            padding: 20px;
-            margin-bottom: 20px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        }
-        input, select, textarea {
-            width: 100%;
-            padding: 8px;
-            margin-top: 6px;
-            margin-bottom: 16px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-        }
-        button {
-            background-color: #27ae60;
-            color: white;
-            padding: 10px 20px;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-        }
-        button:hover {
-            background-color: #219150;
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 14px;
-        }
-        table th, table td {
-            text-align: left;
-            padding: 10px;
-            border-bottom: 1px solid #eee;
-        }
-        .delete-btn {
-            background-color: #e74c3c;
-            color: white;
-            padding: 6px 12px;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 12px;
-        }
-        .top-buttons {
-            display: flex;
-            justify-content: flex-end;
-            margin-bottom: 10px;
-            gap: 10px;
-        }
-    </style>
-</head>
-<body>
-    <h2>Configuración de Reglas</h2>
-    <p>Para reglas de medición usa "*" en <em>Texto del usuario</em> y define la fórmula en <em>Cálculo</em> con variables como <code>medida</code>, <code>p1</code> o <code>p2</code>. Opcionalmente indica un <em>Handler</em> para delegar el cálculo a código externo.</p>
-
-    <form method="POST" enctype="multipart/form-data">
-        <h3>Agregar o actualizar regla</h3>
-        <label for="step">Paso actual:</label>
-        <input type="text" id="step" name="step" required>
-
-        <label for="input_text">Texto del usuario (separa sinónimos con comas):</label>
-        <input type="text" id="input_text" name="input_text" placeholder="palabra1, palabra2" required>
-
-        <label for="respuesta">Respuesta del bot:</label>
-        <textarea id="respuesta" name="respuesta" rows="4" required></textarea>
-
-        <label for="siguiente_step">Siguiente paso:</label>
-        <input type="text" id="siguiente_step" name="siguiente_step">
-
-        <label for="tipo">Tipo:</label>
-        <select name="tipo" id="tipo" class="form-control">
-            <option value="texto">Texto</option>
-            <option value="boton">Botón</option>
-            <option value="lista">Lista</option>
-            <option value="image">Imagen</option>
-            <option value="document">Documento</option>
-            <option value="video">Video</option>
-            <option value="audio">Audio</option>
-        </select>
-
-        <label for="media" id="label_media_file" style="display:none;">Subir archivo:</label>
-        <input type="file" id="media" name="media" style="display:none;">
-
-        <label for="media_url" id="label_media_url" style="display:none;">o URL del archivo:</label>
-        <input type="text" id="media_url" name="media_url" style="display:none;">
-
-        <label for="rol_keyword">Rol keyword:</label>
-        <input type="text" id="rol_keyword" name="rol_keyword">
-
-        <label for="calculo">Cálculo:</label>
-        <input type="text" id="calculo" name="calculo">
-
-        <label for="handler">Handler externo:</label>
-        <input type="text" id="handler" name="handler">
-
-        <label for="opciones">Opciones (solo para listas, formato JSON):</label><br>
-        <textarea name="opciones" rows="6" cols="60" placeholder='[{"title":"Rápido","rows":[{"id":"express","title":"Express","description":"1 día"}]}]'></textarea>
-
-        <button type="submit">Guardar regla</button>
-    </form>
-
-    <form method="POST" enctype="multipart/form-data">
-        <h3>Importar reglas desde archivo Excel (.xlsx)</h3>
-        <input type="file" name="archivo" accept=".xlsx" required>
-        <button type="submit">Importar reglas</button>
-    </form>
-
-<div style="position: absolute; top: 20px; right: 20px;">
+{% extends 'base.html' %}
+{% block title %}Configuración de Reglas{% endblock %}
+{% block body_class %}page{% endblock %}
+{% block content %}
+<div class="top-right">
     <a href="{{ url_for('chat.index') }}">
-        <button style="
-            background-color: #3498db;
-            color: white;
-            border: none;
-            border-radius: 6px;
-            padding: 10px 20px;
-            font-size: 14px;
-            cursor: pointer;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        ">
-            Volver al inicio
-        </button>
+        <button class="back-btn">Volver al inicio</button>
     </a>
 </div>
 
-    <h3>Reglas existentes</h3>
-    <table>
-        <tr>
-            <th>ID</th>
-            <th>Paso</th>
-            <th>Input</th>
-            <th>Respuesta</th>
-            <th>Siguiente paso</th>
-            <th>Tipo</th>
-            <th>Media URL</th>
-            <th>Media Tipo</th>
-            <th>Rol</th>
-            <th>Opciones</th>
-            <th>Cálculo</th>
-            <th>Handler</th>
-            <th>Acción</th>
-        </tr>
-        {% for regla in reglas %}
-        <tr>
-            <td>{{ regla[0] }}</td>
-            <td>{{ regla[1] }}</td>
-            <td>{{ regla[2] }}</td>
-            <td>{{ regla[3] }}</td>
-            <td>{{ regla[4] or '-' }}</td>
-            <td>{{ regla[5] }}</td>
-            <td>{{ regla[6] or '-' }}</td>
-            <td>{{ regla[7] or '-' }}</td>
-            <td>{{ regla[9] or '-' }}</td>
-            <td><pre style="white-space: pre-wrap;">{{ regla[8] }}</pre></td>
-            <td>{{ regla[10] or '-' }}</td>
-            <td>{{ regla[11] or '-' }}</td>
-            <td>
-                <form method="POST" action="{{ url_for('configuracion.eliminar_regla', regla_id=regla[0]) }}">
-                    <button class="delete-btn" type="submit">Eliminar</button>
-                </form>
-            </td>
-        </tr>
-        {% endfor %}
-    </table>
+<h2>Configuración de Reglas</h2>
+<p>Para reglas de medición usa "*" en <em>Texto del usuario</em> y define la fórmula en <em>Cálculo</em> con variables como <code>medida</code>, <code>p1</code> o <code>p2</code>. Opcionalmente indica un <em>Handler</em> para delegar el cálculo a código externo.</p>
 
-    <script>
-    function toggleMediaFields() {
-        const tipo = document.getElementById('tipo').value;
-        const show = ['image', 'video', 'audio', 'document'].includes(tipo);
-        document.getElementById('media').style.display = show ? 'block' : 'none';
-        document.getElementById('label_media_file').style.display = show ? 'block' : 'none';
-        document.getElementById('media_url').style.display = show ? 'block' : 'none';
-        document.getElementById('label_media_url').style.display = show ? 'block' : 'none';
-    }
-    document.getElementById('tipo').addEventListener('change', toggleMediaFields);
-    window.addEventListener('DOMContentLoaded', toggleMediaFields);
-    </script>
-</body>
-</html>
+<form method="POST" enctype="multipart/form-data">
+    <h3>Agregar o actualizar regla</h3>
+    <label for="step">Paso actual:</label>
+    <input type="text" id="step" name="step" required>
+
+    <label for="input_text">Texto del usuario (separa sinónimos con comas):</label>
+    <input type="text" id="input_text" name="input_text" placeholder="palabra1, palabra2" required>
+
+    <label for="respuesta">Respuesta del bot:</label>
+    <textarea id="respuesta" name="respuesta" rows="4" required></textarea>
+
+    <label for="siguiente_step">Siguiente paso:</label>
+    <input type="text" id="siguiente_step" name="siguiente_step">
+
+    <label for="tipo">Tipo:</label>
+    <select name="tipo" id="tipo" class="form-control">
+        <option value="texto">Texto</option>
+        <option value="boton">Botón</option>
+        <option value="lista">Lista</option>
+        <option value="image">Imagen</option>
+        <option value="document">Documento</option>
+        <option value="video">Video</option>
+        <option value="audio">Audio</option>
+    </select>
+
+    <label for="media" id="label_media_file" style="display:none;">Subir archivo:</label>
+    <input type="file" id="media" name="media" style="display:none;">
+
+    <label for="media_url" id="label_media_url" style="display:none;">o URL del archivo:</label>
+    <input type="text" id="media_url" name="media_url" style="display:none;">
+
+    <label for="rol_keyword">Rol keyword:</label>
+    <input type="text" id="rol_keyword" name="rol_keyword">
+
+    <label for="calculo">Cálculo:</label>
+    <input type="text" id="calculo" name="calculo">
+
+    <label for="handler">Handler externo:</label>
+    <input type="text" id="handler" name="handler">
+
+    <label for="opciones">Opciones (solo para listas, formato JSON):</label><br>
+    <textarea name="opciones" rows="6" cols="60" placeholder='[{"title":"Rápido","rows":[{"id":"express","title":"Express","description":"1 día"}]}]'></textarea>
+
+    <button type="submit">Guardar regla</button>
+</form>
+
+<form method="POST" enctype="multipart/form-data">
+    <h3>Importar reglas desde archivo Excel (.xlsx)</h3>
+    <input type="file" name="archivo" accept=".xlsx" required>
+    <button type="submit">Importar reglas</button>
+</form>
+
+<h3>Reglas existentes</h3>
+<table>
+    <tr>
+        <th>ID</th>
+        <th>Paso</th>
+        <th>Input</th>
+        <th>Respuesta</th>
+        <th>Siguiente paso</th>
+        <th>Tipo</th>
+        <th>Media URL</th>
+        <th>Media Tipo</th>
+        <th>Rol</th>
+        <th>Opciones</th>
+        <th>Cálculo</th>
+        <th>Handler</th>
+        <th>Acción</th>
+    </tr>
+    {% for regla in reglas %}
+    <tr>
+        <td>{{ regla[0] }}</td>
+        <td>{{ regla[1] }}</td>
+        <td>{{ regla[2] }}</td>
+        <td>{{ regla[3] }}</td>
+        <td>{{ regla[4] or '-' }}</td>
+        <td>{{ regla[5] }}</td>
+        <td>{{ regla[6] or '-' }}</td>
+        <td>{{ regla[7] or '-' }}</td>
+        <td>{{ regla[9] or '-' }}</td>
+        <td><pre style="white-space: pre-wrap;">{{ regla[8] }}</pre></td>
+        <td>{{ regla[10] or '-' }}</td>
+        <td>{{ regla[11] or '-' }}</td>
+        <td>
+            <form method="POST" action="{{ url_for('configuracion.eliminar_regla', regla_id=regla[0]) }}">
+                <button class="delete-btn" type="submit">Eliminar</button>
+            </form>
+        </td>
+    </tr>
+    {% endfor %}
+</table>
+
+<script>
+function toggleMediaFields() {
+    const tipo = document.getElementById('tipo').value;
+    const show = ['image', 'video', 'audio', 'document'].includes(tipo);
+    document.getElementById('media').style.display = show ? 'block' : 'none';
+    document.getElementById('label_media_file').style.display = show ? 'block' : 'none';
+    document.getElementById('media_url').style.display = show ? 'block' : 'none';
+    document.getElementById('label_media_url').style.display = show ? 'block' : 'none';
+}
+
+document.getElementById('tipo').addEventListener('change', toggleMediaFields);
+window.addEventListener('DOMContentLoaded', toggleMediaFields);
+</script>
+{% endblock %}
