@@ -161,3 +161,7 @@ docker-compose up
 ```
 
 El archivo `Procfile` ya no es necesario cuando se utiliza Docker para el despliegue.
+
+## Despliegue en Railway
+
+Railway define la variable de entorno `PORT` (8080) en tiempo de ejecución. El script `start.sh` utiliza automáticamente este valor para enlazar Gunicorn y, en caso de que no esté presente, recurre al puerto 5000 por defecto.
