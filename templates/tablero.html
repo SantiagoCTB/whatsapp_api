@@ -6,7 +6,14 @@
     <title>Tablero</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        body { margin: 0; font-family: 'Segoe UI', sans-serif; background: #f4f4f4; }
+        body {
+            margin: 0;
+            font-family: 'Segoe UI', sans-serif;
+            background-image: url("{{ url_for('static', filename='fondo_general.jpeg') }}");
+            background-size: cover;
+            background-position: center;
+            background-repeat: repeat;
+        }
         .back-btn { position: absolute; top: 20px; right: 20px; }
         .back-btn button {
             background-color: #3498db;
@@ -19,19 +26,26 @@
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
         .dashboard {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            display: flex;
+            flex-direction: column;
+            align-items: center;
             gap: 20px;
             padding: 20px;
         }
         .card {
-            background: #fff;
+            width: 100%;
+            max-width: 600px;
+            background: rgba(255, 255, 255, 0.9);
             border-radius: 8px;
             box-shadow: 0 2px 8px rgba(0,0,0,0.1);
             padding: 20px;
             text-align: center;
         }
-        .card canvas { margin-top: 20px; width: 100%; height: auto; }
+        .card canvas {
+            margin-top: 20px;
+            width: 100%;
+            height: auto;
+        }
     </style>
 </head>
 <body>
