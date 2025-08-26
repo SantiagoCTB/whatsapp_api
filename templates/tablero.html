@@ -7,6 +7,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='tablero.css') }}">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-wordcloud"></script>
 </head>
 <body>
     <header class="header">
@@ -20,6 +21,8 @@
         <input type="date" id="fechaInicio">
         <label for="fechaFin">Hasta:</label>
         <input type="date" id="fechaFin">
+        <label for="limit">Límite de palabras:</label>
+        <input type="number" id="limit" min="1" value="10">
     </div>
 
     <nav class="sidebar">
