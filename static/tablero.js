@@ -187,4 +187,23 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       });
     });
+
+  fetch('/datos_tipos')
+    .then(response => response.json())
+    .then(data => {
+      const labels = data.map(item => item.tipo);
+      const values = data.map(item => item.total);
+      const ctx = document.getElementById('graficoTipos').getContext('2d');
+      const colors = ['#FF6384','#36A2EB','#FFCE56','#4BC0C0','#9966FF','#FF9F40','#8E5EA2','#3CBA9F','#E8C3B9','#C45850'];
+      new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+          labels: labels,
+          datasets: [{
+            data: values,
+            backgroundColor: labels.map((_, i) => colors[i % colors.length])
+          }]
+        }
+      });
+    });
 });
