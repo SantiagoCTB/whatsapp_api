@@ -15,6 +15,13 @@
         <a class="back-btn" href="{{ url_for('chat.index') }}">Volver</a>
     </header>
 
+    <div class="filters">
+        <label for="fechaInicio">Desde:</label>
+        <input type="date" id="fechaInicio">
+        <label for="fechaFin">Hasta:</label>
+        <input type="date" id="fechaFin">
+    </div>
+
     <nav class="sidebar">
         <ul>
             <li><a href="#totalesCard">Totales</a></li>

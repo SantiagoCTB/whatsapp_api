@@ -22,9 +22,17 @@ def datos_tablero():
     if "user" not in session:
         return redirect(url_for('auth.login'))
 
+    start = request.args.get('start')
+    end = request.args.get('end')
+
     conn = get_connection()
     cur = conn.cursor()
-    cur.execute("SELECT numero, mensaje FROM mensajes")
+    query = "SELECT numero, mensaje FROM mensajes"
+    params = []
+    if start and end:
+        query += " WHERE timestamp BETWEEN ? AND ?"
+        params.extend([start, end])
+    cur.execute(query, params)
     rows = cur.fetchall()
     conn.close()
 
@@ -45,9 +53,17 @@ def datos_palabras():
 
     limite = request.args.get('limit', 10, type=int)
 
+    start = request.args.get('start')
+    end = request.args.get('end')
+
     conn = get_connection()
     cur = conn.cursor()
-    cur.execute("SELECT mensaje FROM mensajes")
+    query = "SELECT mensaje FROM mensajes"
+    params = []
+    if start and end:
+        query += " WHERE timestamp BETWEEN ? AND ?"
+        params.extend([start, end])
+    cur.execute(query, params)
     rows = cur.fetchall()
     conn.close()
 
@@ -68,18 +84,26 @@ def datos_roles():
     if "user" not in session:
         return redirect(url_for('auth.login'))
 
+    start = request.args.get('start')
+    end = request.args.get('end')
+
     conn = get_connection()
     cur = conn.cursor()
-    cur.execute(
+    query = (
         """
         SELECT COALESCE(r.keyword, r.name) AS rol, COUNT(*) AS mensajes
           FROM mensajes AS m
           JOIN chat_roles AS cr ON m.numero = cr.numero
           JOIN roles AS r ON cr.role_id = r.id
          WHERE m.tipo LIKE 'cliente%'
-         GROUP BY rol
         """
     )
+    params = []
+    if start and end:
+        query += " AND m.timestamp BETWEEN ? AND ?"
+        params.extend([start, end])
+    query += " GROUP BY rol"
+    cur.execute(query, params)
     rows = cur.fetchall()
     conn.close()
 
@@ -95,19 +119,25 @@ def datos_top_numeros():
 
     limite = request.args.get('limit', 5, type=int)
 
+    start = request.args.get('start')
+    end = request.args.get('end')
+
     conn = get_connection()
     cur = conn.cursor()
-    cur.execute(
+    query = (
         """
         SELECT numero, COUNT(*) AS total
           FROM mensajes
          WHERE tipo LIKE 'cliente%'
-         GROUP BY numero
-         ORDER BY total DESC
-         LIMIT ?
-        """,
-        (limite,),
+        """
     )
+    params = []
+    if start and end:
+        query += " AND timestamp BETWEEN ? AND ?"
+        params.extend([start, end])
+    query += " GROUP BY numero ORDER BY total DESC LIMIT ?"
+    params.append(limite)
+    cur.execute(query, params)
     rows = cur.fetchall()
     conn.close()
 
@@ -121,16 +151,23 @@ def datos_mensajes_diarios():
     if "user" not in session:
         return redirect(url_for('auth.login'))
 
+    start = request.args.get('start')
+    end = request.args.get('end')
+
     conn = get_connection()
     cur = conn.cursor()
-    cur.execute(
+    query = (
         """
         SELECT DATE(timestamp) AS fecha, COUNT(*) AS total
           FROM mensajes
-         GROUP BY DATE(timestamp)
-         ORDER BY fecha
         """
     )
+    params = []
+    if start and end:
+        query += " WHERE timestamp BETWEEN ? AND ?"
+        params.extend([start, end])
+    query += " GROUP BY DATE(timestamp) ORDER BY fecha"
+    cur.execute(query, params)
     rows = cur.fetchall()
     conn.close()
 
@@ -144,16 +181,23 @@ def datos_mensajes_hora():
     if "user" not in session:
         return redirect(url_for('auth.login'))
 
+    start = request.args.get('start')
+    end = request.args.get('end')
+
     conn = get_connection()
     cur = conn.cursor()
-    cur.execute(
+    query = (
         """
         SELECT HOUR(timestamp) AS hora, COUNT(*) AS total
           FROM mensajes
-         GROUP BY HOUR(timestamp)
-         ORDER BY hora
         """
     )
+    params = []
+    if start and end:
+        query += " WHERE timestamp BETWEEN ? AND ?"
+        params.extend([start, end])
+    query += " GROUP BY HOUR(timestamp) ORDER BY hora"
+    cur.execute(query, params)
     rows = cur.fetchall()
     conn.close()
 
@@ -167,9 +211,18 @@ def datos_tipos():
     if "user" not in session:
         return redirect(url_for('auth.login'))
 
+    start = request.args.get('start')
+    end = request.args.get('end')
+
     conn = get_connection()
     cur = conn.cursor()
-    cur.execute("SELECT tipo, COUNT(*) FROM mensajes GROUP BY tipo")
+    query = "SELECT tipo, COUNT(*) FROM mensajes"
+    params = []
+    if start and end:
+        query += " WHERE timestamp BETWEEN ? AND ?"
+        params.extend([start, end])
+    query += " GROUP BY tipo"
+    cur.execute(query, params)
     rows = cur.fetchall()
     conn.close()
 
@@ -183,9 +236,18 @@ def datos_totales():
     if "user" not in session:
         return redirect(url_for('auth.login'))
 
+    start = request.args.get('start')
+    end = request.args.get('end')
+
     conn = get_connection()
     cur = conn.cursor()
-    cur.execute("SELECT tipo, COUNT(*) FROM mensajes GROUP BY tipo")
+    query = "SELECT tipo, COUNT(*) FROM mensajes"
+    params = []
+    if start and end:
+        query += " WHERE timestamp BETWEEN ? AND ?"
+        params.extend([start, end])
+    query += " GROUP BY tipo"
+    cur.execute(query, params)
     rows = cur.fetchall()
     conn.close()
 
