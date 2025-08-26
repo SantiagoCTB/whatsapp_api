@@ -138,6 +138,29 @@ def datos_mensajes_diarios():
     return jsonify(data)
 
 
+@tablero_bp.route('/datos_mensajes_hora')
+def datos_mensajes_hora():
+    """Devuelve el total de mensajes agrupados por hora."""
+    if "user" not in session:
+        return redirect(url_for('auth.login'))
+
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute(
+        """
+        SELECT HOUR(timestamp) AS hora, COUNT(*) AS total
+          FROM mensajes
+         GROUP BY HOUR(timestamp)
+         ORDER BY hora
+        """
+    )
+    rows = cur.fetchall()
+    conn.close()
+
+    data = [{"hora": int(hora), "total": total} for hora, total in rows]
+    return jsonify(data)
+
+
 @tablero_bp.route('/datos_totales')
 def datos_totales():
     """Devuelve el total de mensajes enviados y recibidos."""
