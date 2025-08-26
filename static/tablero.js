@@ -34,6 +34,32 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     });
 
+  fetch('/datos_mensajes_diarios')
+    .then(response => response.json())
+    .then(data => {
+      const labels = data.map(item => item.fecha);
+      const values = data.map(item => item.total);
+      const ctx = document.getElementById('graficoDiario').getContext('2d');
+      new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: 'Mensajes por día',
+            data: values,
+            fill: false,
+            borderColor: 'rgba(153, 102, 255, 1)',
+            tension: 0.1
+          }]
+        },
+        options: {
+          scales: {
+            y: { beginAtZero: true }
+          }
+        }
+      });
+    });
+
   fetch('/datos_tablero')
     .then(response => response.json())
     .then(data => {

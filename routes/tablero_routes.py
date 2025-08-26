@@ -115,6 +115,29 @@ def datos_top_numeros():
     return jsonify(data)
 
 
+@tablero_bp.route('/datos_mensajes_diarios')
+def datos_mensajes_diarios():
+    """Devuelve el total de mensajes agrupados por fecha."""
+    if "user" not in session:
+        return redirect(url_for('auth.login'))
+
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute(
+        """
+        SELECT DATE(timestamp) AS fecha, COUNT(*) AS total
+          FROM mensajes
+         GROUP BY DATE(timestamp)
+         ORDER BY fecha
+        """
+    )
+    rows = cur.fetchall()
+    conn.close()
+
+    data = [{"fecha": fecha.strftime("%Y-%m-%d"), "total": total} for fecha, total in rows]
+    return jsonify(data)
+
+
 @tablero_bp.route('/datos_totales')
 def datos_totales():
     """Devuelve el total de mensajes enviados y recibidos."""
