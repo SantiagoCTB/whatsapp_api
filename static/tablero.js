@@ -9,11 +9,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const startInput = document.getElementById('fechaInicio');
   const endInput = document.getElementById('fechaFin');
+  const limitInput = document.getElementById('limit');
 
   function buildQuery() {
     const params = new URLSearchParams();
     if (startInput.value) params.append('start', startInput.value);
     if (endInput.value) params.append('end', endInput.value);
+    if (limitInput && limitInput.value) params.append('limit', limitInput.value);
     const q = params.toString();
     return q ? `?${q}` : '';
   }
@@ -164,20 +166,17 @@ document.addEventListener('DOMContentLoaded', () => {
         const values = data.map(item => item.frecuencia);
         const ctx = document.getElementById('grafico_palabras').getContext('2d');
         new Chart(ctx, {
-          type: 'bar',
+          type: 'wordCloud',
           data: {
             labels: labels,
             datasets: [{
               label: 'Palabras más frecuentes',
-              data: values,
-              backgroundColor: 'rgba(255, 159, 64, 0.5)',
-              borderColor: 'rgba(255, 159, 64, 1)',
-              borderWidth: 1
+              data: values
             }]
           },
           options: {
-            scales: {
-              y: { beginAtZero: true }
+            plugins: {
+              legend: { display: false }
             }
           }
         });
@@ -224,6 +223,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   startInput.addEventListener('change', cargarDatos);
   endInput.addEventListener('change', cargarDatos);
+  if (limitInput) limitInput.addEventListener('change', cargarDatos);
 
   cargarDatos();
 });
