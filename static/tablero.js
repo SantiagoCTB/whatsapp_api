@@ -60,6 +60,36 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     });
 
+  fetch('/datos_mensajes_hora')
+    .then(response => response.json())
+    .then(data => {
+      const valores = Array(24).fill(0);
+      data.forEach(item => {
+        const h = parseInt(item.hora, 10);
+        if (!isNaN(h)) valores[h] = item.total;
+      });
+      const labels = Array.from({ length: 24 }, (_, i) => i.toString().padStart(2, '0'));
+      const ctx = document.getElementById('graficoHora').getContext('2d');
+      new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: 'Mensajes por hora',
+            data: valores,
+            backgroundColor: 'rgba(255, 206, 86, 0.5)',
+            borderColor: 'rgba(255, 206, 86, 1)',
+            borderWidth: 1
+          }]
+        },
+        options: {
+          scales: {
+            y: { beginAtZero: true }
+          }
+        }
+      });
+    });
+
   fetch('/datos_tablero')
     .then(response => response.json())
     .then(data => {
