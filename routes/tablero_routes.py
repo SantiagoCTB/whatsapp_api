@@ -161,6 +161,22 @@ def datos_mensajes_hora():
     return jsonify(data)
 
 
+@tablero_bp.route('/datos_tipos')
+def datos_tipos():
+    """Devuelve la cantidad de mensajes agrupados por tipo."""
+    if "user" not in session:
+        return redirect(url_for('auth.login'))
+
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT tipo, COUNT(*) FROM mensajes GROUP BY tipo")
+    rows = cur.fetchall()
+    conn.close()
+
+    data = [{"tipo": tipo or "desconocido", "total": count} for tipo, count in rows]
+    return jsonify(data)
+
+
 @tablero_bp.route('/datos_totales')
 def datos_totales():
     """Devuelve el total de mensajes enviados y recibidos."""
