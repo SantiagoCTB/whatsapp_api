@@ -3,13 +3,11 @@ services:
     build: .
     ports:
       - "5000:5000"
-      - "8501:8501"
     env_file:
       - .env
     volumes:
       - .:/app
     command: >
-      bash -lc 'streamlit run scripts/tablero.py --server.port 8501 &
-                (command -v gunicorn >/dev/null &&
+      bash -lc '(command -v gunicorn >/dev/null &&
                  exec gunicorn -w 2 -b 0.0.0.0:${PORT:-5000} app:app ||
                  exec python app.py)'
