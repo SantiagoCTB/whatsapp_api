@@ -27,11 +27,7 @@ RUN useradd -m appuser && \
 
 USER appuser
 
-EXPOSE 5000
+EXPOSE 5000 8501
 
-# Start with Gunicorn (fallback to python)
-CMD bash -lc 'if command -v gunicorn >/dev/null 2>&1; then \
-    exec gunicorn -w 2 -b 0.0.0.0:${PORT:-5000} app:app; \
-  else \
-    echo "Gunicorn not found; starting with python app.py" && exec python app.py; \
-  fi'
+# Run Streamlit dashboard alongside Gunicorn
+CMD bash -lc 'streamlit run scripts/tablero.py --server.port 8501 & gunicorn -w 2 -b 0.0.0.0:${PORT:-5000} app:app'
