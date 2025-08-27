@@ -1,4 +1,10 @@
 document.addEventListener('DOMContentLoaded', () => {
+  const REFRESH_INTERVAL = 60000;
+  let chartTotales, chartDiario, chartHora, chartTablero, chartTopNumeros, chartPalabras, chartRoles, chartTipos;
+  const commonOptions = {
+    animation: { duration: 1000 },
+    interaction: { mode: 'nearest', intersect: false }
+  };
   const menuToggle = document.getElementById('menu-toggle');
   const sidebar = document.querySelector('.sidebar');
   if (menuToggle && sidebar) {
@@ -45,8 +51,9 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('totalEnviados').textContent = data.enviados;
         document.getElementById('totalRecibidos').textContent = data.recibidos;
 
+        if (chartTotales) chartTotales.destroy();
         const ctx = document.getElementById('graficoTotales').getContext('2d');
-        new Chart(ctx, {
+        chartTotales = new Chart(ctx, {
           type: 'bar',
           data: {
             labels: ['Enviados', 'Recibidos'],
@@ -59,6 +66,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }]
           },
           options: {
+            ...commonOptions,
             scales: {
               y: { beginAtZero: true }
             }
@@ -71,8 +79,9 @@ document.addEventListener('DOMContentLoaded', () => {
       .then(data => {
         const labels = data.map(item => item.fecha);
         const values = data.map(item => item.total);
+        if (chartDiario) chartDiario.destroy();
         const ctx = document.getElementById('graficoDiario').getContext('2d');
-        new Chart(ctx, {
+        chartDiario = new Chart(ctx, {
           type: 'line',
           data: {
             labels: labels,
@@ -85,6 +94,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }]
           },
           options: {
+            ...commonOptions,
             scales: {
               y: { beginAtZero: true }
             }
@@ -101,8 +111,9 @@ document.addEventListener('DOMContentLoaded', () => {
           if (!isNaN(h)) valores[h] = item.total;
         });
         const labels = Array.from({ length: 24 }, (_, i) => i.toString().padStart(2, '0'));
+        if (chartHora) chartHora.destroy();
         const ctx = document.getElementById('graficoHora').getContext('2d');
-        new Chart(ctx, {
+        chartHora = new Chart(ctx, {
           type: 'bar',
           data: {
             labels: labels,
@@ -115,6 +126,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }]
           },
           options: {
+            ...commonOptions,
             scales: {
               y: { beginAtZero: true }
             }
@@ -127,8 +139,9 @@ document.addEventListener('DOMContentLoaded', () => {
       .then(data => {
         const labels = data.map(item => item.numero);
         const values = data.map(item => item.palabras);
+        if (chartTablero) chartTablero.destroy();
         const ctx = document.getElementById('grafico').getContext('2d');
-        new Chart(ctx, {
+        chartTablero = new Chart(ctx, {
           type: 'bar',
           data: {
             labels: labels,
@@ -141,6 +154,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }]
           },
           options: {
+            ...commonOptions,
             scales: {
               y: { beginAtZero: true }
             }
@@ -153,8 +167,9 @@ document.addEventListener('DOMContentLoaded', () => {
       .then(data => {
         const labels = data.map(item => item.numero);
         const values = data.map(item => item.mensajes);
+        if (chartTopNumeros) chartTopNumeros.destroy();
         const ctx = document.getElementById('graficoTopNumeros').getContext('2d');
-        new Chart(ctx, {
+        chartTopNumeros = new Chart(ctx, {
           type: 'bar',
           data: {
             labels: labels,
@@ -167,6 +182,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }]
           },
           options: {
+            ...commonOptions,
             indexAxis: 'y',
             scales: {
               x: { beginAtZero: true }
@@ -180,8 +196,9 @@ document.addEventListener('DOMContentLoaded', () => {
       .then(data => {
         const labels = data.map(item => item.palabra);
         const values = data.map(item => item.frecuencia);
+        if (chartPalabras) chartPalabras.destroy();
         const ctx = document.getElementById('grafico_palabras').getContext('2d');
-        new Chart(ctx, {
+        chartPalabras = new Chart(ctx, {
           type: 'wordCloud',
           data: {
             labels: labels,
@@ -191,6 +208,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }]
           },
           options: {
+            ...commonOptions,
             plugins: {
               legend: { display: false }
             }
@@ -203,9 +221,10 @@ document.addEventListener('DOMContentLoaded', () => {
       .then(data => {
         const labels = data.map(item => item.rol);
         const values = data.map(item => item.mensajes);
+        if (chartRoles) chartRoles.destroy();
         const ctx = document.getElementById('grafico_roles').getContext('2d');
         const colors = ['#FF6384','#36A2EB','#FFCE56','#4BC0C0','#9966FF','#FF9F40'];
-        new Chart(ctx, {
+        chartRoles = new Chart(ctx, {
           type: 'pie',
           data: {
             labels: labels,
@@ -213,6 +232,9 @@ document.addEventListener('DOMContentLoaded', () => {
               data: values,
               backgroundColor: labels.map((_, i) => colors[i % colors.length])
             }]
+          },
+          options: {
+            ...commonOptions
           }
         });
       });
@@ -222,9 +244,10 @@ document.addEventListener('DOMContentLoaded', () => {
       .then(data => {
         const labels = data.map(item => item.tipo);
         const values = data.map(item => item.total);
+        if (chartTipos) chartTipos.destroy();
         const ctx = document.getElementById('graficoTipos').getContext('2d');
         const colors = ['#FF6384','#36A2EB','#FFCE56','#4BC0C0','#9966FF','#FF9F40','#8E5EA2','#3CBA9F','#E8C3B9','#C45850'];
-        new Chart(ctx, {
+        chartTipos = new Chart(ctx, {
           type: 'doughnut',
           data: {
             labels: labels,
@@ -232,11 +255,15 @@ document.addEventListener('DOMContentLoaded', () => {
               data: values,
               backgroundColor: labels.map((_, i) => colors[i % colors.length])
             }]
+          },
+          options: {
+            ...commonOptions
           }
         });
       });
   }
 
   cargarDatos();
+  setInterval(cargarDatos, REFRESH_INTERVAL);
 });
 
