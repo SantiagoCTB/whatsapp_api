@@ -38,20 +38,41 @@
         <div class="dashboard-grid">
             <section class="cards totales">
                 <div class="card" id="totalesCard">
-                    <h3>Totales de mensajes</h3>
+                    <h3><span class="icon">📊</span> Totales de mensajes</h3>
                     <p>Enviados: <span id="totalEnviados">0</span></p>
                     <p>Recibidos: <span id="totalRecibidos">0</span></p>
-                    <canvas id="graficoTotales"></canvas>
+                    <canvas id="graficoTotales" height="120"></canvas>
                 </div>
             </section>
             <section class="reports graficas" id="reportes">
-                <div class="card"><canvas id="graficoDiario"></canvas></div>
-                <div class="card"><canvas id="graficoHora"></canvas></div>
-                <div class="card"><canvas id="grafico"></canvas></div>
-                <div class="card"><canvas id="graficoTopNumeros"></canvas></div>
-                <div class="card"><canvas id="grafico_palabras"></canvas></div>
-                <div class="card"><canvas id="grafico_roles"></canvas></div>
-                <div class="card"><canvas id="graficoTipos"></canvas></div>
+                <div class="card">
+                    <h4>Mensajes por Día</h4>
+                    <canvas id="graficoDiario" height="120"></canvas>
+                </div>
+                <div class="card">
+                    <h4>Mensajes por Hora</h4>
+                    <canvas id="graficoHora" height="120"></canvas>
+                </div>
+                <div class="card">
+                    <h4>Mensajes por Usuario</h4>
+                    <canvas id="grafico" height="120"></canvas>
+                </div>
+                <div class="card">
+                    <h4>Top Números</h4>
+                    <canvas id="graficoTopNumeros" height="120"></canvas>
+                </div>
+                <div class="card">
+                    <h4>Palabras Más Usadas</h4>
+                    <canvas id="grafico_palabras" height="120"></canvas>
+                </div>
+                <div class="card">
+                    <h4>Roles</h4>
+                    <canvas id="grafico_roles" height="120"></canvas>
+                </div>
+                <div class="card">
+                    <h4>Tipos de Mensaje</h4>
+                    <canvas id="graficoTipos" height="120"></canvas>
+                </div>
             </section>
         </div>
     </main>

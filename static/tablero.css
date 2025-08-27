@@ -66,8 +66,8 @@
 .dashboard-grid {
   display: grid;
   grid-template-columns: 1fr 2fr;
-  grid-template-areas: "totales graficas";
-  gap: 20px;
+  gap: 2rem;
+  margin: 2rem;
 }
 
 .totales {
@@ -92,14 +92,21 @@
 }
 
 .card {
-  background: var(--bg-glass);
-  color: var(--text-main);
-  border-radius: 8px;
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255,255,255,0.2);
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
-  padding: 20px;
-  text-align: center;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.card h3, .card h4 {
+  margin-top: 0;
+  color: #2c3e50;
+}
+
+.icon {
+  font-size: 1.2em;
+  margin-right: 0.5em;
 }
 
 .card canvas {
@@ -112,6 +119,12 @@
   .dashboard-grid {
     grid-template-columns: 1fr 1fr;
   }
+}
+
+@media (max-width: 900px) {
+    .dashboard-grid {
+        grid-template-columns: 1fr;
+    }
 }
 
 @media (max-width: 768px) {
