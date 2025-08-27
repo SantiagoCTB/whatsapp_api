@@ -27,7 +27,7 @@ RUN useradd -m appuser && \
 
 USER appuser
 
-EXPOSE ${PORT} 8501
+EXPOSE ${PORT}
 
-# Run Streamlit dashboard alongside Gunicorn
-CMD bash -lc 'streamlit run scripts/tablero.py --server.port 8501 & gunicorn -w 2 -b 0.0.0.0:${PORT:-8080} app:app'
+# Run the Flask app with Gunicorn
+CMD bash -lc 'gunicorn -w 2 -b 0.0.0.0:${PORT:-8080} app:app'

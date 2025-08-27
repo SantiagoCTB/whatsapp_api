@@ -11,7 +11,6 @@ from routes.configuracion import config_bp
 from routes.roles_routes import roles_bp
 from routes.webhook import webhook_bp
 from routes.tablero_routes import tablero_bp
-from routes.streamlit_routes import streamlit_bp
 
 load_dotenv()
 
@@ -27,7 +26,6 @@ def create_app():
     app.register_blueprint(roles_bp)
     app.register_blueprint(webhook_bp)
     app.register_blueprint(tablero_bp)
-    app.register_blueprint(streamlit_bp)
 
     # Inicializa BD solo si se pide explícitamente y dentro del app_context
     if os.getenv("INIT_DB_ON_START", "0") == "1":
