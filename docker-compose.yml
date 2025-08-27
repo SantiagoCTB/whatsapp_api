@@ -5,8 +5,9 @@ services:
       - "5000:5000"
     env_file:
       - .env
+    # Persist only user uploads instead of mounting the entire project
     volumes:
-      - .:/app
+      - ./static/uploads:/app/static/uploads
     command: >
       bash -lc '(command -v gunicorn >/dev/null &&
                  exec gunicorn -w 2 -b 0.0.0.0:${PORT:-5000} app:app ||
