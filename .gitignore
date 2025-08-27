@@ -11,6 +11,10 @@
 __pycache__/
 *.pyc
 
+# Archivos de Node / React
+node_modules/
+dist/
+
 # Medios generados por los usuarios
 static/uploads/
 uploads/
