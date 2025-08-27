@@ -6,9 +6,8 @@ from config import Config
 from services.whatsapp_api import enviar_mensaje
 from services.db import get_connection, get_chat_state, update_chat_state
 
-# Ruta al build de Vite y recursos estáticos
-BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-FRONTEND_DIST = os.path.join(BASE_DIR, 'frontend', 'dist')
+# Ruta al build de Vite y recursos estáticos dentro de la imagen Docker
+FRONTEND_DIST = '/app/static'
 
 chat_bp = Blueprint(
     'chat',
