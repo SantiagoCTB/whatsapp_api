@@ -1,0 +1,388 @@
+{% extends 'base.html' %}
+{% block title %}Chat Tecnimedellín{% endblock %}
+{% block body_class %}chat{% endblock %}
+{% block content %}
+  <div class="container">
+    <!-- Sidebar -->
+    <div class="sidebar">
+      <h2>Chats</h2>
+      <div class="sidebar-header">
+        <button id="settingsBtn">⚙️</button>
+      </div>
+      <div id="settingsMenu">
+        <a href="{{ url_for('configuracion.reglas') }}">Reglas</a>
+        <a href="{{ url_for('configuracion.botones') }}">Botones</a>
+        {% if session.get('roles') and 'admin' in session['roles'] %}
+        <a href="{{ url_for('roles.roles') }}">Roles</a>
+        {% endif %}
+        <a href="{{ url_for('tablero.tablero') }}">Tablero</a>
+        <a href="{{ url_for('auth.logout') }}">Cerrar sesión</a>
+      </div>
+      <input id="buscador" type="text" placeholder="Buscar número…">
+      <ul id="chatList"></ul>
+    </div>
+
+    <!-- Chat Window -->
+    <div class="chatWindow">
+      <div id="botonera"></div>
+      <div id="chatBox"></div>
+      <div id="replyPreview" class="reply-preview"></div>
+      <div class="inputArea">
+        <button id="attachBtn">+</button>
+      <div id="attachMenu" class="attach-menu">
+        <div id="attachImage" class="attach-item" title="Enviar imagen">📷</div>
+        <div id="attachAudio" class="attach-item" title="Enviar audio">🎤</div>
+        <div id="attachVideo" class="attach-item" title="Enviar video">🎥</div>
+      </div>
+      <input id="messageInput" type="text" placeholder="Escribe un mensaje…">
+      <button id="sendBtn">Enviar</button>
+      <input id="imageInput" type="file" accept="image/*" style="display:none;">
+      <input id="audioInput" type="file" accept="audio/*" style="display:none;">
+      <input id="videoInput" type="file" accept="video/*" style="display:none;">
+    </div>
+  </div>
+</div>
+
+  <div id="contextMenu" class="context-menu"><div id="replyAction">Responder</div></div>
+
+  <div class="role-indicator">{{ rol }}</div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      let currentChat = null, autoRefresh = null, todosChats = [], lastCount = 0, replyTo = null;
+      let selectedBubble = null;
+      const chatListEl = document.getElementById('chatList');
+      const chatBoxEl  = document.getElementById('chatBox');
+      const botoneraEl = document.getElementById('botonera');
+      const replyPreviewEl = document.getElementById('replyPreview');
+      const contextMenu = document.getElementById('contextMenu');
+      const replyAction = document.getElementById('replyAction');
+      const userRole   = "{{ rol }}";
+      const userRoleId = {{ role_id | tojson }};
+
+      document.addEventListener('click', () => contextMenu.classList.remove('show'));
+
+      replyAction.onclick = () => {
+        if (!selectedBubble) return;
+        replyTo = selectedBubble.dataset.waId;
+        replyPreviewEl.innerHTML = '';
+        const tipo = selectedBubble.dataset.tipo || '';
+        const url  = selectedBubble.dataset.url;
+        const text = selectedBubble.dataset.text;
+        if (url && tipo.endsWith('_image')) {
+          const img = document.createElement('img');
+          img.src = url; replyPreviewEl.appendChild(img);
+        } else if (url && tipo.includes('audio')) {
+          const a = document.createElement('audio'); a.controls=true; a.src=url; replyPreviewEl.appendChild(a);
+        } else if (url && tipo.includes('video')) {
+          const v = document.createElement('video'); v.controls=true; v.src=url; replyPreviewEl.appendChild(v);
+        }
+        if (text) {
+          const p = document.createElement('p'); p.textContent = text; replyPreviewEl.appendChild(p);
+        }
+        replyPreviewEl.style.display = 'block';
+        contextMenu.classList.remove('show');
+      };
+
+      replyPreviewEl.onclick = () => {
+        replyTo = null;
+        replyPreviewEl.style.display = 'none';
+        replyPreviewEl.innerHTML = '';
+      };
+
+      // Mostrar u ocultar menú settings
+      const settingsBtn = document.getElementById('settingsBtn');
+      const settingsMenu = document.getElementById('settingsMenu');
+      settingsBtn.onclick = e => {
+        e.stopPropagation();
+        settingsMenu.classList.toggle('show');
+      };
+      document.addEventListener('click', () => settingsMenu.classList.remove('show'));
+
+      // Cargar lista de chats
+      function fetchChatList() {
+        fetch('/get_chat_list')
+          .then(r=>r.json())
+          .then(data=>{
+            todosChats = data;
+            chatListEl.innerHTML='';
+            data.forEach(c => {
+              if (userRole !== 'admin') {
+                const roles = c.roles ? c.roles.split(',').map(Number) : [];
+                if (!roles.includes(userRoleId)) return;
+              }
+              const li = document.createElement('li');
+              li.textContent = c.alias ? `${c.alias} (${c.numero})` : c.numero;
+              if (c.estado) li.classList.add('estado-' + c.estado);
+
+              // Badge con inicial del rol
+              if (c.inicial_rol) {
+                const badge = document.createElement('span');
+                badge.className = 'badge';
+                badge.textContent = c.inicial_rol;
+                li.appendChild(badge);
+              }
+
+              // Al hacer clic, seleccionar el chat
+              li.onclick = () => selectChat(c.numero, li);
+
+              // ✅ Clic derecho para asignar alias
+              li.addEventListener('contextmenu', function (e) {
+                e.preventDefault(); // evita el menú del navegador
+
+                const nombre = prompt("Asignar alias a: " + c.numero, c.alias || "");
+                if (nombre !== null && nombre.trim() !== "") {
+                  fetch('/set_alias', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ numero: c.numero, nombre })
+                  }).then(() => fetchChatList());
+                }
+              });
+
+              chatListEl.appendChild(li);
+            });
+          });
+      }
+
+      // Seleccionar chat
+      function selectChat(numero, liEl) {
+        currentChat = numero; lastCount = 0;
+        // marcar activo
+        document.querySelectorAll('#chatList li').forEach(li => li.classList.remove('active'));
+        liEl.classList.add('active');
+        if (autoRefresh) clearInterval(autoRefresh);
+        autoRefresh = setInterval(loadMessages, 3000);
+        loadMessages(); loadBotonera();
+      }
+
+      // Cargar mensajes
+      function loadMessages() {
+        if (!currentChat) return;
+        // no interrumpir si hay media reproduciéndose
+        const mediaEls = chatBoxEl.querySelectorAll('audio, video');
+        for (let m of mediaEls) if (!m.paused) return;
+
+        fetch(`/get_chat/${currentChat}`)
+          .then(r=>r.json())
+          .then(data => {
+            const msgs = data.mensajes, total = msgs.length;
+            const atBottom = chatBoxEl.scrollTop + chatBoxEl.clientHeight >= chatBoxEl.scrollHeight - 5;
+            if (lastCount===0 || total<lastCount) {
+              chatBoxEl.innerHTML = ''; lastCount = 0;
+            }
+            for (let i=lastCount; i<total; i++){
+              const [txt, tipo, url, ts, linkUrl, linkTitle, linkBody, linkThumb, waId, replyWaId, replyText, replyTipo, replyUrl] = msgs[i];
+              const div = document.createElement('div');
+              // map tipo a bubble class
+              let bubble = 'cliente';
+              if (tipo.startsWith('bot'))    bubble='bot';
+              if (tipo.startsWith('asesor')) bubble='asesor';
+              div.className = `bubble ${bubble} message`;
+
+              if (replyWaId) {
+                const replyDiv = document.createElement('div');
+                replyDiv.className = 'reply';
+                if (replyTipo && replyTipo.endsWith('_image') && replyUrl) {
+                  const img = document.createElement('img');
+                  img.src = replyUrl;
+                  img.style.maxWidth = '100px';
+                  replyDiv.appendChild(img);
+                } else if (replyTipo && replyTipo.includes('audio') && replyUrl) {
+                  const a = document.createElement('audio');
+                  a.controls = true; a.src = replyUrl; replyDiv.appendChild(a);
+                } else if (replyTipo && replyTipo.includes('video') && replyUrl) {
+                  const v = document.createElement('video');
+                  v.controls = true; v.src = replyUrl; v.style.maxWidth = '100px';
+                  replyDiv.appendChild(v);
+                }
+                if (replyText) {
+                  const p = document.createElement('p');
+                  p.textContent = replyText;
+                  replyDiv.appendChild(p);
+                }
+                div.appendChild(replyDiv);
+              }
+
+              // insertar media o texto
+              if (tipo === 'referral' && linkUrl) {
+                const a = document.createElement('a');
+                a.href = linkUrl; a.target = '_blank'; a.style.textDecoration = 'none';
+                const card = document.createElement('div');
+                card.style.display = 'flex';
+                const img = document.createElement('img');
+                img.src = linkThumb; img.style.width = '100px'; img.style.marginRight = '8px';
+                const textBox = document.createElement('div');
+                textBox.innerHTML = `<strong>${linkTitle}</strong><br>${linkBody}`;
+                card.appendChild(img); card.appendChild(textBox); a.appendChild(card);
+                div.appendChild(a);
+              } else if (tipo.endsWith('_image') && url) {
+                const img = document.createElement('img');
+                img.src = url; img.style.maxWidth='200px';
+                div.appendChild(img);
+              } else if (tipo.includes('audio') && url) {
+                const a = document.createElement('audio');
+                a.controls=true; a.src=url; div.appendChild(a);
+              } else if (tipo.includes('video') && url) {
+                const v = document.createElement('video');
+                v.controls=true; v.src=url; v.style.maxWidth='200px';
+                div.appendChild(v);
+              }
+
+              // texto (caption o mensajes)
+              if (txt) {
+                const p = document.createElement('p');
+                p.textContent = txt;
+                div.appendChild(p);
+              }
+
+              // fecha y hora
+              if (ts) {
+                const date = new Date(ts);
+                const timeSpan = document.createElement('div');
+                const dia = String(date.getDate()).padStart(2, '0');
+                const mes = String(date.getMonth() + 1).padStart(2, '0');
+                const hora = String(date.getHours()).padStart(2, '0');
+                const min = String(date.getMinutes()).padStart(2, '0');
+                timeSpan.className = 'timestamp';
+                timeSpan.textContent = `${dia}/${mes} ${hora}:${min}`;
+                div.appendChild(timeSpan);
+              }
+
+              if (waId) {
+                div.dataset.waId = waId;
+                if (txt) div.dataset.text = txt;
+                if (url) div.dataset.url = url;
+                div.dataset.tipo = tipo;
+                div.addEventListener('contextmenu', e => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  selectedBubble = div;
+                  contextMenu.style.top = e.pageY + 'px';
+                  contextMenu.style.left = e.pageX + 'px';
+                  contextMenu.classList.add('show');
+                });
+              }
+
+              chatBoxEl.appendChild(div);
+            }
+            lastCount = total;
+            if (atBottom) chatBoxEl.scrollTop = chatBoxEl.scrollHeight;
+          });
+      }
+
+      // Botones rápidos
+      function loadBotonera() {
+        fetch('/get_botones')
+          .then(r=>r.json())
+          .then(btns => {
+            botoneraEl.innerHTML='';
+            btns.forEach((b,i) => {
+              const btn = document.createElement('button');
+              btn.textContent = b.nombre || i+1;
+              btn.onclick = () => {
+                if (!currentChat) return;
+                const urls = (b.media_urls && b.media_urls.length) ? b.media_urls : [null];
+                const envios = urls.map((url, index) => fetch('/send_message', {
+                  method:'POST',
+                  headers:{'Content-Type':'application/json'},
+                  body:JSON.stringify({
+                    numero: currentChat,
+                    mensaje: index === 0 ? b.mensaje : '',
+                    tipo_respuesta: b.tipo,
+                    opciones: url,
+                    reply_to_wa_id: replyTo
+                  })
+                }));
+                Promise.all(envios).then(responses => {
+                  if (responses.every(r => r.ok)) {
+                    replyTo=null;
+                    replyPreviewEl.style.display='none';
+                    replyPreviewEl.innerHTML='';
+                    loadMessages(); fetchChatList();
+                  } else {
+                    alert('No se pudo enviar el mensaje');
+                  }
+                });
+              };
+              botoneraEl.appendChild(btn);
+            });
+          });
+      }
+
+      // Enviar texto
+      document.getElementById('sendBtn').onclick = () => {
+        const inp = document.getElementById('messageInput');
+        const txt = inp.value.trim();
+        if (!txt||!currentChat) return;
+        fetch('/send_message',{
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({numero:currentChat,mensaje:txt,reply_to_wa_id:replyTo})
+        }).then(res=>{
+          if(!res.ok){
+            alert('No se pudo enviar el mensaje');
+            return;
+          }
+          inp.value='';
+          replyTo=null;
+          replyPreviewEl.style.display='none';
+          replyPreviewEl.innerHTML='';
+          loadMessages(); fetchChatList();
+        });
+      };
+
+      document.getElementById('messageInput').addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          document.getElementById('sendBtn').click();
+        }
+      });
+
+      // Attach menu
+      const attachBtn = document.getElementById('attachBtn');
+      const attachMenu = document.getElementById('attachMenu');
+      attachBtn.onclick = e => {
+        e.stopPropagation();
+        attachMenu.classList.toggle('show');
+      };
+      document.addEventListener('click', () => attachMenu.classList.remove('show'));
+
+      // File inputs
+      const imgIn = document.getElementById('imageInput');
+      const audIn = document.getElementById('audioInput');
+      const vidIn = document.getElementById('videoInput');
+      document.getElementById('attachImage').onclick = () => imgIn.click();
+      document.getElementById('attachAudio').onclick = () => audIn.click();
+      document.getElementById('attachVideo').onclick = () => vidIn.click();
+
+      async function sendFile(inputEl, endpoint) {
+        if (!currentChat) return;
+        const file = inputEl.files[0];
+        if (!file) return;
+        const form = new FormData();
+        form.append(endpoint.split('_')[1], file);
+        form.append('caption','');
+        form.append('numero', currentChat);
+        const res = await fetch(`/${endpoint}`, { method:'POST', body:form });
+        if (!res.ok) return;
+        inputEl.value=''; attachMenu.classList.remove('show');
+        loadMessages(); fetchChatList();
+      }
+      imgIn.onchange = () => sendFile(imgIn, 'send_image');
+      audIn.onchange = () => sendFile(audIn, 'send_audio');
+      vidIn.onchange = () => sendFile(vidIn, 'send_video');
+
+      // Filtrar chats
+      document.getElementById('buscador').addEventListener('input', function(){
+        const v = this.value.toLowerCase();
+        chatListEl.querySelectorAll('li').forEach(li => {
+          li.style.display = li.textContent.toLowerCase().includes(v) ? '' : 'none';
+        });
+      });
+
+      // Inicializa
+      fetchChatList();
+    });
+  </script>
+{% endblock %}
