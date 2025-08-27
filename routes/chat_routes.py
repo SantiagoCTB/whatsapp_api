@@ -1,20 +1,12 @@
 import os
 import uuid
-from flask import Blueprint, send_from_directory, request, redirect, session, url_for, jsonify
+from flask import Blueprint, request, redirect, session, url_for, jsonify, render_template
 from werkzeug.utils import secure_filename
 from config import Config
 from services.whatsapp_api import enviar_mensaje
 from services.db import get_connection, get_chat_state, update_chat_state
 
-# Ruta al build de Vite y recursos estáticos dentro de la imagen Docker
-FRONTEND_DIST = '/app/static'
-
-chat_bp = Blueprint(
-    'chat',
-    __name__,
-    static_folder=os.path.join(FRONTEND_DIST, 'assets'),
-    static_url_path='/assets'
-)
+chat_bp = Blueprint('chat', __name__)
 
 # Carpeta de subida debe coincidir con la de whatsapp_api
 MEDIA_ROOT = Config.MEDIA_ROOT
@@ -22,11 +14,11 @@ os.makedirs(Config.MEDIA_ROOT, exist_ok=True)
 
 @chat_bp.route('/')
 def index():
-    """Entrega la aplicación frontend construida por Vite."""
+    """Entrega la interfaz de chat basada en plantilla."""
     if "user" not in session:
         return redirect(url_for("auth.login"))
 
-    return send_from_directory(FRONTEND_DIST, 'index.html')
+    return render_template('index.html')
 
 @chat_bp.route('/get_chat/<numero>')
 def get_chat(numero):
