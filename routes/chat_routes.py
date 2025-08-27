@@ -18,7 +18,17 @@ def index():
     if "user" not in session:
         return redirect(url_for("auth.login"))
 
-    return render_template('index.html')
+    conn = get_connection()
+    c    = conn.cursor()
+    rol  = session.get('rol')
+    role_id = None
+    if rol != 'admin':
+        c.execute("SELECT id FROM roles WHERE keyword=%s", (rol,))
+        row = c.fetchone()
+        role_id = row[0] if row else None
+    conn.close()
+
+    return render_template('index.html', rol=rol, role_id=role_id)
 
 @chat_bp.route('/get_chat/<numero>')
 def get_chat(numero):
