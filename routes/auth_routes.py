@@ -1,4 +1,13 @@
-from flask import Blueprint, render_template, request, redirect, session, url_for
+from flask import (
+    Blueprint,
+    request,
+    redirect,
+    session,
+    url_for,
+    send_from_directory,
+    current_app,
+)
+import os
 import hashlib
 from werkzeug.security import check_password_hash
 from services.db import get_connection, get_roles_by_user
@@ -20,7 +29,6 @@ def _verify_password(stored_hash: str, plain: str) -> bool:
 
 @auth_bp.route('/login', methods=['GET', 'POST'])
 def login():
-    error = None
     if request.method == 'POST':
         username = (request.form.get('username') or "").strip()
         password = (request.form.get('password') or "")
@@ -46,11 +54,14 @@ def login():
 
                 return redirect(url_for('chat.index'))
             else:
-                error = 'Usuario o contraseña incorrectos'
+                # En caso de error, regresar a la interfaz de login
+                return redirect(url_for('auth.login'))
         finally:
             conn.close()
 
-    return render_template('login.html', error=error)
+    # Para GET, sirve la aplicación de React
+    dist_dir = os.path.join(current_app.root_path, 'frontend', 'dist')
+    return send_from_directory(dist_dir, 'index.html')
 
 @auth_bp.route('/logout')
 def logout():

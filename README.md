@@ -24,11 +24,12 @@ Editar
 │   ├── whatsapp_api.py            # Funciones para enviar mensajes con texto, botones y listas
 │   └── utils.py                   # (Reservado para funciones auxiliares si es necesario)
 │
-├── /templates/                    # Archivos HTML (Jinja2)
-│   ├── index.html                 # Vista del chat entre clientes y asesores
-│   ├── login.html                 # Formulario de inicio de sesión
+├── /templates/                    # Vistas internas basadas en Jinja2
 │   ├── configuracion.html         # Administración de reglas del chatbot
-│   └── botones.html               # Administración de botones predefinidos
+│   ├── botones.html               # Administración de botones predefinidos
+│   ├── reglas.html                # Vista de reglas existentes
+│   ├── roles.html                 # Gestión de roles de usuarios
+│   └── tablero.html               # Tablero principal para administradores
 │
 ├── /static/                       # Archivos CSS/JS si los hay
 │   └── style.css                  # Estilos generales
