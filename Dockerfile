@@ -1,7 +1,7 @@
 # ---- Base image ----
 FROM python:3.11-slim
 
-ENV PYTHONDONTWRITEBYTECODE=1     PYTHONUNBUFFERED=1     PORT=5000
+ENV PYTHONDONTWRITEBYTECODE=1     PYTHONUNBUFFERED=1     PORT=8080
 
 WORKDIR /app
 
@@ -27,7 +27,7 @@ RUN useradd -m appuser && \
 
 USER appuser
 
-EXPOSE 5000 8501
+EXPOSE ${PORT} 8501
 
 # Run Streamlit dashboard alongside Gunicorn
-CMD bash -lc 'streamlit run scripts/tablero.py --server.port 8501 & gunicorn -w 2 -b 0.0.0.0:${PORT:-5000} app:app'
+CMD bash -lc 'streamlit run scripts/tablero.py --server.port 8501 & gunicorn -w 2 -b 0.0.0.0:${PORT:-8080} app:app'
