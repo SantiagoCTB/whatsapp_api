@@ -134,3 +134,13 @@
       "graficas";
   }
 }
+
+.filters-panel {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.3s ease;
+}
+
+.filters-panel.open {
+  max-height: 500px;
+}
