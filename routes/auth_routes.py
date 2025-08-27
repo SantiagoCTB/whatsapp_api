@@ -6,6 +6,7 @@ from flask import (
     url_for,
     send_from_directory,
     current_app,
+    jsonify,
 )
 import os
 import hashlib
@@ -62,6 +63,43 @@ def login():
     # Para GET, sirve la aplicación de React
     dist_dir = os.path.join(current_app.root_path, 'frontend', 'dist')
     return send_from_directory(dist_dir, 'index.html')
+
+
+@auth_bp.route('/api/login', methods=['POST'])
+def api_login():
+    data = request.get_json() or {}
+    username = (data.get('username') or "").strip()
+    password = data.get('password') or ""
+
+    conn = get_connection()
+    try:
+        c = conn.cursor()
+        c.execute(
+            'SELECT id, username, password FROM usuarios WHERE username = %s',
+            (username,),
+        )
+        user = c.fetchone()
+
+        if user and _verify_password(user[2], password):
+            session['user'] = user[1]
+
+            roles = get_roles_by_user(user[0]) or []
+            session['roles'] = roles
+            session['rol'] = roles[0] if roles else None
+
+            return jsonify({'status': 'ok'})
+        else:
+            return (
+                jsonify(
+                    {
+                        'status': 'error',
+                        'message': 'Usuario o contraseña incorrectos',
+                    }
+                ),
+                401,
+            )
+    finally:
+        conn.close()
 
 @auth_bp.route('/logout')
 def logout():
