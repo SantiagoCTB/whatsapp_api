@@ -1,13 +1,13 @@
 import React, { useState, useMemo } from "react";
 import { motion, useMotionValue, useTransform, AnimatePresence } from "framer-motion";
-import { Eye, EyeOff, Loader2, Shield, Github, Mail } from "lucide-react";
+import { Eye, EyeOff, Loader2, Shield } from "lucide-react";
 
 export default function Login({
   onSubmit,
   loading = false,
   errorMessage = "",
 }) {
-  const [form, setForm] = useState({ username: "", password: "", remember: false });
+  const [form, setForm] = useState({ username: "", password: "" });
   const [touched, setTouched] = useState({ username: false, password: false });
   const [showPassword, setShowPassword] = useState(false);
 
@@ -26,8 +26,7 @@ export default function Login({
   }, [form.password]);
 
   // Handlers
-  const handleChange = (e) =>
-    setForm({ ...form, [e.target.name]: e.target.type === "checkbox" ? e.target.checked : e.target.value });
+  const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
   const handleBlur = (e) => setTouched({ ...touched, [e.target.name]: true });
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -35,7 +34,7 @@ export default function Login({
       setTouched({ username: true, password: true });
       return;
     }
-    if (onSubmit) await onSubmit({ username: form.username, password: form.password, remember: form.remember });
+    if (onSubmit) await onSubmit({ username: form.username, password: form.password });
   };
 
   // Card parallax effect
@@ -186,24 +185,6 @@ export default function Login({
               )}
             </div>
 
-            {/* Remember / Forgot */}
-            <div className="flex items-center justify-between text-xs text-gray-400">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  name="remember"
-                  checked={form.remember}
-                  onChange={handleChange}
-                  disabled={loading}
-                  className="h-4 w-4 rounded border-gray-600 bg-transparent text-cyan-500 focus:ring-cyan-400"
-                />
-                Recordarme
-              </label>
-              <a href="#" className="hover:text-cyan-400 focus:text-cyan-400 focus:outline-none">
-                ¿Olvidaste tu contraseña?
-              </a>
-            </div>
-
             {/* Submit button */}
             <motion.button
               data-testid="submit"
@@ -216,21 +197,6 @@ export default function Login({
               {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : "Ingresar"}
             </motion.button>
 
-            {/* Social logins (placeholders) */}
-            <div className="mt-2 flex gap-3">
-              <button
-                type="button"
-                className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-gray-600 bg-white/5 p-2 text-sm text-gray-300 hover:border-cyan-400 hover:text-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-400"
-              >
-                <Mail className="h-4 w-4" /> Google
-              </button>
-              <button
-                type="button"
-                className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-gray-600 bg-white/5 p-2 text-sm text-gray-300 hover:border-cyan-400 hover:text-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-400"
-              >
-                <Github className="h-4 w-4" /> GitHub
-              </button>
-            </div>
           </form>
 
           {/* Secondary links */}
