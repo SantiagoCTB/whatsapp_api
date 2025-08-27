@@ -10,6 +10,22 @@ document.addEventListener('DOMContentLoaded', () => {
   const startInput = document.getElementById('fechaInicio');
   const endInput = document.getElementById('fechaFin');
   const limitInput = document.getElementById('limit');
+  const filtersToggle = document.getElementById('filters-toggle');
+  const filtersPanel = document.querySelector('.filters-panel');
+  const applyFilters = document.getElementById('apply-filters');
+
+  if (filtersToggle && filtersPanel) {
+    filtersToggle.addEventListener('click', () => {
+      filtersPanel.classList.toggle('open');
+    });
+  }
+
+  if (applyFilters && filtersPanel) {
+    applyFilters.addEventListener('click', () => {
+      cargarDatos();
+      filtersPanel.classList.remove('open');
+    });
+  }
 
   function buildQuery() {
     const params = new URLSearchParams();
@@ -220,10 +236,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
       });
   }
-
-  startInput.addEventListener('change', cargarDatos);
-  endInput.addEventListener('change', cargarDatos);
-  if (limitInput) limitInput.addEventListener('change', cargarDatos);
 
   cargarDatos();
 });

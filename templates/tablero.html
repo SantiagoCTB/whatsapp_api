@@ -16,13 +16,15 @@
         <a class="back-btn" href="{{ url_for('chat.index') }}">Volver</a>
     </header>
 
-    <div class="filters">
+    <button id="filters-toggle" class="filters-toggle">Filtros</button>
+    <div class="filters-panel">
         <label for="fechaInicio">Desde:</label>
         <input type="date" id="fechaInicio">
         <label for="fechaFin">Hasta:</label>
         <input type="date" id="fechaFin">
         <label for="limit">Límite de palabras:</label>
         <input type="number" id="limit" min="1" value="10">
+        <button id="apply-filters">Aplicar</button>
     </div>
 
     <nav class="sidebar">
