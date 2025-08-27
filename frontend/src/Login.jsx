@@ -209,7 +209,7 @@ export default function Login({
         </motion.div>
 
         {/* Footer */}
-        <div classabel="mt-4 flex items-center justify-center gap-2 text-xs text-gray-500">
+        <div className="mt-4 flex items-center justify-center gap-2 text-xs text-gray-500">
           <motion.div
             animate={{ opacity: [0.6, 1, 0.6] }}
             transition={{ repeat: Infinity, duration: 2 }}
