@@ -60,9 +60,19 @@ def login():
         finally:
             conn.close()
 
-    # Para GET, sirve la aplicación de React
-    dist_dir = os.path.join(current_app.root_path, 'frontend', 'dist')
-    return send_from_directory(dist_dir, 'index.html')
+    # Para GET, sirve la aplicación de React. Verifica si el build existe.
+    frontend_dir = os.path.join(current_app.root_path, 'frontend')
+    dist_dir = os.path.join(frontend_dir, 'dist')
+    index_dist = os.path.join(dist_dir, 'index.html')
+
+    if os.path.exists(index_dist):
+        return send_from_directory(dist_dir, 'index.html')
+
+    index_dev = os.path.join(frontend_dir, 'index.html')
+    if os.path.exists(index_dev):
+        return send_from_directory(frontend_dir, 'index.html')
+
+    return redirect('/')
 
 
 @auth_bp.route('/api/login', methods=['POST'])
