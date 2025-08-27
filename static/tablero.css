@@ -4,21 +4,28 @@
   left: 0;
   right: 0;
   height: 60px;
-  background: var(--accent);
+  background: var(--bg-glass);
   color: var(--text-light);
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 0 1rem;
   z-index: 1000;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255,255,255,0.2);
+  box-shadow: 0 4px 10px rgba(0,0,0,0.3);
 }
 
 #menu-toggle {
   background: none;
   border: none;
-  color: var(--text-light);
+  color: var(--accent-neon);
   font-size: 1.5rem;
   cursor: pointer;
+  transition: color 0.3s;
+}
+#menu-toggle:hover {
+  color: var(--accent-hover);
 }
 
 .sidebar {
@@ -39,12 +46,13 @@
 .sidebar li a {
   display: block;
   padding: 1rem;
-  color: var(--text-main);
+  color: var(--accent-neon);
   text-decoration: none;
+  transition: color 0.3s, background 0.3s;
 }
 
 .sidebar li a:hover {
-  background: var(--accent);
+  background: var(--accent-neon);
   color: var(--text-light);
 }
 
@@ -84,10 +92,12 @@
 }
 
 .card {
-  background: var(--text-light);
+  background: var(--bg-glass);
   color: var(--text-main);
   border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255,255,255,0.2);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
   padding: 20px;
   text-align: center;
 }
