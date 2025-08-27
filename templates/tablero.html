@@ -33,23 +33,25 @@
     </nav>
 
     <main class="content">
-        <section class="cards">
-            <div class="card" id="totalesCard">
-                <h3>Totales de mensajes</h3>
-                <p>Enviados: <span id="totalEnviados">0</span></p>
-                <p>Recibidos: <span id="totalRecibidos">0</span></p>
-                <canvas id="graficoTotales"></canvas>
-            </div>
-        </section>
-        <section class="reports" id="reportes">
-            <div class="card"><canvas id="graficoDiario"></canvas></div>
-            <div class="card"><canvas id="graficoHora"></canvas></div>
-            <div class="card"><canvas id="grafico"></canvas></div>
-            <div class="card"><canvas id="graficoTopNumeros"></canvas></div>
-            <div class="card"><canvas id="grafico_palabras"></canvas></div>
-            <div class="card"><canvas id="grafico_roles"></canvas></div>
-            <div class="card"><canvas id="graficoTipos"></canvas></div>
-        </section>
+        <div class="dashboard-grid">
+            <section class="cards totales">
+                <div class="card" id="totalesCard">
+                    <h3>Totales de mensajes</h3>
+                    <p>Enviados: <span id="totalEnviados">0</span></p>
+                    <p>Recibidos: <span id="totalRecibidos">0</span></p>
+                    <canvas id="graficoTotales"></canvas>
+                </div>
+            </section>
+            <section class="reports graficas" id="reportes">
+                <div class="card"><canvas id="graficoDiario"></canvas></div>
+                <div class="card"><canvas id="graficoHora"></canvas></div>
+                <div class="card"><canvas id="grafico"></canvas></div>
+                <div class="card"><canvas id="graficoTopNumeros"></canvas></div>
+                <div class="card"><canvas id="grafico_palabras"></canvas></div>
+                <div class="card"><canvas id="grafico_roles"></canvas></div>
+                <div class="card"><canvas id="graficoTipos"></canvas></div>
+            </section>
+        </div>
     </main>
 
     <script src="{{ url_for('static', filename='tablero.js') }}"></script>

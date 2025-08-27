@@ -55,6 +55,21 @@
   transition: margin-left 0.3s ease;
 }
 
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  grid-template-areas: "totales graficas";
+  gap: 20px;
+}
+
+.totales {
+  grid-area: totales;
+}
+
+.graficas {
+  grid-area: graficas;
+}
+
 .cards {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
@@ -83,6 +98,12 @@
   height: auto;
 }
 
+@media (max-width: 1024px) {
+  .dashboard-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
 @media (max-width: 768px) {
   .sidebar {
     transform: translateX(-100%);
@@ -94,5 +115,12 @@
 
   .content {
     margin-left: 0;
+  }
+
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "totales"
+      "graficas";
   }
 }
