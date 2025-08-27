@@ -23,7 +23,7 @@ function App() {
         setErrorMessage(data.message || 'Error al iniciar sesión');
       } else {
         // Optional redirect after successful login
-        window.location.href = '/tablero';
+        window.location.href = '/';
       }
     } catch (err) {
       setErrorMessage('Error de conexión');
