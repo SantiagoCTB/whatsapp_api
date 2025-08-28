@@ -379,7 +379,6 @@ def trigger_auto_steps(numero):
         regla_id = row[0]
         logging.info("Transición automática para %s: step '%s' con regla %s", numero, step, regla_id)
         set_en_hilo(numero, regla_id)
-        handle_text_message(numero, "")
 
 
 def process_buffered_messages(numero):
