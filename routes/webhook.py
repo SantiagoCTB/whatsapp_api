@@ -214,20 +214,17 @@ def handle_text_message(numero, texto, fallback_text: str = DEFAULT_FALLBACK_TEX
 
     # ===============  A) REGRA EN HILO CON '*'  ===============
     # Ver si hay una regla "en-hilo" pendiente para este número
-    regla_hilo_id = pending_rules.get(numero)  # id de la regla que estamos esperando evaluar
+    regla_hilo_id = pending_rules.get(numero)  # id de la regla que estamos esperando consumir
     if regla_hilo_id is not None:
+        # Cargar todas las reglas del step actual (ya las tienes en "reglas")
         r_activa = next((r for r in reglas if str(r[0]) == str(regla_hilo_id)), None)
         if r_activa:
             _id, resp, next_step, tipo_resp, media_urls, opts, rol_kw, input_db = r_activa
-            if (input_db or '').strip() == '*':
-                media_list = media_urls.split('||') if media_urls else []
-                if tipo_resp in ['image', 'video', 'audio', 'document'] and media_list:
-                    enviar_mensaje(numero, resp, tipo_respuesta=tipo_resp, opciones=media_list[0])
-                    for extra in media_list[1:]:
-                        enviar_mensaje(numero, '', tipo_respuesta=tipo_resp, opciones=extra)
-                else:
-                    enviar_mensaje(numero, resp, tipo_respuesta=tipo_resp, opciones=opts)
 
+            # IMPORTANTE: si la pendiente es '*', NO volvemos a enviar "resp" del step actual.
+            # Simplemente consumimos la '*' y AVANZAMOS al siguiente_step.
+            if (input_db or '').strip() == '*':
+                # (Opcional) asignar rol si aplica en este punto
                 if rol_kw:
                     conn2 = get_connection(); c2 = conn2.cursor()
                     c2.execute("SELECT id FROM roles WHERE keyword=%s", (rol_kw,))
@@ -240,12 +237,16 @@ def handle_text_message(numero, texto, fallback_text: str = DEFAULT_FALLBACK_TEX
                         conn2.commit()
                     conn2.close()
 
+                # Avanzar de step y limpiar la pendiente
                 set_user_step(numero, (next_step or '').strip().lower())
-                pending_rules.pop(numero, None)  # limpiar en-hilo
+                pending_rules.pop(numero, None)
+
+                # Si el nuevo step también es '*' único, se marca como pendiente y se muestra su prompt,
+                # pero NO se avanza (queda esperando el PRÓXIMO mensaje del usuario).
                 if next_step:
                     trigger_auto_steps(numero)
                 return
-        # Si la activa no es '*', seguimos con la lógica normal
+        # Si no encuentra la regla activa, seguir con el flujo normal
 
     # ===============  B) MATCH EXACTO (sin '*')  ===============
     row = None
@@ -413,8 +414,10 @@ def process_en_hilo_rule(numero, regla_id):
 
 
 def trigger_auto_steps(numero):
-    """Si el step actual tiene exactamente UNA regla con '*', dejarla pendiente (en-hilo)
-    y NO procesarla de inmediato. Se ejecutará cuando llegue el siguiente mensaje del usuario."""
+    """Si el step actual tiene exactamente UNA regla con '*', la marca como pendiente (en-hilo)
+    y muestra su respuesta (si existe), pero NO avanza de step. Se consumirá con el
+    PRÓXIMO mensaje del usuario en handle_text_message (bloque A)."""
+
     step = user_steps.get(numero, '').strip().lower()
     if not step:
         return
@@ -426,28 +429,59 @@ def trigger_auto_steps(numero):
     conn = get_connection(); c = conn.cursor()
     c.execute(
         """
-        SELECT COUNT(*),
+        SELECT COUNT(*) AS total,
                SUM(CASE WHEN TRIM(input_text)='*' THEN 1 ELSE 0 END) AS comodines
           FROM reglas
          WHERE step=%s
         """,
         (step,)
     )
-    total, comodines = c.fetchone()
-    comodines = comodines if comodines is not None else 0
+    row = c.fetchone()
+    if not row:
+        conn.close()
+        return
+
+    total, comodines = row
+    comodines = comodines or 0
 
     # Caso deseado: el step tiene exactamente 1 regla y es '*'
     if total == 1 and comodines == 1:
-        c.execute("SELECT id FROM reglas WHERE step=%s AND input_text='*'", (step,))
-        row = c.fetchone()
-        if row:
-            regla_id = row[0]
-            logging.info(
-                "Marcando regla '*' como pendiente (en-hilo) para %s en step '%s' (id=%s).",
-                numero, step, regla_id
-            )
-            set_en_hilo(numero, regla_id)
+        c.execute(
+            """
+            SELECT r.id, r.respuesta, r.tipo,
+                   GROUP_CONCAT(m.media_url SEPARATOR '||') AS media_urls,
+                   r.opciones
+              FROM reglas r
+              LEFT JOIN regla_medias m ON r.id = m.regla_id
+             WHERE r.step=%s AND TRIM(r.input_text)='*'
+             GROUP BY r.id
+            """,
+            (step,)
+        )
+        r = c.fetchone()
+        conn.close()
+
+        if not r:
+            return
+
+        regla_id, resp, tipo_resp, media_urls, opts = r
+        # 1) Marcar como pendiente (en-hilo)
+        set_en_hilo(numero, regla_id)
+
+        # 2) Mostrar el prompt del step (si existe), PERO NO AVANZAR
+        media_list = media_urls.split('||') if media_urls else []
+        if tipo_resp in ['image', 'video', 'audio', 'document'] and media_list:
+            enviar_mensaje(numero, resp, tipo_respuesta=tipo_resp, opciones=media_list[0])
+            for extra in media_list[1:]:
+                enviar_mensaje(numero, '', tipo_respuesta=tipo_resp, opciones=extra)
+        else:
+            # texto/botón/lista/etc.
+            enviar_mensaje(numero, resp, tipo_respuesta=tipo_resp, opciones=opts)
+
+        return
+
     conn.close()
+
 
 
 
