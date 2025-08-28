@@ -221,6 +221,7 @@ def handle_text_message(numero, texto):
 
     if row is None and wildcard_rule:
         row = wildcard_rule
+
     if row:
         resp, next_step, tipo_resp, media_list, opts, rol_kw = row
         if tipo_resp in ['image', 'video', 'audio', 'document'] and media_list:
@@ -427,7 +428,7 @@ def webhook():
                 pending_texts.setdefault(from_number, []).append(normalized_text)
                 if from_number in pending_timers:
                     pending_timers[from_number].cancel()
-                timer = threading.Timer(15, process_buffered_messages, args=(from_number,))
+                timer = threading.Timer(10, process_buffered_messages, args=(from_number,))
                 pending_timers[from_number] = timer
                 timer.start()
                 return jsonify({'status': 'buffered'}), 200
