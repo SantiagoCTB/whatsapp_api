@@ -22,6 +22,7 @@ webhook_bp = Blueprint('webhook', __name__)
 
 VERIFY_TOKEN    = Config.VERIFY_TOKEN
 SESSION_TIMEOUT = Config.SESSION_TIMEOUT
+DEFAULT_FALLBACK_TEXT = "No entendí tu respuesta, intenta de nuevo."
 
 user_last_activity = {}
 user_steps         = {}
@@ -117,7 +118,7 @@ def handle_medicion(numero, texto):
     return True
 
 
-def handle_text_message(numero, texto):
+def handle_text_message(numero, texto, fallback_text: str = DEFAULT_FALLBACK_TEXT):
     now           = datetime.now()
     last_time     = user_last_activity.get(numero)
     session_reset = False
@@ -346,11 +347,8 @@ def handle_text_message(numero, texto):
         return
 
     # ===============  F) FALLBACK  ===============
-    guardar_mensaje(
-        numero,
-        "No entendí tu respuesta, intenta de nuevo.",
-        "bot"
-    )
+    enviar_mensaje(numero, fallback_text)
+    guardar_mensaje(numero, fallback_text, "bot")
     # (Asegúrate de que update_chat_state acepte estos parámetros)
     update_chat_state(numero, step, 'sin_regla')
 
