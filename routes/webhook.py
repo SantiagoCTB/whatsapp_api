@@ -178,6 +178,9 @@ def handle_text_message(numero, texto, fallback_text: str = DEFAULT_FALLBACK_TEX
                     conn2.commit()
                 conn2.close()
             set_user_step(numero, next_step.strip().lower() if next_step else '')
+            if next_step:
+                trigger_auto_steps(numero)
+                return
 
     if session_reset:
         return
@@ -238,6 +241,8 @@ def handle_text_message(numero, texto, fallback_text: str = DEFAULT_FALLBACK_TEX
 
                 set_user_step(numero, (next_step or '').strip().lower())
                 pending_rules.pop(numero, None)  # limpiar en-hilo
+                if next_step:
+                    trigger_auto_steps(numero)
                 return
         # Si la activa no es '*', seguimos con la lógica normal
 
@@ -318,6 +323,8 @@ def handle_text_message(numero, texto, fallback_text: str = DEFAULT_FALLBACK_TEX
 
             set_user_step(numero, (next_step or '').strip().lower())
             pending_rules.pop(numero, None)  # por si venía de una regla en-hilo
+            if next_step:
+                trigger_auto_steps(numero)
             return
 
     # ===============  E) RESPONDER SI HUBO MATCH (B/C)  ===============
@@ -344,6 +351,8 @@ def handle_text_message(numero, texto, fallback_text: str = DEFAULT_FALLBACK_TEX
 
         set_user_step(numero, (next_step or '').strip().lower())
         pending_rules.pop(numero, None)
+        if next_step:
+            trigger_auto_steps(numero)
         return
 
     # ===============  F) FALLBACK  ===============
@@ -355,6 +364,22 @@ def handle_text_message(numero, texto, fallback_text: str = DEFAULT_FALLBACK_TEX
 def set_en_hilo(numero, regla_id):
     """Registra que el número tiene una regla en-hilo pendiente."""
     pending_rules[numero] = regla_id
+
+
+def trigger_auto_steps(numero):
+    """Busca y ejecuta en cadena las reglas automáticas ('*') del step actual."""
+    step = user_steps.get(numero, '').strip().lower()
+    if not step:
+        return
+
+    conn = get_connection(); c = conn.cursor()
+    c.execute("SELECT id FROM reglas WHERE step=%s AND input_text='*'", (step,))
+    row = c.fetchone(); conn.close()
+    if row:
+        regla_id = row[0]
+        logging.info("Transición automática para %s: step '%s' con regla %s", numero, step, regla_id)
+        set_en_hilo(numero, regla_id)
+        handle_text_message(numero, "")
 
 
 def process_buffered_messages(numero):
