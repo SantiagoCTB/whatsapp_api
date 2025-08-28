@@ -25,7 +25,10 @@ SESSION_TIMEOUT = Config.SESSION_TIMEOUT
 
 user_last_activity = {}
 user_steps         = {}
-pending_texts      = {}
+# Mapa numero -> id de regla "en-hilo" pendiente de evaluar
+pending_rules      = {}
+# Mapa numero -> lista de textos recibidos para procesar tras un delay
+message_buffer     = {}
 pending_timers     = {}
 
 STEP_HANDLERS = {}
@@ -205,7 +208,8 @@ def handle_text_message(numero, texto):
     reglas = c.fetchall(); conn.close()
 
     # ===============  A) REGRA EN HILO CON '*'  ===============
-    regla_hilo_id = pending_texts.get(numero)  # id de la regla que estamos esperando evaluar
+    # Ver si hay una regla "en-hilo" pendiente para este número
+    regla_hilo_id = pending_rules.get(numero)  # id de la regla que estamos esperando evaluar
     if regla_hilo_id is not None:
         r_activa = next((r for r in reglas if str(r[0]) == str(regla_hilo_id)), None)
         if r_activa:
@@ -232,7 +236,7 @@ def handle_text_message(numero, texto):
                     conn2.close()
 
                 set_user_step(numero, (next_step or '').strip().lower())
-                pending_texts.pop(numero, None)  # limpiar en-hilo
+                pending_rules.pop(numero, None)  # limpiar en-hilo
                 return
         # Si la activa no es '*', seguimos con la lógica normal
 
@@ -312,7 +316,7 @@ def handle_text_message(numero, texto):
                 conn2.close()
 
             set_user_step(numero, (next_step or '').strip().lower())
-            pending_texts.pop(numero, None)  # por si venía de una regla en-hilo
+            pending_rules.pop(numero, None)  # por si venía de una regla en-hilo
             return
 
     # ===============  E) RESPONDER SI HUBO MATCH (B/C)  ===============
@@ -338,7 +342,7 @@ def handle_text_message(numero, texto):
             conn2.close()
 
         set_user_step(numero, (next_step or '').strip().lower())
-        pending_texts.pop(numero, None)
+        pending_rules.pop(numero, None)
         return
 
     # ===============  F) FALLBACK  ===============
@@ -351,17 +355,18 @@ def handle_text_message(numero, texto):
     update_chat_state(numero, step, 'sin_regla')
 
 def set_en_hilo(numero, regla_id):
-    pending_texts[numero] = regla_id
+    """Registra que el número tiene una regla en-hilo pendiente."""
+    pending_rules[numero] = regla_id
 
 
 def process_buffered_messages(numero):
-    textos = pending_texts.get(numero)
+    textos = message_buffer.get(numero)
     if not textos:
         return
     combined = " ".join(textos)
     normalized = normalize_text(combined)
     handle_text_message(numero, normalized)
-    pending_texts.pop(numero, None)
+    message_buffer.pop(numero, None)
     timer = pending_timers.pop(numero, None)
     if timer:
         timer.cancel()
@@ -528,7 +533,7 @@ def webhook():
                     wa_id=wa_id,
                     reply_to_wa_id=reply_to_id,
                 )
-                pending_texts.setdefault(from_number, []).append(normalized_text)
+                message_buffer.setdefault(from_number, []).append(normalized_text)
                 if from_number in pending_timers:
                     pending_timers[from_number].cancel()
                 timer = threading.Timer(10, process_buffered_messages, args=(from_number,))
