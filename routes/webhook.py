@@ -118,20 +118,25 @@ def handle_text_message(numero, texto):
     now           = datetime.now()
     last_time     = user_last_activity.get(numero)
     session_reset = False
+
+    # Expiración de sesión
     if last_time and (now - last_time).total_seconds() > SESSION_TIMEOUT:
         user_steps.pop(numero, None)
         delete_chat_state(numero)
         session_reset = True
     user_last_activity[numero] = now
 
+    # Comandos globales
     if handle_global_command(numero, texto):
         return
 
+    # Paso inicial y bienvenida si es usuario nuevo
     is_new_user = numero not in user_steps
     stored_step = user_steps.get(numero, '')
     if not is_new_user:
         update_chat_state(numero, stored_step)
     step = stored_step.strip().lower() if stored_step else 'menu_principal'
+
     if is_new_user:
         conn = get_connection(); c = conn.cursor()
         c.execute(
@@ -144,7 +149,7 @@ def handle_text_message(numero, texto):
              WHERE r.step=%s AND r.input_text=%s
              GROUP BY r.id
             """,
-            (step,'iniciar')
+            (step, 'iniciar')
         )
         row = c.fetchone(); conn.close()
         if row:
@@ -156,6 +161,7 @@ def handle_text_message(numero, texto):
                     enviar_mensaje(numero, '', tipo_respuesta=tipo_resp, opciones=extra)
             else:
                 enviar_mensaje(numero, resp, tipo_respuesta=tipo_resp, opciones=opts)
+
             if rol_kw:
                 conn2 = get_connection(); c2 = conn2.cursor()
                 c2.execute("SELECT id FROM roles WHERE keyword=%s", (rol_kw,))
@@ -168,14 +174,18 @@ def handle_text_message(numero, texto):
                     conn2.commit()
                 conn2.close()
             set_user_step(numero, next_step.strip().lower() if next_step else '')
+
     if session_reset:
         return
+
     step = user_steps.get(numero, '').strip().lower()
 
+    # Handler específico del step (por ejemplo, mediciones)
     handler = STEP_HANDLERS.get(step)
     if handler and handler(numero, texto):
         return
 
+    # Cargar reglas del step actual
     conn = get_connection(); c = conn.cursor()
     c.execute(
         """
@@ -192,17 +202,22 @@ def handle_text_message(numero, texto):
     reglas = c.fetchall(); conn.close()
 
     row = None
-    wildcard_rule = None
+    wildcard_next = None  # guarda el siguiente_step de la regla '*'
+
+    # 1) Coincidencia exacta por triggers
     for resp, next_step, tipo_resp, media_urls, opts, rol_kw, input_db in reglas:
         media_list = media_urls.split('||') if media_urls else []
         if (input_db or '').strip() == '*':
-            wildcard_rule = (resp, next_step, tipo_resp, media_list, opts, rol_kw)
+            # El comportamiento requerido: no responder acá, sino SALTAR al siguiente_step
+            wildcard_next = (next_step or '').strip().lower()
             continue
+
         triggers = [normalize_text(t.strip()) for t in (input_db or '').split(',')]
         if any(trigger and re.search(rf"\b{re.escape(trigger)}\b", texto) for trigger in triggers):
             row = (resp, next_step, tipo_resp, media_list, opts, rol_kw)
             break
 
+    # 2) Fuzzy matching si aún no hay match
     if not row:
         for resp, next_step, tipo_resp, media_urls, opts, rol_kw, input_db in reglas:
             if (input_db or '').strip() == '*':
@@ -219,9 +234,53 @@ def handle_text_message(numero, texto):
             if row:
                 break
 
-    if row is None and wildcard_rule:
-        row = wildcard_rule
+    # 3) Si no hubo match y hay wildcard '*', SALTAR al siguiente_step e iniciar allí
+    if row is None and wildcard_next:
+        conn = get_connection(); c = conn.cursor()
+        c.execute(
+            """
+            SELECT r.respuesta, r.siguiente_step, r.tipo,
+                   GROUP_CONCAT(m.media_url SEPARATOR '||') AS media_urls,
+                   r.opciones, r.rol_keyword
+              FROM reglas r
+              LEFT JOIN regla_medias m ON r.id = m.regla_id
+             WHERE r.step=%s AND r.input_text='iniciar'
+             GROUP BY r.id
+            """,
+            (wildcard_next,),
+        )
+        res = c.fetchone(); conn.close()
 
+        # Si existe 'iniciar' en el siguiente step, enviarlo; si no, igual avanzar de step sin mensaje
+        if res:
+            resp, next_step, tipo_resp, media_urls, opts, rol_kw = res
+            media_list = media_urls.split('||') if media_urls else []
+            if tipo_resp in ['image', 'video', 'audio', 'document'] and media_list:
+                enviar_mensaje(numero, resp, tipo_respuesta=tipo_resp, opciones=media_list[0])
+                for extra in media_list[1:]:
+                    enviar_mensaje(numero, '', tipo_respuesta=tipo_resp, opciones=extra)
+            else:
+                enviar_mensaje(numero, resp, tipo_respuesta=tipo_resp, opciones=opts)
+
+            if rol_kw:
+                conn2 = get_connection(); c2 = conn2.cursor()
+                c2.execute("SELECT id FROM roles WHERE keyword=%s", (rol_kw,))
+                role = c2.fetchone()
+                if role:
+                    c2.execute(
+                        "INSERT IGNORE INTO chat_roles (numero, role_id) VALUES (%s, %s)",
+                        (numero, role[0])
+                    )
+                    conn2.commit()
+                conn2.close()
+
+            set_user_step(numero, (next_step or '').strip().lower())
+        else:
+            # Avanza el step aunque no haya 'iniciar'
+            set_user_step(numero, wildcard_next)
+        return
+
+    # 4) Hubo match: responder y avanzar
     if row:
         resp, next_step, tipo_resp, media_list, opts, rol_kw = row
         if tipo_resp in ['image', 'video', 'audio', 'document'] and media_list:
@@ -230,6 +289,7 @@ def handle_text_message(numero, texto):
                 enviar_mensaje(numero, '', tipo_respuesta=tipo_resp, opciones=extra)
         else:
             enviar_mensaje(numero, resp, tipo_respuesta=tipo_resp, opciones=opts)
+
         if rol_kw:
             conn2 = get_connection(); c2 = conn2.cursor()
             c2.execute("SELECT id FROM roles WHERE keyword=%s", (rol_kw,))
@@ -241,14 +301,17 @@ def handle_text_message(numero, texto):
                 )
                 conn2.commit()
             conn2.close()
-        set_user_step(numero, next_step.strip().lower() if next_step else '')
+
+        set_user_step(numero, (next_step or '').strip().lower())
     else:
+        # Sin match y sin wildcard: fallback
         guardar_mensaje(
             numero,
             "No entendí tu respuesta, intenta de nuevo.",
             "bot"
         )
         update_chat_state(numero, step, 'sin_regla')
+
 
 
 def process_buffered_messages(numero):
