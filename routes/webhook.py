@@ -206,7 +206,7 @@ def handle_text_message(numero, texto):
     # Si existe una regla wildcard '*' se salta directamente al siguiente_step
     wildcard_regla = next((r for r in reglas if (r[6] or '').strip() == '*'), None)
     if wildcard_regla:
-        wildcard_next = (wildcard_regla[1] or '').strip().lower()
+        wildcard_step = (wildcard_regla[1] or '').strip().lower()
 
         conn = get_connection(); c = conn.cursor()
         c.execute(
@@ -219,7 +219,7 @@ def handle_text_message(numero, texto):
              WHERE r.step=%s AND r.input_text='iniciar'
              GROUP BY r.id
             """,
-            (wildcard_next,),
+            (wildcard_step,),
         )
         res = c.fetchone(); conn.close()
 
@@ -247,7 +247,7 @@ def handle_text_message(numero, texto):
 
             set_user_step(numero, (next_step or '').strip().lower())
         else:
-            set_user_step(numero, wildcard_next)
+            set_user_step(numero, wildcard_step)
         return
 
     # 1) Coincidencia exacta por triggers
@@ -296,7 +296,7 @@ def handle_text_message(numero, texto):
             conn2.close()
 
         set_user_step(numero, (next_step or '').strip().lower())
-    else:
+    elif not wildcard_regla:
         # Sin match y sin wildcard: fallback
         guardar_mensaje(
             numero,
