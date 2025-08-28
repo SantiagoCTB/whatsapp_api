@@ -192,11 +192,11 @@ def handle_text_message(numero, texto):
     reglas = c.fetchall(); conn.close()
 
     row = None
-    wildcard_next = None
+    wildcard_rule = None
     for resp, next_step, tipo_resp, media_urls, opts, rol_kw, input_db in reglas:
         media_list = media_urls.split('||') if media_urls else []
         if (input_db or '').strip() == '*':
-            wildcard_next = next_step
+            wildcard_rule = (resp, next_step, tipo_resp, media_list, opts, rol_kw)
             continue
         triggers = [normalize_text(t.strip()) for t in (input_db or '').split(',')]
         if any(trigger and re.search(rf"\b{re.escape(trigger)}\b", texto) for trigger in triggers):
@@ -219,25 +219,9 @@ def handle_text_message(numero, texto):
             if row:
                 break
 
-    if row is None and wildcard_next:
-        conn = get_connection(); c = conn.cursor()
-        c.execute(
-            """
-            SELECT r.respuesta, r.siguiente_step, r.tipo,
-                   GROUP_CONCAT(m.media_url SEPARATOR '||') AS media_urls,
-                   r.opciones, r.rol_keyword
-              FROM reglas r
-              LEFT JOIN regla_medias m ON r.id = m.regla_id
-             WHERE r.step=%s AND r.input_text='iniciar'
-             GROUP BY r.id
-            """,
-            (wildcard_next.strip().lower(),),
-        )
-        res = c.fetchone(); conn.close()
-        if res:
-            resp, next_step, tipo_resp, media_urls, opts, rol_kw = res
-            media_list = media_urls.split('||') if media_urls else []
-            row = (resp, next_step, tipo_resp, media_list, opts, rol_kw)
+    if row is None and wildcard_rule:
+        row = wildcard_rule
+
     if row:
         resp, next_step, tipo_resp, media_list, opts, rol_kw = row
         if tipo_resp in ['image', 'video', 'audio', 'document'] and media_list:
@@ -444,7 +428,7 @@ def webhook():
                 pending_texts.setdefault(from_number, []).append(normalized_text)
                 if from_number in pending_timers:
                     pending_timers[from_number].cancel()
-                timer = threading.Timer(15, process_buffered_messages, args=(from_number,))
+                timer = threading.Timer(10, process_buffered_messages, args=(from_number,))
                 pending_timers[from_number] = timer
                 timer.start()
                 return jsonify({'status': 'buffered'}), 200
