@@ -54,7 +54,7 @@ def reiniciar_handler(numero, text):
 
 
 # Registrar comandos por defecto
-for cmd in ['reiniciar', 'volver al inicio', 'inicio', 'menú', 'menu', 'ayuda']:
+for cmd in ['reiniciar', 'volver al inicio', 'inicio', 'iniciar', 'menú', 'menu', 'ayuda']:
     GLOBAL_COMMANDS[normalize_text(cmd)] = reiniciar_handler
 
 
