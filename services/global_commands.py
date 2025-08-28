@@ -1,5 +1,6 @@
 import re
 
+from config import Config
 from services.db import get_connection
 from services.whatsapp_api import enviar_mensaje
 from services.normalize_text import normalize_text
@@ -12,7 +13,7 @@ def reiniciar_handler(numero, text):
     """Reinicia el flujo para el usuario y envía el mensaje inicial."""
     from routes.webhook import set_user_step  # Evitar dependencias circulares
 
-    set_user_step(numero, 'menu_principal')
+    set_user_step(numero, Config.INITIAL_STEP)
     enviar_mensaje(numero, "Perfecto, volvamos a empezar.")
 
     conn = get_connection(); c = conn.cursor()
@@ -26,7 +27,7 @@ def reiniciar_handler(numero, text):
          WHERE r.step=%s AND r.input_text=%s
          GROUP BY r.id
         """,
-        ('menu_principal', 'iniciar')
+        (Config.INITIAL_STEP, 'iniciar')
     )
     row = c.fetchone(); conn.close()
 

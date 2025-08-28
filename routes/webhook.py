@@ -208,9 +208,15 @@ def handle_text_message(numero: str, texto: str):
         user_steps.pop(numero, None)
         delete_chat_state(numero)
     user_last_activity[numero] = now
-    text_norm = normalize_text(texto or "")
+    if not user_steps.get(numero):
+        set_user_step(numero, Config.INITIAL_STEP)
+        process_step_chain(numero, 'iniciar')
+        return
+
     if handle_global_command(numero, texto):
         return
+
+    text_norm = normalize_text(texto or "")
     process_step_chain(numero, text_norm)
 
 
