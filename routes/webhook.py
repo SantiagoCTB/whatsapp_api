@@ -113,6 +113,7 @@ def handle_medicion(numero, texto):
                 conn2.commit()
             conn2.close()
         set_user_step(numero, next_step.strip().lower() if next_step else '')
+        trigger_auto_steps(numero)
     except Exception:
         enviar_mensaje(numero, "Por favor ingresa la medida correcta.")
     return True
