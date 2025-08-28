@@ -367,6 +367,51 @@ def set_en_hilo(numero, regla_id):
     pending_rules[numero] = regla_id
 
 
+def process_en_hilo_rule(numero, regla_id):
+    """Procesa inmediatamente una regla en-hilo enviando su respuesta y avanzando de step."""
+    conn = get_connection(); c = conn.cursor()
+    c.execute(
+        """
+        SELECT r.respuesta, r.siguiente_step, r.tipo,
+               GROUP_CONCAT(m.media_url SEPARATOR '||') AS media_urls,
+               r.opciones, r.rol_keyword
+          FROM reglas r
+          LEFT JOIN regla_medias m ON r.id = m.regla_id
+         WHERE r.id=%s
+         GROUP BY r.id
+        """,
+        (regla_id,),
+    )
+    row = c.fetchone(); conn.close()
+    if not row:
+        return
+    resp, next_step, tipo_resp, media_urls, opts, rol_kw = row
+    media_list = media_urls.split('||') if media_urls else []
+    if tipo_resp in ['image', 'video', 'audio', 'document'] and media_list:
+        enviar_mensaje(numero, resp, tipo_respuesta=tipo_resp, opciones=media_list[0])
+        for extra in media_list[1:]:
+            enviar_mensaje(numero, '', tipo_respuesta=tipo_resp, opciones=extra)
+    else:
+        enviar_mensaje(numero, resp, tipo_respuesta=tipo_resp, opciones=opts)
+
+    if rol_kw:
+        conn2 = get_connection(); c2 = conn2.cursor()
+        c2.execute("SELECT id FROM roles WHERE keyword=%s", (rol_kw,))
+        role = c2.fetchone()
+        if role:
+            c2.execute(
+                "INSERT IGNORE INTO chat_roles (numero, role_id) VALUES (%s, %s)",
+                (numero, role[0])
+            )
+            conn2.commit()
+        conn2.close()
+
+    set_user_step(numero, next_step.strip().lower() if next_step else '')
+    pending_rules.pop(numero, None)
+    if next_step:
+        trigger_auto_steps(numero)
+
+
 def trigger_auto_steps(numero):
     """Busca y ejecuta en cadena las reglas automáticas ('*') del step actual."""
     step = user_steps.get(numero, '').strip().lower()
@@ -392,6 +437,9 @@ def trigger_auto_steps(numero):
             regla_id = row[0]
             logging.info("Transición automática para %s: step '%s' con regla %s", numero, step, regla_id)
             set_en_hilo(numero, regla_id)
+            conn.close()
+            process_en_hilo_rule(numero, regla_id)
+            return
     conn.close()
 
 
