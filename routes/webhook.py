@@ -141,7 +141,7 @@ def handle_text_message(numero, texto):
         conn = get_connection(); c = conn.cursor()
         c.execute(
             """
-            SELECT r.respuesta, r.siguiente_step, r.tipo,
+            SELECT r.id, r.respuesta, r.siguiente_step, r.tipo,
                    GROUP_CONCAT(m.media_url SEPARATOR '||') AS media_urls,
                    r.opciones, r.rol_keyword
               FROM reglas r
@@ -153,7 +153,7 @@ def handle_text_message(numero, texto):
         )
         row = c.fetchone(); conn.close()
         if row:
-            resp, next_step, tipo_resp, media_urls, opts, rol_kw = row
+            _, resp, next_step, tipo_resp, media_urls, opts, rol_kw = row
             media_list = media_urls.split('||') if media_urls else []
             if tipo_resp in ['image', 'video', 'audio', 'document'] and media_list:
                 enviar_mensaje(numero, resp, tipo_respuesta=tipo_resp, opciones=media_list[0])
@@ -189,11 +189,11 @@ def handle_text_message(numero, texto):
     # Normaliza el input del usuario una sola vez
     texto_norm = normalize_text(texto or '')
 
-    # Cargar reglas del step actual
+    # Cargar reglas del step actual (incluye r.id e input_text)
     conn = get_connection(); c = conn.cursor()
     c.execute(
         """
-        SELECT r.respuesta, r.siguiente_step, r.tipo,
+        SELECT r.id, r.respuesta, r.siguiente_step, r.tipo,
                GROUP_CONCAT(m.media_url SEPARATOR '||') AS media_urls,
                r.opciones, r.rol_keyword, r.input_text
           FROM reglas r
@@ -205,44 +205,71 @@ def handle_text_message(numero, texto):
     )
     reglas = c.fetchall(); conn.close()
 
+    # --- (A) Si la regla "en hilo" tiene '*', aplícala de inmediato ---
+    regla_hilo_id = pending_texts.get(numero)  # Debe ser un int/str con el r.id de la regla activa
+    if regla_hilo_id is not None:
+        r_activa = next((r for r in reglas if str(r[0]) == str(regla_hilo_id)), None)
+        if r_activa:
+            _id, resp, next_step, tipo_resp, media_urls, opts, rol_kw, input_db = r_activa
+            if (input_db or '').strip() == '*':
+                media_list = media_urls.split('||') if media_urls else []
+                if tipo_resp in ['image', 'video', 'audio', 'document'] and media_list:
+                    enviar_mensaje(numero, resp, tipo_respuesta=tipo_resp, opciones=media_list[0])
+                    for extra in media_list[1:]:
+                        enviar_mensaje(numero, '', tipo_respuesta=tipo_resp, opciones=extra)
+                else:
+                    enviar_mensaje(numero, resp, tipo_respuesta=tipo_resp, opciones=opts)
+
+                if rol_kw:
+                    conn2 = get_connection(); c2 = conn2.cursor()
+                    c2.execute("SELECT id FROM roles WHERE keyword=%s", (rol_kw,))
+                    role = c2.fetchone()
+                    if role:
+                        c2.execute(
+                            "INSERT IGNORE INTO chat_roles (numero, role_id) VALUES (%s, %s)",
+                            (numero, role[0])
+                        )
+                        conn2.commit()
+                    conn2.close()
+
+                # Importante: avanzamos y limpiamos la regla en hilo
+                set_user_step(numero, (next_step or '').strip().lower())
+                pending_texts.pop(numero, None)
+                return
+        # Si la regla en hilo NO es '*', seguimos con la lógica normal
+
+    # --- (B) Lógica normal: match exacto → fuzzy → fallback ---
     row = None
-    wildcard_row = None
 
-    # 1) Coincidencia exacta por triggers (prioridad)
-    for resp, next_step, tipo_resp, media_urls, opts, rol_kw, input_db in reglas:
-        # Guarda referencia al wildcard si existe
+    # 1) Coincidencia exacta por triggers (NO considera '*')
+    for _id, resp, next_step, tipo_resp, media_urls, opts, rol_kw, input_db in reglas:
         if (input_db or '').strip() == '*':
-            wildcard_row = (resp, next_step, tipo_resp, media_urls, opts, rol_kw)
             continue
-
         triggers = [normalize_text(t.strip()) for t in (input_db or '').split(',') if t.strip()]
         if not triggers:
             continue
 
-        # match "palabra completa" o frase completa; usamos regex sobre texto_norm
         matched = False
         for trigger in triggers:
             if not trigger:
                 continue
-            # Si el trigger es frase con espacios, intentamos búsqueda como substring normalizada
             if ' ' in trigger:
                 if trigger in texto_norm:
                     matched = True
                     break
             else:
-                # palabra completa
                 if re.search(rf"\b{re.escape(trigger)}\b", texto_norm):
                     matched = True
                     break
 
         if matched:
             media_list = media_urls.split('||') if media_urls else []
-            row = (resp, next_step, tipo_resp, media_list, opts, rol_kw)
+            row = (_id, resp, next_step, tipo_resp, media_list, opts, rol_kw)
             break
 
-    # 2) Fuzzy matching si aún no hay match
+    # 2) Fuzzy matching si aún no hay match (NO considera '*')
     if not row:
-        for resp, next_step, tipo_resp, media_urls, opts, rol_kw, input_db in reglas:
+        for _id, resp, next_step, tipo_resp, media_urls, opts, rol_kw, input_db in reglas:
             if (input_db or '').strip() == '*':
                 continue
             triggers = [normalize_text(t.strip()) for t in (input_db or '').split(',') if t.strip()]
@@ -259,38 +286,12 @@ def handle_text_message(numero, texto):
                     break
             if found:
                 media_list = media_urls.split('||') if media_urls else []
-                row = (resp, next_step, tipo_resp, media_list, opts, rol_kw)
+                row = (_id, resp, next_step, tipo_resp, media_list, opts, rol_kw)
                 break
 
-    # 3) Wildcard como catch-all del step actual
-    if not row and wildcard_row:
-        resp, next_step, tipo_resp, media_urls, opts, rol_kw = wildcard_row
-        media_list = media_urls.split('||') if media_urls else []
-        if tipo_resp in ['image', 'video', 'audio', 'document'] and media_list:
-            enviar_mensaje(numero, resp, tipo_respuesta=tipo_resp, opciones=media_list[0])
-            for extra in media_list[1:]:
-                enviar_mensaje(numero, '', tipo_respuesta=tipo_resp, opciones=extra)
-        else:
-            enviar_mensaje(numero, resp, tipo_respuesta=tipo_resp, opciones=opts)
-
-        if rol_kw:
-            conn2 = get_connection(); c2 = conn2.cursor()
-            c2.execute("SELECT id FROM roles WHERE keyword=%s", (rol_kw,))
-            role = c2.fetchone()
-            if role:
-                c2.execute(
-                    "INSERT IGNORE INTO chat_roles (numero, role_id) VALUES (%s, %s)",
-                    (numero, role[0])
-                )
-                conn2.commit()
-            conn2.close()
-
-        set_user_step(numero, (next_step or '').strip().lower())
-        return
-
-    # 4) Hubo match por exacto/fuzzy
+    # 3) Hubo match por exacto/fuzzy
     if row:
-        resp, next_step, tipo_resp, media_list, opts, rol_kw = row
+        _id, resp, next_step, tipo_resp, media_list, opts, rol_kw = row
         if tipo_resp in ['image', 'video', 'audio', 'document'] and media_list:
             enviar_mensaje(numero, resp, tipo_respuesta=tipo_resp, opciones=media_list[0])
             for extra in media_list[1:]:
@@ -311,15 +312,18 @@ def handle_text_message(numero, texto):
             conn2.close()
 
         set_user_step(numero, (next_step or '').strip().lower())
+        # Al cerrar esta regla, ya no esperamos evaluar esta en-hilo:
+        pending_texts.pop(numero, None)
         return
 
-    # 5) Sin match y sin wildcard: fallback
+    # 4) Sin match y sin wildcard (en hilo): fallback
     guardar_mensaje(
         numero,
         "No entendí tu respuesta, intenta de nuevo.",
         "bot"
     )
     update_chat_state(numero, step, 'sin_regla')
+
 
 
 
