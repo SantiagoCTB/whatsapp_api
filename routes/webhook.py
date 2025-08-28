@@ -373,8 +373,17 @@ def trigger_auto_steps(numero):
         return
 
     conn = get_connection(); c = conn.cursor()
-    c.execute("SELECT COUNT(*), SUM(input_text='*') FROM reglas WHERE step=%s", (step,))
+    c.execute(
+        """
+        SELECT COUNT(*),
+               SUM(CASE WHEN TRIM(input_text)='*' THEN 1 ELSE 0 END) AS comodines
+          FROM reglas
+         WHERE step=%s
+        """,
+        (step,)
+    )
     total, comodines = c.fetchone()
+    comodines = comodines if comodines is not None else 0
     if total == 1 and comodines == 1:
         c.execute("SELECT id FROM reglas WHERE step=%s AND input_text='*'", (step,))
         row = c.fetchone()
