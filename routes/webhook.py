@@ -373,12 +373,16 @@ def trigger_auto_steps(numero):
         return
 
     conn = get_connection(); c = conn.cursor()
-    c.execute("SELECT id FROM reglas WHERE step=%s AND input_text='*'", (step,))
-    row = c.fetchone(); conn.close()
-    if row:
-        regla_id = row[0]
-        logging.info("Transición automática para %s: step '%s' con regla %s", numero, step, regla_id)
-        set_en_hilo(numero, regla_id)
+    c.execute("SELECT COUNT(*), SUM(input_text='*') FROM reglas WHERE step=%s", (step,))
+    total, comodines = c.fetchone()
+    if total == 1 and comodines == 1:
+        c.execute("SELECT id FROM reglas WHERE step=%s AND input_text='*'", (step,))
+        row = c.fetchone()
+        if row:
+            regla_id = row[0]
+            logging.info("Transición automática para %s: step '%s' con regla %s", numero, step, regla_id)
+            set_en_hilo(numero, regla_id)
+    conn.close()
 
 
 def process_buffered_messages(numero):
