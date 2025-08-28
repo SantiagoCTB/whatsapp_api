@@ -202,40 +202,12 @@ def handle_text_message(numero, texto):
     reglas = c.fetchall(); conn.close()
 
     row = None
-    wildcard_next = None  # guarda el siguiente_step de la regla '*'
 
-    # 1) Coincidencia exacta por triggers
-    for resp, next_step, tipo_resp, media_urls, opts, rol_kw, input_db in reglas:
-        media_list = media_urls.split('||') if media_urls else []
-        if (input_db or '').strip() == '*':
-            # El comportamiento requerido: no responder acá, sino SALTAR al siguiente_step
-            wildcard_next = (next_step or '').strip().lower()
-            continue
+    # Si existe una regla wildcard '*' se salta directamente al siguiente_step
+    wildcard_regla = next((r for r in reglas if (r[6] or '').strip() == '*'), None)
+    if wildcard_regla:
+        wildcard_next = (wildcard_regla[1] or '').strip().lower()
 
-        triggers = [normalize_text(t.strip()) for t in (input_db or '').split(',')]
-        if any(trigger and re.search(rf"\b{re.escape(trigger)}\b", texto) for trigger in triggers):
-            row = (resp, next_step, tipo_resp, media_list, opts, rol_kw)
-            break
-
-    # 2) Fuzzy matching si aún no hay match
-    if not row:
-        for resp, next_step, tipo_resp, media_urls, opts, rol_kw, input_db in reglas:
-            if (input_db or '').strip() == '*':
-                continue
-            media_list = media_urls.split('||') if media_urls else []
-            triggers = [normalize_text(t.strip()) for t in (input_db or '').split(',')]
-            for trigger in triggers:
-                for word in texto.split():
-                    if SequenceMatcher(None, word, trigger).ratio() >= 0.8:
-                        row = (resp, next_step, tipo_resp, media_list, opts, rol_kw)
-                        break
-                if row:
-                    break
-            if row:
-                break
-
-    # 3) Si no hubo match y hay wildcard '*', SALTAR al siguiente_step e iniciar allí
-    if row is None and wildcard_next:
         conn = get_connection(); c = conn.cursor()
         c.execute(
             """
@@ -251,7 +223,6 @@ def handle_text_message(numero, texto):
         )
         res = c.fetchone(); conn.close()
 
-        # Si existe 'iniciar' en el siguiente step, enviarlo; si no, igual avanzar de step sin mensaje
         if res:
             resp, next_step, tipo_resp, media_urls, opts, rol_kw = res
             media_list = media_urls.split('||') if media_urls else []
@@ -276,11 +247,33 @@ def handle_text_message(numero, texto):
 
             set_user_step(numero, (next_step or '').strip().lower())
         else:
-            # Avanza el step aunque no haya 'iniciar'
             set_user_step(numero, wildcard_next)
         return
 
-    # 4) Hubo match: responder y avanzar
+    # 1) Coincidencia exacta por triggers
+    for resp, next_step, tipo_resp, media_urls, opts, rol_kw, input_db in reglas:
+        media_list = media_urls.split('||') if media_urls else []
+        triggers = [normalize_text(t.strip()) for t in (input_db or '').split(',')]
+        if any(trigger and re.search(rf"\b{re.escape(trigger)}\b", texto) for trigger in triggers):
+            row = (resp, next_step, tipo_resp, media_list, opts, rol_kw)
+            break
+
+    # 2) Fuzzy matching si aún no hay match
+    if not row:
+        for resp, next_step, tipo_resp, media_urls, opts, rol_kw, input_db in reglas:
+            media_list = media_urls.split('||') if media_urls else []
+            triggers = [normalize_text(t.strip()) for t in (input_db or '').split(',')]
+            for trigger in triggers:
+                for word in texto.split():
+                    if SequenceMatcher(None, word, trigger).ratio() >= 0.8:
+                        row = (resp, next_step, tipo_resp, media_list, opts, rol_kw)
+                        break
+                if row:
+                    break
+            if row:
+                break
+
+    # Hubo match: responder y avanzar
     if row:
         resp, next_step, tipo_resp, media_list, opts, rol_kw = row
         if tipo_resp in ['image', 'video', 'audio', 'document'] and media_list:
