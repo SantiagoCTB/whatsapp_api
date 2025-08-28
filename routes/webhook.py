@@ -15,6 +15,7 @@ from services.db import (
 from services.whatsapp_api import download_audio, get_media_url, enviar_mensaje
 from services.job_queue import enqueue_transcription
 from services.normalize_text import normalize_text
+from services.global_commands import handle_global_command
 
 webhook_bp = Blueprint('webhook', __name__)
 
@@ -208,6 +209,8 @@ def handle_text_message(numero: str, texto: str):
         delete_chat_state(numero)
     user_last_activity[numero] = now
     text_norm = normalize_text(texto or "")
+    if handle_global_command(numero, texto):
+        return
     process_step_chain(numero, text_norm)
 
 
