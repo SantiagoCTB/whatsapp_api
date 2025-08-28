@@ -119,248 +119,113 @@ def handle_medicion(numero, texto):
     return True
 
 
-def handle_text_message(numero, texto, fallback_text: str = DEFAULT_FALLBACK_TEXT):
-    now           = datetime.now()
-    last_time     = user_last_activity.get(numero)
-    session_reset = False
+def _norm(s: str) -> str:
+    """Normaliza texto para matching: strip + lower (simple y suficiente)."""
+    return (s or "").strip().lower()
 
-    # Expiración de sesión
-    if last_time and (now - last_time).total_seconds() > SESSION_TIMEOUT:
-        user_steps.pop(numero, None)
-        delete_chat_state(numero)
-        session_reset = True
-    user_last_activity[numero] = now
 
-    # Comandos globales
-    if handle_global_command(numero, texto):
-        return
+def _buscar_reglas_del_step(conn, step):
+    """
+    Devuelve lista de dicts con las reglas del step:
+    [{'step':..., 'input_text':..., 'siguiente_step':...}, ...]
+    """
+    q = """
+        SELECT step, input_text, siguiente_step
+        FROM reglas
+        WHERE TRIM(LOWER(step)) = %s
+    """
+    c = conn.cursor(dictionary=True)
+    c.execute(q, (_norm(step),))
+    return c.fetchall()
 
-    # Paso inicial y bienvenida si es usuario nuevo
-    is_new_user = numero not in user_steps
-    stored_step = user_steps.get(numero, '')
-    if not is_new_user:
-        update_chat_state(numero, stored_step)
-    step = stored_step.strip().lower() if stored_step else 'menu_principal'
 
-    if is_new_user:
-        conn = get_connection(); c = conn.cursor()
-        c.execute(
-            """
-            SELECT r.id, r.respuesta, r.siguiente_step, r.tipo,
-                   GROUP_CONCAT(m.media_url SEPARATOR '||') AS media_urls,
-                   r.opciones, r.rol_keyword
-              FROM reglas r
-              LEFT JOIN regla_medias m ON r.id = m.regla_id
-             WHERE r.step=%s AND r.input_text=%s
-             GROUP BY r.id
-            """,
-            (step, 'iniciar')
-        )
-        row = c.fetchone(); conn.close()
-        if row:
-            _, resp, next_step, tipo_resp, media_urls, opts, rol_kw = row
-            media_list = media_urls.split('||') if media_urls else []
-            if tipo_resp in ['image', 'video', 'audio', 'document'] and media_list:
-                enviar_mensaje(numero, resp, tipo_respuesta=tipo_resp, opciones=media_list[0])
-                for extra in media_list[1:]:
-                    enviar_mensaje(numero, '', tipo_respuesta=tipo_resp, opciones=extra)
-            else:
-                enviar_mensaje(numero, resp, tipo_respuesta=tipo_resp, opciones=opts)
+def handle_text_message(numero, texto):
+    """
+    Flujo simple:
+    - Si hay regla exacta (input_text == texto normalizado), avanza a siguiente_step.
+    - Si no hay exacta y existe '*' en el step actual, avanza a siguiente_step de '*'.
+    - Si no hay match, responde 'No entendí...'.
+    - Nunca auto-encadena: cada '*' consume exactamente 1 mensaje del usuario.
+    """
+    try:
+        # 1) Determinar step actual (default: 'menu_principal')
+        stored_step = get_chat_state(numero) or ""
+        step_actual = _norm(stored_step) if stored_step else "menu_principal"
 
-            if rol_kw:
-                conn2 = get_connection(); c2 = conn2.cursor()
-                c2.execute("SELECT id FROM roles WHERE keyword=%s", (rol_kw,))
-                role = c2.fetchone()
-                if role:
-                    c2.execute(
-                        "INSERT IGNORE INTO chat_roles (numero, role_id) VALUES (%s, %s)",
-                        (numero, role[0])
-                    )
-                    conn2.commit()
-                conn2.close()
-            set_user_step(numero, next_step.strip().lower() if next_step else '')
-            if next_step:
-                trigger_auto_steps(numero)
-                return
+        # 2) Guardar el mensaje del usuario (si usas bitácora)
+        try:
+            guardar_mensaje(numero, "usuario", texto)
+        except Exception:
+            logging.exception("No se pudo guardar_mensaje (usuario); continuando...")
 
-    if session_reset:
-        return
+        # 3) Traer reglas del step
+        conn = get_connection()
+        reglas = _buscar_reglas_del_step(conn, step_actual)
 
-    # Step actual
-    step = user_steps.get(numero, '').strip().lower()
-
-    # Handler específico del step
-    handler = STEP_HANDLERS.get(step)
-    if handler and handler(numero, texto):
-        return
-
-    texto_norm = normalize_text(texto or '')
-
-    # Cargar reglas del step actual (incluye r.id e input_text)
-    conn = get_connection(); c = conn.cursor()
-    c.execute(
-        """
-        SELECT r.id, r.respuesta, r.siguiente_step, r.tipo,
-               GROUP_CONCAT(m.media_url SEPARATOR '||') AS media_urls,
-               r.opciones, r.rol_keyword, r.input_text
-          FROM reglas r
-          LEFT JOIN regla_medias m ON r.id = m.regla_id
-         WHERE r.step=%s
-         GROUP BY r.id
-        """,
-        (step,)
-    )
-    reglas = c.fetchall(); conn.close()
-
-    # ===============  A) REGRA EN HILO CON '*'  ===============
-    # Ver si hay una regla "en-hilo" pendiente para este número
-    regla_hilo_id = pending_rules.get(numero)  # id de la regla que estamos esperando evaluar
-    if regla_hilo_id is not None:
-        r_activa = next((r for r in reglas if str(r[0]) == str(regla_hilo_id)), None)
-        if r_activa:
-            _id, resp, next_step, tipo_resp, media_urls, opts, rol_kw, input_db = r_activa
-            if (input_db or '').strip() == '*':
-                media_list = media_urls.split('||') if media_urls else []
-                if tipo_resp in ['image', 'video', 'audio', 'document'] and media_list:
-                    enviar_mensaje(numero, resp, tipo_respuesta=tipo_resp, opciones=media_list[0])
-                    for extra in media_list[1:]:
-                        enviar_mensaje(numero, '', tipo_respuesta=tipo_resp, opciones=extra)
-                else:
-                    enviar_mensaje(numero, resp, tipo_respuesta=tipo_resp, opciones=opts)
-
-                if rol_kw:
-                    conn2 = get_connection(); c2 = conn2.cursor()
-                    c2.execute("SELECT id FROM roles WHERE keyword=%s", (rol_kw,))
-                    role = c2.fetchone()
-                    if role:
-                        c2.execute(
-                            "INSERT IGNORE INTO chat_roles (numero, role_id) VALUES (%s, %s)",
-                            (numero, role[0])
-                        )
-                        conn2.commit()
-                    conn2.close()
-
-                set_user_step(numero, (next_step or '').strip().lower())
-                pending_rules.pop(numero, None)  # limpiar en-hilo
-                if next_step:
-                    trigger_auto_steps(numero)
-                return
-        # Si la activa no es '*', seguimos con la lógica normal
-
-    # ===============  B) MATCH EXACTO (sin '*')  ===============
-    row = None
-    for _id, resp, next_step, tipo_resp, media_urls, opts, rol_kw, input_db in reglas:
-        if (input_db or '').strip() == '*':
-            continue  # el * no participa en matching; se usa solo en A) o D)
-        triggers = [normalize_text(t.strip()) for t in (input_db or '').split(',') if t.strip()]
-        if not triggers:
-            continue
-
-        matched = False
-        for trigger in triggers:
-            if not trigger:
-                continue
-            if ' ' in trigger:
-                if trigger in texto_norm:
-                    matched = True
-                    break
-            else:
-                if re.search(rf"\b{re.escape(trigger)}\b", texto_norm):
-                    matched = True
-                    break
-
-        if matched:
-            media_list = media_urls.split('||') if media_urls else []
-            row = (_id, resp, next_step, tipo_resp, media_list, opts, rol_kw)
-            break
-
-    # ===============  C) MATCH "FUZZY" (sin '*')  ===============
-    if not row:
-        words = texto_norm.split()
-        for _id, resp, next_step, tipo_resp, media_urls, opts, rol_kw, input_db in reglas:
-            if (input_db or '').strip() == '*':
-                continue
-            triggers = [normalize_text(t.strip()) for t in (input_db or '').split(',') if t.strip()]
-            if not triggers:
-                continue
-            found = False
-            for trigger in triggers:
-                for word in words:
-                    if SequenceMatcher(None, word, trigger).ratio() >= 0.8:
-                        found = True
-                        break
-                if found:
-                    break
-            if found:
-                media_list = media_urls.split('||') if media_urls else []
-                row = (_id, resp, next_step, tipo_resp, media_list, opts, rol_kw)
-                break
-
-    # ===============  D) CATCH-ALL CON '*' (solo si hay uno)  ===============
-    if not row:
-        wildcard_reglas = [r for r in reglas if (r[7] or '').strip() == '*']
-        # Si hay exactamente UNA regla con '*', úsala como catch-all del step
-        if len(wildcard_reglas) == 1:
-            _id, resp, next_step, tipo_resp, media_urls, opts, rol_kw, _ = wildcard_reglas[0]
-            media_list = media_urls.split('||') if media_urls else []
-            if tipo_resp in ['image', 'video', 'audio', 'document'] and media_list:
-                enviar_mensaje(numero, resp, tipo_respuesta=tipo_resp, opciones=media_list[0])
-                for extra in media_list[1:]:
-                    enviar_mensaje(numero, '', tipo_respuesta=tipo_resp, opciones=extra)
-            else:
-                enviar_mensaje(numero, resp, tipo_respuesta=tipo_resp, opciones=opts)
-
-            if rol_kw:
-                conn2 = get_connection(); c2 = conn2.cursor()
-                c2.execute("SELECT id FROM roles WHERE keyword=%s", (rol_kw,))
-                role = c2.fetchone()
-                if role:
-                    c2.execute(
-                        "INSERT IGNORE INTO chat_roles (numero, role_id) VALUES (%s, %s)",
-                        (numero, role[0])
-                    )
-                    conn2.commit()
-                conn2.close()
-
-            set_user_step(numero, (next_step or '').strip().lower())
-            pending_rules.pop(numero, None)  # por si venía de una regla en-hilo
-            if next_step:
-                trigger_auto_steps(numero)
+        if not reglas:
+            # Step desconocido: reubicar al inicial
+            update_chat_state(numero, "menu_principal")
+            # Opcional: puedes enviar aquí algún mensaje de bienvenida o menú
+            enviar_mensaje(numero, "No entendí tu respuesta, intenta de nuevo.")
             return
 
-    # ===============  E) RESPONDER SI HUBO MATCH (B/C)  ===============
-    if row:
-        _id, resp, next_step, tipo_resp, media_list, opts, rol_kw = row
-        if tipo_resp in ['image', 'video', 'audio', 'document'] and media_list:
-            enviar_mensaje(numero, resp, tipo_respuesta=tipo_resp, opciones=media_list[0])
-            for extra in media_list[1:]:
-                enviar_mensaje(numero, '', tipo_respuesta=tipo_resp, opciones=extra)
-        else:
-            enviar_mensaje(numero, resp, tipo_respuesta=tipo_resp, opciones=opts)
+        # 4) Intentar match EXACTO
+        user_in = _norm(texto)
+        match_exacto = None
+        comodin = None  # regla con input_text='*'
 
-        if rol_kw:
-            conn2 = get_connection(); c2 = conn2.cursor()
-            c2.execute("SELECT id FROM roles WHERE keyword=%s", (rol_kw,))
-            role = c2.fetchone()
-            if role:
-                c2.execute(
-                    "INSERT IGNORE INTO chat_roles (numero, role_id) VALUES (%s, %s)",
-                    (numero, role[0])
-                )
-                conn2.commit()
-            conn2.close()
+        for r in reglas:
+            it = _norm(r["input_text"])
+            if it == "*":
+                comodin = r
+            if it == user_in and it != "*":
+                match_exacto = r
+                break
 
-        set_user_step(numero, (next_step or '').strip().lower())
-        pending_rules.pop(numero, None)
-        if next_step:
-            trigger_auto_steps(numero)
-        return
+        regla_seleccionada = match_exacto or comodin
 
-    # ===============  F) FALLBACK  ===============
-    enviar_mensaje(numero, fallback_text)
-    guardar_mensaje(numero, fallback_text, "bot")
-    # (Asegúrate de que update_chat_state acepte estos parámetros)
-    update_chat_state(numero, step, 'sin_regla')
+        if not regla_seleccionada:
+            # 5) No hubo match ni comodín → fallback
+            enviar_mensaje(numero, "No entendí tu respuesta, intenta de nuevo.")
+            return
+
+        # 6) Avanzar al siguiente_step
+        siguiente = regla_seleccionada["siguiente_step"] or ""
+        siguiente = _norm(siguiente) or "menu_principal"
+        update_chat_state(numero, siguiente)
+
+        # 7) (OPCIONAL) Si tienes una columna 'respuesta' en la tabla 'reglas' o en otra tabla,
+        #    podrías enviar un texto informativo del siguiente paso. Ejemplo:
+        #
+        # try:
+        #     c = conn.cursor()
+        #     c.execute("""
+        #         SELECT respuesta FROM reglas
+        #          WHERE TRIM(LOWER(step))=%s
+        #            AND (respuesta IS NOT NULL AND TRIM(respuesta) <> '')
+        #         LIMIT 1
+        #     """, (siguiente,))
+        #     row = c.fetchone()
+        #     if row and row[0]:
+        #         enviar_mensaje(numero, row[0])
+        # except Exception:
+        #     logging.exception("No se pudo enviar respuesta del siguiente paso; continuando...")
+
+        # 8) Registrar acción del bot (si llevas bitácora)
+        try:
+            guardar_mensaje(
+                numero, "sistema",
+                f"Transición: {step_actual} -> {siguiente} (por {'match' if match_exacto else '*'})"
+            )
+        except Exception:
+            pass
+
+    except Exception:
+        logging.exception("Error en handle_text_message")
+        try:
+            enviar_mensaje(numero, "Ocurrió un error procesando tu mensaje. Intenta de nuevo.")
+        except Exception:
+            pass
 
 def set_en_hilo(numero, regla_id):
     """Registra que el número tiene una regla en-hilo pendiente."""
