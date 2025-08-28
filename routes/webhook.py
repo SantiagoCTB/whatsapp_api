@@ -80,63 +80,53 @@ def dispatch_rule(numero, regla):
 
 
 def process_step_chain(numero, text_norm=None):
-    """Procesa el step actual y avanza automáticamente por reglas '*'."""
-    while True:
-        step = (user_steps.get(numero) or '').strip().lower()
-        if not step:
-            return
+    """Procesa el step actual una sola vez.
 
-        conn = get_connection(); c = conn.cursor()
-        c.execute(
-            """
-            SELECT r.id, r.respuesta, r.siguiente_step, r.tipo,
-                   GROUP_CONCAT(m.media_url SEPARATOR '||') AS media_urls,
-                   r.opciones, r.rol_keyword, r.input_text
-              FROM reglas r
-              LEFT JOIN regla_medias m ON r.id = m.regla_id
-             WHERE r.step=%s
-             GROUP BY r.id
-            """,
-            (step,),
-        )
-        reglas = c.fetchall(); conn.close()
-        if not reglas:
-            return
-
-        comodines = [r for r in reglas if (r[7] or '').strip() == '*']
-
-        # Regla única con '*': responder sin validar y continuar
-        if len(reglas) == 1 and comodines:
-            next_step = dispatch_rule(numero, comodines[0])
-            set_user_step(numero, next_step)
-            text_norm = None
-            continue
-
-        if text_norm is None:
-            return
-
-        # Coincidencia exacta
-        matched = None
-        for r in reglas:
-            patt = (r[7] or '').strip()
-            if patt and patt != '*' and normalize_text(patt) == text_norm:
-                matched = r
-                break
-
-        if matched:
-            next_step = dispatch_rule(numero, matched)
-            set_user_step(numero, next_step)
-            text_norm = None
-            continue
-
-        if comodines:
-            next_step = dispatch_rule(numero, comodines[0])
-            set_user_step(numero, next_step)
-            text_norm = None
-            continue
-
-        enviar_mensaje(numero, DEFAULT_FALLBACK_TEXT)
+    No ejecuta reglas con `input_text='*'` si no se recibió texto del
+    usuario, evitando avanzar automáticamente entre pasos.
+    """
+    step = (user_steps.get(numero) or '').strip().lower()
+    if not step:
         return
+
+    conn = get_connection(); c = conn.cursor()
+    c.execute(
+        """
+        SELECT r.id, r.respuesta, r.siguiente_step, r.tipo,
+               GROUP_CONCAT(m.media_url SEPARATOR '||') AS media_urls,
+               r.opciones, r.rol_keyword, r.input_text
+          FROM reglas r
+          LEFT JOIN regla_medias m ON r.id = m.regla_id
+         WHERE r.step=%s
+         GROUP BY r.id
+        """,
+        (step,),
+    )
+    reglas = c.fetchall(); conn.close()
+    if not reglas:
+        return
+
+    comodines = [r for r in reglas if (r[7] or '').strip() == '*']
+
+    # No avanzar si no hay texto del usuario
+    if text_norm is None:
+        return
+
+    # Coincidencia exacta
+    for r in reglas:
+        patt = (r[7] or '').strip()
+        if patt and patt != '*' and normalize_text(patt) == text_norm:
+            next_step = dispatch_rule(numero, r)
+            set_user_step(numero, next_step)
+            return
+
+    # Regla comodín
+    if comodines:
+        next_step = dispatch_rule(numero, comodines[0])
+        set_user_step(numero, next_step)
+        return
+
+    enviar_mensaje(numero, DEFAULT_FALLBACK_TEXT)
 
 
 @register_handler('barra_medida')
