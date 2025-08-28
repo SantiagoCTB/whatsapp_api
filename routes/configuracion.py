@@ -12,6 +12,10 @@ config_bp = Blueprint('configuracion', __name__)
 MEDIA_ROOT = Config.MEDIA_ROOT
 os.makedirs(Config.MEDIA_ROOT, exist_ok=True)
 
+# El comodín '*' en `input_text` permite avanzar al siguiente paso sin validar
+# la respuesta del usuario. Si es la única regla de un paso se ejecuta
+# automáticamente; si coexiste con otras, actúa como respuesta por defecto.
+
 def _require_admin():
     # Debe haber usuario logueado y el rol 'admin' en la lista de roles
     return "user" in session and 'admin' in (session.get('roles') or [])
@@ -31,6 +35,10 @@ def _url_ok(url):
         return False, None
 
 def _reglas_view(template_name):
+    """Renderiza las vistas de reglas.
+    El comodín '*' en `input_text` avanza al siguiente paso sin validar
+    la respuesta del usuario; si existen otras reglas, actúa como opción
+    por defecto."""
     if not _require_admin():
         return redirect(url_for("auth.login"))
 

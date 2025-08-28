@@ -9,7 +9,7 @@
 </div>
 
 <h2>Configuración de Reglas</h2>
-<p>Para reglas de medición usa "*" en <em>Texto del usuario</em> y define la fórmula en <em>Cálculo</em> con variables como <code>medida</code>, <code>p1</code> o <code>p2</code>. Opcionalmente indica un <em>Handler</em> para delegar el cálculo a código externo.</p>
+<p>Para reglas de medición usa "*" en <em>Texto del usuario</em> y define la fórmula en <em>Cálculo</em> con variables como <code>medida</code>, <code>p1</code> o <code>p2</code>. El comodín "*" permite avanzar al siguiente paso sin validar el texto recibido: si es la única regla del paso se ejecutará de forma automática; si hay más reglas, actuará como opción por defecto. Opcionalmente indica un <em>Handler</em> para delegar el cálculo a código externo.</p>
 
 <form method="POST" enctype="multipart/form-data">
     <h3>Agregar o actualizar regla</h3>
