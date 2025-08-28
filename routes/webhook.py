@@ -413,7 +413,9 @@ def process_en_hilo_rule(numero, regla_id):
 
 
 def trigger_auto_steps(numero):
-    """Busca y ejecuta en cadena las reglas automáticas ('*') del step actual."""
+    """Si el step actual tiene exactamente una regla '*' (comodín), solo la
+    marcamos como 'en-hilo' y esperamos el *siguiente* mensaje del usuario.
+    NO la procesamos automáticamente aquí para evitar encadenar pasos sin input."""
     step = user_steps.get(numero, '').strip().lower()
     if not step:
         return
@@ -430,16 +432,19 @@ def trigger_auto_steps(numero):
     )
     total, comodines = c.fetchone()
     comodines = comodines if comodines is not None else 0
+
+    # Si en el step actual existe exactamente UNA regla '*' (catch-all del step),
+    # la dejamos marcada "en-hilo" para que el próximo mensaje del usuario la dispare.
     if total == 1 and comodines == 1:
-        c.execute("SELECT id FROM reglas WHERE step=%s AND input_text='*'", (step,))
+        c.execute("SELECT id FROM reglas WHERE step=%s AND TRIM(input_text)='*'", (step,))
         row = c.fetchone()
         if row:
             regla_id = row[0]
-            logging.info("Transición automática para %s: step '%s' con regla %s", numero, step, regla_id)
+            logging.info(
+                "Marcando regla '*' en-hilo para %s: step '%s', regla_id=%s (esperando siguiente mensaje)",
+                numero, step, regla_id
+            )
             set_en_hilo(numero, regla_id)
-            conn.close()
-            process_en_hilo_rule(numero, regla_id)
-            return
     conn.close()
 
 
