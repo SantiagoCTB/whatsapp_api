@@ -43,10 +43,23 @@ def enviar_mensaje(numero, mensaje, tipo='bot', tipo_respuesta='texto', opciones
             opts = json.loads(opciones) if opciones else {}
         except Exception:
             opts = {}
-        sections = opts.get("sections", [])
-        header   = opts.get("header") or "Menú"
-        footer   = opts.get("footer") or "Selecciona una opción"
-        button   = opts.get("button") or "Ver opciones"
+
+        if isinstance(opts, list):
+            sections = opts
+            header = "Menú"
+            footer = "Selecciona una opción"
+            button = "Ver opciones"
+        elif isinstance(opts, dict):
+            sections = opts.get("sections", [])
+            header = opts.get("header") or "Menú"
+            footer = opts.get("footer") or "Selecciona una opción"
+            button = opts.get("button") or "Ver opciones"
+        else:
+            sections = []
+            header = "Menú"
+            footer = "Selecciona una opción"
+            button = "Ver opciones"
+
         data = {
             "messaging_product": "whatsapp",
             "to": numero,
