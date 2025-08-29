@@ -93,6 +93,7 @@ def process_step_chain(numero, text_norm=None):
         return
 
     conn = get_connection(); c = conn.cursor()
+    # Ordenar reglas para evaluar primero las de menor ID (o prioridad).
     c.execute(
         """
         SELECT r.id, r.respuesta, r.siguiente_step, r.tipo,
@@ -102,6 +103,7 @@ def process_step_chain(numero, text_norm=None):
           LEFT JOIN regla_medias m ON r.id = m.regla_id
          WHERE r.step=%s
          GROUP BY r.id
+         ORDER BY r.id
         """,
         (step,),
     )
