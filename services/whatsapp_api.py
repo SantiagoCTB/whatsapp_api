@@ -59,6 +59,10 @@ def enviar_mensaje(numero, mensaje, tipo='bot', tipo_respuesta='texto', opciones
             header = "Menú"
             footer = "Selecciona una opción"
             button = "Ver opciones"
+        if not sections:
+            fallback = mensaje or "No hay opciones disponibles."
+            print("[WA API] Lista vacía; enviando mensaje de texto de fallback")
+            return enviar_mensaje(numero, fallback, tipo, 'texto', None, reply_to_wa_id)
 
         data = {
             "messaging_product": "whatsapp",

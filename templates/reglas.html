@@ -144,7 +144,7 @@ function toggleListFields() {
     });
 }
 
-function prepareOptions() {
+function prepareOptions(e) {
     const tipo = document.getElementById('tipo').value;
     if (tipo === 'lista') {
         const header = document.getElementById('list_header').value;
@@ -154,9 +154,17 @@ function prepareOptions() {
         let sections;
         try {
             sections = JSON.parse(sectionsText || '[]');
-        } catch (e) {
+        } catch (err) {
             sections = [];
         }
+
+        const invalid = !Array.isArray(sections) || sections.length === 0 || sections.some(sec => !sec.rows || sec.rows.length === 0);
+        if (invalid) {
+            alert('Debes definir al menos una sección con una o más filas.');
+            e.preventDefault();
+            return;
+        }
+
         const opts = {header, button, footer, sections};
         document.getElementById('opciones').value = JSON.stringify(opts);
     }
