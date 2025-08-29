@@ -1,5 +1,4 @@
 import os
-import re
 import logging
 import threading
 from flask import Blueprint, request, jsonify, url_for
@@ -23,11 +22,10 @@ VERIFY_TOKEN    = Config.VERIFY_TOKEN
 SESSION_TIMEOUT = Config.SESSION_TIMEOUT
 DEFAULT_FALLBACK_TEXT = "No entendí tu respuesta, intenta de nuevo."
 
-user_last_activity = {}
-user_steps         = {}
 # Mapa numero -> lista de textos recibidos para procesar tras un delay
 message_buffer     = {}
 pending_timers     = {}
+cache_lock         = threading.Lock()
 
 STEP_HANDLERS = {}
 EXTERNAL_HANDLERS = {}
@@ -48,9 +46,13 @@ def register_external(name):
 
 
 def set_user_step(numero, step, estado='espera_usuario'):
-    """Actualiza el paso en memoria y en la tabla chat_state."""
-    user_steps[numero] = step
+    """Actualiza el paso en la tabla chat_state."""
     update_chat_state(numero, step, estado)
+
+
+def get_current_step(numero):
+    row = get_chat_state(numero)
+    return (row[0] or '').strip().lower() if row else ''
 
 os.makedirs(Config.MEDIA_ROOT, exist_ok=True)
 
@@ -86,7 +88,7 @@ def process_step_chain(numero, text_norm=None):
     recibió texto del usuario, pero tras la primera ejecución el flujo se
     detiene y espera una nueva entrada.
     """
-    step = (user_steps.get(numero) or '').strip().lower()
+    step = get_current_step(numero)
     if not step:
         return
 
@@ -136,7 +138,7 @@ def process_step_chain(numero, text_norm=None):
 @register_handler('meson_recto_medida')
 @register_handler('meson_l_medida')
 def handle_medicion(numero, texto):
-    step_actual = user_steps.get(numero, '').strip().lower()
+    step_actual = get_current_step(numero)
     conn = get_connection(); c = conn.cursor()
     c.execute(
         """
@@ -196,12 +198,16 @@ def handle_medicion(numero, texto):
 def handle_text_message(numero: str, texto: str):
     """Procesa un mensaje de texto y avanza los pasos del flujo."""
     now = datetime.now()
-    last_time = user_last_activity.get(numero)
+    row = get_chat_state(numero)
+    step_db = row[0] if row else None
+    last_time = row[1] if row else None
     if last_time and (now - last_time).total_seconds() > SESSION_TIMEOUT:
-        user_steps.pop(numero, None)
         delete_chat_state(numero)
-    user_last_activity[numero] = now
-    if not user_steps.get(numero):
+        step_db = None
+    elif row:
+        update_chat_state(numero, step_db)
+
+    if not step_db:
         set_user_step(numero, Config.INITIAL_STEP)
         process_step_chain(numero, 'iniciar')
         return
@@ -215,15 +221,16 @@ def handle_text_message(numero: str, texto: str):
 
 
 def process_buffered_messages(numero):
-    textos = message_buffer.pop(numero, None)
+    with cache_lock:
+        textos = message_buffer.pop(numero, None)
+        timer = pending_timers.pop(numero, None)
+    if timer:
+        timer.cancel()
     if not textos:
         return
     combined = " ".join(textos)
     normalized = normalize_text(combined)
     handle_text_message(numero, normalized)
-    timer = pending_timers.pop(numero, None)
-    if timer:
-        timer.cancel()
 
 @webhook_bp.route('/webhook', methods=['GET', 'POST'])
 def webhook():
@@ -246,14 +253,6 @@ def webhook():
                 from_number = msg.get('from')
                 wa_id       = msg.get('id')
                 reply_to_id = msg.get('context', {}).get('id')
-
-                if from_number not in user_steps:
-                    row = get_chat_state(from_number)
-                    if row:
-                        step_db, last_act = row
-                        user_steps[from_number] = step_db or ''
-                        if last_act:
-                            user_last_activity[from_number] = last_act
 
                 # evitar duplicados
                 conn = get_connection(); c = conn.cursor()
@@ -387,11 +386,12 @@ def webhook():
                     wa_id=wa_id,
                     reply_to_wa_id=reply_to_id,
                 )
-                message_buffer.setdefault(from_number, []).append(normalized_text)
-                if from_number in pending_timers:
-                    pending_timers[from_number].cancel()
-                timer = threading.Timer(3, process_buffered_messages, args=(from_number,))
-                pending_timers[from_number] = timer
+                with cache_lock:
+                    message_buffer.setdefault(from_number, []).append(normalized_text)
+                    if from_number in pending_timers:
+                        pending_timers[from_number].cancel()
+                    timer = threading.Timer(3, process_buffered_messages, args=(from_number,))
+                    pending_timers[from_number] = timer
                 timer.start()
                 return jsonify({'status': 'buffered'}), 200
     return jsonify({'status':'received'}), 200
