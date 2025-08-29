@@ -82,8 +82,9 @@ def dispatch_rule(numero, regla):
 def process_step_chain(numero, text_norm=None):
     """Procesa el step actual una sola vez.
 
-    No ejecuta reglas con `input_text='*'` si no se recibió texto del
-    usuario, evitando avanzar automáticamente entre pasos.
+    Las reglas con ``input_text='*'`` pueden ejecutarse incluso si no se
+    recibió texto del usuario, pero tras la primera ejecución el flujo se
+    detiene y espera una nueva entrada.
     """
     step = (user_steps.get(numero) or '').strip().lower()
     if not step:
@@ -124,8 +125,7 @@ def process_step_chain(numero, text_norm=None):
     if comodines:
         next_step = dispatch_rule(numero, comodines[0])
         set_user_step(numero, next_step)
-        if next_step != step:
-            process_step_chain(numero)
+        # No procesar recursivamente otros comodines; esperar nueva entrada
         return
 
     enviar_mensaje(numero, DEFAULT_FALLBACK_TEXT)
