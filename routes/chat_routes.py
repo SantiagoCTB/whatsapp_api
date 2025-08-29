@@ -1,5 +1,6 @@
 import os
 import uuid
+import json
 from flask import Blueprint, render_template, request, redirect, session, url_for, jsonify
 from werkzeug.utils import secure_filename
 from config import Config
@@ -117,6 +118,23 @@ def send_message():
     texto  = data.get('mensaje')
     tipo_respuesta = data.get('tipo_respuesta', 'texto')
     opciones = data.get('opciones')
+    list_header = data.get('list_header')
+    list_footer = data.get('list_footer')
+    list_button = data.get('list_button')
+    sections    = data.get('sections')
+    if tipo_respuesta == 'lista':
+        if not opciones:
+            try:
+                sections_data = json.loads(sections) if sections else []
+            except Exception:
+                sections_data = []
+            opts = {
+                'header': list_header,
+                'footer': list_footer,
+                'button': list_button,
+                'sections': sections_data
+            }
+            opciones = json.dumps(opts)
     reply_to_wa_id = data.get('reply_to_wa_id')
 
     conn = get_connection()
