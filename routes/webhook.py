@@ -214,13 +214,12 @@ def handle_text_message(numero: str, texto: str):
 
 
 def process_buffered_messages(numero):
-    textos = message_buffer.get(numero)
+    textos = message_buffer.pop(numero, None)
     if not textos:
         return
     combined = " ".join(textos)
     normalized = normalize_text(combined)
     handle_text_message(numero, normalized)
-    message_buffer.pop(numero, None)
     timer = pending_timers.pop(numero, None)
     if timer:
         timer.cancel()
