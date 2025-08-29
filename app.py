@@ -2,6 +2,8 @@
 from flask import Flask
 from dotenv import load_dotenv
 import os
+import logging
+import sys
 from config import Config
 
 from services.db import init_db
@@ -18,6 +20,17 @@ def create_app():
     app = Flask(__name__)
     # Si usas clase de config:
     app.config.from_object(Config)
+
+    if not app.debug:
+        log_format = '%(asctime)s [%(levelname)s] %(name)s: %(message)s'
+        logging.basicConfig(
+            level=logging.INFO,
+            format=log_format,
+            handlers=[
+                logging.FileHandler('app.log'),
+                logging.StreamHandler(sys.stdout)
+            ]
+        )
 
     # Registra blueprints
     app.register_blueprint(auth_bp)

@@ -128,6 +128,7 @@ def process_step_chain(numero, text_norm=None):
         # No procesar recursivamente otros comodines; esperar nueva entrada
         return
 
+    logging.warning("Fallback en step '%s' para entrada '%s'", step, text_norm)
     enviar_mensaje(numero, DEFAULT_FALLBACK_TEXT)
 
 
