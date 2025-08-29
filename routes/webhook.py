@@ -108,8 +108,8 @@ def process_step_chain(numero, text_norm=None):
 
     comodines = [r for r in reglas if (r[7] or '').strip() == '*']
 
-    # No avanzar si no hay texto del usuario
-    if text_norm is None:
+    # No avanzar si no hay texto del usuario, salvo que existan comodines
+    if text_norm is None and not comodines:
         return
 
     # Coincidencia exacta
@@ -124,6 +124,8 @@ def process_step_chain(numero, text_norm=None):
     if comodines:
         next_step = dispatch_rule(numero, comodines[0])
         set_user_step(numero, next_step)
+        if next_step != step:
+            process_step_chain(numero)
         return
 
     enviar_mensaje(numero, DEFAULT_FALLBACK_TEXT)
