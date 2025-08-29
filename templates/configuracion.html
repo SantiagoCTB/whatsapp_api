@@ -118,7 +118,7 @@
                 "rol_keyword": regla[9] or "",
                 "calculo": regla[10] or "",
                 "handler": regla[11] or ""
-            }|tojson } )'>Editar</button>
+            }|tojson }})'>Editar</button>
             <form method="POST" action="{{ url_for('configuracion.eliminar_regla', regla_id=regla[0]) }}">
                 <button class="delete-btn btn-primary" type="submit">Eliminar</button>
             </form>
