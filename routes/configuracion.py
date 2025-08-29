@@ -185,18 +185,15 @@ def _reglas_view(template_name):
                 rol_keyword = request.form.get('rol_keyword')
                 calculo = request.form.get('calculo')
                 handler = request.form.get('handler')
+                regla_id = request.form.get('regla_id')
 
-                c.execute(
-                    "SELECT id FROM reglas WHERE step = %s AND input_text = %s",
-                    (step, input_text)
-                )
-                existente = c.fetchone()
-                if existente:
-                    regla_id = existente[0]
+                if regla_id:
                     c.execute(
                         """
                         UPDATE reglas
-                           SET respuesta = %s,
+                           SET step = %s,
+                               input_text = %s,
+                               respuesta = %s,
                                siguiente_step = %s,
                                tipo = %s,
                                media_url = %s,
@@ -207,7 +204,20 @@ def _reglas_view(template_name):
                                handler = %s
                          WHERE id = %s
                         """,
-                        (respuesta, siguiente_step, tipo, media_url, media_tipo, opciones, rol_keyword, calculo, handler, regla_id)
+                        (
+                            step,
+                            input_text,
+                            respuesta,
+                            siguiente_step,
+                            tipo,
+                            media_url,
+                            media_tipo,
+                            opciones,
+                            rol_keyword,
+                            calculo,
+                            handler,
+                            regla_id,
+                        ),
                     )
                     c.execute("DELETE FROM regla_medias WHERE regla_id=%s", (regla_id,))
                     for url, tipo_media in medias:
@@ -217,16 +227,69 @@ def _reglas_view(template_name):
                         )
                 else:
                     c.execute(
-                        "INSERT INTO reglas (step, input_text, respuesta, siguiente_step, tipo, media_url, media_tipo, opciones, rol_keyword, calculo, handler) "
-                        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
-                        (step, input_text, respuesta, siguiente_step, tipo, media_url, media_tipo, opciones, rol_keyword, calculo, handler),
+                        "SELECT id FROM reglas WHERE step = %s AND input_text = %s",
+                        (step, input_text)
                     )
-                    regla_id = c.lastrowid
-                    for url, tipo_media in medias:
+                    existente = c.fetchone()
+                    if existente:
+                        regla_id = existente[0]
                         c.execute(
-                            "INSERT INTO regla_medias (regla_id, media_url, media_tipo) VALUES (%s, %s, %s)",
-                            (regla_id, url, tipo_media),
+                            """
+                            UPDATE reglas
+                               SET respuesta = %s,
+                                   siguiente_step = %s,
+                                   tipo = %s,
+                                   media_url = %s,
+                                   media_tipo = %s,
+                                   opciones = %s,
+                                   rol_keyword = %s,
+                                   calculo = %s,
+                                   handler = %s
+                             WHERE id = %s
+                            """,
+                            (
+                                respuesta,
+                                siguiente_step,
+                                tipo,
+                                media_url,
+                                media_tipo,
+                                opciones,
+                                rol_keyword,
+                                calculo,
+                                handler,
+                                regla_id,
+                            ),
                         )
+                        c.execute("DELETE FROM regla_medias WHERE regla_id=%s", (regla_id,))
+                        for url, tipo_media in medias:
+                            c.execute(
+                                "INSERT INTO regla_medias (regla_id, media_url, media_tipo) VALUES (%s, %s, %s)",
+                                (regla_id, url, tipo_media),
+                            )
+                    else:
+                        c.execute(
+                            "INSERT INTO reglas (step, input_text, respuesta, siguiente_step, tipo, media_url, media_tipo, opciones, rol_keyword, calculo, handler) "
+                            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                            (
+                                step,
+                                input_text,
+                                respuesta,
+                                siguiente_step,
+                                tipo,
+                                media_url,
+                                media_tipo,
+                                opciones,
+                                rol_keyword,
+                                calculo,
+                                handler,
+                            ),
+                        )
+                        regla_id = c.lastrowid
+                        for url, tipo_media in medias:
+                            c.execute(
+                                "INSERT INTO regla_medias (regla_id, media_url, media_tipo) VALUES (%s, %s, %s)",
+                                (regla_id, url, tipo_media),
+                            )
                 conn.commit()
 
         # Listar todas las reglas
