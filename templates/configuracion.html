@@ -11,7 +11,7 @@
 <h2>Configuración de Reglas</h2>
 <p>Para reglas de medición usa "*" en <em>Texto del usuario</em> y define la fórmula en <em>Cálculo</em> con variables como <code>medida</code>, <code>p1</code> o <code>p2</code>. El comodín "*" permite avanzar al siguiente paso sin validar el texto recibido: si es la única regla del paso se ejecutará de forma automática; si hay más reglas, actuará como opción por defecto. Opcionalmente indica un <em>Handler</em> para delegar el cálculo a código externo.</p>
 
-<form method="POST" enctype="multipart/form-data">
+<form id="reglaForm" method="POST" enctype="multipart/form-data">
     <h3>Agregar o actualizar regla</h3>
     <label for="step">Paso actual:</label>
     <input type="text" id="step" name="step" required>
@@ -51,8 +51,18 @@
     <label for="handler">Handler externo:</label>
     <input type="text" id="handler" name="handler">
 
-    <label for="opciones">Opciones (solo para listas, formato JSON):</label><br>
-    <textarea name="opciones" rows="6" cols="60" placeholder='[{"title":"Rápido","rows":[{"id":"express","title":"Express","description":"1 día"}]}]'></textarea>
+    <label for="list_header" class="list-field" style="display:none;">Encabezado de la lista:</label>
+    <input type="text" id="list_header" name="list_header" class="list-field" style="display:none;">
+
+    <label for="list_button" class="list-field" style="display:none;">Texto del botón:</label>
+    <input type="text" id="list_button" name="list_button" class="list-field" style="display:none;">
+
+    <label for="list_footer" class="list-field" style="display:none;">Pie de página (opcional):</label>
+    <input type="text" id="list_footer" name="list_footer" class="list-field" style="display:none;">
+
+    <label for="sections" class="list-field" style="display:none;">Secciones (formato JSON):</label><br>
+    <textarea id="sections" name="sections" class="list-field" style="display:none;" rows="6" cols="60" placeholder='[{"title":"Rápido","rows":[{"id":"express","title":"Express","description":"1 día"}]}]'></textarea>
+    <input type="hidden" name="opciones" id="opciones">
 
     <button type="submit" class="btn-primary">Guardar regla</button>
 </form>
@@ -113,7 +123,39 @@ function toggleMediaFields() {
     document.getElementById('label_media_url').style.display = show ? 'block' : 'none';
 }
 
-document.getElementById('tipo').addEventListener('change', toggleMediaFields);
-window.addEventListener('DOMContentLoaded', toggleMediaFields);
+function toggleListFields() {
+    const isList = document.getElementById('tipo').value === 'lista';
+    document.querySelectorAll('.list-field').forEach(el => {
+        el.style.display = isList ? 'block' : 'none';
+    });
+}
+
+function prepareOptions() {
+    const tipo = document.getElementById('tipo').value;
+    if (tipo === 'lista') {
+        const header = document.getElementById('list_header').value;
+        const button = document.getElementById('list_button').value;
+        const footer = document.getElementById('list_footer').value;
+        const sectionsText = document.getElementById('sections').value;
+        let sections;
+        try {
+            sections = JSON.parse(sectionsText || '[]');
+        } catch (e) {
+            sections = [];
+        }
+        const opts = {header, button, footer, sections};
+        document.getElementById('opciones').value = JSON.stringify(opts);
+    }
+}
+document.getElementById('tipo').addEventListener('change', () => {
+    toggleMediaFields();
+    toggleListFields();
+});
+const form = document.getElementById('reglaForm');
+form.addEventListener('submit', prepareOptions);
+window.addEventListener('DOMContentLoaded', () => {
+    toggleMediaFields();
+    toggleListFields();
+});
 </script>
 {% endblock %}

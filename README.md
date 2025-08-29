@@ -60,6 +60,24 @@ Importación de reglas y botones desde archivos .xlsx
 
 Soporte para mensajes interactivos: texto, botones y listas desplegables
 
+Ejemplo de `opciones` para una lista con textos personalizados:
+
+```json
+{
+  "header": "Menú principal",
+  "button": "Ver opciones",
+  "footer": "Selecciona una opción",
+  "sections": [
+    {
+      "title": "Rápido",
+      "rows": [
+        {"id": "express", "title": "Express", "description": "1 día"}
+      ]
+    }
+  ]
+}
+```
+
 Detección de inactividad para cerrar sesión automática del cliente
 
 🔧 Tecnologías utilizadas

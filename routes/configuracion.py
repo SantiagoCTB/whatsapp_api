@@ -7,6 +7,7 @@ import os
 import uuid
 import re
 import requests
+import json
 
 config_bp = Blueprint('configuracion', __name__)
 MEDIA_ROOT = Config.MEDIA_ROOT
@@ -164,6 +165,23 @@ def _reglas_view(template_name):
                 media_url = medias[0][0] if medias else None
                 media_tipo = medias[0][1] if medias else None
                 opciones = request.form.get('opciones', '')
+                list_header = request.form.get('list_header')
+                list_footer = request.form.get('list_footer')
+                list_button = request.form.get('list_button')
+                sections_raw = request.form.get('sections')
+                if tipo == 'lista':
+                    if not opciones:
+                        try:
+                            sections = json.loads(sections_raw) if sections_raw else []
+                        except Exception:
+                            sections = []
+                        opts = {
+                            'header': list_header,
+                            'footer': list_footer,
+                            'button': list_button,
+                            'sections': sections
+                        }
+                        opciones = json.dumps(opts)
                 rol_keyword = request.form.get('rol_keyword')
                 calculo = request.form.get('calculo')
                 handler = request.form.get('handler')

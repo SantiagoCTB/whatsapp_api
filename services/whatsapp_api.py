@@ -40,21 +40,25 @@ def enviar_mensaje(numero, mensaje, tipo='bot', tipo_respuesta='texto', opciones
 
     elif tipo_respuesta == 'lista':
         try:
-            secciones = json.loads(opciones) if opciones else []
+            opts = json.loads(opciones) if opciones else {}
         except Exception:
-            secciones = []
+            opts = {}
+        sections = opts.get("sections", [])
+        header   = opts.get("header") or "Menú"
+        footer   = opts.get("footer") or "Selecciona una opción"
+        button   = opts.get("button") or "Ver opciones"
         data = {
             "messaging_product": "whatsapp",
             "to": numero,
             "type": "interactive",
             "interactive": {
                 "type": "list",
-                "header": {"type": "text", "text": "Menú"},
+                "header": {"type": "text", "text": header},
                 "body": {"text": mensaje},
-                "footer": {"text": "Selecciona una opción"},
+                "footer": {"text": footer},
                 "action": {
-                    "button": "Ver opciones",
-                    "sections": secciones
+                    "button": button,
+                    "sections": sections
                 }
             }
         }
