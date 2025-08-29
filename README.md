@@ -42,6 +42,8 @@ Recepción y procesamiento de mensajes entrantes de WhatsApp vía webhook
 
 Flujo automático basado en reglas configurables (con pasos, respuestas, tipo de mensaje y opciones)
 
+Las reglas de un mismo paso se evalúan en orden ascendente por `id` (o columna de prioridad) para mantener un criterio consistente.
+
 Envío de mensajes por parte del asesor desde la interfaz web
 
 Interfaz tipo WhatsApp Web con:
