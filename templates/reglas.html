@@ -13,6 +13,7 @@
 
 <form id="reglaForm" method="POST" enctype="multipart/form-data">
     <h3>Agregar o actualizar regla</h3>
+    <input type="hidden" id="regla_id" name="regla_id">
     <label for="step">Paso actual:</label>
     <input type="text" id="step" name="step" required>
 
@@ -105,6 +106,19 @@
         <td>{{ regla[10] or '-' }}</td>
         <td>{{ regla[11] or '-' }}</td>
         <td>
+            <button class="edit-btn btn-primary" type="button" onclick='cargarRegla({{ {
+                "id": regla[0],
+                "step": regla[1],
+                "input_text": regla[2],
+                "respuesta": regla[3],
+                "siguiente_step": regla[4] or "",
+                "tipo": regla[5],
+                "media_urls": (regla[6] or "").split("||"),
+                "opciones": regla[8] or "",
+                "rol_keyword": regla[9] or "",
+                "calculo": regla[10] or "",
+                "handler": regla[11] or ""
+            }|tojson } )'>Editar</button>
             <form method="POST" action="{{ url_for('configuracion.eliminar_regla', regla_id=regla[0]) }}">
                 <button class="delete-btn btn-primary" type="submit">Eliminar</button>
             </form>
@@ -163,5 +177,40 @@ window.addEventListener('DOMContentLoaded', () => {
     toggleMediaFields();
     toggleListFields();
 });
+
+function cargarRegla(regla) {
+    document.getElementById('regla_id').value = regla.id;
+    document.getElementById('step').value = regla.step || '';
+    document.getElementById('input_text').value = regla.input_text || '';
+    document.getElementById('respuesta').value = regla.respuesta || '';
+    document.getElementById('siguiente_step').value = regla.siguiente_step || '';
+    document.getElementById('tipo').value = regla.tipo || 'texto';
+    document.getElementById('media').value = '';
+    document.getElementById('media_url').value = (regla.media_urls || []).filter(u => u).join('\n');
+    document.getElementById('rol_keyword').value = regla.rol_keyword || '';
+    document.getElementById('calculo').value = regla.calculo || '';
+    document.getElementById('handler').value = regla.handler || '';
+    document.getElementById('list_header').value = '';
+    document.getElementById('list_button').value = '';
+    document.getElementById('list_footer').value = '';
+    document.getElementById('sections').value = '';
+    document.getElementById('opciones').value = '';
+    if (regla.tipo === 'lista' && regla.opciones) {
+        try {
+            const opts = JSON.parse(regla.opciones);
+            document.getElementById('list_header').value = opts.header || '';
+            document.getElementById('list_button').value = opts.button || '';
+            document.getElementById('list_footer').value = opts.footer || '';
+            document.getElementById('sections').value = JSON.stringify(opts.sections || []);
+            document.getElementById('opciones').value = JSON.stringify(opts);
+        } catch (e) {
+            document.getElementById('opciones').value = regla.opciones || '';
+        }
+    } else {
+        document.getElementById('opciones').value = regla.opciones || '';
+    }
+    toggleMediaFields();
+    toggleListFields();
+}
 </script>
 {% endblock %}
