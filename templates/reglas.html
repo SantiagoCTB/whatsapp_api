@@ -87,39 +87,33 @@
         <th>Media Tipo</th>
         <th>Rol</th>
         <th>Opciones</th>
+        <th>Encabezado</th>
+        <th>Botón</th>
+        <th>Pie</th>
         <th>Cálculo</th>
         <th>Handler</th>
         <th>Acción</th>
     </tr>
     {% for regla in reglas %}
     <tr>
-        <td>{{ regla[0] }}</td>
-        <td>{{ regla[1] }}</td>
-        <td>{{ regla[2] }}</td>
-        <td>{{ regla[3] }}</td>
-        <td>{{ regla[4] or '-' }}</td>
-        <td>{{ regla[5] }}</td>
-        <td><pre style="white-space: pre-wrap;">{{ (regla[6] or '-')|replace('||','\n') }}</pre></td>
-        <td><pre style="white-space: pre-wrap;">{{ (regla[7] or '-')|replace('||','\n') }}</pre></td>
-        <td>{{ regla[9] or '-' }}</td>
-        <td><pre style="white-space: pre-wrap;">{{ regla[8] }}</pre></td>
-        <td>{{ regla[10] or '-' }}</td>
-        <td>{{ regla[11] or '-' }}</td>
+        <td>{{ regla.id }}</td>
+        <td>{{ regla.step }}</td>
+        <td>{{ regla.input_text }}</td>
+        <td>{{ regla.respuesta }}</td>
+        <td>{{ regla.siguiente_step or '-' }}</td>
+        <td>{{ regla.tipo }}</td>
+        <td><pre style="white-space: pre-wrap;">{{ regla.media_urls|join('\n') if regla.media_urls else '-' }}</pre></td>
+        <td><pre style="white-space: pre-wrap;">{{ regla.media_tipos|join('\n') if regla.media_tipos else '-' }}</pre></td>
+        <td>{{ regla.rol_keyword or '-' }}</td>
+        <td><pre style="white-space: pre-wrap;">{{ regla.opciones }}</pre></td>
+        <td>{{ regla.header or '-' }}</td>
+        <td>{{ regla.button or '-' }}</td>
+        <td>{{ regla.footer or '-' }}</td>
+        <td>{{ regla.calculo or '-' }}</td>
+        <td>{{ regla.handler or '-' }}</td>
         <td>
-            <button class="edit-btn btn-primary" type="button" onclick='cargarRegla({{ {
-                "id": regla[0],
-                "step": regla[1],
-                "input_text": regla[2],
-                "respuesta": regla[3],
-                "siguiente_step": regla[4] or "",
-                "tipo": regla[5],
-                "media_urls": (regla[6] or "").split("||"),
-                "opciones": regla[8] or "",
-                "rol_keyword": regla[9] or "",
-                "calculo": regla[10] or "",
-                "handler": regla[11] or ""
-            }|tojson }})'>Editar</button>
-            <form method="POST" action="{{ url_for('configuracion.eliminar_regla', regla_id=regla[0]) }}">
+            <button class="edit-btn btn-primary" type="button" onclick='cargarRegla({{ regla|tojson }})'>Editar</button>
+            <form method="POST" action="{{ url_for('configuracion.eliminar_regla', regla_id=regla.id) }}">
                 <button class="delete-btn btn-primary" type="submit">Eliminar</button>
             </form>
         </td>
@@ -190,9 +184,9 @@ function cargarRegla(regla) {
     document.getElementById('rol_keyword').value = regla.rol_keyword || '';
     document.getElementById('calculo').value = regla.calculo || '';
     document.getElementById('handler').value = regla.handler || '';
-    document.getElementById('list_header').value = '';
-    document.getElementById('list_button').value = '';
-    document.getElementById('list_footer').value = '';
+    document.getElementById('list_header').value = regla.header || '';
+    document.getElementById('list_button').value = regla.button || '';
+    document.getElementById('list_footer').value = regla.footer || '';
     document.getElementById('sections').value = '';
     document.getElementById('opciones').value = '';
     if (regla.tipo === 'lista' && regla.opciones) {

@@ -305,7 +305,36 @@ def _reglas_view(template_name):
              ORDER BY r.step, r.id
             """
         )
-        reglas = c.fetchall()
+        rows = c.fetchall()
+        reglas = []
+        for row in rows:
+            d = {
+                'id': row[0],
+                'step': row[1],
+                'input_text': row[2],
+                'respuesta': row[3],
+                'siguiente_step': row[4],
+                'tipo': row[5],
+                'media_urls': (row[6] or '').split('||') if row[6] else [],
+                'media_tipos': (row[7] or '').split('||') if row[7] else [],
+                'opciones': row[8] or '',
+                'rol_keyword': row[9],
+                'calculo': row[10],
+                'handler': row[11],
+                'header': None,
+                'button': None,
+                'footer': None,
+            }
+            if d['opciones']:
+                try:
+                    opts = json.loads(d['opciones'])
+                    if isinstance(opts, dict):
+                        d['header'] = opts.get('header')
+                        d['button'] = opts.get('button')
+                        d['footer'] = opts.get('footer')
+                except Exception:
+                    pass
+            reglas.append(d)
         return render_template(template_name, reglas=reglas)
     finally:
         conn.close()
