@@ -231,6 +231,21 @@ document.addEventListener('DOMContentLoaded', () => {
       .then(data => {
         const labels = data.map(item => item.rol);
         const values = data.map(item => item.mensajes);
+        const tabla = document.getElementById('tabla_roles');
+        if (tabla) {
+          const tbody = tabla.querySelector('tbody');
+          tbody.innerHTML = '';
+          data.forEach(item => {
+            const row = document.createElement('tr');
+            const rolCell = document.createElement('td');
+            rolCell.textContent = item.rol;
+            const mensajesCell = document.createElement('td');
+            mensajesCell.textContent = item.mensajes;
+            row.appendChild(rolCell);
+            row.appendChild(mensajesCell);
+            tbody.appendChild(row);
+          });
+        }
         if (chartRoles) chartRoles.destroy();
         const ctx = document.getElementById('grafico_roles').getContext('2d');
         const colors = ['#FF6384','#36A2EB','#FFCE56','#4BC0C0','#9966FF','#FF9F40'];
