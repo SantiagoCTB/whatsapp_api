@@ -172,11 +172,31 @@ document.addEventListener('DOMContentLoaded', () => {
         });
       });
 
-    fetch(`/datos_top_numeros${query}`)
+    const topParams = new URLSearchParams(query.startsWith('?') ? query.slice(1) : query);
+    topParams.delete('limit');
+    const topQuery = topParams.toString();
+    fetch(`/datos_top_numeros?limit=3${topQuery ? '&' + topQuery : ''}`)
       .then(response => response.json())
       .then(data => {
         const labels = data.map(item => item.numero);
         const values = data.map(item => item.mensajes);
+
+        const tablaTop = document.getElementById('tabla_top_numeros');
+        if (tablaTop) {
+          const tbody = tablaTop.querySelector('tbody');
+          tbody.innerHTML = '';
+          data.forEach(item => {
+            const row = document.createElement('tr');
+            const numCell = document.createElement('td');
+            numCell.textContent = item.numero;
+            const msgCell = document.createElement('td');
+            msgCell.textContent = item.mensajes;
+            row.appendChild(numCell);
+            row.appendChild(msgCell);
+            tbody.appendChild(row);
+          });
+        }
+
         if (chartTopNumeros) chartTopNumeros.destroy();
         const ctx = document.getElementById('graficoTopNumeros').getContext('2d');
         chartTopNumeros = new Chart(ctx, {

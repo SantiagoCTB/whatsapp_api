@@ -117,7 +117,7 @@ def datos_top_numeros():
     if "user" not in session:
         return redirect(url_for('auth.login'))
 
-    limite = request.args.get('limit', 5, type=int)
+    limite = request.args.get('limit', 3, type=int)
 
     start = request.args.get('start')
     end = request.args.get('end')
