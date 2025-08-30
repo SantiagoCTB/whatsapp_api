@@ -8,6 +8,30 @@ from services.db import get_connection
 tablero_bp = Blueprint('tablero', __name__)
 
 
+def _apply_filters(cur, rol, numero):
+    """Valida rol y número y genera joins/condiciones para las consultas."""
+    joins = []
+    conditions = []
+    params = []
+
+    if numero:
+        cur.execute("SELECT 1 FROM mensajes WHERE numero = ? LIMIT 1", (numero,))
+        if not cur.fetchone():
+            raise ValueError("numero")
+        conditions.append("m.numero = ?")
+        params.append(numero)
+
+    if rol:
+        cur.execute("SELECT 1 FROM roles WHERE id = ?", (rol,))
+        if not cur.fetchone():
+            raise ValueError("rol")
+        joins.append("JOIN chat_roles AS cr ON m.numero = cr.numero")
+        conditions.append("cr.role_id = ?")
+        params.append(rol)
+
+    return " ".join(joins), conditions, params
+
+
 @tablero_bp.route('/tablero')
 def tablero():
     """Renderiza la página del tablero con gráficos de Chart.js."""
@@ -24,11 +48,11 @@ def lista_roles():
 
     conn = get_connection()
     cur = conn.cursor()
-    cur.execute("SELECT COALESCE(keyword, name) AS rol FROM roles")
+    cur.execute("SELECT id, name FROM roles")
     rows = cur.fetchall()
     conn.close()
 
-    roles = [rol for (rol,) in rows]
+    roles = [{"id": rid, "name": name} for rid, name in rows]
     return jsonify(roles)
 
 
@@ -56,14 +80,32 @@ def datos_tablero():
 
     start = request.args.get('start')
     end = request.args.get('end')
+    rol = request.args.get('rol', type=int)
+    numero = request.args.get('numero')
 
     conn = get_connection()
     cur = conn.cursor()
-    query = "SELECT numero, mensaje FROM mensajes"
+    try:
+        joins, filter_conditions, filter_params = _apply_filters(cur, rol, numero)
+    except ValueError as e:
+        conn.close()
+        msg = 'Rol' if str(e) == 'rol' else 'Número'
+        return jsonify({"error": f"{msg} no encontrado"}), 400
+
+    query = "SELECT m.numero, m.mensaje FROM mensajes m"
+    if joins:
+        query += " " + joins
+
+    conditions = []
     params = []
     if start and end:
-        query += " WHERE timestamp BETWEEN ? AND ?"
+        conditions.append("m.timestamp BETWEEN ? AND ?")
         params.extend([start, end])
+    conditions.extend(filter_conditions)
+    params.extend(filter_params)
+    if conditions:
+        query += " WHERE " + " AND ".join(conditions)
+
     cur.execute(query, params)
     rows = cur.fetchall()
     conn.close()
@@ -85,19 +127,36 @@ def datos_tipos_diarios():
 
     start = request.args.get('start')
     end = request.args.get('end')
+    rol = request.args.get('rol', type=int)
+    numero = request.args.get('numero')
 
     conn = get_connection()
     cur = conn.cursor()
+
+    try:
+        joins, filter_conditions, filter_params = _apply_filters(cur, rol, numero)
+    except ValueError as e:
+        conn.close()
+        msg = 'Rol' if str(e) == 'rol' else 'Número'
+        return jsonify({"error": f"{msg} no encontrado"}), 400
+
     query = (
         """
-        SELECT DATE(timestamp) AS fecha, tipo, COUNT(*)
-          FROM mensajes
+        SELECT DATE(m.timestamp) AS fecha, m.tipo, COUNT(*)
+          FROM mensajes m
         """
     )
+    if joins:
+        query += " " + joins
+
+    conditions = []
     params = []
     if start and end:
-        query += " WHERE timestamp BETWEEN ? AND ?"
+        conditions.append("m.timestamp BETWEEN ? AND ?")
         params.extend([start, end])
+    conditions.extend(filter_conditions)
+    params.extend(filter_params)
+    query += " WHERE " + " AND ".join(conditions) if conditions else ""
     query += " GROUP BY fecha, tipo ORDER BY fecha"
     cur.execute(query, params)
     rows = cur.fetchall()
@@ -135,14 +194,33 @@ def datos_palabras():
 
     start = request.args.get('start')
     end = request.args.get('end')
+    rol = request.args.get('rol', type=int)
+    numero = request.args.get('numero')
 
     conn = get_connection()
     cur = conn.cursor()
-    query = "SELECT mensaje FROM mensajes"
+
+    try:
+        joins, filter_conditions, filter_params = _apply_filters(cur, rol, numero)
+    except ValueError as e:
+        conn.close()
+        msg = 'Rol' if str(e) == 'rol' else 'Número'
+        return jsonify({"error": f"{msg} no encontrado"}), 400
+
+    query = "SELECT m.mensaje FROM mensajes m"
+    if joins:
+        query += " " + joins
+
+    conditions = []
     params = []
     if start and end:
-        query += " WHERE timestamp BETWEEN ? AND ?"
+        conditions.append("m.timestamp BETWEEN ? AND ?")
         params.extend([start, end])
+    conditions.extend(filter_conditions)
+    params.extend(filter_params)
+    if conditions:
+        query += " WHERE " + " AND ".join(conditions)
+
     cur.execute(query, params)
     rows = cur.fetchall()
     conn.close()
@@ -166,9 +244,23 @@ def datos_roles():
 
     start = request.args.get('start')
     end = request.args.get('end')
+    rol = request.args.get('rol', type=int)
+    numero = request.args.get('numero')
 
     conn = get_connection()
     cur = conn.cursor()
+
+    if numero:
+        cur.execute("SELECT 1 FROM mensajes WHERE numero = ? LIMIT 1", (numero,))
+        if not cur.fetchone():
+            conn.close()
+            return jsonify({"error": "Número no encontrado"}), 400
+    if rol:
+        cur.execute("SELECT 1 FROM roles WHERE id = ?", (rol,))
+        if not cur.fetchone():
+            conn.close()
+            return jsonify({"error": "Rol no encontrado"}), 400
+
     query = (
         """
         SELECT COALESCE(r.keyword, r.name) AS rol, COUNT(*) AS mensajes
@@ -182,6 +274,12 @@ def datos_roles():
     if start and end:
         query += " AND m.timestamp BETWEEN ? AND ?"
         params.extend([start, end])
+    if numero:
+        query += " AND m.numero = ?"
+        params.append(numero)
+    if rol:
+        query += " AND cr.role_id = ?"
+        params.append(rol)
     query += " GROUP BY rol"
     cur.execute(query, params)
     rows = cur.fetchall()
@@ -201,21 +299,38 @@ def datos_top_numeros():
 
     start = request.args.get('start')
     end = request.args.get('end')
+    rol = request.args.get('rol', type=int)
+    numero = request.args.get('numero')
 
     conn = get_connection()
     cur = conn.cursor()
+
+    try:
+        joins, filter_conditions, filter_params = _apply_filters(cur, rol, numero)
+    except ValueError as e:
+        conn.close()
+        msg = 'Rol' if str(e) == 'rol' else 'Número'
+        return jsonify({"error": f"{msg} no encontrado"}), 400
+
     query = (
         """
-        SELECT numero, COUNT(*) AS total
-          FROM mensajes
-         WHERE tipo LIKE 'cliente%'
+        SELECT m.numero, COUNT(*) AS total
+          FROM mensajes m
         """
     )
+    if joins:
+        query += " " + joins
+
+    conditions = ["m.tipo LIKE 'cliente%'"]
     params = []
     if start and end:
-        query += " AND timestamp BETWEEN ? AND ?"
+        conditions.append("m.timestamp BETWEEN ? AND ?")
         params.extend([start, end])
-    query += " GROUP BY numero ORDER BY total DESC LIMIT ?"
+    conditions.extend(filter_conditions)
+    params.extend(filter_params)
+    if conditions:
+        query += " WHERE " + " AND ".join(conditions)
+    query += " GROUP BY m.numero ORDER BY total DESC LIMIT ?"
     params.append(limite)
     cur.execute(query, params)
     rows = cur.fetchall()
@@ -233,20 +348,38 @@ def datos_mensajes_diarios():
 
     start = request.args.get('start')
     end = request.args.get('end')
+    rol = request.args.get('rol', type=int)
+    numero = request.args.get('numero')
 
     conn = get_connection()
     cur = conn.cursor()
+
+    try:
+        joins, filter_conditions, filter_params = _apply_filters(cur, rol, numero)
+    except ValueError as e:
+        conn.close()
+        msg = 'Rol' if str(e) == 'rol' else 'Número'
+        return jsonify({"error": f"{msg} no encontrado"}), 400
+
     query = (
         """
-        SELECT DATE(timestamp) AS fecha, COUNT(*) AS total
-          FROM mensajes
+        SELECT DATE(m.timestamp) AS fecha, COUNT(*) AS total
+          FROM mensajes m
         """
     )
+    if joins:
+        query += " " + joins
+
+    conditions = []
     params = []
     if start and end:
-        query += " WHERE timestamp BETWEEN ? AND ?"
+        conditions.append("m.timestamp BETWEEN ? AND ?")
         params.extend([start, end])
-    query += " GROUP BY DATE(timestamp) ORDER BY fecha"
+    conditions.extend(filter_conditions)
+    params.extend(filter_params)
+    if conditions:
+        query += " WHERE " + " AND ".join(conditions)
+    query += " GROUP BY DATE(m.timestamp) ORDER BY fecha"
     cur.execute(query, params)
     rows = cur.fetchall()
     conn.close()
@@ -263,20 +396,38 @@ def datos_mensajes_hora():
 
     start = request.args.get('start')
     end = request.args.get('end')
+    rol = request.args.get('rol', type=int)
+    numero = request.args.get('numero')
 
     conn = get_connection()
     cur = conn.cursor()
+
+    try:
+        joins, filter_conditions, filter_params = _apply_filters(cur, rol, numero)
+    except ValueError as e:
+        conn.close()
+        msg = 'Rol' if str(e) == 'rol' else 'Número'
+        return jsonify({"error": f"{msg} no encontrado"}), 400
+
     query = (
         """
-        SELECT HOUR(timestamp) AS hora, COUNT(*) AS total
-          FROM mensajes
+        SELECT HOUR(m.timestamp) AS hora, COUNT(*) AS total
+          FROM mensajes m
         """
     )
+    if joins:
+        query += " " + joins
+
+    conditions = []
     params = []
     if start and end:
-        query += " WHERE timestamp BETWEEN ? AND ?"
+        conditions.append("m.timestamp BETWEEN ? AND ?")
         params.extend([start, end])
-    query += " GROUP BY HOUR(timestamp) ORDER BY hora"
+    conditions.extend(filter_conditions)
+    params.extend(filter_params)
+    if conditions:
+        query += " WHERE " + " AND ".join(conditions)
+    query += " GROUP BY HOUR(m.timestamp) ORDER BY hora"
     cur.execute(query, params)
     rows = cur.fetchall()
     conn.close()
@@ -293,15 +444,33 @@ def datos_tipos():
 
     start = request.args.get('start')
     end = request.args.get('end')
+    rol = request.args.get('rol', type=int)
+    numero = request.args.get('numero')
 
     conn = get_connection()
     cur = conn.cursor()
-    query = "SELECT tipo, COUNT(*) FROM mensajes"
+
+    try:
+        joins, filter_conditions, filter_params = _apply_filters(cur, rol, numero)
+    except ValueError as e:
+        conn.close()
+        msg = 'Rol' if str(e) == 'rol' else 'Número'
+        return jsonify({"error": f"{msg} no encontrado"}), 400
+
+    query = "SELECT m.tipo, COUNT(*) FROM mensajes m"
+    if joins:
+        query += " " + joins
+
+    conditions = []
     params = []
     if start and end:
-        query += " WHERE timestamp BETWEEN ? AND ?"
+        conditions.append("m.timestamp BETWEEN ? AND ?")
         params.extend([start, end])
-    query += " GROUP BY tipo"
+    conditions.extend(filter_conditions)
+    params.extend(filter_params)
+    if conditions:
+        query += " WHERE " + " AND ".join(conditions)
+    query += " GROUP BY m.tipo"
     cur.execute(query, params)
     rows = cur.fetchall()
     conn.close()
@@ -334,15 +503,33 @@ def datos_totales():
 
     start = request.args.get('start')
     end = request.args.get('end')
+    rol = request.args.get('rol', type=int)
+    numero = request.args.get('numero')
 
     conn = get_connection()
     cur = conn.cursor()
-    query = "SELECT tipo, COUNT(*) FROM mensajes"
+
+    try:
+        joins, filter_conditions, filter_params = _apply_filters(cur, rol, numero)
+    except ValueError as e:
+        conn.close()
+        msg = 'Rol' if str(e) == 'rol' else 'Número'
+        return jsonify({"error": f"{msg} no encontrado"}), 400
+
+    query = "SELECT m.tipo, COUNT(*) FROM mensajes m"
+    if joins:
+        query += " " + joins
+
+    conditions = []
     params = []
     if start and end:
-        query += " WHERE timestamp BETWEEN ? AND ?"
+        conditions.append("m.timestamp BETWEEN ? AND ?")
         params.extend([start, end])
-    query += " GROUP BY tipo"
+    conditions.extend(filter_conditions)
+    params.extend(filter_params)
+    if conditions:
+        query += " WHERE " + " AND ".join(conditions)
+    query += " GROUP BY m.tipo"
     cur.execute(query, params)
     rows = cur.fetchall()
     conn.close()
