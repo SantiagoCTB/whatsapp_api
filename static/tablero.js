@@ -307,18 +307,29 @@ document.addEventListener('DOMContentLoaded', () => {
     fetch(`/datos_tipos${query}`)
       .then(response => response.json())
       .then(data => {
-        const labels = data.map(item => item.tipo);
-        const values = data.map(item => item.total);
+        const order = ['cliente', 'bot', 'asesor', 'otros'];
+        const labelMap = { cliente: 'Clientes', bot: 'Bots', asesor: 'Asesores', otros: 'Otros' };
+        const colorMap = { cliente: '#FF6384', bot: '#36A2EB', asesor: '#FFCE56', otros: '#4BC0C0' };
+        const labels = [];
+        const values = [];
+        const colors = [];
+        order.forEach(cat => {
+          const entry = data.find(d => d.tipo === cat);
+          if (entry) {
+            labels.push(labelMap[cat]);
+            values.push(entry.total);
+            colors.push(colorMap[cat]);
+          }
+        });
         if (chartTipos) chartTipos.destroy();
         const ctx = document.getElementById('graficoTipos').getContext('2d');
-        const colors = ['#FF6384','#36A2EB','#FFCE56','#4BC0C0','#9966FF','#FF9F40','#8E5EA2','#3CBA9F','#E8C3B9','#C45850'];
         chartTipos = new Chart(ctx, {
           type: 'doughnut',
           data: {
             labels: labels,
             datasets: [{
               data: values,
-              backgroundColor: labels.map((_, i) => colors[i % colors.length])
+              backgroundColor: colors
             }]
           },
           options: {

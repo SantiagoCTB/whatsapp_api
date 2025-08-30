@@ -226,7 +226,23 @@ def datos_tipos():
     rows = cur.fetchall()
     conn.close()
 
-    data = [{"tipo": tipo or "desconocido", "total": count} for tipo, count in rows]
+    aggregates = {"cliente": 0, "bot": 0, "asesor": 0, "otros": 0}
+    for tipo, count in rows:
+        t = (tipo or "").lower()
+        if t.startswith("cliente"):
+            aggregates["cliente"] += count
+        elif t.startswith("bot"):
+            aggregates["bot"] += count
+        elif t.startswith("asesor"):
+            aggregates["asesor"] += count
+        else:
+            aggregates["otros"] += count
+
+    data = [
+        {"tipo": tipo, "total": total}
+        for tipo, total in aggregates.items()
+        if total > 0
+    ]
     return jsonify(data)
 
 
