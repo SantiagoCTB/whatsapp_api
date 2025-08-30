@@ -221,11 +221,31 @@ document.addEventListener('DOMContentLoaded', () => {
         });
       });
 
-    fetch(`/datos_palabras${query}`)
+    const palabrasParams = new URLSearchParams(query.startsWith('?') ? query.slice(1) : query);
+    palabrasParams.set('limit', 5);
+    const palabrasQuery = palabrasParams.toString();
+    fetch(`/datos_palabras?${palabrasQuery}`)
       .then(response => response.json())
       .then(data => {
         const labels = data.map(item => item.palabra);
         const values = data.map(item => item.frecuencia);
+
+        const tablaPalabras = document.getElementById('tabla_palabras');
+        if (tablaPalabras) {
+          const tbody = tablaPalabras.querySelector('tbody');
+          tbody.innerHTML = '';
+          data.forEach(item => {
+            const row = document.createElement('tr');
+            const palabraCell = document.createElement('td');
+            palabraCell.textContent = item.palabra;
+            const freqCell = document.createElement('td');
+            freqCell.textContent = item.frecuencia;
+            row.appendChild(palabraCell);
+            row.appendChild(freqCell);
+            tbody.appendChild(row);
+          });
+        }
+
         if (chartPalabras) chartPalabras.destroy();
         const ctx = document.getElementById('grafico_palabras').getContext('2d');
         chartPalabras = new Chart(ctx, {
