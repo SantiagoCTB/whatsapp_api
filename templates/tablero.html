@@ -1,82 +1,83 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Tablero</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='tablero.css') }}">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-wordcloud"></script>
-</head>
-<body>
-    <header class="header">
-        <button id="menu-toggle">☰</button>
-        <h1>Tablero</h1>
-        <a class="back-btn" href="{{ url_for('chat.index') }}">Volver</a>
-    </header>
+{% extends 'base.html' %}
+{% block title %}Tablero{% endblock %}
+{% block body_class %}page{% endblock %}
+{% block content %}
+<link rel="stylesheet" href="{{ url_for('static', filename='tablero.css') }}">
 
-    <button id="filters-toggle" class="filters-toggle">Filtros</button>
-    <div class="filters-panel">
-        <label for="fechaInicio">Desde:</label>
-        <input type="date" id="fechaInicio">
-        <label for="fechaFin">Hasta:</label>
-        <input type="date" id="fechaFin">
-        <label for="limit">Límite de palabras:</label>
-        <input type="number" id="limit" min="1" value="10">
-        <button id="apply-filters">Aplicar</button>
+<div class="top-right">
+    <a href="{{ url_for('chat.index') }}">
+        <button class="back-btn btn-primary">Volver al inicio</button>
+    </a>
+</div>
+
+<header class="header">
+    <button id="menu-toggle">☰</button>
+    <h1>Tablero</h1>
+</header>
+
+<button id="filters-toggle" class="filters-toggle">Filtros</button>
+<div class="filters-panel">
+    <label for="fechaInicio">Desde:</label>
+    <input type="date" id="fechaInicio">
+    <label for="fechaFin">Hasta:</label>
+    <input type="date" id="fechaFin">
+    <label for="limit">Límite de palabras:</label>
+    <input type="number" id="limit" min="1" value="10">
+    <button id="apply-filters">Aplicar</button>
+</div>
+
+<nav class="sidebar">
+    <ul>
+        <li><a href="#totalesCard">Totales</a></li>
+        <li><a href="#reportes">Reportes</a></li>
+    </ul>
+</nav>
+
+<main class="content">
+    <div class="dashboard-grid">
+        <section class="cards totales">
+            <div class="card" id="totalesCard">
+                <h3><span class="icon">📊</span> Totales de mensajes</h3>
+                <p>Enviados: <span id="totalEnviados">0</span></p>
+                <p>Recibidos: <span id="totalRecibidos">0</span></p>
+                <canvas id="graficoTotales" height="120"></canvas>
+            </div>
+        </section>
+        <section class="reports graficas" id="reportes">
+            <div class="card">
+                <h4>Mensajes por Día</h4>
+                <canvas id="graficoDiario" height="120"></canvas>
+            </div>
+            <div class="card">
+                <h4>Mensajes por Hora</h4>
+                <canvas id="graficoHora" height="120"></canvas>
+            </div>
+            <div class="card">
+                <h4>Mensajes por Usuario</h4>
+                <canvas id="grafico" height="120"></canvas>
+            </div>
+            <div class="card">
+                <h4>Top Números</h4>
+                <canvas id="graficoTopNumeros" height="120"></canvas>
+            </div>
+            <div class="card">
+                <h4>Palabras Más Usadas</h4>
+                <canvas id="grafico_palabras" height="120"></canvas>
+            </div>
+            <div class="card">
+                <h4>Roles</h4>
+                <canvas id="grafico_roles" height="120"></canvas>
+            </div>
+            <div class="card">
+                <h4>Tipos de Mensaje</h4>
+                <canvas id="graficoTipos" height="120"></canvas>
+            </div>
+        </section>
     </div>
+</main>
 
-    <nav class="sidebar">
-        <ul>
-            <li><a href="#totalesCard">Totales</a></li>
-            <li><a href="#reportes">Reportes</a></li>
-        </ul>
-    </nav>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-wordcloud"></script>
+<script src="{{ url_for('static', filename='tablero.js') }}"></script>
+{% endblock %}
 
-    <main class="content">
-        <div class="dashboard-grid">
-            <section class="cards totales">
-                <div class="card" id="totalesCard">
-                    <h3><span class="icon">📊</span> Totales de mensajes</h3>
-                    <p>Enviados: <span id="totalEnviados">0</span></p>
-                    <p>Recibidos: <span id="totalRecibidos">0</span></p>
-                    <canvas id="graficoTotales" height="120"></canvas>
-                </div>
-            </section>
-            <section class="reports graficas" id="reportes">
-                <div class="card">
-                    <h4>Mensajes por Día</h4>
-                    <canvas id="graficoDiario" height="120"></canvas>
-                </div>
-                <div class="card">
-                    <h4>Mensajes por Hora</h4>
-                    <canvas id="graficoHora" height="120"></canvas>
-                </div>
-                <div class="card">
-                    <h4>Mensajes por Usuario</h4>
-                    <canvas id="grafico" height="120"></canvas>
-                </div>
-                <div class="card">
-                    <h4>Top Números</h4>
-                    <canvas id="graficoTopNumeros" height="120"></canvas>
-                </div>
-                <div class="card">
-                    <h4>Palabras Más Usadas</h4>
-                    <canvas id="grafico_palabras" height="120"></canvas>
-                </div>
-                <div class="card">
-                    <h4>Roles</h4>
-                    <canvas id="grafico_roles" height="120"></canvas>
-                </div>
-                <div class="card">
-                    <h4>Tipos de Mensaje</h4>
-                    <canvas id="graficoTipos" height="120"></canvas>
-                </div>
-            </section>
-        </div>
-    </main>
-
-    <script src="{{ url_for('static', filename='tablero.js') }}"></script>
-</body>
-</html>
