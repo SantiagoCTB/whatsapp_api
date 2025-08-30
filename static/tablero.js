@@ -124,15 +124,15 @@ document.addEventListener('DOMContentLoaded', () => {
         if (chartHora) chartHora.destroy();
         const ctx = document.getElementById('graficoHora').getContext('2d');
         chartHora = new Chart(ctx, {
-          type: 'bar',
+          type: 'line',
           data: {
             labels: labels,
             datasets: [{
               label: 'Mensajes por hora',
               data: valores,
-              backgroundColor: 'rgba(255, 206, 86, 0.5)',
+              fill: false,
               borderColor: 'rgba(255, 206, 86, 1)',
-              borderWidth: 1
+              tension: 0.1
             }]
           },
           options: {
