@@ -16,6 +16,38 @@ def tablero():
     return render_template('tablero.html')
 
 
+@tablero_bp.route('/lista_roles')
+def lista_roles():
+    """Devuelve la lista de roles disponibles."""
+    if "user" not in session:
+        return redirect(url_for('auth.login'))
+
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT COALESCE(keyword, name) AS rol FROM roles")
+    rows = cur.fetchall()
+    conn.close()
+
+    roles = [rol for (rol,) in rows]
+    return jsonify(roles)
+
+
+@tablero_bp.route('/lista_numeros')
+def lista_numeros():
+    """Devuelve la lista de números disponibles."""
+    if "user" not in session:
+        return redirect(url_for('auth.login'))
+
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT DISTINCT numero FROM mensajes")
+    rows = cur.fetchall()
+    conn.close()
+
+    numeros = [numero for (numero,) in rows]
+    return jsonify(numeros)
+
+
 @tablero_bp.route('/datos_tablero')
 def datos_tablero():
     """Devuelve métricas del tablero en formato JSON."""
