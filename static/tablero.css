@@ -157,3 +157,18 @@
 .filters-panel.open {
   max-height: 500px;
 }
+
+.filters-panel label,
+.filters-panel input,
+.filters-panel select,
+.filters-panel button {
+  margin-right: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.filters-panel .message-type {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
