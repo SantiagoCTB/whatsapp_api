@@ -56,8 +56,8 @@ document.addEventListener('DOMContentLoaded', () => {
         rolInput.innerHTML = '<option value="">Todos</option>';
         data.forEach(rol => {
           const opt = document.createElement('option');
-          opt.value = rol;
-          opt.textContent = rol;
+          opt.value = rol.id;
+          opt.textContent = rol.name;
           rolInput.appendChild(opt);
         });
       });
@@ -83,7 +83,10 @@ document.addEventListener('DOMContentLoaded', () => {
     if (startInput.value) params.append('start', startInput.value);
     if (endInput.value) params.append('end', endInput.value);
     if (limitInput && limitInput.value) params.append('limit', limitInput.value);
-    if (rolInput && rolInput.value) params.append('rol', rolInput.value);
+    if (rolInput && rolInput.value) {
+      const rolId = rolInput.value;
+      params.append('rol', rolId);
+    }
     if (numeroInput && numeroInput.value) params.append('numero', numeroInput.value);
     const tipos = [];
     if (tipoCliente && tipoCliente.checked) tipos.push('cliente');
