@@ -23,7 +23,22 @@
     <input type="date" id="fechaFin">
     <label for="limit">Límite de palabras:</label>
     <input type="number" id="limit" min="1" value="10">
+    <label for="filtroRol">Rol:</label>
+    <select id="filtroRol">
+        <option value="">Todos</option>
+    </select>
+    <label for="filtroNumero">Número:</label>
+    <select id="filtroNumero">
+        <option value="">Todos</option>
+    </select>
+    <div class="message-type">
+        <span>Tipo:</span>
+        <label><input type="checkbox" id="tipoCliente" value="cliente" checked> Cliente</label>
+        <label><input type="checkbox" id="tipoBot" value="bot" checked> Bot</label>
+        <label><input type="checkbox" id="tipoAsesor" value="asesor" checked> Asesor</label>
+    </div>
     <button id="apply-filters">Aplicar</button>
+    <button id="clear-filters" type="button">Limpiar filtros</button>
 </div>
 
 <nav class="sidebar">
