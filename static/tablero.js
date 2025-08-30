@@ -19,8 +19,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const filtersToggle = document.getElementById('filters-toggle');
   const filtersPanel = document.querySelector('.filters-panel');
   const applyFilters = document.getElementById('apply-filters');
-  const filtroRol = document.getElementById('filtroRol');
-  const filtroNumero = document.getElementById('filtroNumero');
+  const rolInput = document.getElementById('filtroRol');
+  const numeroInput = document.getElementById('filtroNumero');
   const clearFilters = document.getElementById('clear-filters');
   const tipoCliente = document.getElementById('tipoCliente');
   const tipoBot = document.getElementById('tipoBot');
@@ -35,6 +35,8 @@ document.addEventListener('DOMContentLoaded', () => {
   if (applyFilters && filtersPanel) {
     applyFilters.addEventListener('click', () => {
       cargarDatos();
+      cargarRoles();
+      cargarNumeros();
       filtersPanel.classList.remove('open');
     });
   }
@@ -44,8 +46,8 @@ document.addEventListener('DOMContentLoaded', () => {
       if (startInput) startInput.value = '';
       if (endInput) endInput.value = '';
       if (limitInput) limitInput.value = '10';
-      if (filtroRol) filtroRol.selectedIndex = 0;
-      if (filtroNumero) filtroNumero.selectedIndex = 0;
+      if (rolInput) rolInput.selectedIndex = 0;
+      if (numeroInput) numeroInput.selectedIndex = 0;
       [tipoCliente, tipoBot, tipoAsesor].forEach(cb => {
         if (cb) cb.checked = true;
       });
@@ -53,33 +55,34 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  function populateFilters() {
-    if (filtroRol) {
-      fetch('/datos_roles')
-        .then(res => res.json())
-        .then(data => {
-          filtroRol.innerHTML = '<option value="">Todos</option>';
-          data.forEach(item => {
-            const opt = document.createElement('option');
-            opt.value = item.rol;
-            opt.textContent = item.rol;
-            filtroRol.appendChild(opt);
-          });
+  function cargarRoles() {
+    if (!rolInput) return;
+    fetch('/lista_roles')
+      .then(res => res.json())
+      .then(data => {
+        rolInput.innerHTML = '<option value="">Todos</option>';
+        data.forEach(rol => {
+          const opt = document.createElement('option');
+          opt.value = rol;
+          opt.textContent = rol;
+          rolInput.appendChild(opt);
         });
-    }
-    if (filtroNumero) {
-      fetch('/datos_tablero')
-        .then(res => res.json())
-        .then(data => {
-          filtroNumero.innerHTML = '<option value="">Todos</option>';
-          data.forEach(item => {
-            const opt = document.createElement('option');
-            opt.value = item.numero;
-            opt.textContent = item.numero;
-            filtroNumero.appendChild(opt);
-          });
+      });
+  }
+
+  function cargarNumeros() {
+    if (!numeroInput) return;
+    fetch('/lista_numeros')
+      .then(res => res.json())
+      .then(data => {
+        numeroInput.innerHTML = '<option value="">Todos</option>';
+        data.forEach(numero => {
+          const opt = document.createElement('option');
+          opt.value = numero;
+          opt.textContent = numero;
+          numeroInput.appendChild(opt);
         });
-    }
+      });
   }
 
   function buildQuery() {
@@ -87,8 +90,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (startInput.value) params.append('start', startInput.value);
     if (endInput.value) params.append('end', endInput.value);
     if (limitInput && limitInput.value) params.append('limit', limitInput.value);
-    if (filtroRol && filtroRol.value) params.append('rol', filtroRol.value);
-    if (filtroNumero && filtroNumero.value) params.append('numero', filtroNumero.value);
+    if (rolInput && rolInput.value) params.append('rol', rolInput.value);
+    if (numeroInput && numeroInput.value) params.append('numero', numeroInput.value);
     const tipos = [];
     if (tipoCliente && tipoCliente.checked) tipos.push('cliente');
     if (tipoBot && tipoBot.checked) tipos.push('bot');
@@ -439,7 +442,8 @@ document.addEventListener('DOMContentLoaded', () => {
       });
   }
 
-  populateFilters();
+  cargarRoles();
+  cargarNumeros();
   cargarDatos();
   setInterval(cargarDatos, REFRESH_INTERVAL);
 });
