@@ -88,14 +88,31 @@ document.addEventListener('DOMContentLoaded', () => {
       params.append('rol', rolId);
     }
     if (numeroInput && numeroInput.value) params.append('numero', numeroInput.value);
-    const tipos = [];
-    if (tipoCliente && tipoCliente.checked) tipos.push('cliente');
-    if (tipoBot && tipoBot.checked) tipos.push('bot');
-    if (tipoAsesor && tipoAsesor.checked) tipos.push('asesor');
-    if (tipos.length && tipos.length < 3) params.append('tipos', tipos.join(','));
-    const q = params.toString();
-    return q ? `?${q}` : '';
-  }
+  const tipos = [];
+  if (tipoCliente && tipoCliente.checked) tipos.push('cliente');
+  if (tipoBot && tipoBot.checked) tipos.push('bot');
+  if (tipoAsesor && tipoAsesor.checked) tipos.push('asesor');
+  if (tipos.length && tipos.length < 3) params.append('tipos', tipos.join(','));
+  const q = params.toString();
+  return q ? `?${q}` : '';
+}
+
+ function showCardMessage(elemId, message) {
+   const elem = document.getElementById(elemId);
+   const card = elem ? elem.closest('.card') : null;
+   if (!card) return;
+   let msgElem = card.querySelector('.card-message');
+   if (!message) {
+     if (msgElem) msgElem.remove();
+     return;
+   }
+   if (!msgElem) {
+     msgElem = document.createElement('p');
+     msgElem.className = 'card-message';
+     card.appendChild(msgElem);
+   }
+   msgElem.textContent = message;
+ }
 
   function cargarDatos() {
     const query = buildQuery();
@@ -103,6 +120,11 @@ document.addEventListener('DOMContentLoaded', () => {
     fetch(`/datos_totales${query}`)
       .then(response => response.json())
       .then(data => {
+        if (!data || Object.keys(data).length === 0) {
+          document.getElementById('totalMensajes').textContent = 'No hay datos disponibles';
+          showCardMessage('graficoTotales', 'No hay datos disponibles');
+          return;
+        }
         document.getElementById('totalEnviados').textContent = data.enviados;
         document.getElementById('totalRecibidos').textContent = data.recibidos;
         const total = data.enviados + data.recibidos;
@@ -110,6 +132,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (totalElem) totalElem.textContent = total;
 
         if (chartTotales) chartTotales.destroy();
+        showCardMessage('graficoTotales');
         const ctx = document.getElementById('graficoTotales').getContext('2d');
         chartTotales = new Chart(ctx, {
           type: 'bar',
@@ -130,21 +153,42 @@ document.addEventListener('DOMContentLoaded', () => {
             }
           }
         });
+      })
+      .catch(err => {
+        console.error(err);
+        document.getElementById('totalMensajes').textContent = 'Error al cargar datos';
+        if (chartTotales) chartTotales.destroy();
+        showCardMessage('graficoTotales', 'Error al cargar datos');
       });
 
     fetch('/datos_roles_total')
       .then(response => response.json())
       .then(data => {
         const rolesElem = document.getElementById('cantidadRoles');
+        if (!data || Object.keys(data).length === 0) {
+          if (rolesElem) rolesElem.textContent = 'No hay datos disponibles';
+          return;
+        }
         if (rolesElem) rolesElem.textContent = data.total_roles;
+      })
+      .catch(err => {
+        console.error(err);
+        const rolesElem = document.getElementById('cantidadRoles');
+        if (rolesElem) rolesElem.textContent = 'Error al cargar datos';
       });
 
     fetch(`/datos_mensajes_diarios${query}`)
       .then(response => response.json())
       .then(data => {
+        if (!Array.isArray(data) || data.length === 0) {
+          if (chartDiario) chartDiario.destroy();
+          showCardMessage('graficoDiario', 'No hay datos disponibles');
+          return;
+        }
         const labels = data.map(item => item.fecha);
         const values = data.map(item => item.total);
         if (chartDiario) chartDiario.destroy();
+        showCardMessage('graficoDiario');
         const ctx = document.getElementById('graficoDiario').getContext('2d');
         chartDiario = new Chart(ctx, {
           type: 'line',
@@ -165,11 +209,21 @@ document.addEventListener('DOMContentLoaded', () => {
             }
           }
         });
+      })
+      .catch(err => {
+        console.error(err);
+        if (chartDiario) chartDiario.destroy();
+        showCardMessage('graficoDiario', 'Error al cargar datos');
       });
 
     fetch(`/datos_mensajes_hora${query}`)
       .then(response => response.json())
       .then(data => {
+        if (!Array.isArray(data) || data.length === 0) {
+          if (chartHora) chartHora.destroy();
+          showCardMessage('graficoHora', 'No hay datos disponibles');
+          return;
+        }
         const valores = Array(24).fill(0);
         data.forEach(item => {
           const h = parseInt(item.hora, 10);
@@ -177,6 +231,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         const labels = Array.from({ length: 24 }, (_, i) => i.toString().padStart(2, '0'));
         if (chartHora) chartHora.destroy();
+        showCardMessage('graficoHora');
         const ctx = document.getElementById('graficoHora').getContext('2d');
         chartHora = new Chart(ctx, {
           type: 'line',
@@ -197,14 +252,25 @@ document.addEventListener('DOMContentLoaded', () => {
             }
           }
         });
+      })
+      .catch(err => {
+        console.error(err);
+        if (chartHora) chartHora.destroy();
+        showCardMessage('graficoHora', 'Error al cargar datos');
       });
 
     fetch(`/datos_tablero${query}`)
       .then(response => response.json())
       .then(data => {
+        if (!Array.isArray(data) || data.length === 0) {
+          if (chartTablero) chartTablero.destroy();
+          showCardMessage('grafico', 'No hay datos disponibles');
+          return;
+        }
         const labels = data.map(item => item.numero);
         const values = data.map(item => item.palabras);
         if (chartTablero) chartTablero.destroy();
+        showCardMessage('grafico');
         const ctx = document.getElementById('grafico').getContext('2d');
         chartTablero = new Chart(ctx, {
           type: 'bar',
@@ -225,6 +291,11 @@ document.addEventListener('DOMContentLoaded', () => {
             }
           }
         });
+      })
+      .catch(err => {
+        console.error(err);
+        if (chartTablero) chartTablero.destroy();
+        showCardMessage('grafico', 'Error al cargar datos');
       });
 
     const topParams = new URLSearchParams(query.startsWith('?') ? query.slice(1) : query);
@@ -233,6 +304,13 @@ document.addEventListener('DOMContentLoaded', () => {
     fetch(`/datos_top_numeros?limit=3${topQuery ? '&' + topQuery : ''}`)
       .then(response => response.json())
       .then(data => {
+        if (!Array.isArray(data) || data.length === 0) {
+          if (chartTopNumeros) chartTopNumeros.destroy();
+          const tablaTop = document.getElementById('tabla_top_numeros');
+          if (tablaTop) tablaTop.querySelector('tbody').innerHTML = '';
+          showCardMessage('graficoTopNumeros', 'No hay datos disponibles');
+          return;
+        }
         const labels = data.map(item => item.numero);
         const values = data.map(item => item.mensajes);
 
@@ -253,6 +331,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (chartTopNumeros) chartTopNumeros.destroy();
+        showCardMessage('graficoTopNumeros');
         const ctx = document.getElementById('graficoTopNumeros').getContext('2d');
         chartTopNumeros = new Chart(ctx, {
           type: 'bar',
@@ -274,6 +353,13 @@ document.addEventListener('DOMContentLoaded', () => {
             }
           }
         });
+      })
+      .catch(err => {
+        console.error(err);
+        if (chartTopNumeros) chartTopNumeros.destroy();
+        const tablaTop = document.getElementById('tabla_top_numeros');
+        if (tablaTop) tablaTop.querySelector('tbody').innerHTML = '';
+        showCardMessage('graficoTopNumeros', 'Error al cargar datos');
       });
 
     const palabrasParams = new URLSearchParams(query.startsWith('?') ? query.slice(1) : query);
@@ -282,6 +368,13 @@ document.addEventListener('DOMContentLoaded', () => {
     fetch(`/datos_palabras?${palabrasQuery}`)
       .then(response => response.json())
       .then(data => {
+        if (!Array.isArray(data) || data.length === 0) {
+          if (chartPalabras) chartPalabras.destroy();
+          const tablaPalabras = document.getElementById('tabla_palabras');
+          if (tablaPalabras) tablaPalabras.querySelector('tbody').innerHTML = '';
+          showCardMessage('grafico_palabras', 'No hay datos disponibles');
+          return;
+        }
         const labels = data.map(item => item.palabra);
         const values = data.map(item => item.frecuencia);
 
@@ -302,6 +395,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (chartPalabras) chartPalabras.destroy();
+        showCardMessage('grafico_palabras');
         const ctx = document.getElementById('grafico_palabras').getContext('2d');
         chartPalabras = new Chart(ctx, {
           type: 'wordCloud',
@@ -319,11 +413,25 @@ document.addEventListener('DOMContentLoaded', () => {
             }
           }
         });
+      })
+      .catch(err => {
+        console.error(err);
+        if (chartPalabras) chartPalabras.destroy();
+        const tablaPalabras = document.getElementById('tabla_palabras');
+        if (tablaPalabras) tablaPalabras.querySelector('tbody').innerHTML = '';
+        showCardMessage('grafico_palabras', 'Error al cargar datos');
       });
 
     fetch(`/datos_roles${query}`)
       .then(response => response.json())
       .then(data => {
+        if (!Array.isArray(data) || data.length === 0) {
+          if (chartRoles) chartRoles.destroy();
+          const tabla = document.getElementById('tabla_roles');
+          if (tabla) tabla.querySelector('tbody').innerHTML = '';
+          showCardMessage('grafico_roles', 'No hay datos disponibles');
+          return;
+        }
         const labels = data.map(item => item.rol);
         const values = data.map(item => item.mensajes);
         const tabla = document.getElementById('tabla_roles');
@@ -342,6 +450,7 @@ document.addEventListener('DOMContentLoaded', () => {
           });
         }
         if (chartRoles) chartRoles.destroy();
+        showCardMessage('grafico_roles');
         const ctx = document.getElementById('grafico_roles').getContext('2d');
         const colors = ['#FF6384','#36A2EB','#FFCE56','#4BC0C0','#9966FF','#FF9F40'];
         chartRoles = new Chart(ctx, {
@@ -357,11 +466,23 @@ document.addEventListener('DOMContentLoaded', () => {
             ...commonOptions
           }
         });
+      })
+      .catch(err => {
+        console.error(err);
+        if (chartRoles) chartRoles.destroy();
+        const tabla = document.getElementById('tabla_roles');
+        if (tabla) tabla.querySelector('tbody').innerHTML = '';
+        showCardMessage('grafico_roles', 'Error al cargar datos');
       });
 
     fetch(`/datos_tipos${query}`)
       .then(response => response.json())
       .then(data => {
+        if (!Array.isArray(data) || data.length === 0) {
+          if (chartTipos) chartTipos.destroy();
+          showCardMessage('graficoTipos', 'No hay datos disponibles');
+          return;
+        }
         const order = ['cliente', 'bot', 'asesor', 'otros'];
         const labelMap = { cliente: 'Clientes', bot: 'Bots', asesor: 'Asesores', otros: 'Otros' };
         const colorMap = { cliente: '#FF6384', bot: '#36A2EB', asesor: '#FFCE56', otros: '#4BC0C0' };
@@ -377,6 +498,7 @@ document.addEventListener('DOMContentLoaded', () => {
           }
         });
         if (chartTipos) chartTipos.destroy();
+        showCardMessage('graficoTipos');
         const ctx = document.getElementById('graficoTipos').getContext('2d');
         chartTipos = new Chart(ctx, {
           type: 'doughnut',
@@ -391,11 +513,21 @@ document.addEventListener('DOMContentLoaded', () => {
             ...commonOptions
           }
         });
+      })
+      .catch(err => {
+        console.error(err);
+        if (chartTipos) chartTipos.destroy();
+        showCardMessage('graficoTipos', 'Error al cargar datos');
       });
 
     fetch(`/datos_tipos_diarios${query}`)
       .then(response => response.json())
       .then(data => {
+        if (!Array.isArray(data) || data.length === 0) {
+          if (chartTiposDiarios) chartTiposDiarios.destroy();
+          showCardMessage('graficoTiposDiarios', 'No hay datos disponibles');
+          return;
+        }
         const labels = data.map(item => item.fecha);
         const datasets = [
           {
@@ -424,6 +556,7 @@ document.addEventListener('DOMContentLoaded', () => {
           }
         ];
         if (chartTiposDiarios) chartTiposDiarios.destroy();
+        showCardMessage('graficoTiposDiarios');
         const ctx = document.getElementById('graficoTiposDiarios').getContext('2d');
         chartTiposDiarios = new Chart(ctx, {
           type: 'line',
@@ -435,6 +568,11 @@ document.addEventListener('DOMContentLoaded', () => {
             }
           }
         });
+      })
+      .catch(err => {
+        console.error(err);
+        if (chartTiposDiarios) chartTiposDiarios.destroy();
+        showCardMessage('graficoTiposDiarios', 'Error al cargar datos');
       });
   }
 

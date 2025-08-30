@@ -104,3 +104,9 @@
   flex-wrap: wrap;
   gap: 0.5rem;
 }
+
+.card-message {
+  color: red;
+  margin-top: 1rem;
+  text-align: center;
+}
