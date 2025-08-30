@@ -1,8 +1,8 @@
 .dashboard-grid {
   display: grid;
-  grid-template-columns: 1fr 2fr;
   gap: 2rem;
   margin: 2rem;
+  grid-template-columns: 1fr;
 }
 
 .totales {
@@ -13,17 +13,15 @@
   grid-area: graficas;
 }
 
-.cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 20px;
-  margin-bottom: 20px;
-}
-
+.cards,
 .reports {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
   gap: 20px;
+  grid-template-columns: 1fr;
+}
+
+.cards {
+  margin-bottom: 20px;
 }
 
 .card {
@@ -50,24 +48,23 @@
   height: auto;
 }
 
-@media (max-width: 1024px) {
+@media (min-width: 768px) {
   .dashboard-grid {
     grid-template-columns: 1fr 1fr;
   }
+
+  .cards {
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  }
+
+  .reports {
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  }
 }
 
-@media (max-width: 900px) {
-    .dashboard-grid {
-        grid-template-columns: 1fr;
-    }
-}
-
-@media (max-width: 768px) {
+@media (min-width: 1200px) {
   .dashboard-grid {
-    grid-template-columns: 1fr;
-    grid-template-areas:
-      "totales"
-      "graficas";
+    grid-template-columns: 1fr 2fr;
   }
 }
 
