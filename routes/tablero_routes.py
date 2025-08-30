@@ -45,6 +45,54 @@ def datos_tablero():
     return jsonify(data)
 
 
+@tablero_bp.route('/datos_tipos_diarios')
+def datos_tipos_diarios():
+    """Devuelve la cantidad de mensajes por tipo agrupados por fecha."""
+    if "user" not in session:
+        return redirect(url_for('auth.login'))
+
+    start = request.args.get('start')
+    end = request.args.get('end')
+
+    conn = get_connection()
+    cur = conn.cursor()
+    query = (
+        """
+        SELECT DATE(timestamp) AS fecha, tipo, COUNT(*)
+          FROM mensajes
+        """
+    )
+    params = []
+    if start and end:
+        query += " WHERE timestamp BETWEEN ? AND ?"
+        params.extend([start, end])
+    query += " GROUP BY fecha, tipo ORDER BY fecha"
+    cur.execute(query, params)
+    rows = cur.fetchall()
+    conn.close()
+
+    aggregates = {}
+    for fecha, tipo, total in rows:
+        fecha_str = fecha.strftime("%Y-%m-%d")
+        if fecha_str not in aggregates:
+            aggregates[fecha_str] = {"cliente": 0, "bot": 0, "asesor": 0, "otros": 0}
+        t = (tipo or "").lower()
+        if t.startswith("cliente"):
+            aggregates[fecha_str]["cliente"] += total
+        elif t.startswith("bot"):
+            aggregates[fecha_str]["bot"] += total
+        elif t.startswith("asesor"):
+            aggregates[fecha_str]["asesor"] += total
+        else:
+            aggregates[fecha_str]["otros"] += total
+
+    data = [
+        {"fecha": fecha, **vals}
+        for fecha, vals in sorted(aggregates.items())
+    ]
+    return jsonify(data)
+
+
 @tablero_bp.route('/datos_palabras')
 def datos_palabras():
     """Devuelve las palabras más frecuentes en los mensajes."""

@@ -1,6 +1,6 @@
 document.addEventListener('DOMContentLoaded', () => {
   const REFRESH_INTERVAL = 60000;
-  let chartTotales, chartDiario, chartHora, chartTablero, chartTopNumeros, chartPalabras, chartRoles, chartTipos;
+  let chartTotales, chartDiario, chartHora, chartTablero, chartTopNumeros, chartPalabras, chartRoles, chartTipos, chartTiposDiarios;
   const commonOptions = {
     animation: { duration: 1000 },
     interaction: { mode: 'nearest', intersect: false }
@@ -334,6 +334,50 @@ document.addEventListener('DOMContentLoaded', () => {
           },
           options: {
             ...commonOptions
+          }
+        });
+      });
+
+    fetch(`/datos_tipos_diarios${query}`)
+      .then(response => response.json())
+      .then(data => {
+        const labels = data.map(item => item.fecha);
+        const datasets = [
+          {
+            label: 'Clientes',
+            data: data.map(item => item.cliente || 0),
+            borderColor: '#FF6384',
+            backgroundColor: 'rgba(255, 99, 132, 0.2)',
+            tension: 0.1,
+            fill: false
+          },
+          {
+            label: 'Bots',
+            data: data.map(item => item.bot || 0),
+            borderColor: '#36A2EB',
+            backgroundColor: 'rgba(54, 162, 235, 0.2)',
+            tension: 0.1,
+            fill: false
+          },
+          {
+            label: 'Asesores',
+            data: data.map(item => item.asesor || 0),
+            borderColor: '#FFCE56',
+            backgroundColor: 'rgba(255, 206, 86, 0.2)',
+            tension: 0.1,
+            fill: false
+          }
+        ];
+        if (chartTiposDiarios) chartTiposDiarios.destroy();
+        const ctx = document.getElementById('graficoTiposDiarios').getContext('2d');
+        chartTiposDiarios = new Chart(ctx, {
+          type: 'line',
+          data: { labels, datasets },
+          options: {
+            ...commonOptions,
+            scales: {
+              y: { beginAtZero: true }
+            }
           }
         });
       });
