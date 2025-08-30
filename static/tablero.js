@@ -50,6 +50,9 @@ document.addEventListener('DOMContentLoaded', () => {
       .then(data => {
         document.getElementById('totalEnviados').textContent = data.enviados;
         document.getElementById('totalRecibidos').textContent = data.recibidos;
+        const total = data.enviados + data.recibidos;
+        const totalElem = document.getElementById('totalMensajes');
+        if (totalElem) totalElem.textContent = total;
 
         if (chartTotales) chartTotales.destroy();
         const ctx = document.getElementById('graficoTotales').getContext('2d');
@@ -72,6 +75,13 @@ document.addEventListener('DOMContentLoaded', () => {
             }
           }
         });
+      });
+
+    fetch('/datos_roles_total')
+      .then(response => response.json())
+      .then(data => {
+        const rolesElem = document.getElementById('cantidadRoles');
+        if (rolesElem) rolesElem.textContent = data.total_roles;
       });
 
     fetch(`/datos_mensajes_diarios${query}`)

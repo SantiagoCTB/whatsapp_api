@@ -263,3 +263,18 @@ def datos_totales():
     )
 
     return jsonify({"enviados": enviados, "recibidos": recibidos})
+
+
+@tablero_bp.route('/datos_roles_total')
+def datos_roles_total():
+    """Devuelve la cantidad total de roles."""
+    if "user" not in session:
+        return redirect(url_for('auth.login'))
+
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT COUNT(*) FROM roles")
+    total = cur.fetchone()[0]
+    conn.close()
+
+    return jsonify({"total_roles": total})
