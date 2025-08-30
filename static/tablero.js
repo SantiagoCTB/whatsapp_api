@@ -5,14 +5,6 @@ document.addEventListener('DOMContentLoaded', () => {
     animation: { duration: 1000 },
     interaction: { mode: 'nearest', intersect: false }
   };
-  const menuToggle = document.getElementById('menu-toggle');
-  const sidebar = document.querySelector('.sidebar');
-  if (menuToggle && sidebar) {
-    menuToggle.addEventListener('click', () => {
-      sidebar.classList.toggle('open');
-    });
-  }
-
   const startInput = document.getElementById('fechaInicio');
   const endInput = document.getElementById('fechaFin');
   const limitInput = document.getElementById('limit');
