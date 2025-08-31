@@ -112,10 +112,14 @@
         <td>{{ regla.calculo or '-' }}</td>
         <td>{{ regla.handler or '-' }}</td>
         <td>
-            <button class="edit-btn btn-primary" type="button" onclick='cargarRegla({{ regla|tojson }})'>Editar</button>
-            <form method="POST" action="{{ url_for('configuracion.eliminar_regla', regla_id=regla.id) }}">
-                <button class="delete-btn btn-primary" type="submit">Eliminar</button>
-            </form>
+            <div class="action-buttons">
+                <form class="action-form" onsubmit="return false;">
+                    <button class="edit-btn btn-primary" type="button" onclick='cargarRegla({{ regla|tojson }})'>Editar</button>
+                </form>
+                <form class="action-form" method="POST" action="{{ url_for('configuracion.eliminar_regla', regla_id=regla.id) }}">
+                    <button class="delete-btn btn-primary" type="submit">Eliminar</button>
+                </form>
+            </div>
         </td>
     </tr>
     {% endfor %}
