@@ -330,8 +330,8 @@ def datos_top_numeros():
     params.extend(filter_params)
     if conditions:
         query += " WHERE " + " AND ".join(conditions)
-    query += " GROUP BY m.numero ORDER BY total DESC LIMIT ?"
-    params.append(limite)
+    # Embed the limit directly to avoid placeholder compatibility issues
+    query += f" GROUP BY m.numero ORDER BY total DESC LIMIT {limite}"
     cur.execute(query, params)
     rows = cur.fetchall()
     conn.close()

@@ -406,18 +406,22 @@ document.addEventListener('DOMContentLoaded', () => {
         showCardMessage('grafico_palabras');
         const ctx = document.getElementById('grafico_palabras').getContext('2d');
         chartPalabras = new Chart(ctx, {
-          type: 'wordCloud',
+          type: 'bar',
           data: {
             labels: labels,
             datasets: [{
-              label: 'Palabras más frecuentes',
-              data: values
+              label: 'Frecuencia',
+              data: values,
+              backgroundColor: 'rgba(153, 102, 255, 0.5)',
+              borderColor: 'rgba(153, 102, 255, 1)',
+              borderWidth: 1
             }]
           },
           options: {
             ...commonOptions,
-            plugins: {
-              legend: { display: false }
+            indexAxis: 'y',
+            scales: {
+              x: { beginAtZero: true }
             }
           }
         });
