@@ -1,17 +1,9 @@
+
 .dashboard-grid {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 2rem;
   margin: 2rem;
-  grid-template-columns: 1fr;
-  justify-items: stretch;
-}
-
-.totales {
-  grid-area: totales;
-}
-
-.graficas {
-  grid-area: graficas;
 }
 
 .cards,
@@ -55,18 +47,14 @@
 
 .card canvas {
   width: 100%;
-  height: 400px;
+  height: 300px;
   display: block;
   margin: 0 auto;
 }
 
 @media (min-width: 768px) {
-  .dashboard-grid {
-    grid-template-columns: 1fr 1fr;
-  }
-
   .cards {
-    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   }
 
   .reports {
@@ -74,28 +62,33 @@
   }
 }
 
-@media (min-width: 1200px) {
-  .dashboard-grid {
-    grid-template-columns: 1fr 2fr;
-  }
+.filters-toggle {
+  margin: 1rem 0;
 }
 
 .filters-panel {
   max-height: 0;
   overflow: hidden;
-  transition: max-height 0.3s ease;
+  transition: max-height 0.3s ease, padding 0.3s ease;
+  padding: 0;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+  margin-bottom: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
 }
 
 .filters-panel.open {
   max-height: 500px;
+  padding: 1rem;
+  margin-bottom: 1.5rem;
 }
 
-.filters-panel label,
-.filters-panel input,
-.filters-panel select,
-.filters-panel button {
-  margin-right: 0.5rem;
-  margin-bottom: 0.5rem;
+.filters-panel label {
+  font-weight: 600;
 }
 
 .filters-panel .message-type {
