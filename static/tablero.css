@@ -62,10 +62,19 @@
   }
 }
 
+.filters-toggle {
+  margin-bottom: 1rem;
+}
+
 .filters-panel {
   max-height: 0;
   overflow: hidden;
   transition: max-height 0.3s ease;
+  background: #fff;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 1rem;
 }
 
 .filters-panel.open {
