@@ -15,18 +15,18 @@ def _apply_filters(cur, rol, numero):
     params = []
 
     if numero:
-        cur.execute("SELECT 1 FROM mensajes WHERE numero = ? LIMIT 1", (numero,))
+        cur.execute("SELECT 1 FROM mensajes WHERE numero = %s LIMIT 1", (numero,))
         if not cur.fetchone():
             raise ValueError("numero")
-        conditions.append("m.numero = ?")
+        conditions.append("m.numero = %s")
         params.append(numero)
 
     if rol:
-        cur.execute("SELECT 1 FROM roles WHERE id = ?", (rol,))
+        cur.execute("SELECT 1 FROM roles WHERE id = %s", (rol,))
         if not cur.fetchone():
             raise ValueError("rol")
         joins.append("JOIN chat_roles AS cr ON m.numero = cr.numero")
-        conditions.append("cr.role_id = ?")
+        conditions.append("cr.role_id = %s")
         params.append(rol)
 
     return " ".join(joins), conditions, params
@@ -99,7 +99,7 @@ def datos_tablero():
     conditions = []
     params = []
     if start and end:
-        conditions.append("m.timestamp BETWEEN ? AND ?")
+        conditions.append("m.timestamp BETWEEN %s AND %s")
         params.extend([start, end])
     conditions.extend(filter_conditions)
     params.extend(filter_params)
@@ -152,7 +152,7 @@ def datos_tipos_diarios():
     conditions = []
     params = []
     if start and end:
-        conditions.append("m.timestamp BETWEEN ? AND ?")
+        conditions.append("m.timestamp BETWEEN %s AND %s")
         params.extend([start, end])
     conditions.extend(filter_conditions)
     params.extend(filter_params)
@@ -214,7 +214,7 @@ def datos_palabras():
     conditions = []
     params = []
     if start and end:
-        conditions.append("m.timestamp BETWEEN ? AND ?")
+        conditions.append("m.timestamp BETWEEN %s AND %s")
         params.extend([start, end])
     conditions.extend(filter_conditions)
     params.extend(filter_params)
@@ -251,12 +251,12 @@ def datos_roles():
     cur = conn.cursor()
 
     if numero:
-        cur.execute("SELECT 1 FROM mensajes WHERE numero = ? LIMIT 1", (numero,))
+        cur.execute("SELECT 1 FROM mensajes WHERE numero = %s LIMIT 1", (numero,))
         if not cur.fetchone():
             conn.close()
             return jsonify({"error": "Número no encontrado"}), 400
     if rol:
-        cur.execute("SELECT 1 FROM roles WHERE id = ?", (rol,))
+        cur.execute("SELECT 1 FROM roles WHERE id = %s", (rol,))
         if not cur.fetchone():
             conn.close()
             return jsonify({"error": "Rol no encontrado"}), 400
@@ -272,13 +272,13 @@ def datos_roles():
     )
     params = []
     if start and end:
-        query += " AND m.timestamp BETWEEN ? AND ?"
+        query += " AND m.timestamp BETWEEN %s AND %s"
         params.extend([start, end])
     if numero:
-        query += " AND m.numero = ?"
+        query += " AND m.numero = %s"
         params.append(numero)
     if rol:
-        query += " AND cr.role_id = ?"
+        query += " AND cr.role_id = %s"
         params.append(rol)
     query += " GROUP BY rol"
     cur.execute(query, params)
@@ -324,7 +324,7 @@ def datos_top_numeros():
     conditions = ["m.tipo LIKE 'cliente%'"]
     params = []
     if start and end:
-        conditions.append("m.timestamp BETWEEN ? AND ?")
+        conditions.append("m.timestamp BETWEEN %s AND %s")
         params.extend([start, end])
     conditions.extend(filter_conditions)
     params.extend(filter_params)
@@ -373,7 +373,7 @@ def datos_mensajes_diarios():
     conditions = []
     params = []
     if start and end:
-        conditions.append("m.timestamp BETWEEN ? AND ?")
+        conditions.append("m.timestamp BETWEEN %s AND %s")
         params.extend([start, end])
     conditions.extend(filter_conditions)
     params.extend(filter_params)
@@ -421,7 +421,7 @@ def datos_mensajes_hora():
     conditions = []
     params = []
     if start and end:
-        conditions.append("m.timestamp BETWEEN ? AND ?")
+        conditions.append("m.timestamp BETWEEN %s AND %s")
         params.extend([start, end])
     conditions.extend(filter_conditions)
     params.extend(filter_params)
@@ -464,7 +464,7 @@ def datos_tipos():
     conditions = []
     params = []
     if start and end:
-        conditions.append("m.timestamp BETWEEN ? AND ?")
+        conditions.append("m.timestamp BETWEEN %s AND %s")
         params.extend([start, end])
     conditions.extend(filter_conditions)
     params.extend(filter_params)
@@ -523,7 +523,7 @@ def datos_totales():
     conditions = []
     params = []
     if start and end:
-        conditions.append("m.timestamp BETWEEN ? AND ?")
+        conditions.append("m.timestamp BETWEEN %s AND %s")
         params.extend([start, end])
     conditions.extend(filter_conditions)
     params.extend(filter_params)
