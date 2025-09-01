@@ -400,6 +400,8 @@
       border-radius: 4px;
       cursor: pointer;
       transition: background 0.3s, color 0.3s;
+      display: block;
+      width: 100%;
     }
     .delete-btn:hover,
     .edit-btn:hover {
@@ -409,11 +411,13 @@
 
     .action-cell {
       display: flex;
+      flex-direction: column;
       gap: 8px;
-      align-items: center;
+      align-items: stretch;
     }
     .action-cell form {
       margin: 0;
+      width: 100%;
     }
 
     .top-right {
