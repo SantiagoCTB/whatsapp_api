@@ -11,7 +11,7 @@
 </div>
 
 
-<button id="filters-toggle" class="filters-toggle">Filtros</button>
+<button id="filters-toggle" class="filters-toggle btn-primary">Filtros</button>
 <div class="filters-panel">
     <label for="fechaInicio">Desde:</label>
     <input type="date" id="fechaInicio">
@@ -33,14 +33,14 @@
         <label><input type="checkbox" id="tipoBot" value="bot" checked> Bot</label>
         <label><input type="checkbox" id="tipoAsesor" value="asesor" checked> Asesor</label>
     </div>
-    <button id="apply-filters">Aplicar</button>
-    <button id="clear-filters" type="button">Limpiar filtros</button>
+    <button id="apply-filters" class="btn-primary">Aplicar</button>
+    <button id="clear-filters" type="button" class="btn-primary">Limpiar filtros</button>
 </div>
 
 
 <main>
     <div class="dashboard-grid">
-        <section class="cards totales">
+        <section class="cards resumen">
             <div class="card">
                 <h3>Total de mensajes</h3>
                 <p id="totalMensajes">0</p>
@@ -49,14 +49,20 @@
                 <h3>Cantidad de roles</h3>
                 <p id="cantidadRoles">0</p>
             </div>
-            <div class="card" id="totalesCard">
-                <h3><span class="icon">📊</span> Totales de mensajes</h3>
-                <p>Enviados: <span id="totalEnviados">0</span></p>
-                <p>Recibidos: <span id="totalRecibidos">0</span></p>
-                <canvas id="graficoTotales"></canvas>
+            <div class="card">
+                <h3>Enviados</h3>
+                <p id="totalEnviados">0</p>
+            </div>
+            <div class="card">
+                <h3>Recibidos</h3>
+                <p id="totalRecibidos">0</p>
             </div>
         </section>
-        <section class="reports graficas" id="reportes">
+        <section class="reports" id="reportes">
+            <div class="card">
+                <h3><span class="icon">📊</span> Totales de mensajes</h3>
+                <canvas id="graficoTotales"></canvas>
+            </div>
             <div class="card">
                 <h4>Mensajes por Día</h4>
                 <canvas id="graficoDiario"></canvas>
@@ -121,7 +127,6 @@
 </main>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-wordcloud"></script>
 <script src="{{ url_for('static', filename='tablero.js') }}"></script>
 {% endblock %}
 
