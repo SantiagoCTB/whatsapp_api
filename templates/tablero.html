@@ -42,26 +42,49 @@
     <div class="dashboard-grid">
         <section class="cards resumen">
             <div class="card">
-                <h3>Total de mensajes</h3>
-                <p id="totalMensajes">0</p>
+                <div class="card-content">
+                    <span class="icon">💬</span>
+                    <div class="text">
+                        <h3>Total de mensajes</h3>
+                        <p id="totalMensajes">0</p>
+                    </div>
+                </div>
             </div>
             <div class="card">
-                <h3>Cantidad de roles</h3>
-                <p id="cantidadRoles">0</p>
+                <div class="card-content">
+                    <span class="icon">👥</span>
+                    <div class="text">
+                        <h3>Cantidad de roles</h3>
+                        <p id="cantidadRoles">0</p>
+                    </div>
+                </div>
             </div>
             <div class="card">
-                <h3>Enviados</h3>
-                <p id="totalEnviados">0</p>
+                <div class="card-content">
+                    <span class="icon">📤</span>
+                    <div class="text">
+                        <h3>Enviados</h3>
+                        <p id="totalEnviados">0</p>
+                    </div>
+                </div>
             </div>
             <div class="card">
-                <h3>Recibidos</h3>
-                <p id="totalRecibidos">0</p>
+                <div class="card-content">
+                    <span class="icon">📥</span>
+                    <div class="text">
+                        <h3>Recibidos</h3>
+                        <p id="totalRecibidos">0</p>
+                    </div>
+                </div>
             </div>
         </section>
         <section class="reports" id="reportes">
             <div class="wide-row">
                 <div class="card chart-card">
-                    <h4>Mensajes por Día</h4>
+                    <div class="card-header">
+                        <span class="icon">📅</span>
+                        <h4>Mensajes por Día</h4>
+                    </div>
                     <canvas id="graficoDiario" width="600" height="300"></canvas>
                     <table id="tabla_dia_semana" class="fixed-table">
                         <thead><tr><th>Día</th><th>Mensajes</th></tr></thead>
@@ -69,20 +92,32 @@
                     </table>
                 </div>
                 <div class="card chart-card">
-                    <h4>Mensajes por Hora</h4>
+                    <div class="card-header">
+                        <span class="icon">⏰</span>
+                        <h4>Mensajes por Hora</h4>
+                    </div>
                     <canvas id="graficoHora" width="600" height="300"></canvas>
                 </div>
             </div>
             <div class="card chart-card">
-                <h3><span class="icon">📊</span> Totales de mensajes</h3>
+                <div class="card-header">
+                    <span class="icon">📊</span>
+                    <h3>Totales de mensajes</h3>
+                </div>
                 <canvas id="graficoTotales" width="600" height="300"></canvas>
             </div>
             <div class="card chart-card">
-                <h4>Mensajes por Usuario</h4>
+                <div class="card-header">
+                    <span class="icon">👤</span>
+                    <h4>Mensajes por Usuario</h4>
+                </div>
                 <canvas id="grafico" width="600" height="300"></canvas>
             </div>
             <div class="card chart-card">
-                <h4>Top Números</h4>
+                <div class="card-header">
+                    <span class="icon">🏆</span>
+                    <h4>Top Números</h4>
+                </div>
                 <div class="chart-table">
                     <canvas id="graficoTopNumeros" width="600" height="300"></canvas>
                     <table id="tabla_top_numeros" class="fixed-table">
@@ -97,7 +132,10 @@
                 </div>
             </div>
             <div class="card chart-card">
-                <h4>Palabras Más Usadas</h4>
+                <div class="card-header">
+                    <span class="icon">🔤</span>
+                    <h4>Palabras Más Usadas</h4>
+                </div>
                 <div class="chart-table">
                     <canvas id="grafico_palabras" width="600" height="300"></canvas>
                     <table id="tabla_palabras" class="fixed-table">
@@ -112,7 +150,10 @@
                 </div>
             </div>
             <div class="card chart-card">
-                <h4>Roles</h4>
+                <div class="card-header">
+                    <span class="icon">👥</span>
+                    <h4>Roles</h4>
+                </div>
                 <div class="chart-table">
                     <canvas id="grafico_roles" width="600" height="300"></canvas>
                     <table id="tabla_roles" class="fixed-table">
@@ -127,11 +168,17 @@
                 </div>
             </div>
             <div class="card chart-card">
-                <h4>Tipos de Mensaje</h4>
+                <div class="card-header">
+                    <span class="icon">💬</span>
+                    <h4>Tipos de Mensaje</h4>
+                </div>
                 <canvas id="graficoTipos" width="600" height="300"></canvas>
             </div>
             <div class="card chart-card">
-                <h4>Tipos por Día</h4>
+                <div class="card-header">
+                    <span class="icon">🗓️</span>
+                    <h4>Tipos por Día</h4>
+                </div>
                 <canvas id="graficoTiposDiarios" width="600" height="300"></canvas>
             </div>
         </section>
