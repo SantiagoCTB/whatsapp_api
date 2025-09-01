@@ -1,6 +1,7 @@
 from flask import Blueprint, render_template, session, redirect, url_for, jsonify, request
 from collections import Counter
 import re
+from datetime import datetime
 
 from services.db import get_connection
 
@@ -178,7 +179,10 @@ def datos_tipos_diarios():
             aggregates[fecha_str]["otros"] += total
 
     data = [
-        {"fecha": fecha, **vals}
+        {
+            "fecha": datetime.strptime(fecha, "%Y-%m-%d").strftime("%d/%m/%Y"),
+            **vals,
+        }
         for fecha, vals in sorted(aggregates.items())
     ]
     return jsonify(data)
@@ -384,7 +388,7 @@ def datos_mensajes_diarios():
     rows = cur.fetchall()
     conn.close()
 
-    data = [{"fecha": fecha.strftime("%Y-%m-%d"), "total": total} for fecha, total in rows]
+    data = [{"fecha": fecha.strftime("%d/%m/%Y"), "total": total} for fecha, total in rows]
     return jsonify(data)
 
 
