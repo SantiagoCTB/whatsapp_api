@@ -6,6 +6,12 @@
   margin: 2rem;
 }
 
+.stats-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
 .cards,
 .reports {
   display: grid;
@@ -35,8 +41,13 @@
 }
 
 .chart-card {
-  width: 400px;
-  height: 300px;
+  width: 450px;      /* Ajustar según necesidad */
+  height: 360px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 12px;
+  overflow: hidden;
 }
 
 .card h3, .card h4 {
@@ -55,6 +66,10 @@
   height: 100%;
   display: block;
   margin: 0 auto;
+}
+
+.chart-card canvas {
+  flex: 0 0 200px;   /* Gráfico fijo arriba */
 }
 
 .wide-row {
@@ -122,4 +137,11 @@
   max-height: 150px;
   overflow-y: auto;
   display: block;
+}
+
+.chart-card table {
+  flex: 1;
+  width: 100%;
+  overflow-y: auto;
+  table-layout: fixed;
 }
