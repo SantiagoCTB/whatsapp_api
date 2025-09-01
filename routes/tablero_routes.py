@@ -392,6 +392,54 @@ def datos_mensajes_diarios():
     return jsonify(data)
 
 
+@tablero_bp.route('/datos_mensajes_semana')
+def datos_mensajes_semana():
+    """Devuelve el total de mensajes agrupados por día de la semana."""
+    if "user" not in session:
+        return redirect(url_for('auth.login'))
+
+    start = request.args.get('start')
+    end = request.args.get('end')
+    rol = request.args.get('rol', type=int)
+    numero = request.args.get('numero')
+
+    conn = get_connection()
+    cur = conn.cursor()
+
+    try:
+        joins, filter_conditions, filter_params = _apply_filters(cur, rol, numero)
+    except ValueError as e:
+        conn.close()
+        msg = 'Rol' if str(e) == 'rol' else 'Número'
+        return jsonify({"error": f"{msg} no encontrado"}), 400
+
+    query = (
+        """
+        SELECT DATE_FORMAT(m.timestamp, '%W') AS dia, COUNT(*) AS total
+          FROM mensajes m
+        """
+    )
+    if joins:
+        query += " " + joins
+
+    conditions = []
+    params = []
+    if start and end:
+        conditions.append("m.timestamp BETWEEN %s AND %s")
+        params.extend([start, end])
+    conditions.extend(filter_conditions)
+    params.extend(filter_params)
+    if conditions:
+        query += " WHERE " + " AND ".join(conditions)
+    query += " GROUP BY dia ORDER BY FIELD(DAYOFWEEK(m.timestamp),2,3,4,5,6,7,1)"
+    cur.execute(query, params)
+    rows = cur.fetchall()
+    conn.close()
+
+    data = [{"dia": dia, "total": total} for dia, total in rows]
+    return jsonify(data)
+
+
 @tablero_bp.route('/datos_mensajes_hora')
 def datos_mensajes_hora():
     """Devuelve el total de mensajes agrupados por hora."""
