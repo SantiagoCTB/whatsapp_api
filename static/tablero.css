@@ -41,7 +41,7 @@
 }
 
 .chart-card {
-  width: 450px;      /* Ajustar según necesidad */
+  width: 100%;
   height: 360px;
   display: flex;
   flex-direction: column;
