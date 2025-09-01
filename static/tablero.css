@@ -46,9 +46,8 @@
 }
 
 .card canvas {
-  width: 280px;
-  height: 180px;
-  max-width: 100%;
+  width: 280px !important;
+  height: 180px !important;
   display: block;
   margin: 0 auto;
 }
