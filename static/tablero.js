@@ -1,6 +1,14 @@
 document.addEventListener('DOMContentLoaded', () => {
   const REFRESH_INTERVAL = 60000;
-  let chartTotales, chartDiario, chartHora, chartTablero, chartTopNumeros, chartPalabras, chartRoles, chartTipos, chartTiposDiarios;
+  let chartTotales,
+      chartDiario,
+      chartHora,
+      chartTablero,
+      chartTopNumeros,
+      chartPalabras,
+      chartRoles,
+      chartTipos,
+      chartTiposDiarios;
   const commonOptions = {
     animation: { duration: 1000 },
     interaction: { mode: 'nearest', intersect: false },
