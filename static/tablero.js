@@ -212,6 +212,7 @@ document.addEventListener('DOMContentLoaded', () => {
           },
           options: {
             ...commonOptions,
+            maintainAspectRatio: false,
             scales: {
               y: { beginAtZero: true }
             }
@@ -280,6 +281,7 @@ document.addEventListener('DOMContentLoaded', () => {
           },
           options: {
             ...commonOptions,
+            maintainAspectRatio: false,
             scales: {
               y: { beginAtZero: true }
             }
