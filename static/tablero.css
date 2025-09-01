@@ -30,7 +30,7 @@
 }
 
 .card {
-  background: #fff;
+  background: #f8f9fa;
   border-radius: 12px;
   box-shadow: 0 2px 8px rgba(0,0,0,0.07);
   padding: 1.5rem;
@@ -38,6 +38,8 @@
   display: flex;
   flex-direction: column;
   align-items: center;
+  font-family: 'Helvetica Neue', Arial, sans-serif;
+  color: #1a202c;
 }
 
 .chart-card {
@@ -52,13 +54,23 @@
 }
 
 .card h3, .card h4 {
-  margin-top: 0;
+  margin: 0;
   color: #2c3e50;
 }
 
+.card-content,
+.card-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.card-header {
+  margin-bottom: 0.5rem;
+}
+
 .icon {
-  font-size: 1.2em;
-  margin-right: 0.5em;
+  font-size: 1.5em;
 }
 
 
