@@ -49,6 +49,7 @@
   display: flex;
   flex-direction: column;
   justify-content: space-between;
+  align-items: center;
   gap: 12px;
   overflow: hidden;
 }
@@ -83,8 +84,8 @@
 }
 
 .chart-card canvas {
-  width: 600px;
-  height: 350px;
+  width: 450px;
+  height: 250px;
   flex: none;
 }
 
