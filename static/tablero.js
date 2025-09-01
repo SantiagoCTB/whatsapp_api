@@ -12,8 +12,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const commonOptions = {
     animation: { duration: 1000 },
     interaction: { mode: 'nearest', intersect: false },
-    maintainAspectRatio: false,
-    responsive: false
+    maintainAspectRatio: true,
+    responsive: true
   };
   const startInput = document.getElementById('fechaInicio');
   const endInput = document.getElementById('fechaFin');
