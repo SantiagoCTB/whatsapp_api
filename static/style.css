@@ -387,6 +387,14 @@
       width: 100%;
       border-collapse: collapse;
     }
+    .fixed-table {
+      width: 800px;
+      height: 400px;
+      overflow-x: auto;
+      overflow-y: auto;
+      word-break: break-word;
+      white-space: normal;
+    }
     th, td {
       padding: 10px;
       text-align: left;
