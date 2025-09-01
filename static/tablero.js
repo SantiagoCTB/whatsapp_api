@@ -13,7 +13,7 @@ document.addEventListener('DOMContentLoaded', () => {
     animation: { duration: 1000 },
     interaction: { mode: 'nearest', intersect: false },
     maintainAspectRatio: false,
-    responsive: true
+    responsive: false
   };
   const startInput = document.getElementById('fechaInicio');
   const endInput = document.getElementById('fechaFin');
