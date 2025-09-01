@@ -53,22 +53,19 @@
 }
 
 .wide-row {
+  grid-column: 1 / -1;  /* ocupar todo el ancho de la cuadrícula */
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, 1fr);
   gap: 20px;
 }
 
-.large-chart {
-  grid-column: span 1;
-}
-
-.large-chart canvas {
-  height: 400px;
-}
-
+/* ajustar la altura para que la fila no se vea tan larga */
 .wide-row .card canvas {
-  width: 100%;
-  height: 400px;
+  height: 250px; /* o el valor que se prefiera */
+}
+
+@media (max-width: 768px) {
+  .wide-row { grid-template-columns: 1fr; }  /* apilar en pantallas pequeñas */
 }
 
 @media (min-width: 768px) {
