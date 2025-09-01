@@ -12,7 +12,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const commonOptions = {
     animation: { duration: 1000 },
     interaction: { mode: 'nearest', intersect: false },
-    maintainAspectRatio: true
+    maintainAspectRatio: false
   };
   const startInput = document.getElementById('fechaInicio');
   const endInput = document.getElementById('fechaFin');
@@ -212,7 +212,6 @@ document.addEventListener('DOMContentLoaded', () => {
           },
           options: {
             ...commonOptions,
-            maintainAspectRatio: false,
             scales: {
               y: { beginAtZero: true }
             }
@@ -281,7 +280,6 @@ document.addEventListener('DOMContentLoaded', () => {
           },
           options: {
             ...commonOptions,
-            maintainAspectRatio: false,
             scales: {
               y: { beginAtZero: true }
             }
