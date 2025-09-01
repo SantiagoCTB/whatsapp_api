@@ -145,6 +145,17 @@
   text-align: center;
 }
 
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th, td {
+  padding: 0.5rem;
+  text-align: left;
+  border-bottom: 1px solid #ddd;
+}
+
 .card table {
   max-height: 150px;
   overflow-y: auto;
