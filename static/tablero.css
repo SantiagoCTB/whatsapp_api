@@ -45,10 +45,9 @@
 .chart-card {
   width: 100%;
   height: auto;
-  min-height: 240px;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
+  justify-content: flex-start;
   align-items: center;
   gap: 12px;
   overflow: hidden;
@@ -84,8 +83,8 @@
 }
 
 .chart-card canvas {
-  width: 450px;
-  height: 250px;
+  width: 100%;
+  height: auto;
   flex: none;
 }
 
