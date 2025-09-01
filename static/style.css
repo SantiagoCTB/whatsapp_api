@@ -35,6 +35,8 @@
     }
     body.page {
       padding: 20px;
+      background: #fff;
+      background-image: none;
     }
     .container {
       flex: 1;
@@ -389,17 +391,33 @@
       padding: 10px;
       text-align: left;
     }
-    .delete-btn {
-      background: var(--accent-neon);
-      color: var(--text-light);
-      border: none;
+    .delete-btn,
+    .edit-btn {
+      background: #fff;
+      color: var(--accent-neon);
+      border: 1px solid var(--accent-neon);
       padding: 6px 12px;
       border-radius: 4px;
       cursor: pointer;
       transition: background 0.3s, color 0.3s;
+      width: 100%;
+      display: block;
     }
-    .delete-btn:hover {
+    .delete-btn:hover,
+    .edit-btn:hover {
       background: var(--accent-hover);
+      color: var(--text-light);
+    }
+
+    .action-cell {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      align-items: stretch;
+    }
+    .action-cell form {
+      margin: 0;
+      width: 100%;
     }
 
     .top-right {
