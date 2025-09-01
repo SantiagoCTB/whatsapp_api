@@ -43,7 +43,7 @@
 .chart-card {
   width: 100%;
   height: auto;
-  min-height: 360px;
+  min-height: 240px;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
@@ -70,7 +70,8 @@
 }
 
 .chart-card canvas {
-  flex: 0 0 200px;   /* Gráfico fijo arriba */
+  flex: 0 0 150px;
+  height: 150px;
 }
 
 .chart-table {
