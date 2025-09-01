@@ -118,3 +118,9 @@
   margin-top: 1rem;
   text-align: center;
 }
+
+.card table {
+  max-height: 150px;
+  overflow-y: auto;
+  display: block;
+}
