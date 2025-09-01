@@ -63,15 +63,15 @@
 
 
 .card canvas {
-  width: 100%;
-  height: 100%;
+  width: 600px;
+  height: 300px;
   display: block;
   margin: 0 auto;
 }
 
 .chart-card canvas {
-  flex: 0 0 150px;
-  height: 150px;
+  width: 600px;
+  height: 300px;
 }
 
 .chart-table {
