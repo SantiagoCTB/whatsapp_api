@@ -42,7 +42,8 @@
 
 .chart-card {
   width: 100%;
-  height: 360px;
+  height: auto;
+  min-height: 360px;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
@@ -70,6 +71,17 @@
 
 .chart-card canvas {
   flex: 0 0 200px;   /* Gráfico fijo arriba */
+}
+
+.chart-table {
+  display: flex;
+  gap: 1rem;
+  align-items: stretch;
+}
+
+.chart-table canvas,
+.chart-table table {
+  flex: 1;
 }
 
 .wide-row {
