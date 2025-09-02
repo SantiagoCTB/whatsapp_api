@@ -133,14 +133,14 @@
   overflow: hidden;
   transition: max-height 0.3s ease;
   background: #fff;
-  border: 1px solid var(--border-color);
   border-radius: 8px;
-  padding: 1rem;
-  margin-bottom: 1rem;
 }
 
 .filters-panel.open {
   max-height: 500px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+  border: 1px solid var(--border-color);
 }
 
 .filters-panel label,
