@@ -383,6 +383,8 @@
 
       // Inicializa
       fetchChatList();
+      setInterval(fetchChatList, 5000); // intervalo según necesidad
+      // TODO: sustituir el sondeo por WebSockets o Server-Sent Events para actualizaciones en tiempo real
     });
   </script>
 {% endblock %}
