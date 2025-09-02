@@ -388,8 +388,9 @@
       border-collapse: collapse;
     }
     .fixed-table {
-      width: 800px;
-      height: 400px;
+      width: 100%;
+      max-width: 800px;
+      max-height: 400px;
       overflow-x: auto;
       overflow-y: auto;
       word-break: break-word;
