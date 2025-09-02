@@ -95,8 +95,7 @@ def handle_option_reply(numero, option_id):
     for (opcs,) in rows:
         nxt = _get_step_from_options(opcs or '', option_id)
         if nxt:
-            set_user_step(numero, nxt)
-            process_step_chain(numero)
+            advance_steps(numero, nxt)
             return True
     return False
 
@@ -122,7 +121,7 @@ def dispatch_rule(numero, regla):
             )
             conn.commit()
         conn.close()
-    return (next_step or '').strip().lower()
+    advance_steps(numero, next_step)
 
 
 def advance_steps(numero: str, steps_str: str):
@@ -194,14 +193,12 @@ def process_step_chain(numero, text_norm=None):
     for r in reglas:
         patt = (r[7] or '').strip()
         if patt and patt != '*' and normalize_text(patt) == text_norm:
-            next_step = dispatch_rule(numero, r)
-            set_user_step(numero, next_step)
+            dispatch_rule(numero, r)
             return
 
     # Regla comodín
     if comodines:
-        next_step = dispatch_rule(numero, comodines[0])
-        set_user_step(numero, next_step)
+        dispatch_rule(numero, comodines[0])
         # No procesar recursivamente otros comodines; esperar nueva entrada
         return
 
@@ -264,8 +261,7 @@ def handle_medicion(numero, texto):
                 )
                 conn2.commit()
             conn2.close()
-        set_user_step(numero, next_step.strip().lower() if next_step else '')
-        process_step_chain(numero)
+        advance_steps(numero, next_step)
     except Exception:
         enviar_mensaje(numero, "Por favor ingresa la medida correcta.")
     return True
