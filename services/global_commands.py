@@ -11,8 +11,10 @@ GLOBAL_COMMANDS = {}
 
 def reiniciar_handler(numero, text):
     """Reinicia el flujo para el usuario y envía el mensaje inicial."""
-    from routes.webhook import set_user_step  # Evitar dependencias circulares
+    # Importar aquí para evitar dependencias circulares
+    from routes.webhook import set_user_step, advance_steps
 
+    # Aseguramos establecer el paso inicial antes de iniciar el flujo
     set_user_step(numero, Config.INITIAL_STEP)
     enviar_mensaje(numero, "Perfecto, volvamos a empezar.")
 
@@ -51,7 +53,7 @@ def reiniciar_handler(numero, text):
                 )
                 conn2.commit()
             conn2.close()
-        set_user_step(numero, next_step.strip().lower() if next_step else '')
+        advance_steps(numero, next_step)
 
 
 # Registrar comandos por defecto
