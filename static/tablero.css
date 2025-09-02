@@ -78,7 +78,6 @@
 .card canvas {
   width: 100%;
   height: auto;
-  aspect-ratio: 2 / 1;
   display: block;
   margin: 0 auto;
 }
@@ -97,9 +96,13 @@
   align-items: stretch;
 }
 
-.chart-table canvas,
-.chart-table table:not(.fixed-table) {
-  flex: 1;
+.chart-table canvas {
+  flex: 1 1 50%;
+  max-width: 50%;
+}
+
+.chart-table .fixed-table {
+  flex: 1 1 50%;
 }
 
 .wide-row {
