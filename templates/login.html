@@ -35,38 +35,33 @@
     }
   </style>
 </head>
-<body class="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary via-secondary to-primary-dark relative overflow-hidden">
+<body class="min-h-screen flex items-center justify-center relative overflow-hidden" style="background-image: url('https://images.unsplash.com/photo-1501785888041-af3ef285b470?auto=format&fit=crop&w=1920&q=80'); background-size: cover; background-position: center;">
 
-  <!-- Animated background blobs -->
-  <div class="absolute -top-20 -left-20 w-72 h-72 bg-primary rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob"></div>
-  <div class="absolute -bottom-24 -right-20 w-72 h-72 bg-secondary rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob animation-delay-2000"></div>
-  <div class="absolute top-1/2 left-1/2 w-72 h-72 bg-primary-dark rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob animation-delay-4000"></div>
-
-  <div class="relative z-10 w-full max-w-sm px-8 py-10 bg-white/30 backdrop-blur-xl rounded-2xl shadow-xl">
-    <h2 class="text-3xl font-bold text-center text-white mb-6">Iniciar sesión</h2>
+  <div class="relative z-10 w-full max-w-sm p-8 bg-white/20 backdrop-blur-lg shadow-lg rounded-xl">
+    <h2 class="text-3xl font-bold text-center text-white drop-shadow mb-6">Iniciar sesión</h2>
     <form method="POST" id="loginForm" class="space-y-6">
       <div class="relative">
         <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
           <!-- user icon -->
-          <svg class="w-5 h-5 text-white/70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg class="w-5 h-5 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.121 17.804A11.955 11.955 0 0112 15c2.5 0 4.847.767 6.879 2.076M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
           </svg>
         </span>
         <input id="username" name="username" required placeholder="Usuario"
-          class="w-full pl-10 pr-3 py-2 rounded-lg bg-white/60 focus:bg-white/80 placeholder-white/60 text-gray-800 focus:outline-none focus:ring-2 focus:ring-primary"/>
+          class="w-full pl-10 pr-3 py-2 rounded-lg bg-white/60 focus:bg-white/80 placeholder-gray-600 text-gray-800 focus:outline-none focus:ring-2 focus:ring-primary"/>
       </div>
 
       <div class="relative">
         <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
           <!-- lock icon -->
-          <svg class="w-5 h-5 text-white/70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg class="w-5 h-5 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 11c1.657 0 3-1.343 3-3V6a3 3 0 10-6 0v2c0 1.657 1.343 3 3 3z"/>
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 11h14v10H5z"/>
           </svg>
         </span>
         <input type="password" id="password" name="password" required placeholder="Contraseña"
-          class="w-full pl-10 pr-10 py-2 rounded-lg bg-white/60 focus:bg-white/80 placeholder-white/60 text-gray-800 focus:outline-none focus:ring-2 focus:ring-primary"/>
-        <span class="absolute inset-y-0 right-0 pr-3 flex items-center cursor-pointer text-white/70" id="togglePassword">
+          class="w-full pl-10 pr-10 py-2 rounded-lg bg-white/60 focus:bg-white/80 placeholder-gray-600 text-gray-800 focus:outline-none focus:ring-2 focus:ring-primary"/>
+        <span class="absolute inset-y-0 right-0 pr-3 flex items-center cursor-pointer text-gray-700" id="togglePassword">
           <svg id="eyeOpen" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.477 0 8.268 2.943 9.542 7-1.274 4.057-5.065 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
