@@ -64,6 +64,16 @@ def enviar_mensaje(numero, mensaje, tipo='bot', tipo_respuesta='texto', opciones
             print("[WA API] Lista vacía; enviando mensaje de texto de fallback")
             return enviar_mensaje(numero, fallback, tipo, 'texto', None, reply_to_wa_id)
 
+        sections_clean = []
+        for sec in sections:
+            rows_clean = []
+            for row in sec.get("rows", []):
+                row_clean = {k: v for k, v in row.items() if k not in {"step", "next_step"}}
+                rows_clean.append(row_clean)
+            sec_clean = {k: v for k, v in sec.items() if k != "rows"}
+            sec_clean["rows"] = rows_clean
+            sections_clean.append(sec_clean)
+
         data = {
             "messaging_product": "whatsapp",
             "to": numero,
@@ -75,7 +85,7 @@ def enviar_mensaje(numero, mensaje, tipo='bot', tipo_respuesta='texto', opciones
                 "footer": {"text": footer},
                 "action": {
                     "button": button,
-                    "sections": sections
+                    "sections": sections_clean
                 }
             }
         }
@@ -85,6 +95,10 @@ def enviar_mensaje(numero, mensaje, tipo='bot', tipo_respuesta='texto', opciones
             botones = json.loads(opciones) if opciones else []
         except Exception:
             botones = []
+        botones_clean = []
+        for b in botones:
+            btn_clean = {k: v for k, v in b.items() if k not in {"step", "next_step"}}
+            botones_clean.append(btn_clean)
         data = {
             "messaging_product": "whatsapp",
             "to": numero,
@@ -92,7 +106,7 @@ def enviar_mensaje(numero, mensaje, tipo='bot', tipo_respuesta='texto', opciones
             "interactive": {
                 "type": "button",
                 "body": {"text": mensaje},
-                "action": {"buttons": botones}
+                "action": {"buttons": botones_clean}
             }
         }
 

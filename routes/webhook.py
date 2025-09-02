@@ -1,6 +1,7 @@
 import os
 import logging
 import threading
+import json
 from flask import Blueprint, request, jsonify, url_for
 from datetime import datetime
 from config import Config
@@ -55,6 +56,49 @@ def get_current_step(numero):
     return (row[0] or '').strip().lower() if row else ''
 
 os.makedirs(Config.MEDIA_ROOT, exist_ok=True)
+
+
+def _get_step_from_options(opciones_json, option_id):
+    try:
+        data = json.loads(opciones_json or '')
+    except Exception:
+        return None
+    if isinstance(data, list):
+        # Puede ser lista de secciones o botones
+        if data and isinstance(data[0], dict) and data[0].get('reply'):
+            for b in data:
+                if b.get('reply', {}).get('id') == option_id:
+                    nxt = b.get('step') or b.get('next_step')
+                    return (nxt or '').strip().lower() or None
+        sections = data
+    elif isinstance(data, dict):
+        sections = data.get('sections', [])
+    else:
+        sections = []
+    for sec in sections:
+        for row in sec.get('rows', []):
+            if row.get('id') == option_id:
+                nxt = row.get('step') or row.get('next_step')
+                return (nxt or '').strip().lower() or None
+    return None
+
+
+def handle_option_reply(numero, option_id):
+    if not option_id:
+        return False
+    step = get_current_step(numero)
+    if not step:
+        return False
+    conn = get_connection(); c = conn.cursor()
+    c.execute("SELECT opciones FROM reglas WHERE step=%s", (step,))
+    rows = c.fetchall(); conn.close()
+    for (opcs,) in rows:
+        nxt = _get_step_from_options(opcs or '', option_id)
+        if nxt:
+            set_user_step(numero, nxt)
+            process_step_chain(numero)
+            return True
+    return False
 
 
 def dispatch_rule(numero, regla):
@@ -372,29 +416,44 @@ def webhook():
                 # TEXTO / INTERACTIVO
                 if 'text' in msg:
                     text = msg['text']['body'].strip()
+                    normalized_text = normalize_text(text)
+                    guardar_mensaje(
+                        from_number,
+                        text,
+                        'cliente',
+                        wa_id=wa_id,
+                        reply_to_wa_id=reply_to_id,
+                    )
+                    with cache_lock:
+                        message_buffer.setdefault(from_number, []).append(normalized_text)
+                        if from_number in pending_timers:
+                            pending_timers[from_number].cancel()
+                        timer = threading.Timer(3, process_buffered_messages, args=(from_number,))
+                        pending_timers[from_number] = timer
+                    timer.start()
+                    return jsonify({'status': 'buffered'}), 200
                 elif 'interactive' in msg:
-                    text = (
-                        msg['interactive'].get('list_reply', {}).get('title') or
-                        msg['interactive'].get('button_reply', {}).get('title') or ''
-                    ).strip()
+                    opt = msg['interactive'].get('list_reply') or msg['interactive'].get('button_reply') or {}
+                    option_id = opt.get('id') or ''
+                    text = (opt.get('title') or '').strip()
+                    guardar_mensaje(
+                        from_number,
+                        text,
+                        'cliente',
+                        wa_id=wa_id,
+                        reply_to_wa_id=reply_to_id,
+                    )
+                    if handle_option_reply(from_number, option_id):
+                        continue
+                    normalized_text = normalize_text(text)
+                    with cache_lock:
+                        message_buffer.setdefault(from_number, []).append(normalized_text)
+                        if from_number in pending_timers:
+                            pending_timers[from_number].cancel()
+                        timer = threading.Timer(3, process_buffered_messages, args=(from_number,))
+                        pending_timers[from_number] = timer
+                    timer.start()
+                    return jsonify({'status': 'buffered'}), 200
                 else:
                     continue
-
-                normalized_text = normalize_text(text)
-
-                guardar_mensaje(
-                    from_number,
-                    text,
-                    'cliente',
-                    wa_id=wa_id,
-                    reply_to_wa_id=reply_to_id,
-                )
-                with cache_lock:
-                    message_buffer.setdefault(from_number, []).append(normalized_text)
-                    if from_number in pending_timers:
-                        pending_timers[from_number].cancel()
-                    timer = threading.Timer(3, process_buffered_messages, args=(from_number,))
-                    pending_timers[from_number] = timer
-                timer.start()
-                return jsonify({'status': 'buffered'}), 200
     return jsonify({'status':'received'}), 200

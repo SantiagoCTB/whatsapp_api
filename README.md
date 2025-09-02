@@ -60,7 +60,7 @@ Importación de reglas y botones desde archivos .xlsx
 
 Soporte para mensajes interactivos: texto, botones y listas desplegables
 
-Ejemplo de `opciones` para una lista con textos personalizados:
+Ejemplo de `opciones` para una lista con textos personalizados y paso destino:
 
 ```json
 {
@@ -71,12 +71,14 @@ Ejemplo de `opciones` para una lista con textos personalizados:
     {
       "title": "Rápido",
       "rows": [
-        {"id": "express", "title": "Express", "description": "1 día"}
+        {"id": "express", "title": "Express", "description": "1 día", "step": "cotizacion"}
       ]
     }
   ]
 }
 ```
+
+Cada fila puede incluir un campo opcional `step` que indica el paso destino al seleccionar esa opción.
 
 Detección de inactividad para cerrar sesión automática del cliente
 
