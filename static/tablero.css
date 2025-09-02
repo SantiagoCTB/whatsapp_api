@@ -102,7 +102,8 @@
 }
 
 .chart-table .fixed-table {
-  flex: 1 1 50%;
+  flex: 1;
+  min-width: 0;
 }
 
 .wide-row {
