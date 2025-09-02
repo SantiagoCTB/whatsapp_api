@@ -139,7 +139,7 @@
       justify-content: center;   /* centra el contenido */
       pointer-events: none;
     }
-    .estado-sin_regla { background-color: orange; color: var(--text-light); }
+    .estado-sin_regla { background-color: #ff4d4f; color: var(--text-light); }
     .estado-espera_usuario { background-color: green; color: var(--text-light); }
     .estado-asesor { background-color: yellow; color: var(--text-main); }
 

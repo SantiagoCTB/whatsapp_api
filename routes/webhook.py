@@ -134,6 +134,7 @@ def process_step_chain(numero, text_norm=None):
 
     logging.warning("Fallback en step '%s' para entrada '%s'", step, text_norm)
     enviar_mensaje(numero, DEFAULT_FALLBACK_TEXT)
+    update_chat_state(numero, get_current_step(numero), 'sin_regla')
 
 
 @register_handler('barra_medida')
