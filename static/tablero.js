@@ -226,31 +226,6 @@ document.addEventListener('DOMContentLoaded', () => {
         showCardMessage('graficoDiario', 'Error al cargar datos');
       });
 
-    fetch(`/datos_mensajes_semana${query}`)
-      .then(response => response.json())
-      .then(data => {
-        const tabla = document.getElementById('tabla_dia_semana');
-        if (!tabla) return;
-        const tbody = tabla.querySelector('tbody');
-        tbody.innerHTML = '';
-        if (!Array.isArray(data) || data.length === 0) return;
-        data.forEach(item => {
-          const row = document.createElement('tr');
-          const diaCell = document.createElement('td');
-          diaCell.textContent = item.dia;
-          const totalCell = document.createElement('td');
-          totalCell.textContent = item.total;
-          row.appendChild(diaCell);
-          row.appendChild(totalCell);
-          tbody.appendChild(row);
-        });
-      })
-      .catch(err => {
-        console.error(err);
-        const tabla = document.getElementById('tabla_dia_semana');
-        if (tabla) tabla.querySelector('tbody').innerHTML = '';
-      });
-
     fetch(`/datos_mensajes_hora${query}`)
       .then(response => response.json())
       .then(data => {
