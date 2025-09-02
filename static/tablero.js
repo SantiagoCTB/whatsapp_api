@@ -12,6 +12,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const commonOptions = {
     animation: { duration: 1000 },
     interaction: { mode: 'nearest', intersect: false },
+    // Allow charts to respect the explicit canvas height
     maintainAspectRatio: false,
     responsive: true
   };
