@@ -5,7 +5,7 @@
 
       --accent:         #00A884;  /* verde WhatsApp moderno */
       --accent-hover:   #007C67;  /* verde más oscuro para hover */
-      --accent-neon:    #39FF14;  /* acento verde neón */
+      --accent-neon:    #00A884;  /* acento verde neón */
       --bg-glass:       rgba(255,255,255,0.1); /* fondo translúcido */
 
       --bubble-user:    #D2F5F0;  /* mensajes del cliente */
@@ -388,13 +388,14 @@
       border-collapse: collapse;
     }
     .fixed-table {
-      width: 100%;
-      max-width: 800px;
-      max-height: 400px;
-      overflow-x: auto;
-      overflow-y: auto;
-      word-break: break-word;
-      white-space: normal;
+    width: 100%;
+    max-width: 800px;
+    max-height: 400px;
+    overflow-x: auto;
+    overflow-y: auto;
+    word-break: break-word;
+    white-space: normal;
+    margin: 0 auto;       /* nuevo */
     }
     th, td {
       padding: 10px;
