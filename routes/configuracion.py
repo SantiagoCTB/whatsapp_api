@@ -94,7 +94,7 @@ def _reglas_view(template_name):
                     # Normalizar campos clave
                     step = (step or '').strip().lower()
                     input_text = _normalize_input(input_text)
-                    siguiente_step = (siguiente_step or '').strip().lower() or None
+                    siguiente_step = _normalize_input(siguiente_step) or None
 
                     c.execute(
                         "SELECT id FROM reglas WHERE step = %s AND input_text = %s",
@@ -143,7 +143,7 @@ def _reglas_view(template_name):
                 step = (request.form['step'] or '').strip().lower() or None
                 input_text = _normalize_input(request.form['input_text']) or None
                 respuesta = request.form['respuesta']
-                siguiente_step = (request.form.get('siguiente_step') or '').strip().lower() or None
+                siguiente_step = _normalize_input(request.form.get('siguiente_step')) or None
                 tipo = request.form.get('tipo', 'texto')
                 media_files = request.files.getlist('media') or request.files.getlist('media[]')
                 media_url_field = request.form.get('media_url')
