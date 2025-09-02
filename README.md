@@ -44,6 +44,8 @@ Flujo automático basado en reglas configurables (con pasos, respuestas, tipo de
 
 Las reglas de un mismo paso se evalúan en orden ascendente por `id` (o columna de prioridad) para mantener un criterio consistente.
 
+El procesamiento de listas de pasos (`step1,step2`) se realiza únicamente en memoria mediante la función `advance_steps`.
+
 Envío de mensajes por parte del asesor desde la interfaz web
 
 Interfaz tipo WhatsApp Web con:

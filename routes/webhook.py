@@ -125,7 +125,12 @@ def dispatch_rule(numero, regla):
 
 
 def advance_steps(numero: str, steps_str: str):
-    """Avanza múltiples pasos enviando las reglas comodín correspondientes."""
+    """Avanza múltiples pasos enviando las reglas comodín correspondientes.
+
+    El procesamiento de la lista de pasos ocurre únicamente en memoria; solo
+    se persiste el último paso mediante ``set_user_step``. No se almacena el
+    detalle de la lista en la base de datos.
+    """
     steps = [s.strip().lower() for s in (steps_str or '').split(',') if s.strip()]
     if not steps:
         return
