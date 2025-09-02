@@ -86,6 +86,8 @@
 .chart-card canvas {
   width: 100%;
   height: auto;
+  max-height: 300px;
+  aspect-ratio: auto;
   flex: none;
 }
 

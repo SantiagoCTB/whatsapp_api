@@ -12,7 +12,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const commonOptions = {
     animation: { duration: 1000 },
     interaction: { mode: 'nearest', intersect: false },
-    maintainAspectRatio: true,
+    maintainAspectRatio: false,
     responsive: true
   };
   const startInput = document.getElementById('fechaInicio');
