@@ -61,6 +61,9 @@
     <label for="list_footer" class="list-field" style="display:none;">Pie de página (opcional):</label>
     <input type="text" id="list_footer" name="list_footer" class="list-field" style="display:none;">
 
+    <label for="button_options" class="button-field" style="display:none;">Opciones del botón (JSON):</label>
+    <textarea id="button_options" name="button_options" class="button-field" style="display:none;" rows="4" cols="60" placeholder='[{"type":"reply","title":"Opción","id":"1"}]'></textarea>
+
     <label for="sections" class="list-field" style="display:none;">Secciones (formato JSON):</label><br>
     <textarea id="sections" name="sections" class="list-field" style="display:none;" rows="6" cols="60" placeholder='[{"title":"Rápido","rows":[{"id":"express","title":"Express","description":"1 día"}]}]'></textarea>
     <input type="hidden" name="opciones" id="opciones">
@@ -140,8 +143,16 @@ function toggleListFields() {
     });
 }
 
+function toggleButtonFields() {
+    const isButton = document.getElementById('tipo').value === 'boton';
+    document.querySelectorAll('.button-field').forEach(el => {
+        el.style.display = isButton ? 'block' : 'none';
+    });
+}
+
 function prepareOptions(e) {
     const tipo = document.getElementById('tipo').value;
+    const opcionesInput = document.getElementById('opciones');
     if (tipo === 'lista') {
         const header = document.getElementById('list_header').value;
         const button = document.getElementById('list_button').value;
@@ -162,18 +173,34 @@ function prepareOptions(e) {
         }
 
         const opts = {header, button, footer, sections};
-        document.getElementById('opciones').value = JSON.stringify(opts);
+        opcionesInput.value = JSON.stringify(opts);
+    } else if (tipo === 'boton') {
+        const text = document.getElementById('button_options').value.trim();
+        if (text) {
+            try {
+                JSON.parse(text);
+            } catch (err) {
+                alert('El JSON de opciones de botón no es válido');
+                e.preventDefault();
+                return;
+            }
+        }
+        opcionesInput.value = text;
+    } else {
+        opcionesInput.value = '';
     }
 }
 document.getElementById('tipo').addEventListener('change', () => {
     toggleMediaFields();
     toggleListFields();
+    toggleButtonFields();
 });
 const form = document.getElementById('reglaForm');
 form.addEventListener('submit', prepareOptions);
 window.addEventListener('DOMContentLoaded', () => {
     toggleMediaFields();
     toggleListFields();
+    toggleButtonFields();
 });
 
 function cargarRegla(regla) {
@@ -192,6 +219,7 @@ function cargarRegla(regla) {
     document.getElementById('list_button').value = regla.button || '';
     document.getElementById('list_footer').value = regla.footer || '';
     document.getElementById('sections').value = '';
+    document.getElementById('button_options').value = '';
     document.getElementById('opciones').value = '';
     if (regla.tipo === 'lista' && regla.opciones) {
         try {
@@ -204,11 +232,15 @@ function cargarRegla(regla) {
         } catch (e) {
             document.getElementById('opciones').value = regla.opciones || '';
         }
+    } else if (regla.tipo === 'boton') {
+        document.getElementById('button_options').value = regla.opciones || '';
+        document.getElementById('opciones').value = regla.opciones || '';
     } else {
         document.getElementById('opciones').value = regla.opciones || '';
     }
     toggleMediaFields();
     toggleListFields();
+    toggleButtonFields();
 }
 </script>
 {% endblock %}

@@ -164,7 +164,7 @@ def _reglas_view(template_name):
                         medias.append((url, content_type))
                 media_url = medias[0][0] if medias else None
                 media_tipo = medias[0][1] if medias else None
-                opciones = request.form.get('opciones', '')
+                opciones = request.form['opciones']
                 list_header = request.form.get('list_header')
                 list_footer = request.form.get('list_footer')
                 list_button = request.form.get('list_button')
