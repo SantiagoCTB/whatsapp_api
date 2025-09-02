@@ -125,6 +125,35 @@ def dispatch_rule(numero, regla):
     return (next_step or '').strip().lower()
 
 
+def advance_steps(numero: str, steps_str: str):
+    """Avanza múltiples pasos enviando las reglas comodín correspondientes."""
+    steps = [s.strip().lower() for s in (steps_str or '').split(',') if s.strip()]
+    if not steps:
+        return
+    for step in steps[:-1]:
+        conn = get_connection(); c = conn.cursor()
+        c.execute(
+            """
+            SELECT r.id, r.respuesta, r.siguiente_step, r.tipo,
+                   GROUP_CONCAT(m.media_url SEPARATOR '||') AS media_urls,
+                   r.opciones, r.rol_keyword, r.input_text
+              FROM reglas r
+              LEFT JOIN regla_medias m ON r.id = m.regla_id
+             WHERE r.step=%s AND r.input_text='*'
+             GROUP BY r.id
+             ORDER BY r.id
+             LIMIT 1
+            """,
+            (step,),
+        )
+        regla = c.fetchone(); conn.close()
+        if regla:
+            dispatch_rule(numero, regla)
+    set_user_step(numero, steps[-1])
+
+
+
+
 def process_step_chain(numero, text_norm=None):
     """Procesa el step actual una sola vez.
 
