@@ -276,6 +276,41 @@ def set_alias():
 
     return jsonify({"status": "ok"}), 200
 
+@chat_bp.route('/assign_chat_role', methods=['POST'])
+def assign_chat_role():
+    if 'user' not in session:
+        return jsonify({'error': 'No autorizado'}), 401
+
+    data   = request.get_json()
+    numero = data.get('numero')
+    role_kw = data.get('role')
+
+    conn = get_connection()
+    c    = conn.cursor()
+
+    c.execute("SELECT id FROM roles WHERE keyword=%s", (role_kw,))
+    row = c.fetchone()
+    role_id = row[0] if row else None
+
+    if role_id is not None:
+        c.execute(
+            """
+            DELETE FROM chat_roles
+            WHERE numero = %s AND role_id IN (
+                SELECT id FROM roles WHERE keyword IN ('ticket','cotizar')
+            )
+            """,
+            (numero,),
+        )
+        c.execute(
+            "INSERT INTO chat_roles (numero, role_id) VALUES (%s, %s)",
+            (numero, role_id),
+        )
+        conn.commit()
+    conn.close()
+
+    return jsonify({'status': 'ok'})
+
 @chat_bp.route('/send_image', methods=['POST'])
 def send_image():
     # Validación de sesión
