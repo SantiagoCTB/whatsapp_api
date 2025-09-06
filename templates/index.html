@@ -20,6 +20,10 @@
       </div>
       <input id="buscador" type="text" placeholder="Buscar número…">
       <ul id="chatList"></ul>
+      <div class="role-drop-zone">
+        <div class="role-icon" data-role="ticket">🎟️</div>
+        <div class="role-icon" data-role="cotizar">📝</div>
+      </div>
     </div>
 
     <!-- Chat Window -->
@@ -59,6 +63,21 @@
       const replyAction = document.getElementById('replyAction');
       const userRole   = "{{ rol }}";
       const userRoleId = {{ role_id | tojson }};
+
+      document.querySelectorAll('.role-icon').forEach(icon => {
+        icon.addEventListener('dragover', e => {
+          e.preventDefault();
+          icon.classList.add('drag-over');
+        });
+        icon.addEventListener('dragleave', () => icon.classList.remove('drag-over'));
+        icon.addEventListener('drop', e => {
+          e.preventDefault();
+          icon.classList.remove('drag-over');
+          const numero = e.dataTransfer.getData('text/plain');
+          fetch('/assign_chat_role', {method:'POST', body: JSON.stringify({numero, role: icon.dataset.role})})
+            .then(() => fetchChatList());
+        });
+      });
 
       document.addEventListener('click', () => contextMenu.classList.remove('show'));
 
@@ -114,6 +133,11 @@
               const li = document.createElement('li');
               li.textContent = c.alias ? `${c.alias} (${c.numero})` : c.numero;
               if (c.estado) li.classList.add('estado-' + c.estado);
+
+              li.draggable = true;
+              li.addEventListener('dragstart', e => {
+                e.dataTransfer.setData('text/plain', c.numero);
+              });
 
               // Badge con inicial del rol
               if (c.inicial_rol) {
