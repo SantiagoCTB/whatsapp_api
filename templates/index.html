@@ -315,8 +315,13 @@
               }
 
               chatBoxEl.appendChild(div);
+
+              if (bubble !== 'asesor') {
+                const mediaPlaying = Array.from(chatBoxEl.querySelectorAll('audio, video')).some(m => !m.paused);
+                if (!mediaPlaying) playAlertSound();
+              }
+              lastCount = i + 1;
             }
-            lastCount = total;
             if (atBottom) chatBoxEl.scrollTop = chatBoxEl.scrollHeight;
           });
       }
