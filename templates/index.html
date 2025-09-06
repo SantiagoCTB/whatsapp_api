@@ -64,6 +64,20 @@
       const userRole   = "{{ rol }}";
       const userRoleId = {{ role_id | tojson }};
 
+      function playAlertSound() {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const oscillator = ctx.createOscillator();
+        const gain = ctx.createGain();
+        oscillator.type = 'sine';
+        oscillator.frequency.value = 880;
+        gain.gain.value = 0.1;
+        oscillator.connect(gain);
+        gain.connect(ctx.destination);
+        oscillator.start();
+        oscillator.stop(ctx.currentTime + 0.2);
+        oscillator.onended = () => ctx.close();
+      }
+
       document.querySelectorAll('.role-icon').forEach(icon => {
         icon.addEventListener('dragover', e => {
           e.preventDefault();
@@ -129,10 +143,16 @@
           .then(data=>{
             todosChats = data;
             chatListEl.innerHTML='';
+            let alertPlayed = false;
             data.forEach(c => {
               if (userRole !== 'admin') {
                 const roles = c.roles ? c.roles.split(',').map(Number) : [];
                 if (!roles.includes(userRoleId)) return;
+              }
+              if (!alertPlayed && c.estado === 'sin_regla') {
+                const mediaPlaying = Array.from(document.querySelectorAll('audio, video')).some(m => !m.paused);
+                if (!mediaPlaying) playAlertSound();
+                alertPlayed = true;
               }
               const li = document.createElement('li');
               li.textContent = c.alias ? `${c.alias} (${c.numero})` : c.numero;
