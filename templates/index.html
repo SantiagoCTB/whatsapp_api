@@ -199,7 +199,8 @@
 
       // Seleccionar chat
       function selectChat(numero, liEl) {
-        currentChat = numero; lastCount = 0;
+        currentChat = numero;
+        lastCount = 0; // reset count so the initial load doesn't trigger alerts
         // marcar activo
         document.querySelectorAll('#chatList li').forEach(li => li.classList.remove('active'));
         liEl.classList.add('active');
@@ -318,7 +319,7 @@
 
               chatBoxEl.appendChild(div);
 
-              if (bubble !== 'asesor') {
+              if (lastCount > 0 && bubble !== 'asesor') {
                 const mediaPlaying = Array.from(chatBoxEl.querySelectorAll('audio, video')).some(m => !m.paused);
                 if (!mediaPlaying) playAlertSound();
               }
