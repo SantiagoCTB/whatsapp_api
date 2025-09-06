@@ -144,18 +144,14 @@
     .estado-asesor { background-color: yellow; color: var(--text-main); }
 
     /* Chat window */
-    .chatWindow { flex:1; display:flex; flex-direction:column; position: relative; }
+    .chatWindow { flex:1; display:flex; flex-direction:column; }
     #botonera {
-      position: absolute;
-      bottom: 0;
-      left: 0;
-      width: 100%;
-      display: flex;
-      justify-content: center;
-      gap: 8px;
-      padding: 8px;
+      display:flex; gap:8px; padding:12px;
       background: var(--bg-chat);
       overflow-x: auto;
+      border: 1px solid var(--border-color); /* ✅ Borde completo */
+      border-radius: 12px; /* Opcional: redondeado si quieres */
+      margin: 8px;         /* Opcional: separación visual */
     }
     #botonera button {
       flex:0 0 auto; padding: 8px 16px; min-width: fit-content;
