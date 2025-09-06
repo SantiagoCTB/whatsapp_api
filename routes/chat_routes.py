@@ -234,7 +234,7 @@ def get_chat_list():
         nombres_roles = fila_roles[1] if fila_roles else None
         inicial_rol = None
         if nombres_roles:
-            primer_nombre = nombres_roles.split(',')[0]
+            primer_nombre = nombres_roles.split(',')[0].strip()
             if primer_nombre:
                 inicial_rol = primer_nombre[0].upper()
 

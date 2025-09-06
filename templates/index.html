@@ -70,17 +70,16 @@
           icon.classList.add('drag-over');
         });
         icon.addEventListener('dragleave', () => icon.classList.remove('drag-over'));
-        icon.addEventListener('drop', e => {
+        icon.addEventListener('drop', async e => {
           e.preventDefault();
           icon.classList.remove('drag-over');
           const numero = e.dataTransfer.getData('text/plain');
-          fetch('/assign_chat_role', {
+          const res = await fetch('/assign_chat_role', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ numero, role: icon.dataset.role })
-          }).then(r => {
-            if (r.ok) fetchChatList();
           });
+          if (res.ok) fetchChatList();
         });
       });
 
@@ -145,6 +144,8 @@
               });
 
               // Badge con inicial del rol
+              const oldBadge = li.querySelector('.badge');
+              if (oldBadge) oldBadge.remove();
               if (c.inicial_rol) {
                 const badge = document.createElement('span');
                 badge.className = 'badge';
