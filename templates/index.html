@@ -74,8 +74,13 @@
           e.preventDefault();
           icon.classList.remove('drag-over');
           const numero = e.dataTransfer.getData('text/plain');
-          fetch('/assign_chat_role', {method:'POST', body: JSON.stringify({numero, role: icon.dataset.role})})
-            .then(() => fetchChatList());
+          fetch('/assign_chat_role', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ numero, role: icon.dataset.role })
+          }).then(r => {
+            if (r.ok) fetchChatList();
+          });
         });
       });
 
