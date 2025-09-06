@@ -208,13 +208,14 @@ def get_chat_list():
         fila = c.fetchone()
         alias = fila[0] if fila else None
 
-        # Último mensaje para asesor
+        # Último mensaje y su timestamp
         c.execute(
-            "SELECT mensaje FROM mensajes WHERE numero = %s "
+            "SELECT mensaje, timestamp FROM mensajes WHERE numero = %s "
             "ORDER BY timestamp DESC LIMIT 1",
             (numero,)
         )
         fila = c.fetchone()
+        last_ts = fila[1].isoformat() if fila and fila[1] else None
         ultimo = fila[0] if fila else ""
         requiere_asesor = "asesor" in ultimo.lower()
 
@@ -250,6 +251,7 @@ def get_chat_list():
             "roles": roles,
             "inicial_rol": inicial_rol,
             "estado": estado,
+            "last_timestamp": last_ts,
         })
 
     conn.close()
