@@ -437,8 +437,17 @@ def datos_mensajes_semana():
     cur.execute(query, params)
     rows = cur.fetchall()
     conn.close()
+    day_map = {
+        "Monday": "Lunes",
+        "Tuesday": "Martes",
+        "Wednesday": "Miércoles",
+        "Thursday": "Jueves",
+        "Friday": "Viernes",
+        "Saturday": "Sábado",
+        "Sunday": "Domingo",
+    }
 
-    data = [{"dia": dia, "total": total} for dow, dia, total in rows]
+    data = [{"dia": day_map.get(dia, dia), "total": total} for dow, dia, total in rows]
     return jsonify(data)
 
 
