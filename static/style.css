@@ -311,11 +311,15 @@
     }
 
     .role-drop-zone {
-      position: fixed;
+      position: absolute;
       bottom: 8px;
       left: 8px;
       display: flex;
       gap: 12px;
+      background: var(--bg-sidebar);
+      padding: 8px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     }
 
     .role-icon {
@@ -329,6 +333,12 @@
       cursor: pointer;
       font-size: 24px;
       padding: 0 12px;
+      transition: background 0.3s, box-shadow 0.3s;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    .role-icon:hover {
+      box-shadow: 0 4px 8px rgba(0,0,0,0.15);
     }
 
     .role-icon.drag-over {
