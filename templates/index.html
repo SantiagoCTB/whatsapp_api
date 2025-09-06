@@ -61,10 +61,11 @@
       const replyPreviewEl = document.getElementById('replyPreview');
       const contextMenu = document.getElementById('contextMenu');
       const replyAction = document.getElementById('replyAction');
-      const userRole   = "{{ rol }}";
-      const userRoleId = {{ role_id | tojson }};
+        const userRole   = "{{ rol }}";
+        const userRoleId = {{ role_id | tojson }};
+        const lastChatTimestamps = {};
 
-      function playAlertSound() {
+        function playAlertSound() {
         const ctx = new (window.AudioContext || window.webkitAudioContext)();
         const oscillator = ctx.createOscillator();
         const gain = ctx.createGain();
@@ -143,17 +144,18 @@
           .then(data=>{
             todosChats = data;
             chatListEl.innerHTML='';
-            let alertPlayed = false;
             data.forEach(c => {
               if (userRole !== 'admin') {
                 const roles = c.roles ? c.roles.split(',').map(Number) : [];
                 if (!roles.includes(userRoleId)) return;
               }
-              if (!alertPlayed && c.estado === 'sin_regla') {
+              const serverTime = c.last_timestamp ? new Date(c.last_timestamp).getTime() : null;
+              const prevTime = lastChatTimestamps[c.numero];
+              if (serverTime && prevTime && serverTime > prevTime && c.numero !== currentChat) {
                 const mediaPlaying = Array.from(document.querySelectorAll('audio, video')).some(m => !m.paused);
                 if (!mediaPlaying) playAlertSound();
-                alertPlayed = true;
               }
+              if (serverTime) lastChatTimestamps[c.numero] = serverTime;
               const li = document.createElement('li');
               li.textContent = c.alias ? `${c.alias} (${c.numero})` : c.numero;
               if (c.estado) li.classList.add('estado-' + c.estado);
