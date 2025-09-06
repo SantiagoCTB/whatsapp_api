@@ -415,7 +415,9 @@ def datos_mensajes_semana():
 
     query = (
         """
-        SELECT DATE_FORMAT(m.timestamp, '%W') AS dia, COUNT(*) AS total
+        SELECT DAYOFWEEK(m.timestamp) AS dow,
+               DATE_FORMAT(m.timestamp, '%W') AS dia,
+               COUNT(*) AS total
           FROM mensajes m
         """
     )
@@ -431,12 +433,12 @@ def datos_mensajes_semana():
     params.extend(filter_params)
     if conditions:
         query += " WHERE " + " AND ".join(conditions)
-    query += " GROUP BY dia ORDER BY FIELD(DAYOFWEEK(m.timestamp),2,3,4,5,6,7,1)"
+    query += " GROUP BY dow, dia ORDER BY FIELD(dow,2,3,4,5,6,7,1)"
     cur.execute(query, params)
     rows = cur.fetchall()
     conn.close()
 
-    data = [{"dia": dia, "total": total} for dia, total in rows]
+    data = [{"dia": dia, "total": total} for dow, dia, total in rows]
     return jsonify(data)
 
 
