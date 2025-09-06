@@ -3,6 +3,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let chartTotales,
       chartDiario,
       chartHora,
+      chartSemana,
       chartTablero,
       chartTopNumeros,
       chartPalabras,
@@ -267,6 +268,64 @@ document.addEventListener('DOMContentLoaded', () => {
         console.error(err);
         if (chartHora) chartHora.destroy();
         showCardMessage('graficoHora', 'Error al cargar datos');
+      });
+
+    fetch(`/datos_mensajes_semana${query}`)
+      .then(response => response.json())
+      .then(data => {
+        if (!Array.isArray(data) || data.length === 0) {
+          if (chartSemana) chartSemana.destroy();
+          const tabla = document.getElementById('tabla_semana');
+          if (tabla) tabla.querySelector('tbody').innerHTML = '';
+          showCardMessage('graficoSemana', 'No hay datos disponibles');
+          return;
+        }
+        const labels = data.map(item => item.dia);
+        const values = data.map(item => item.total);
+        const tabla = document.getElementById('tabla_semana');
+        if (tabla) {
+          const tbody = tabla.querySelector('tbody');
+          tbody.innerHTML = '';
+          data.forEach(item => {
+            const row = document.createElement('tr');
+            const diaCell = document.createElement('td');
+            diaCell.textContent = item.dia;
+            const msgCell = document.createElement('td');
+            msgCell.textContent = item.total;
+            row.appendChild(diaCell);
+            row.appendChild(msgCell);
+            tbody.appendChild(row);
+          });
+        }
+        if (chartSemana) chartSemana.destroy();
+        showCardMessage('graficoSemana');
+        const ctx = document.getElementById('graficoSemana').getContext('2d');
+        chartSemana = new Chart(ctx, {
+          type: 'bar',
+          data: {
+            labels: labels,
+            datasets: [{
+              label: 'Mensajes por día',
+              data: values,
+              backgroundColor: 'rgba(75, 192, 192, 0.5)',
+              borderColor: 'rgba(75, 192, 192, 1)',
+              borderWidth: 1
+            }]
+          },
+          options: {
+            ...commonOptions,
+            scales: {
+              y: { beginAtZero: true }
+            }
+          }
+        });
+      })
+      .catch(err => {
+        console.error(err);
+        if (chartSemana) chartSemana.destroy();
+        const tabla = document.getElementById('tabla_semana');
+        if (tabla) tabla.querySelector('tbody').innerHTML = '';
+        showCardMessage('graficoSemana', 'Error al cargar datos');
       });
 
     fetch(`/datos_tablero${query}`)
