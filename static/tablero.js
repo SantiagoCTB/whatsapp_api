@@ -271,7 +271,10 @@ document.addEventListener('DOMContentLoaded', () => {
       });
 
     fetch(`/datos_mensajes_semana${query}`)
-      .then(response => response.json())
+      .then(res => {
+        if (!res.ok) throw new Error('Network response was not ok');
+        return res.json();
+      })
       .then(data => {
         if (!Array.isArray(data) || data.length === 0) {
           if (chartSemana) chartSemana.destroy();
@@ -324,7 +327,10 @@ document.addEventListener('DOMContentLoaded', () => {
         console.error(err);
         if (chartSemana) chartSemana.destroy();
         const tabla = document.getElementById('tabla_semana');
-        if (tabla) tabla.querySelector('tbody').innerHTML = '';
+        if (tabla) {
+          const tbody = tabla.querySelector('tbody');
+          if (tbody) tbody.innerHTML = '<tr><td colspan="2">Error al cargar datos</td></tr>';
+        }
         showCardMessage('graficoSemana', 'Error al cargar datos');
       });
 
