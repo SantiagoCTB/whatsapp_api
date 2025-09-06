@@ -21,8 +21,9 @@
       <input id="buscador" type="text" placeholder="Buscar número…">
       <ul id="chatList"></ul>
       <div class="role-drop-zone">
-        <div class="role-icon" data-role="ticket">🎟️ Tiquetes</div>
-        <div class="role-icon" data-role="cotizar">📝 Cotizar</div>
+        {% for r in roles %}
+        <div class="role-icon" data-role="{{ r[2] }}">{{ r[1] }}</div>
+        {% endfor %}
       </div>
     </div>
 

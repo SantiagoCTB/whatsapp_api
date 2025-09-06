@@ -68,8 +68,12 @@ def index():
     )
     botones = c.fetchall()
 
+    # Roles disponibles (excluyendo admin)
+    c.execute("SELECT id, name, keyword FROM roles WHERE keyword != 'admin'")
+    roles_db = c.fetchall()
+
     conn.close()
-    return render_template('index.html', chats=chats, botones=botones, rol=rol, role_id=role_id)
+    return render_template('index.html', chats=chats, botones=botones, rol=rol, role_id=role_id, roles=roles_db)
 
 @chat_bp.route('/get_chat/<numero>')
 def get_chat(numero):
@@ -301,7 +305,7 @@ def assign_chat_role():
             """
             DELETE FROM chat_roles
             WHERE numero = %s AND role_id IN (
-                SELECT id FROM roles WHERE keyword IN ('ticket','cotizar')
+                SELECT id FROM roles WHERE keyword != 'admin'
             )
             """,
             (numero,),
