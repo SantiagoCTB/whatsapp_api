@@ -281,9 +281,11 @@ def assign_chat_role():
     if 'user' not in session:
         return jsonify({'error': 'No autorizado'}), 401
 
-    data   = request.get_json()
+    data = request.get_json()
     numero = data.get('numero')
-    role_kw = data.get('role')
+    # "role" es el campo enviado desde el frontend, pero aceptamos
+    # opcionalmente "role_kw" para mayor claridad al llamar la API.
+    role_kw = data.get('role') or data.get('role_kw')
 
     conn = get_connection()
     c    = conn.cursor()
