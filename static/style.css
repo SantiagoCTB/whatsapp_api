@@ -31,7 +31,7 @@
     }
     body.chat {
       display: flex;
-      height: 100vh;
+      min-height: 100vh;
     }
     body.page {
       padding: 20px;
