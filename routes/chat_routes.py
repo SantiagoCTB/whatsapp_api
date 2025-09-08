@@ -292,6 +292,7 @@ def assign_chat_role():
     # "role" es el campo enviado desde el frontend, pero aceptamos
     # opcionalmente "role_kw" para mayor claridad al llamar la API.
     role_kw = data.get('role') or data.get('role_kw')
+    action  = data.get('action', 'add')
 
     conn = get_connection()
     c    = conn.cursor()
@@ -300,24 +301,25 @@ def assign_chat_role():
     row = c.fetchone()
     role_id = row[0] if row else None
 
+    status = 'role_not_found'
     if role_id is not None:
-        c.execute(
-            """
-            DELETE FROM chat_roles
-            WHERE numero = %s AND role_id IN (
-                SELECT id FROM roles WHERE keyword != 'admin'
+        if action == 'remove':
+            c.execute(
+                "DELETE FROM chat_roles WHERE numero = %s AND role_id = %s",
+                (numero, role_id),
             )
-            """,
-            (numero,),
-        )
-        c.execute(
-            "INSERT INTO chat_roles (numero, role_id) VALUES (%s, %s)",
-            (numero, role_id),
-        )
-        conn.commit()
+            conn.commit()
+            status = 'removed' if c.rowcount else 'not_found'
+        else:
+            c.execute(
+                "INSERT IGNORE INTO chat_roles (numero, role_id) VALUES (%s, %s)",
+                (numero, role_id),
+            )
+            conn.commit()
+            status = 'added' if c.rowcount else 'exists'
     conn.close()
 
-    return jsonify({'status': 'ok'})
+    return jsonify({'status': status})
 
 @chat_bp.route('/send_image', methods=['POST'])
 def send_image():
