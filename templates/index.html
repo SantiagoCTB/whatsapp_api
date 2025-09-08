@@ -51,7 +51,7 @@
   <div id="contextMenu" class="context-menu"><div id="replyAction">Responder</div></div>
 
   <div class="role-indicator">{{ rol }}</div>
-  <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
+
   <script>
     document.addEventListener('DOMContentLoaded', () => {
       let currentChat = null, autoRefresh = null, todosChats = [], lastCount = 0, replyTo = null;
@@ -64,18 +64,7 @@
       const replyAction = document.getElementById('replyAction');
         const userRole   = "{{ rol }}";
         const userRoleId = {{ role_id | tojson }};
-      const lastChatTimestamps = {};
-
-      const socket = io();
-      socket.on('chat_estado', ({ numero, estado }) => {
-        const li = document.querySelector(`#chatList li[data-numero="${numero}"]`);
-        if (li) {
-          li.classList.forEach(cls => { if (cls.startsWith('estado-')) li.classList.remove(cls); });
-          if (estado) li.classList.add('estado-' + estado);
-        } else {
-          fetchChatList();
-        }
-      });
+        const lastChatTimestamps = {};
 
         function playAlertSound() {
         const ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -169,7 +158,6 @@
               }
               if (serverTime) lastChatTimestamps[c.numero] = serverTime;
               const li = document.createElement('li');
-              li.dataset.numero = c.numero;
               li.textContent = c.alias ? `${c.alias} (${c.numero})` : c.numero;
               if (c.estado) li.classList.add('estado-' + c.estado);
 
@@ -454,7 +442,8 @@
 
       // Inicializa
       fetchChatList();
-      // Actualizaciones en tiempo real vía WebSockets
+      setInterval(fetchChatList, 5000); // intervalo según necesidad
+      // TODO: sustituir el sondeo por WebSockets o Server-Sent Events para actualizaciones en tiempo real
     });
   </script>
 {% endblock %}
