@@ -3,6 +3,7 @@
 {% block body_class %}chat{% endblock %}
 {% block content %}
   <button id="menuToggle">☰</button>
+  <button id="verRespuestasBtn">Ver respuestas</button>
   <div class="container">
     <!-- Sidebar -->
     <div class="sidebar">
@@ -70,9 +71,15 @@
       const replyAction = document.getElementById('replyAction');
       const sidebar = document.querySelector('.sidebar');
       const menuToggle = document.getElementById('menuToggle');
+      const verRespuestasBtn = document.getElementById('verRespuestasBtn');
       menuToggle.addEventListener('click', () => {
         sidebar.classList.toggle('visible');
       });
+      verRespuestasBtn.onclick = () => {
+        if (currentChat) {
+          window.open('/respuestas/' + currentChat, '_blank');
+        }
+      };
       const roleToggle = document.getElementById('roleToggle');
       const roleDropZone = document.querySelector('.role-drop-zone');
       roleToggle.addEventListener('click', () => {

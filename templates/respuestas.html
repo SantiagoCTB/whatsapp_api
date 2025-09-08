@@ -1,0 +1,28 @@
+{% extends 'base.html' %}
+{% block title %}Respuestas{% endblock %}
+{% block body_class %}page{% endblock %}
+{% block content %}
+<div class="top-right">
+    <a href="{{ url_for('chat.index') }}">
+        <button class="back-btn btn-primary">Volver al inicio</button>
+    </a>
+</div>
+
+<h2>Respuestas</h2>
+<table class="fixed-table">
+    <tr>
+        <th>Timestamp</th>
+        <th>Mensaje</th>
+        <th>Tipo</th>
+        <th>Media URL</th>
+    </tr>
+    {% for r in respuestas %}
+    <tr>
+        <td>{{ r.timestamp }}</td>
+        <td>{{ r.mensaje }}</td>
+        <td>{{ r.tipo }}</td>
+        <td>{{ r.media_url or '-' }}</td>
+    </tr>
+    {% endfor %}
+</table>
+{% endblock %}
