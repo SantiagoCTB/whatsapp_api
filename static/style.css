@@ -493,4 +493,10 @@
     height: auto;
     padding: 10px;
   }
+
+  .role-drop-zone {
+    position: static;
+    justify-content: center;
+    margin-top: 10px;
+  }
 }
