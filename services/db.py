@@ -279,6 +279,18 @@ def init_db():
     """, ('Administrador', 'admin', 'admin'))
 
     c.execute("""
+    INSERT INTO roles (name, keyword)
+      SELECT %s, %s FROM DUAL
+      WHERE NOT EXISTS (SELECT 1 FROM roles WHERE keyword=%s)
+    """, ('Tiquetes', 'tiquetes', 'tiquetes'))
+
+    c.execute("""
+    INSERT INTO roles (name, keyword)
+      SELECT %s, %s FROM DUAL
+      WHERE NOT EXISTS (SELECT 1 FROM roles WHERE keyword=%s)
+    """, ('Cotizar', 'cotizar', 'cotizar'))
+
+    c.execute("""
     INSERT IGNORE INTO user_roles (user_id, role_id)
     SELECT u.id, r.id
       FROM usuarios u, roles r
