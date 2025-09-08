@@ -171,13 +171,17 @@
 
               // Badges por roles
               li.querySelectorAll('.badge').forEach(b => b.remove());
+              li.querySelectorAll('.badges').forEach(bc => bc.remove());
+              const badgeContainer = document.createElement('span');
+              badgeContainer.className = 'badges';
               if (c.roles_kw && c.roles_kw.length) {
                 c.roles_kw.forEach(r => {
                   const badge = document.createElement('span');
                   badge.className = 'badge';
                   badge.textContent = roleIcons[r] || r.charAt(0).toUpperCase();
-                  li.appendChild(badge);
+                  badgeContainer.appendChild(badge);
                 });
+                li.appendChild(badgeContainer);
               }
 
               // Al hacer clic, seleccionar el chat
