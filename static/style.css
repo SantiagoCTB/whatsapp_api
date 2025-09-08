@@ -486,16 +486,30 @@
       background: var(--accent-hover);
     }
 @media (max-width: 768px) {
+  body.chat {
+    overflow: hidden;
+  }
+
   .container {
     flex-direction: column;
     margin: 8px;
   }
 
-  .sidebar,
-  .chatWindow {
+  .sidebar {
     width: 100%;
     height: auto;
     padding: 10px;
+  }
+
+  .chatWindow {
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  #chatBox {
+    flex: 1;
+    overflow-y: auto;
   }
 
   .role-drop-zone {
