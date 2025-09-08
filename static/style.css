@@ -140,8 +140,8 @@
       pointer-events: none;
     }
     .estado-sin_regla { background-color: #ff4d4f; color: var(--text-light); }
-    .estado-espera_usuario { background-color: green; color: var(--text-light); }
-    .estado-asesor { background-color: yellow; color: var(--text-main); }
+    .estado-espera_usuario { background-color: #ffc107; color: var(--text-main); }
+    .estado-asesor { background-color: #28a745; color: var(--text-light); }
 
     /* Chat window */
     .chatWindow { flex:1; display:flex; flex-direction:column; }
