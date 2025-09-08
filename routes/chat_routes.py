@@ -112,6 +112,44 @@ def get_chat(numero):
     conn.close()
     return jsonify({'mensajes': [list(m) for m in mensajes]})
 
+
+@chat_bp.route('/respuestas/<numero>')
+def respuestas(numero):
+    if "user" not in session:
+        return redirect(url_for("auth.login"))
+
+    conn = get_connection()
+    c = conn.cursor()
+    rol = session.get('rol')
+    role_id = None
+    if rol != 'admin':
+        c.execute("SELECT id FROM roles WHERE keyword=%s", (rol,))
+        row = c.fetchone()
+        role_id = row[0] if row else None
+        c.execute(
+            "SELECT 1 FROM chat_roles WHERE numero = %s AND role_id = %s",
+            (numero, role_id),
+        )
+        if not c.fetchone():
+            conn.close()
+            return redirect(url_for('chat.index'))
+    c.execute(
+        "SELECT timestamp, mensaje, tipo, media_url FROM mensajes "
+        "WHERE numero = %s AND tipo LIKE 'bot%%' ORDER BY timestamp",
+        (numero,),
+    )
+    respuestas = [
+        {
+            'timestamp': row[0],
+            'mensaje': row[1],
+            'tipo': row[2],
+            'media_url': row[3],
+        }
+        for row in c.fetchall()
+    ]
+    conn.close()
+    return render_template('respuestas.html', respuestas=respuestas)
+
 @chat_bp.route('/send_message', methods=['POST'])
 def send_message():
     if "user" not in session:
