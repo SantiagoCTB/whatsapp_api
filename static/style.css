@@ -54,6 +54,16 @@
       background: var(--bg-chat);
       border: 2px solid var(--accent); /* ✅ Agrega borde */
     }
+
+    #menuToggle {
+      display: none;
+      background: var(--accent-neon);
+      border: none;
+      color: var(--text-light);
+      padding: 8px;
+      font-size: 24px;
+      cursor: pointer;
+    }
     /* Sidebar */
     .sidebar {
       width:25%; background:var(--bg-sidebar);
@@ -507,10 +517,19 @@
     margin: 8px;
   }
 
+  #menuToggle {
+    display: block;
+  }
+
   .sidebar {
     width: 100%;
     height: auto;
     padding: 10px;
+    display: none;
+  }
+
+  .sidebar.visible {
+    display: flex;
   }
 
   .chatWindow {
