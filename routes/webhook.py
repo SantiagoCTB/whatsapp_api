@@ -381,6 +381,9 @@ def webhook():
                         mime_type=mime_clean,
                     )
 
+                    step = get_current_step(from_number)
+                    update_chat_state(from_number, step, 'sin_respuesta')
+
                     queued = enqueue_transcription(
                         path,
                         from_number,
@@ -423,6 +426,9 @@ def webhook():
                         mime_type=mime_clean
                     )
 
+                    step = get_current_step(from_number)
+                    update_chat_state(from_number, step, 'sin_respuesta')
+
                     # 4) Registro interno
                     logging.info("Video recibido: %s", media_id)
                     continue
@@ -440,6 +446,8 @@ def webhook():
                         media_id=media_id,
                         media_url=media_url
                     )
+                    step = get_current_step(from_number)
+                    update_chat_state(from_number, step, 'sin_respuesta')
                     logging.info("Imagen recibida: %s", media_id)
                     continue
 
@@ -454,6 +462,8 @@ def webhook():
                         wa_id=wa_id,
                         reply_to_wa_id=reply_to_id,
                     )
+                    step = get_current_step(from_number)
+                    update_chat_state(from_number, step, 'sin_respuesta')
                     with cache_lock:
                         message_buffer.setdefault(from_number, []).append(normalized_text)
                         if from_number in pending_timers:
@@ -473,6 +483,8 @@ def webhook():
                         wa_id=wa_id,
                         reply_to_wa_id=reply_to_id,
                     )
+                    step = get_current_step(from_number)
+                    update_chat_state(from_number, step, 'sin_respuesta')
                     if handle_option_reply(from_number, option_id):
                         continue
                     normalized_text = normalize_text(text)

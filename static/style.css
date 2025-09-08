@@ -140,6 +140,7 @@
       pointer-events: none;
     }
     .estado-sin_regla { background-color: #ff4d4f; color: var(--text-light); }
+    .estado-sin_respuesta { background-color: #ff4d4f; color: var(--text-light); }
     .estado-espera_usuario { background-color: #ffc107; color: var(--text-main); }
     .estado-asesor { background-color: #28a745; color: var(--text-light); }
 
