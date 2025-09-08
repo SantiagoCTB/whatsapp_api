@@ -37,7 +37,7 @@
     body.chat {
       display: flex;
       height: calc(var(--vh) * 100);
-      overflow: auto;
+      overflow: hidden;
     }
     body.page {
       padding: 20px;
@@ -182,6 +182,7 @@
       display:flex;
       flex-direction:column;
       height: calc(var(--vh) * 100);
+      overflow: hidden;
     }
     #botonera {
       display:flex; gap:8px; padding:12px;
@@ -280,7 +281,7 @@
     .inputArea {
       display:flex; align-items:center;
       padding:12px; background:var(--text-light);
-      border-top:1px solid #ddd; position:relative;
+      border-top:1px solid #ddd; position: sticky; bottom: 0;
     }
     #attachBtn {
       width:40px; height:40px; border:none; border-radius:50%;
@@ -516,12 +517,12 @@
     }
 @media (min-width: 769px) {
   body.chat {
-    overflow: auto;
+    overflow: hidden;
   }
 }
 @media (max-width: 768px) {
   body.chat {
-    overflow: auto;
+    overflow: hidden;
   }
 
   .container {
@@ -548,12 +549,12 @@
     height: calc(var(--vh) * 100);
     display: flex;
     flex-direction: column;
-    overflow-y: auto;
+    overflow: hidden;
   }
 
   #chatBox {
     flex: 1;
-    overflow-y: visible;
+    overflow-y: auto;
   }
 
   .role-drop-zone {
