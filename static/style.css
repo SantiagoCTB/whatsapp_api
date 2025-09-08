@@ -25,7 +25,7 @@
         max-width: 100%;
         height: auto;
       }
-      body {
+    body {
       font-family: var(--font-base);
       background: var(--bg-page);
       background-image: url("/static/fondo_general.jpeg");
@@ -42,6 +42,16 @@
       padding: 20px;
       background: #fff;
       background-image: none;
+    }
+    .page-wrapper {
+      width: 100%;
+    }
+
+    @media (min-width: 1024px) {
+      .page-wrapper {
+        width: 1024px;
+        margin: 0 auto;
+      }
     }
     .container {
       flex: 1;
