@@ -499,4 +499,10 @@
     justify-content: center;
     margin-top: 10px;
   }
+
+  .role-indicator {
+    bottom: auto;
+    top: 8px;
+    right: 8px;
+  }
 }
