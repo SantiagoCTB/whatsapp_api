@@ -377,16 +377,7 @@ def update_chat_state(numero, step, estado=None):
         (numero, step, estado),
     )
     conn.commit()
-    c.execute("SELECT estado FROM chat_state WHERE numero=%s", (numero,))
-    row = c.fetchone()
-    current_estado = row[0] if row else estado
     conn.close()
-
-    try:
-        from app import socketio
-        socketio.emit('chat_estado', {'numero': numero, 'estado': current_estado})
-    except Exception:
-        pass
 
 
 def delete_chat_state(numero):

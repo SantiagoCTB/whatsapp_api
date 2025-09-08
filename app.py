@@ -1,6 +1,5 @@
 # app.py
 from flask import Flask
-from flask_socketio import SocketIO
 from dotenv import load_dotenv
 import os
 import logging
@@ -17,14 +16,10 @@ from routes.tablero_routes import tablero_bp
 
 load_dotenv()
 
-socketio = SocketIO()
-
-
 def create_app():
     app = Flask(__name__)
     # Si usas clase de config:
     app.config.from_object(Config)
-    socketio.init_app(app, cors_allowed_origins="*")
 
     if not app.debug:
         log_format = '%(asctime)s [%(levelname)s] %(name)s: %(message)s'
@@ -57,4 +52,4 @@ app = create_app()
 
 if __name__ == '__main__':
     port = int(os.getenv('PORT', 5000))
-    socketio.run(app, host='0.0.0.0', port=port)
+    app.run(host='0.0.0.0', port=port)
