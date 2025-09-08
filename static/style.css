@@ -36,7 +36,7 @@
     body.chat {
       display: flex;
       min-height: 100vh;
-      overflow: hidden;
+      overflow: auto;
     }
     body.page {
       padding: 20px;
@@ -491,6 +491,11 @@
     .back-btn:hover {
       background: var(--accent-hover);
     }
+@media (min-width: 769px) {
+  body.chat {
+    overflow: auto;
+  }
+}
 @media (max-width: 768px) {
   body.chat {
     overflow: hidden;
