@@ -63,8 +63,8 @@
       const contextMenu = document.getElementById('contextMenu');
       const replyAction = document.getElementById('replyAction');
         const userRole   = "{{ rol }}";
-        const userRoleId = {{ role_id | tojson }};
         const lastChatTimestamps = {};
+        const roleIcons = { ventas: '💼', soporte: '🛠', marketing: '📣' };
 
         function playAlertSound() {
         const ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -147,8 +147,8 @@
             chatListEl.innerHTML='';
             data.forEach(c => {
               if (userRole !== 'admin') {
-                const roles = c.roles ? c.roles.split(',').map(Number) : [];
-                if (!roles.includes(userRoleId)) return;
+                const roles = c.roles_kw || [];
+                if (!roles.includes(userRole)) return;
               }
               const serverTime = c.last_timestamp ? new Date(c.last_timestamp).getTime() : null;
               const prevTime = lastChatTimestamps[c.numero];
@@ -166,14 +166,15 @@
                 e.dataTransfer.setData('text/plain', c.numero);
               });
 
-              // Badge con inicial del rol
-              const oldBadge = li.querySelector('.badge');
-              if (oldBadge) oldBadge.remove();
-              if (c.inicial_rol) {
-                const badge = document.createElement('span');
-                badge.className = 'badge';
-                badge.textContent = c.inicial_rol;
-                li.appendChild(badge);
+              // Badges por roles
+              li.querySelectorAll('.badge').forEach(b => b.remove());
+              if (c.roles_kw && c.roles_kw.length) {
+                c.roles_kw.forEach(r => {
+                  const badge = document.createElement('span');
+                  badge.className = 'badge';
+                  badge.textContent = roleIcons[r] || r.charAt(0).toUpperCase();
+                  li.appendChild(badge);
+                });
               }
 
               // Al hacer clic, seleccionar el chat

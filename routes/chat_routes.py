@@ -237,11 +237,8 @@ def get_chat_list():
         fila_roles = c.fetchone()
         roles = fila_roles[0] if fila_roles else None
         nombres_roles = fila_roles[1] if fila_roles else None
-        inicial_rol = None
-        if nombres_roles:
-            primer_nombre = nombres_roles.split(',')[0].strip()
-            if primer_nombre:
-                inicial_rol = primer_nombre[0].upper()
+        role_keywords = [n.strip() for n in nombres_roles.split(',')] if nombres_roles else []
+        inicial_rol = role_keywords[0][0].upper() if role_keywords else None
 
         # Estado actual del chat
         c.execute("SELECT estado FROM chat_state WHERE numero = %s", (numero,))
@@ -253,6 +250,7 @@ def get_chat_list():
             "alias":  alias,
             "asesor": requiere_asesor,
             "roles": roles,
+            "roles_kw": role_keywords,
             "inicial_rol": inicial_rol,
             "estado": estado,
             "last_timestamp": last_ts,
