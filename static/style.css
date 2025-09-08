@@ -476,3 +476,16 @@
     .back-btn:hover {
       background: var(--accent-hover);
     }
+@media (max-width: 768px) {
+  .container {
+    flex-direction: column;
+    margin: 8px;
+  }
+
+  .sidebar,
+  .chatWindow {
+    width: 100%;
+    height: auto;
+    padding: 10px;
+  }
+}
