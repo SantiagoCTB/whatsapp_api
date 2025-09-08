@@ -21,6 +21,7 @@
       </div>
       <input id="buscador" type="text" placeholder="Buscar número…">
       <ul id="chatList"></ul>
+      <button id="roleToggle">🎭</button>
       <div class="role-drop-zone">
         {% for r in roles %}
         <div class="role-icon" data-role="{{ r[2] }}">{{ r[1] }}</div>
@@ -67,6 +68,11 @@
       const menuToggle = document.getElementById('menuToggle');
       menuToggle.addEventListener('click', () => {
         sidebar.classList.toggle('visible');
+      });
+      const roleToggle = document.getElementById('roleToggle');
+      const roleDropZone = document.querySelector('.role-drop-zone');
+      roleToggle.addEventListener('click', () => {
+        roleDropZone.classList.toggle('show');
       });
         const userRole   = "{{ rol }}";
         const lastChatTimestamps = {};
