@@ -86,18 +86,21 @@
           icon.classList.add('drag-over');
         });
         icon.addEventListener('dragleave', () => icon.classList.remove('drag-over'));
-        icon.addEventListener('drop', async e => {
-          e.preventDefault();
-          icon.classList.remove('drag-over');
-          const numero = e.dataTransfer.getData('text/plain');
-          const res = await fetch('/assign_chat_role', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ numero, role: icon.dataset.role })
+          icon.addEventListener('drop', async e => {
+            e.preventDefault();
+            icon.classList.remove('drag-over');
+            const numero = e.dataTransfer.getData('text/plain');
+            const chat   = todosChats.find(c => c.numero === numero);
+            const role   = icon.dataset.role;
+            const action = (chat && chat.roles_kw && chat.roles_kw.includes(role)) ? 'remove' : 'add';
+            const res = await fetch('/assign_chat_role', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ numero, role, action })
+            });
+            if (res.ok) fetchChatList();
           });
-          if (res.ok) fetchChatList();
         });
-      });
 
       document.addEventListener('click', () => contextMenu.classList.remove('show'));
 
