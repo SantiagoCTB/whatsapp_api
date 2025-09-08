@@ -18,6 +18,7 @@
       --border-color: #B2DFDB; /* tono suave basado en el acento */
       --timestamp-color: #666666; /* color sutil para hora */
       --font-base: 'Segoe UI', sans-serif;
+      --vh: 1vh;
     }
 
       * { box-sizing: border-box; margin:0; padding:0; }
@@ -158,7 +159,7 @@
       flex:1;
       display:flex;
       flex-direction:column;
-      height: 100vh;
+      height: calc(var(--vh) * 100);
     }
     #botonera {
       display:flex; gap:8px; padding:12px;
@@ -498,7 +499,7 @@
 }
 @media (max-width: 768px) {
   body.chat {
-    overflow: hidden;
+    overflow: auto;
   }
 
   .container {
@@ -513,14 +514,15 @@
   }
 
   .chatWindow {
-    height: 100vh;
+    height: calc(var(--vh) * 100);
     display: flex;
     flex-direction: column;
+    overflow-y: auto;
   }
 
   #chatBox {
     flex: 1;
-    overflow-y: auto;
+    overflow-y: visible;
   }
 
   .role-drop-zone {
