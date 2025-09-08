@@ -316,6 +316,25 @@
     .attach-item:hover {
       transform:scale(1.2); background:var(--accent-hover);
     }
+    .record-controls {
+      display:flex;
+      gap:8px;
+      margin-top:8px;
+    }
+    .record-controls button {
+      width:36px; height:36px;
+      border-radius:50%;
+      border:none;
+      background:var(--accent-neon);
+      color:var(--text-light);
+      font-size:20px;
+      cursor:pointer;
+      transition:transform 0.2s, background 0.3s;
+    }
+    .record-controls button:disabled {
+      background:#aaa;
+      cursor:default;
+    }
     #messageInput {
       flex:1; padding:10px 14px; border:1px solid #ccc;
       border-radius:20px; font-size:14px; outline:none;

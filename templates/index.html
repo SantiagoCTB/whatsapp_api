@@ -38,7 +38,7 @@
         <button id="attachBtn">+</button>
       <div id="attachMenu" class="attach-menu">
         <div id="attachImage" class="attach-item" title="Enviar imagen">📷</div>
-        <div id="attachAudio" class="attach-item" title="Enviar audio">🎤</div>
+        <div id="attachAudio" class="attach-item" title="Grabar audio">🎤</div>
         <div id="attachVideo" class="attach-item" title="Enviar video">🎥</div>
       </div>
       <input id="messageInput" type="text" placeholder="Escribe un mensaje…">
@@ -46,6 +46,10 @@
       <input id="imageInput" type="file" accept="image/*" style="display:none;">
       <input id="audioInput" type="file" accept="audio/*" style="display:none;">
       <input id="videoInput" type="file" accept="video/*" style="display:none;">
+      <div id="recordControls" class="record-controls" style="display:none;">
+        <button id="startRecord" title="Grabar">⏺️</button>
+        <button id="stopRecord" title="Detener" disabled>⏹️</button>
+      </div>
     </div>
   </div>
 </div>
@@ -427,13 +431,57 @@
       };
       document.addEventListener('click', () => attachMenu.classList.remove('show'));
 
-      // File inputs
+      // File inputs y grabación de audio
       const imgIn = document.getElementById('imageInput');
       const audIn = document.getElementById('audioInput');
       const vidIn = document.getElementById('videoInput');
+      const recordControls = document.getElementById('recordControls');
+      const startRecBtn = document.getElementById('startRecord');
+      const stopRecBtn  = document.getElementById('stopRecord');
+      let mediaRecorder = null;
+      let audioChunks = [];
       document.getElementById('attachImage').onclick = () => imgIn.click();
-      document.getElementById('attachAudio').onclick = () => audIn.click();
+      document.getElementById('attachAudio').onclick = async () => {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          audIn.click();
+          return;
+        }
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          mediaRecorder = new MediaRecorder(stream);
+          audioChunks = [];
+          mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+          mediaRecorder.onstop = async () => {
+            const blob = new Blob(audioChunks, { type: 'audio/webm' });
+            const file = new File([blob], 'recording.webm', { type: 'audio/webm' });
+            await sendRecordedAudio(file);
+            mediaRecorder.stream.getTracks().forEach(t=>t.stop());
+          };
+          recordControls.style.display = 'block';
+          attachMenu.classList.remove('show');
+          startRecBtn.disabled = false;
+          stopRecBtn.disabled = true;
+        } catch(err) {
+          audIn.click();
+        }
+      };
       document.getElementById('attachVideo').onclick = () => vidIn.click();
+
+      startRecBtn.onclick = () => {
+        if (mediaRecorder) {
+          mediaRecorder.start();
+          startRecBtn.disabled = true;
+          stopRecBtn.disabled = false;
+        }
+      };
+      stopRecBtn.onclick = () => {
+        if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+          mediaRecorder.stop();
+          recordControls.style.display = 'none';
+          startRecBtn.disabled = false;
+          stopRecBtn.disabled = true;
+        }
+      };
 
       async function sendFile(inputEl, endpoint) {
         if (!currentChat) return;
@@ -446,6 +494,17 @@
         const res = await fetch(`/${endpoint}`, { method:'POST', body:form });
         if (!res.ok) return;
         inputEl.value=''; attachMenu.classList.remove('show');
+        loadMessages(); fetchChatList();
+      }
+      async function sendRecordedAudio(file) {
+        if (!currentChat) return;
+        const form = new FormData();
+        form.append('audio', file);
+        form.append('caption','');
+        form.append('numero', currentChat);
+        const res = await fetch('/send_audio', { method:'POST', body: form });
+        if (!res.ok) return;
+        attachMenu.classList.remove('show');
         loadMessages(); fetchChatList();
       }
       imgIn.onchange = () => sendFile(imgIn, 'send_image');
