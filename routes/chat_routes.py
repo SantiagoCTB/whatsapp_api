@@ -103,11 +103,12 @@ def get_chat(numero):
       SELECT m.mensaje, m.tipo, m.media_url, m.timestamp,
              m.link_url, m.link_title, m.link_body, m.link_thumb,
              m.wa_id, m.reply_to_wa_id,
+             r.id AS reply_id,
              r.mensaje AS reply_text, r.tipo AS reply_tipo, r.media_url AS reply_media_url
       FROM mensajes m
       LEFT JOIN mensajes r ON r.wa_id = m.reply_to_wa_id
       WHERE m.numero = %s
-      ORDER BY m.timestamp
+      ORDER BY r.id
     """, (numero,))
     mensajes = c.fetchall()
     conn.close()
@@ -181,12 +182,16 @@ def respuestas():
                 'media_url': media_url,
             }
             chain = []
-            if step:
-                chain.append(step)
+            if regla_id_join:
+                chain.append((regla_id_join, step))
             if siguiente:
-                chain.extend([s.strip() for s in siguiente.split(',') if s.strip()])
-            for idx, st in enumerate(chain, start=1):
-                key = f'step{idx}'
+                chain.extend(
+                    (int(s.strip()), s.strip())
+                    for s in siguiente.split(',')
+                    if s.strip()
+                )
+            for rid, st in chain:
+                key = f'step{rid}'
                 base[key] = st
                 base[f'respuesta_{key}'] = user_map.get((numero, st))
                 steps_set.add(key)
