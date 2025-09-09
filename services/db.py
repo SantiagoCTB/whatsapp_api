@@ -31,6 +31,8 @@ def init_db():
       link_title TEXT,
       link_body  TEXT,
       link_thumb TEXT,
+      step       TEXT,
+      regla_id   INT,
       timestamp  DATETIME
     ) ENGINE=InnoDB;
     """)
@@ -56,6 +58,14 @@ def init_db():
     c.execute("SHOW COLUMNS FROM mensajes LIKE 'reply_to_wa_id';")
     if not c.fetchone():
         c.execute("ALTER TABLE mensajes ADD COLUMN reply_to_wa_id VARCHAR(255) NULL;")
+
+    # Migración defensiva de columnas step y regla_id
+    c.execute("SHOW COLUMNS FROM mensajes LIKE 'step';")
+    if not c.fetchone():
+        c.execute("ALTER TABLE mensajes ADD COLUMN step TEXT NULL;")
+    c.execute("SHOW COLUMNS FROM mensajes LIKE 'regla_id';")
+    if not c.fetchone():
+        c.execute("ALTER TABLE mensajes ADD COLUMN regla_id INT NULL;")
 
     # mensajes procesados
     c.execute("""
@@ -315,13 +325,16 @@ def guardar_mensaje(
     link_title=None,
     link_body=None,
     link_thumb=None,
+    step=None,
+    regla_id=None,
 ):
     """Guarda un mensaje en la tabla ``mensajes``.
 
     Admite campos opcionales para los identificadores de WhatsApp
     (``wa_id`` y ``reply_to_wa_id``), para medios (``media_id``, ``media_url``,
     ``mime_type``) y, sólo para mensajes de tipo ``referral``, datos de enlaces
-    (``link_url``, ``link_title``, ``link_body``, ``link_thumb``).
+    (``link_url``, ``link_title``, ``link_body``, ``link_thumb``). También puede
+    registrar el ``step`` del flujo y el ``regla_id`` que originó el mensaje.
     """
     if tipo != 'referral':
         link_url = link_title = link_body = link_thumb = None
@@ -331,8 +344,8 @@ def guardar_mensaje(
     c.execute(
         "INSERT INTO mensajes "
         "(numero, mensaje, tipo, wa_id, reply_to_wa_id, media_id, media_url, mime_type, "
-        "link_url, link_title, link_body, link_thumb, timestamp) "
-        "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW())",
+        "link_url, link_title, link_body, link_thumb, step, regla_id, timestamp) "
+        "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW())",
         (
             numero,
             mensaje,
@@ -346,6 +359,8 @@ def guardar_mensaje(
             link_title,
             link_body,
             link_thumb,
+            step,
+            regla_id,
         ),
     )
     mensaje_id = c.lastrowid
