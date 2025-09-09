@@ -17,7 +17,7 @@
         <a href="{{ url_for('roles.roles') }}">Roles</a>
         {% endif %}
         <a href="{{ url_for('tablero.tablero') }}">Tablero</a>
-        <a id="respuestasLink" href="{{ url_for('chat.respuestas', numero='') }}">Respuestas</a>
+        <a id="respuestasLink" href="{{ url_for('chat.respuestas') }}">Respuestas</a>
         <a href="{{ url_for('auth.logout') }}">Cerrar sesión</a>
       </div>
       <input id="buscador" type="text" placeholder="Buscar número…">
@@ -158,16 +158,6 @@
       };
       document.addEventListener('click', () => settingsMenu.classList.remove('show'));
 
-      const respuestasLink = document.getElementById('respuestasLink');
-      respuestasLink.addEventListener('click', e => {
-        if (!currentChat) {
-          e.preventDefault();
-          alert('Selecciona un chat primero');
-          return;
-        }
-        e.preventDefault();
-        window.location.href = "{{ url_for('chat.respuestas', numero='') }}" + encodeURIComponent(currentChat);
-      });
 
       // Cargar lista de chats
       function fetchChatList() {

@@ -114,8 +114,8 @@ def get_chat(numero):
     return jsonify({'mensajes': [list(m) for m in mensajes]})
 
 
-@chat_bp.route('/respuestas/<numero>')
-def respuestas(numero):
+@chat_bp.route('/respuestas')
+def respuestas():
     if "user" not in session:
         return redirect(url_for("auth.login"))
 
@@ -128,48 +128,73 @@ def respuestas(numero):
         row = c.fetchone()
         role_id = row[0] if row else None
         c.execute(
-            "SELECT 1 FROM chat_roles WHERE numero = %s AND role_id = %s",
-            (numero, role_id),
+            """
+            SELECT DISTINCT m.numero
+              FROM mensajes m
+              JOIN chat_roles cr ON m.numero = cr.numero
+             WHERE cr.role_id = %s
+            """,
+            (role_id,),
         )
-        if not c.fetchone():
-            conn.close()
-            return redirect(url_for('chat.index'))
-    c.execute(
-        """
-        SELECT m.timestamp, m.mensaje, m.tipo, m.media_url,
-               r.step, r.siguiente_step
-          FROM mensajes m
-          LEFT JOIN reglas r ON m.mensaje = r.respuesta
-         WHERE m.numero = %s AND m.tipo LIKE 'bot%%'
-         ORDER BY m.timestamp
-        """,
-        (numero,),
-    )
-    rows = c.fetchall()
+    else:
+        c.execute("SELECT DISTINCT numero FROM mensajes")
+    numeros = [row[0] for row in c.fetchall()]
 
-    respuestas = []
+    conversaciones = []
     steps_set = set()
-    for row in rows:
-        base = {
-            'timestamp': row[0],
-            'mensaje': row[1],
-            'tipo': row[2],
-            'media_url': row[3],
-        }
-        chain = []
-        if row[4]:
-            chain.append(row[4])
-        if row[5]:
-            chain.extend([s.strip() for s in row[5].split(',') if s.strip()])
-        for idx, step in enumerate(chain, start=1):
-            key = f'step{idx}'
-            base[key] = step
-            steps_set.add(key)
-        respuestas.append(base)
+
+    if numeros:
+        formato = ','.join(['%s'] * len(numeros))
+
+        c.execute(
+            f"""
+            SELECT numero, step, GROUP_CONCAT(mensaje ORDER BY timestamp SEPARATOR ' | ')
+              FROM mensajes
+             WHERE numero IN ({formato}) AND tipo NOT LIKE 'bot%%' AND step IS NOT NULL
+             GROUP BY numero, step
+            """,
+            numeros,
+        )
+        user_rows = c.fetchall()
+        user_map = {(n, s): msg for n, s, msg in user_rows}
+
+        c.execute(
+            f"""
+            SELECT m.numero, m.timestamp, m.mensaje, m.tipo, m.media_url,
+                   r.step, r.siguiente_step, m.regla_id, r.id
+              FROM mensajes m
+              JOIN reglas r ON m.regla_id = r.id
+             WHERE m.numero IN ({formato}) AND m.tipo LIKE 'bot%%'
+             ORDER BY m.numero, r.id
+            """,
+            numeros,
+        )
+        rows = c.fetchall()
+
+        for row in rows:
+            numero, timestamp, mensaje, tipo, media_url, step, siguiente, regla_id, regla_id_join = row
+            base = {
+                'numero': numero,
+                'timestamp': timestamp,
+                'mensaje': mensaje,
+                'tipo': tipo,
+                'media_url': media_url,
+            }
+            chain = []
+            if step:
+                chain.append(step)
+            if siguiente:
+                chain.extend([s.strip() for s in siguiente.split(',') if s.strip()])
+            for idx, st in enumerate(chain, start=1):
+                key = f'step{idx}'
+                base[key] = st
+                base[f'respuesta_{key}'] = user_map.get((numero, st))
+                steps_set.add(key)
+            conversaciones.append(base)
 
     step_counter = Counter(
         step
-        for r in respuestas
+        for r in conversaciones
         for key, step in r.items()
         if key.startswith('step')
     )
@@ -178,7 +203,7 @@ def respuestas(numero):
     steps = sorted(steps_set, key=lambda x: int(x[4:]))
     conn.close()
     return render_template(
-        'respuestas.html', respuestas=respuestas, steps=steps, summary=summary
+        'respuestas.html', conversaciones=conversaciones, steps=steps, summary=summary
     )
 
 @chat_bp.route('/send_message', methods=['POST'])
