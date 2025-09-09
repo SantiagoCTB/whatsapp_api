@@ -429,6 +429,40 @@ def obtener_mensajes_por_numero(numero):
     return rows  # lista de tuplas (mensaje, tipo, timestamp)
 
 
+def get_conversation(numero):
+    """Obtiene la conversación de un número uniendo ``mensajes`` con ``reglas``.
+
+    Realiza un ``JOIN`` entre ``mensajes`` y ``reglas`` usando ``regla_id`` y
+    ordenando por ``reglas.id``. El resultado se devuelve en una sola fila con
+    columnas dinámicas del tipo ``regla_step``, ``mensaje_usuario``,
+    ``regla_step2``, ``mensaje_usuario_step2``, etc.
+    """
+    conn = get_connection()
+    c    = conn.cursor()
+    c.execute(
+        """
+        SELECT m.numero, r.step, m.mensaje
+          FROM mensajes m
+          JOIN reglas r ON m.regla_id = r.id
+         WHERE m.numero = %s
+         ORDER BY r.id
+        """,
+        (numero,),
+    )
+    rows = c.fetchall()
+    conn.close()
+
+    result = {"numero": numero}
+    for idx, (_numero, step, mensaje) in enumerate(rows, start=1):
+        if idx == 1:
+            result["regla_step"] = step
+            result["mensaje_usuario"] = mensaje
+        else:
+            result[f"regla_step{idx}"] = step
+            result[f"mensaje_usuario_step{idx}"] = mensaje
+    return result
+
+
 def obtener_lista_chats():
     conn = get_connection()
     c    = conn.cursor(dictionary=True)
