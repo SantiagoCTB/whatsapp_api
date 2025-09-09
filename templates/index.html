@@ -17,6 +17,7 @@
         <a href="{{ url_for('roles.roles') }}">Roles</a>
         {% endif %}
         <a href="{{ url_for('tablero.tablero') }}">Tablero</a>
+        <a id="respuestasLink" href="#">Respuestas</a>
         <a href="{{ url_for('auth.logout') }}">Cerrar sesión</a>
       </div>
       <input id="buscador" type="text" placeholder="Buscar número…">
@@ -156,6 +157,14 @@
         settingsMenu.classList.toggle('show');
       };
       document.addEventListener('click', () => settingsMenu.classList.remove('show'));
+
+      const respuestasLink = document.getElementById('respuestasLink');
+      respuestasLink.addEventListener('click', e => {
+        e.preventDefault();
+        if (currentChat) {
+          window.location.href = `/respuestas/${currentChat}`;
+        }
+      });
 
       // Cargar lista de chats
       function fetchChatList() {
