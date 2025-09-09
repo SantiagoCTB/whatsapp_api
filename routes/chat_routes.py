@@ -1,6 +1,7 @@
 import os
 import uuid
 import json
+from collections import Counter
 from flask import Blueprint, render_template, request, redirect, session, url_for, jsonify
 from werkzeug.utils import secure_filename
 from config import Config
@@ -166,9 +167,19 @@ def respuestas(numero):
             steps_set.add(key)
         respuestas.append(base)
 
+    step_counter = Counter(
+        step
+        for r in respuestas
+        for key, step in r.items()
+        if key.startswith('step')
+    )
+    summary = dict(step_counter)
+
     steps = sorted(steps_set, key=lambda x: int(x[4:]))
     conn.close()
-    return render_template('respuestas.html', respuestas=respuestas, steps=steps)
+    return render_template(
+        'respuestas.html', respuestas=respuestas, steps=steps, summary=summary
+    )
 
 @chat_bp.route('/send_message', methods=['POST'])
 def send_message():

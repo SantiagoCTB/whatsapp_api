@@ -9,6 +9,21 @@
 </div>
 
 <h2>Respuestas</h2>
+{% if summary %}
+<h3>Resumen</h3>
+<table class="summary-table">
+    <tr>
+        <th>Regla/Step</th>
+        <th>Cantidad</th>
+    </tr>
+    {% for step, count in summary.items() %}
+    <tr>
+        <td>{{ step }}</td>
+        <td>{{ count }}</td>
+    </tr>
+    {% endfor %}
+</table>
+{% endif %}
 <table class="fixed-table">
     <tr>
         <th>Timestamp</th>
