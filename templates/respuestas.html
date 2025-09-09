@@ -15,6 +15,9 @@
         <th>Mensaje</th>
         <th>Tipo</th>
         <th>Media URL</th>
+        {% for step in steps %}
+        <th>{{ step|capitalize }}</th>
+        {% endfor %}
     </tr>
     {% for r in respuestas %}
     <tr>
@@ -22,6 +25,9 @@
         <td>{{ r.mensaje }}</td>
         <td>{{ r.tipo }}</td>
         <td>{{ r.media_url or '-' }}</td>
+        {% for step in steps %}
+        <td>{{ r.get(step, '-') }}</td>
+        {% endfor %}
     </tr>
     {% endfor %}
 </table>

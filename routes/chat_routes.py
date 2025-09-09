@@ -134,21 +134,41 @@ def respuestas(numero):
             conn.close()
             return redirect(url_for('chat.index'))
     c.execute(
-        "SELECT timestamp, mensaje, tipo, media_url FROM mensajes "
-        "WHERE numero = %s AND tipo LIKE 'bot%%' ORDER BY timestamp",
+        """
+        SELECT m.timestamp, m.mensaje, m.tipo, m.media_url,
+               r.step, r.siguiente_step
+          FROM mensajes m
+          LEFT JOIN reglas r ON m.mensaje = r.respuesta
+         WHERE m.numero = %s AND m.tipo LIKE 'bot%%'
+         ORDER BY m.timestamp
+        """,
         (numero,),
     )
-    respuestas = [
-        {
+    rows = c.fetchall()
+
+    respuestas = []
+    steps_set = set()
+    for row in rows:
+        base = {
             'timestamp': row[0],
             'mensaje': row[1],
             'tipo': row[2],
             'media_url': row[3],
         }
-        for row in c.fetchall()
-    ]
+        chain = []
+        if row[4]:
+            chain.append(row[4])
+        if row[5]:
+            chain.extend([s.strip() for s in row[5].split(',') if s.strip()])
+        for idx, step in enumerate(chain, start=1):
+            key = f'step{idx}'
+            base[key] = step
+            steps_set.add(key)
+        respuestas.append(base)
+
+    steps = sorted(steps_set, key=lambda x: int(x[4:]))
     conn.close()
-    return render_template('respuestas.html', respuestas=respuestas)
+    return render_template('respuestas.html', respuestas=respuestas, steps=steps)
 
 @chat_bp.route('/send_message', methods=['POST'])
 def send_message():
