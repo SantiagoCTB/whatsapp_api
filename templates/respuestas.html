@@ -26,22 +26,26 @@
 {% endif %}
 <table class="fixed-table">
     <tr>
+        <th>Numero</th>
         <th>Timestamp</th>
         <th>Mensaje</th>
         <th>Tipo</th>
         <th>Media URL</th>
         {% for step in steps %}
         <th>{{ step|capitalize }}</th>
+        <th>Respuesta usuario {{ step }}</th>
         {% endfor %}
     </tr>
-    {% for r in respuestas %}
+    {% for r in conversaciones %}
     <tr>
+        <td>{{ r.numero }}</td>
         <td>{{ r.timestamp }}</td>
         <td>{{ r.mensaje }}</td>
         <td>{{ r.tipo }}</td>
         <td>{{ r.media_url or '-' }}</td>
         {% for step in steps %}
         <td>{{ r.get(step, '-') }}</td>
+        <td>{{ r.get('respuesta_' ~ step, '-') }}</td>
         {% endfor %}
     </tr>
     {% endfor %}
