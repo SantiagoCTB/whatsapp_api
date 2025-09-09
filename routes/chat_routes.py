@@ -185,11 +185,13 @@ def respuestas():
             if regla_id_join:
                 chain.append((regla_id_join, step))
             if siguiente:
-                chain.extend(
-                    (int(s.strip()), s.strip())
-                    for s in siguiente.split(',')
-                    if s.strip()
-                )
+                for s in siguiente.split(','):
+                    s = s.strip()
+                    if not s:
+                        continue
+                    if not s.isdigit():
+                        continue  # o registrar un warning
+                    chain.append((int(s), s))
             for rid, st in chain:
                 key = f'step{rid}'
                 base[key] = st
