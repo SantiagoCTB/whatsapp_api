@@ -100,16 +100,38 @@ def handle_option_reply(numero, option_id):
     return False
 
 
-def dispatch_rule(numero, regla):
+def dispatch_rule(numero, regla, step=None):
     """Envía la respuesta definida en una regla y asigna roles si aplica."""
-    _, resp, next_step, tipo_resp, media_urls, opts, rol_kw, _ = regla
+    regla_id, resp, next_step, tipo_resp, media_urls, opts, rol_kw, _ = regla
+    current_step = step or get_current_step(numero)
     media_list = media_urls.split('||') if media_urls else []
     if tipo_resp in ['image', 'video', 'audio', 'document'] and media_list:
-        enviar_mensaje(numero, resp, tipo_respuesta=tipo_resp, opciones=media_list[0])
+        enviar_mensaje(
+            numero,
+            resp,
+            tipo_respuesta=tipo_resp,
+            opciones=media_list[0],
+            step=current_step,
+            regla_id=regla_id,
+        )
         for extra in media_list[1:]:
-            enviar_mensaje(numero, '', tipo_respuesta=tipo_resp, opciones=extra)
+            enviar_mensaje(
+                numero,
+                '',
+                tipo_respuesta=tipo_resp,
+                opciones=extra,
+                step=current_step,
+                regla_id=regla_id,
+            )
     else:
-        enviar_mensaje(numero, resp, tipo_respuesta=tipo_resp, opciones=opts)
+        enviar_mensaje(
+            numero,
+            resp,
+            tipo_respuesta=tipo_resp,
+            opciones=opts,
+            step=current_step,
+            regla_id=regla_id,
+        )
     if rol_kw:
         conn = get_connection(); c = conn.cursor()
         c.execute("SELECT id FROM roles WHERE keyword=%s", (rol_kw,))
@@ -152,7 +174,7 @@ def advance_steps(numero: str, steps_str: str):
         )
         regla = c.fetchone(); conn.close()
         if regla:
-            dispatch_rule(numero, regla)
+            dispatch_rule(numero, regla, step)
     set_user_step(numero, steps[-1])
 
 
@@ -198,12 +220,12 @@ def process_step_chain(numero, text_norm=None):
     for r in reglas:
         patt = (r[7] or '').strip()
         if patt and patt != '*' and normalize_text(patt) == text_norm:
-            dispatch_rule(numero, r)
+            dispatch_rule(numero, r, step)
             return
 
     # Regla comodín
     if comodines:
-        dispatch_rule(numero, comodines[0])
+        dispatch_rule(numero, comodines[0], step)
         # No procesar recursivamente otros comodines; esperar nueva entrada
         return
 
@@ -284,6 +306,9 @@ def handle_text_message(numero: str, texto: str):
     elif row:
         update_chat_state(numero, step_db)
 
+    if texto:
+        guardar_mensaje(numero, texto, 'cliente', step=step_db)
+
     if not step_db:
         set_user_step(numero, Config.INITIAL_STEP)
         process_step_chain(numero, 'iniciar')
@@ -342,6 +367,7 @@ def webhook():
 
                 if msg.get("referral"):
                     ref = msg["referral"]
+                    step = get_current_step(from_number)
                     guardar_mensaje(
                         from_number,
                         "",
@@ -352,7 +378,9 @@ def webhook():
                         link_title=ref.get("headline"),
                         link_body=ref.get("body"),
                         link_thumb=ref.get("thumbnail_url"),
+                        step=step,
                     )
+                    update_chat_state(from_number, step, 'sin_respuesta')
                     continue
 
                 # AUDIO
@@ -370,6 +398,7 @@ def webhook():
 
                     public_url = url_for('static', filename=f'uploads/{filename}', _external=True)
 
+                    step = get_current_step(from_number)
                     db_id = guardar_mensaje(
                         from_number,
                         "",
@@ -379,9 +408,9 @@ def webhook():
                         media_id=media_id,
                         media_url=public_url,
                         mime_type=mime_clean,
+                        step=step,
                     )
 
-                    step = get_current_step(from_number)
                     update_chat_state(from_number, step, 'sin_respuesta')
 
                     queued = enqueue_transcription(
@@ -415,6 +444,7 @@ def webhook():
                     public_url = url_for('static', filename=f'uploads/{filename}', _external=True)
 
                     # 3) Guardar en BD
+                    step = get_current_step(from_number)
                     guardar_mensaje(
                         from_number,
                         "",               # sin texto
@@ -423,10 +453,10 @@ def webhook():
                         reply_to_wa_id=reply_to_id,
                         media_id=media_id,
                         media_url=public_url,
-                        mime_type=mime_clean
+                        mime_type=mime_clean,
+                        step=step,
                     )
 
-                    step = get_current_step(from_number)
                     update_chat_state(from_number, step, 'sin_respuesta')
 
                     # 4) Registro interno
@@ -437,6 +467,7 @@ def webhook():
                 if msg_type == 'image':
                     media_id  = msg['image']['id']
                     media_url = get_media_url(media_id)
+                    step = get_current_step(from_number)
                     guardar_mensaje(
                         from_number,
                         "",
@@ -444,9 +475,9 @@ def webhook():
                         wa_id=wa_id,
                         reply_to_wa_id=reply_to_id,
                         media_id=media_id,
-                        media_url=media_url
+                        media_url=media_url,
+                        step=step,
                     )
-                    step = get_current_step(from_number)
                     update_chat_state(from_number, step, 'sin_respuesta')
                     logging.info("Imagen recibida: %s", media_id)
                     continue
@@ -455,14 +486,15 @@ def webhook():
                 if 'text' in msg:
                     text = msg['text']['body'].strip()
                     normalized_text = normalize_text(text)
+                    step = get_current_step(from_number)
                     guardar_mensaje(
                         from_number,
                         text,
                         'cliente',
                         wa_id=wa_id,
                         reply_to_wa_id=reply_to_id,
+                        step=step,
                     )
-                    step = get_current_step(from_number)
                     update_chat_state(from_number, step, 'sin_respuesta')
                     with cache_lock:
                         message_buffer.setdefault(from_number, []).append(normalized_text)
@@ -476,14 +508,15 @@ def webhook():
                     opt = msg['interactive'].get('list_reply') or msg['interactive'].get('button_reply') or {}
                     option_id = opt.get('id') or ''
                     text = (opt.get('title') or '').strip()
+                    step = get_current_step(from_number)
                     guardar_mensaje(
                         from_number,
                         text,
                         'cliente',
                         wa_id=wa_id,
                         reply_to_wa_id=reply_to_id,
+                        step=step,
                     )
-                    step = get_current_step(from_number)
                     update_chat_state(from_number, step, 'sin_respuesta')
                     if handle_option_reply(from_number, option_id):
                         continue

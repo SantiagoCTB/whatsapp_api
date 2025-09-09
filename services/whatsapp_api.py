@@ -10,7 +10,7 @@ TOKEN    = Config.META_TOKEN
 PHONE_ID = Config.PHONE_NUMBER_ID
 os.makedirs(Config.MEDIA_ROOT, exist_ok=True)
 
-def enviar_mensaje(numero, mensaje, tipo='bot', tipo_respuesta='texto', opciones=None, reply_to_wa_id=None):
+def enviar_mensaje(numero, mensaje, tipo='bot', tipo_respuesta='texto', opciones=None, reply_to_wa_id=None, step=None, regla_id=None):
     url = f"https://graph.facebook.com/v19.0/{PHONE_ID}/messages"
     headers = {
         "Authorization": f"Bearer {TOKEN}",
@@ -191,37 +191,25 @@ def enviar_mensaje(numero, mensaje, tipo='bot', tipo_respuesta='texto', opciones
     if tipo_respuesta in {"image", "audio", "video", "document"} and "_" not in tipo:
         tipo_db = f"{tipo}_{tipo_respuesta}"
 
+    media_url_db = None
     if tipo_respuesta == 'video':
-        guardar_mensaje(
-            numero,
-            mensaje,
-            tipo_db,
-            wa_id=wa_id,
-            reply_to_wa_id=reply_to_wa_id,
-            media_id=None,
-            media_url=video_obj.get("link")
-        )
-
+        media_url_db = video_obj.get("link")
     elif tipo_respuesta == 'audio':
-        guardar_mensaje(
-            numero,
-            mensaje,
-            tipo_db,
-            wa_id=wa_id,
-            reply_to_wa_id=reply_to_wa_id,
-            media_id=None,
-            media_url=audio_obj.get("link")
-        )
+        media_url_db = audio_obj.get("link")
     else:
-        guardar_mensaje(
-            numero,
-            mensaje,
-            tipo_db,
-            wa_id=wa_id,
-            reply_to_wa_id=reply_to_wa_id,
-            media_id=None,
-            media_url=opciones
-        )
+        media_url_db = opciones
+
+    guardar_mensaje(
+        numero,
+        mensaje,
+        tipo_db,
+        wa_id=wa_id,
+        reply_to_wa_id=reply_to_wa_id,
+        media_id=None,
+        media_url=media_url_db,
+        step=step,
+        regla_id=regla_id,
+    )
     return True
 
 def get_media_url(media_id):
