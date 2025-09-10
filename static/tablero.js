@@ -9,7 +9,8 @@ document.addEventListener('DOMContentLoaded', () => {
       chartPalabras,
       chartRoles,
       chartTipos,
-      chartTiposDiarios;
+      chartTiposDiarios,
+      chartSinAsesor;
   const commonOptions = {
     animation: { duration: 1000 },
     interaction: { mode: 'nearest', intersect: false },
@@ -597,6 +598,38 @@ document.addEventListener('DOMContentLoaded', () => {
         console.error(err);
         if (chartTipos) chartTipos.destroy();
         showCardMessage('graficoTipos', 'Error al cargar datos');
+      });
+
+    fetch(`/datos_sin_asesor${query}`)
+      .then(response => response.json())
+      .then(data => {
+        const total = data && typeof data.sin_asesor === 'number' ? data.sin_asesor : null;
+        if (total === null || total === 0) {
+          if (chartSinAsesor) chartSinAsesor.destroy();
+          showCardMessage('graficoSinAsesor', total === 0 ? 'No hay datos disponibles' : 'Error al cargar datos');
+          return;
+        }
+        if (chartSinAsesor) chartSinAsesor.destroy();
+        showCardMessage('graficoSinAsesor');
+        const ctx = document.getElementById('graficoSinAsesor').getContext('2d');
+        chartSinAsesor = new Chart(ctx, {
+          type: 'doughnut',
+          data: {
+            labels: ['Sin Asesor'],
+            datasets: [{
+              data: [total],
+              backgroundColor: ['#FF6384']
+            }]
+          },
+          options: {
+            ...commonOptions
+          }
+        });
+      })
+      .catch(err => {
+        console.error(err);
+        if (chartSinAsesor) chartSinAsesor.destroy();
+        showCardMessage('graficoSinAsesor', 'Error al cargar datos');
       });
 
     fetch(`/datos_tipos_diarios${query}`)
