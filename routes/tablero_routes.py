@@ -558,6 +558,48 @@ def datos_tipos():
     return jsonify(data)
 
 
+@tablero_bp.route('/datos_sin_asesor')
+def datos_sin_asesor():
+    """Devuelve el total de mensajes cuyo tipo no comienza con 'asesor'."""
+    if "user" not in session:
+        return redirect(url_for('auth.login'))
+
+    start = request.args.get('start')
+    end = request.args.get('end')
+    rol = request.args.get('rol', type=int)
+    numero = request.args.get('numero')
+
+    conn = get_connection()
+    cur = conn.cursor()
+
+    try:
+        joins, filter_conditions, filter_params = _apply_filters(cur, rol, numero)
+    except ValueError as e:
+        conn.close()
+        msg = 'Rol' if str(e) == 'rol' else 'Número'
+        return jsonify({"error": f"{msg} no encontrado"}), 400
+
+    query = "SELECT COUNT(*) FROM mensajes m"
+    if joins:
+        query += " " + joins
+
+    conditions = ["(m.tipo IS NULL OR m.tipo NOT LIKE 'asesor%')"]
+    params = []
+    if start and end:
+        conditions.append("m.timestamp BETWEEN %s AND %s")
+        params.extend([start, end])
+    conditions.extend(filter_conditions)
+    params.extend(filter_params)
+    if conditions:
+        query += " WHERE " + " AND ".join(conditions)
+
+    cur.execute(query, params)
+    count = cur.fetchone()[0]
+    conn.close()
+
+    return jsonify({"sin_asesor": count})
+
+
 @tablero_bp.route('/datos_totales')
 def datos_totales():
     """Devuelve el total de mensajes enviados y recibidos."""
