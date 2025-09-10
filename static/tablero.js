@@ -10,7 +10,8 @@ document.addEventListener('DOMContentLoaded', () => {
       chartRoles,
       chartTipos,
       chartTiposDiarios,
-      chartSinAsesor;
+      chartSinAsesor,
+      chartNumerosSinAsesor;
   const commonOptions = {
     animation: { duration: 1000 },
     interaction: { mode: 'nearest', intersect: false },
@@ -109,22 +110,85 @@ document.addEventListener('DOMContentLoaded', () => {
   return q ? `?${q}` : '';
 }
 
- function showCardMessage(elemId, message) {
-   const elem = document.getElementById(elemId);
-   const card = elem ? elem.closest('.card') : null;
-   if (!card) return;
-   let msgElem = card.querySelector('.card-message');
-   if (!message) {
-     if (msgElem) msgElem.remove();
-     return;
-   }
-   if (!msgElem) {
-     msgElem = document.createElement('p');
-     msgElem.className = 'card-message';
-     card.appendChild(msgElem);
-   }
-   msgElem.textContent = message;
- }
+function showCardMessage(elemId, message) {
+  const elem = document.getElementById(elemId);
+  const card = elem ? elem.closest('.card') : null;
+  if (!card) return;
+  let msgElem = card.querySelector('.card-message');
+  if (!message) {
+    if (msgElem) msgElem.remove();
+    return;
+  }
+  if (!msgElem) {
+    msgElem = document.createElement('p');
+    msgElem.className = 'card-message';
+    card.appendChild(msgElem);
+  }
+  msgElem.textContent = message;
+}
+
+  function cargarNumerosSinAsesor(query) {
+    fetch(`/datos_numeros_sin_asesor${query}`)
+      .then(response => response.json())
+      .then(data => {
+        if (!Array.isArray(data) || data.length === 0) {
+          if (chartNumerosSinAsesor) chartNumerosSinAsesor.destroy();
+          const tabla = document.getElementById('tabla_numeros_sin_asesor');
+          if (tabla) tabla.querySelector('tbody').innerHTML = '';
+          showCardMessage('graficoNumerosSinAsesor', 'No hay datos disponibles');
+          return;
+        }
+        const labels = data.map(item => item.numero);
+        const values = data.map(item => item.mensajes);
+
+        const tabla = document.getElementById('tabla_numeros_sin_asesor');
+        if (tabla) {
+          const tbody = tabla.querySelector('tbody');
+          tbody.innerHTML = '';
+          data.forEach(item => {
+            const row = document.createElement('tr');
+            const numCell = document.createElement('td');
+            numCell.textContent = item.numero;
+            const msgCell = document.createElement('td');
+            msgCell.textContent = item.mensajes;
+            row.appendChild(numCell);
+            row.appendChild(msgCell);
+            tbody.appendChild(row);
+          });
+        }
+
+        if (chartNumerosSinAsesor) chartNumerosSinAsesor.destroy();
+        showCardMessage('graficoNumerosSinAsesor');
+        const ctx = document.getElementById('graficoNumerosSinAsesor').getContext('2d');
+        chartNumerosSinAsesor = new Chart(ctx, {
+          type: 'bar',
+          data: {
+            labels: labels,
+            datasets: [{
+              label: 'Mensajes por número',
+              data: values,
+              backgroundColor: 'rgba(153, 102, 255, 0.5)',
+              borderColor: 'rgba(153, 102, 255, 1)',
+              borderWidth: 1
+            }]
+          },
+          options: {
+            ...commonOptions,
+            indexAxis: 'y',
+            scales: {
+              x: { beginAtZero: true }
+            }
+          }
+        });
+      })
+      .catch(err => {
+        console.error(err);
+        if (chartNumerosSinAsesor) chartNumerosSinAsesor.destroy();
+        const tabla = document.getElementById('tabla_numeros_sin_asesor');
+        if (tabla) tabla.querySelector('tbody').innerHTML = '';
+        showCardMessage('graficoNumerosSinAsesor', 'Error al cargar datos');
+      });
+  }
 
   function cargarDatos() {
     const query = buildQuery();
@@ -631,6 +695,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (chartSinAsesor) chartSinAsesor.destroy();
         showCardMessage('graficoSinAsesor', 'Error al cargar datos');
       });
+
+    cargarNumerosSinAsesor(query);
 
     fetch(`/datos_tipos_diarios${query}`)
       .then(response => response.json())
