@@ -141,7 +141,7 @@ def respuestas():
         c.execute("SELECT DISTINCT numero FROM mensajes")
     numeros = [row[0] for row in c.fetchall()]
 
-    conversaciones = []
+    data_by_numero = {}
     steps_set = set()
 
     if numeros:
@@ -174,13 +174,16 @@ def respuestas():
 
         for row in rows:
             numero, timestamp, mensaje, tipo, media_url, step, siguiente, regla_id, regla_id_join = row
-            base = {
-                'numero': numero,
-                'timestamp': timestamp,
-                'mensaje': mensaje,
-                'tipo': tipo,
-                'media_url': media_url,
-            }
+            base = data_by_numero.setdefault(
+                numero,
+                {
+                    'numero': numero,
+                    'timestamp': timestamp,
+                    'mensaje': mensaje,
+                    'tipo': tipo,
+                    'media_url': media_url,
+                },
+            )
             chain = []
             if regla_id_join:
                 chain.append((regla_id_join, step))
@@ -197,7 +200,7 @@ def respuestas():
                 base[key] = st
                 base[f'respuesta_{key}'] = user_map.get((numero, st))
                 steps_set.add(key)
-            conversaciones.append(base)
+    conversaciones = list(data_by_numero.values())
 
     step_counter = Counter(
         step
