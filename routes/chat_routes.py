@@ -161,7 +161,7 @@ def respuestas():
 
         c.execute(
             f"""
-            SELECT m.numero, m.timestamp, m.mensaje, m.tipo, m.media_url,
+            SELECT m.numero, m.timestamp, m.mensaje, m.tipo,
                    r.step, r.siguiente_step, m.regla_id, r.id
               FROM mensajes m
               JOIN reglas r ON m.regla_id = r.id
@@ -173,15 +173,14 @@ def respuestas():
         rows = c.fetchall()
 
         for row in rows:
-            numero, timestamp, mensaje, tipo, media_url, step, siguiente, regla_id, regla_id_join = row
+            numero, timestamp, mensaje, tipo, step, siguiente, regla_id, regla_id_join = row
             base = data_by_numero.setdefault(
                 numero,
                 {
                     'numero': numero,
-                    'timestamp': timestamp,
+                    'fecha': timestamp,
                     'mensaje': mensaje,
                     'tipo': tipo,
-                    'media_url': media_url,
                 },
             )
             chain = []
