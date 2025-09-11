@@ -108,7 +108,7 @@ def get_chat(numero):
       FROM mensajes m
       LEFT JOIN mensajes r ON r.wa_id = m.reply_to_wa_id
       WHERE m.numero = %s
-      ORDER BY r.id
+      ORDER BY m.timestamp ASC
     """, (numero,))
     mensajes = c.fetchall()
     conn.close()

@@ -67,6 +67,11 @@ def init_db():
     if not c.fetchone():
         c.execute("ALTER TABLE mensajes ADD COLUMN regla_id INT NULL;")
 
+    # Índice sobre timestamp para mejorar el ordenamiento cronológico
+    c.execute("SHOW INDEX FROM mensajes WHERE Key_name = 'idx_mensajes_timestamp';")
+    if not c.fetchone():
+        c.execute("CREATE INDEX idx_mensajes_timestamp ON mensajes (timestamp);")
+
     # mensajes procesados
     c.execute("""
     CREATE TABLE IF NOT EXISTS mensajes_procesados (
