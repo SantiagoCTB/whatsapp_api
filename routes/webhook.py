@@ -294,8 +294,20 @@ def handle_medicion(numero, texto):
     return True
 
 
-def handle_text_message(numero: str, texto: str):
-    """Procesa un mensaje de texto y avanza los pasos del flujo."""
+def handle_text_message(numero: str, texto: str, save: bool = True):
+    """Procesa un mensaje de texto y avanza los pasos del flujo.
+
+    Parameters
+    ----------
+    numero: str
+        Número del usuario.
+    texto: str
+        Texto recibido del usuario.
+    save: bool, optional
+        Si ``True`` se guarda el mensaje en la base de datos. Permite
+        reutilizar esta función en flujos donde el texto ya fue
+        almacenado para evitar duplicados en el historial.
+    """
     now = datetime.now()
     row = get_chat_state(numero)
     step_db = row[0] if row else None
@@ -306,7 +318,7 @@ def handle_text_message(numero: str, texto: str):
     elif row:
         update_chat_state(numero, step_db)
 
-    if texto:
+    if texto and save:
         guardar_mensaje(numero, texto, 'cliente', step=step_db)
 
     if not step_db:
@@ -332,7 +344,7 @@ def process_buffered_messages(numero):
         return
     combined = " ".join(textos)
     normalized = normalize_text(combined)
-    handle_text_message(numero, normalized)
+    handle_text_message(numero, normalized, save=False)
 
 @webhook_bp.route('/webhook', methods=['GET', 'POST'])
 def webhook():
