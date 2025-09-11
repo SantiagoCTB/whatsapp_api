@@ -252,7 +252,8 @@
               chatBoxEl.innerHTML = ''; lastCount = 0;
             }
             for (let i=lastCount; i<total; i++){
-              const [txt, tipo, url, ts, linkUrl, linkTitle, linkBody, linkThumb, waId, replyWaId, replyText, replyTipo, replyUrl] = msgs[i];
+              const [txt, tipo, url, ts, linkUrl, linkTitle, linkBody, linkThumb,
+                     waId, replyWaId, replyId, replyText, replyTipo, replyUrl] = msgs[i];
               const div = document.createElement('div');
               // map tipo a bubble class
               let bubble = 'cliente';
