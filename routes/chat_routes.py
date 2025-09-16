@@ -14,7 +14,7 @@ chat_bp = Blueprint('chat', __name__)
 MEDIA_ROOT = Config.MEDIA_ROOT
 os.makedirs(Config.MEDIA_ROOT, exist_ok=True)
 
-@chat_bp.route('/')
+@chat_bp.route('/app')
 def index():
     # Autenticación
     if "user" not in session:
