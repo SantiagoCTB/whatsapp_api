@@ -5,6 +5,14 @@ from services.db import get_connection, get_roles_by_user
 
 auth_bp = Blueprint('auth', __name__)
 
+
+@auth_bp.route('/')
+def landing():
+    if session.get('user'):
+        return redirect(url_for('chat.index'))
+    return render_template('landing.html')
+
+
 def _verify_password(stored_hash: str, plain: str) -> bool:
     """
     Soporta hashes nuevos de Werkzeug (pbkdf2:...) y legacy sha256 hex.

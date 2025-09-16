@@ -8,6 +8,14 @@
       --accent-neon:    #00A884;  /* acento verde neón */
       --bg-glass:       rgba(255,255,255,0.1); /* fondo translúcido */
 
+      --color-orange-light: #ff8a00;
+      --color-orange-dark:  #ff6f00;
+      --color-pink:         #ff4f68;
+      --landing-gradient: radial-gradient(circle at 20% 20%,
+                          rgba(255, 79, 104, 0.85) 0%,
+                          rgba(255, 138, 0, 0.9) 45%,
+                          rgba(255, 111, 0, 0.95) 100%);
+
       --bubble-user:    #D2F5F0;  /* mensajes del cliente */
       --bubble-bot:     #F7F3B7;  /* gris suave, para el bot */
       --bubble-asesor:  #C0F2C9;  /* verde más claro, asesor */
@@ -33,6 +41,22 @@
       background-size: cover;
       background-repeat: repeat;
       background-position: center;
+    }
+    body.landing-page {
+      min-height: 100vh;
+      background-color: #0b1120;
+      background-image: var(--landing-gradient);
+      background-size: cover;
+      background-repeat: no-repeat;
+      background-attachment: fixed;
+      color: #f8fafc;
+      position: relative;
+      overflow-x: hidden;
+    }
+    .landing-overlay {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
     }
     body.chat {
       display: flex;
