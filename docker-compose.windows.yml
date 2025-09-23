@@ -5,20 +5,12 @@
       dockerfile: Dockerfile.win
     env_file:
       - .env
-    # (Opcional: expón 8080 para pruebas locales HTTP directas)
+    # Puedes dejarlo solo local (más seguro) o abierto para probar.
+    # Local seguro:
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"
+    # Para probar desde la LAN, usa temporalmente:
+    # ports:
+    #   - "8080:8080"
     restart: unless-stopped
     # isolation: hyperv
-
-  nginx:
-    image: nginx:alpine
-    depends_on:
-      - web
-    ports:
-      # El puerto del HOST Windows → 8000  (el firewall ya apunta 63443 → 8000)
-      - "8000:8000"
-    volumes:
-      - ./certs:/etc/nginx/certs:ro
-      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
-    restart: unless-stopped
