@@ -1,0 +1,17 @@
+﻿# escape=`
+FROM python:3.12-windowsservercore-ltsc2022
+
+SHELL ["cmd", "/S", "/C"]
+
+WORKDIR C:\app
+
+COPY requirements.txt .
+
+RUN python -m pip install --upgrade pip && pip install -r requirements.txt && pip install waitress
+
+COPY . .
+
+ENV PORT=8000
+EXPOSE 8000
+
+CMD python -m waitress --listen=0.0.0.0:%PORT% app:app
