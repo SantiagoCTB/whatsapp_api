@@ -84,18 +84,8 @@
         const roleIcons = { ventas: '💼', soporte: '🛠', marketing: '📣' };
 
         function playAlertSound() {
-        const ctx = new (window.AudioContext || window.webkitAudioContext)();
-        const oscillator = ctx.createOscillator();
-        const gain = ctx.createGain();
-        oscillator.type = 'sine';
-        oscillator.frequency.value = 880;
-        gain.gain.value = 0.1;
-        oscillator.connect(gain);
-        gain.connect(ctx.destination);
-        oscillator.start();
-        oscillator.stop(ctx.currentTime + 0.2);
-        oscillator.onended = () => ctx.close();
-      }
+          // El sonido de alerta se deshabilita para evitar el tono al ingresar a la interfaz.
+        }
 
       document.querySelectorAll('.role-icon').forEach(icon => {
         icon.addEventListener('dragover', e => {
