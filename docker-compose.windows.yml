@@ -5,12 +5,7 @@
       dockerfile: Dockerfile.win
     env_file:
       - .env
-    # Puedes dejarlo solo local (más seguro) o abierto para probar.
-    # Local seguro:
     ports:
-      - "127.0.0.1:8080:8080"
-    # Para probar desde la LAN, usa temporalmente:
-    # ports:
-    #   - "8080:8080"
+      - "8000:8000"  
     restart: unless-stopped
-    # isolation: hyperv
+    isolation: hyperv

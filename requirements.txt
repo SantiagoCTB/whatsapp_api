@@ -7,4 +7,6 @@ openpyxl
 mysql-connector-python
 vosk
 ffmpeg-python
+uvicorn[standard]
+asgiref
 concurrent-futures; python_version < "3.2"
