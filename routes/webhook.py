@@ -321,12 +321,13 @@ def handle_text_message(numero: str, texto: str, save: bool = True):
     if texto and save:
         guardar_mensaje(numero, texto, 'cliente', step=step_db)
 
+    text_norm = normalize_text(texto or "")
+
     if not step_db:
         set_user_step(numero, Config.INITIAL_STEP)
         process_step_chain(numero, 'iniciar')
-        return
-
-    text_norm = normalize_text(texto or "")
+        if not text_norm or text_norm == 'iniciar':
+            return
 
     if handle_global_command(numero, texto):
         return
