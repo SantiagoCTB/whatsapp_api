@@ -4,6 +4,9 @@ from dotenv import load_dotenv
 import os
 import logging
 import sys
+
+load_dotenv()
+
 from config import Config
 
 from services.db import init_db
@@ -14,8 +17,6 @@ from routes.roles_routes import roles_bp
 from routes.webhook import webhook_bp
 from routes.tablero_routes import tablero_bp
 from routes.export_routes import export_bp
-
-load_dotenv()
 
 def create_app():
     app = Flask(__name__)
