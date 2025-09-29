@@ -1,10 +1,14 @@
 import os
 import json
+import logging
 import mimetypes
 import requests
 from flask import url_for
 from config import Config
 from services.db import guardar_mensaje
+
+
+logger = logging.getLogger(__name__)
 
 TOKEN    = Config.META_TOKEN
 PHONE_ID = Config.PHONE_NUMBER_ID
@@ -61,7 +65,12 @@ def enviar_mensaje(numero, mensaje, tipo='bot', tipo_respuesta='texto', opciones
             button = "Ver opciones"
         if not sections:
             fallback = mensaje or "No hay opciones disponibles."
-            print("[WA API] Lista vacía; enviando mensaje de texto de fallback")
+            logger.warning(
+                "Lista vacía; enviando mensaje de texto de fallback", extra={
+                    "numero": numero,
+                    "tipo_respuesta": tipo_respuesta,
+                }
+            )
             return enviar_mensaje(numero, fallback, tipo, 'texto', None, reply_to_wa_id)
 
         sections_clean = []
@@ -175,14 +184,39 @@ def enviar_mensaje(numero, mensaje, tipo='bot', tipo_respuesta='texto', opciones
     if media_link and isinstance(media_link, str) and media_link.startswith(('http://', 'https://')):
         try:
             check = requests.head(media_link, allow_redirects=True, timeout=5)
-        except requests.RequestException:
+        except requests.RequestException as exc:
+            logger.error(
+                "Error al validar la URL de medios",
+                extra={
+                    "numero": numero,
+                    "tipo_respuesta": tipo_respuesta,
+                    "media_link": media_link,
+                    "error": str(exc),
+                }
+            )
             return False
         if check.status_code != 200:
+            logger.error(
+                "Respuesta no exitosa al validar la URL de medios",
+                extra={
+                    "numero": numero,
+                    "tipo_respuesta": tipo_respuesta,
+                    "media_link": media_link,
+                    "status_code": check.status_code,
+                }
+            )
             return False
     resp = requests.post(url, headers=headers, json=data)
-    print(f"[WA API] {resp.status_code} — {resp.text}")
+    log_payload = {
+        "numero": numero,
+        "tipo_respuesta": tipo_respuesta,
+        "status_code": resp.status_code,
+        "response_text": resp.text,
+    }
     if not resp.ok:
+        logger.error("Error en la respuesta de WhatsApp API", extra=log_payload)
         return False
+    logger.info("Mensaje enviado a WhatsApp API", extra=log_payload)
     try:
         wa_id = resp.json().get("messages", [{}])[0].get("id")
     except Exception:
