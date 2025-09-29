@@ -4,8 +4,7 @@ class Config:
     SECRET_KEY = os.getenv('SECRET_KEY')
     META_TOKEN = os.getenv('META_TOKEN')
     PHONE_NUMBER_ID = os.getenv('PHONE_NUMBER_ID')
-    VERIFY_TOKEN = os.getenv('VERIFY_TOKEN')
-    DB_PATH = 'database.db'
+    VERIFY_TOKEN = os.getenv('VERIFY_TOKEN',"my_secret_token")
     SESSION_TIMEOUT = 600
     INITIAL_STEP = os.getenv('INITIAL_STEP', 'menu_principal')
 
