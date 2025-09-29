@@ -2,7 +2,7 @@ import os
 import logging
 import threading
 import json
-from flask import Blueprint, request, jsonify, url_for
+from flask import Blueprint, Response, jsonify, request, url_for
 from datetime import datetime
 from config import Config
 from services.db import (
@@ -321,12 +321,13 @@ def handle_text_message(numero: str, texto: str, save: bool = True):
     if texto and save:
         guardar_mensaje(numero, texto, 'cliente', step=step_db)
 
+    text_norm = normalize_text(texto or "")
+
     if not step_db:
         set_user_step(numero, Config.INITIAL_STEP)
         process_step_chain(numero, 'iniciar')
-        return
-
-    text_norm = normalize_text(texto or "")
+        if not text_norm or text_norm == 'iniciar':
+            return
 
     if handle_global_command(numero, texto):
         return
@@ -350,10 +351,12 @@ def process_buffered_messages(numero):
 def webhook():
     if request.method == 'GET':
         token     = request.args.get('hub.verify_token')
-        challenge = request.args.get('hub.challenge')
+        challenge = request.args.get('hub.challenge', '')
+
         if token == VERIFY_TOKEN:
-            return challenge, 200
-        return 'Forbidden', 403
+            return Response(challenge, status=200, mimetype='text/plain')
+
+        return Response('Forbidden', status=403, mimetype='text/plain')
 
     data = request.get_json() or {}
     if not data.get('object'):
