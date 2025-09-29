@@ -18,6 +18,7 @@ from services.normalize_text import normalize_text
 from services.global_commands import handle_global_command
 
 webhook_bp = Blueprint('webhook', __name__)
+logger = logging.getLogger(__name__)
 
 VERIFY_TOKEN    = Config.VERIFY_TOKEN
 SESSION_TIMEOUT = Config.SESSION_TIMEOUT
@@ -27,6 +28,33 @@ DEFAULT_FALLBACK_TEXT = "No entendí tu respuesta, intenta de nuevo."
 message_buffer     = {}
 pending_timers     = {}
 cache_lock         = threading.Lock()
+
+RELEVANT_HEADERS = (
+    'X-Hub-Signature-256',
+    'User-Agent',
+    'Content-Type',
+)
+
+
+def _mask_identifier(value, visible=4):
+    if not value:
+        return value
+    value = str(value)
+    if len(value) <= visible:
+        return '*' * len(value)
+    return f"{value[:visible]}...{value[-2:]}"
+
+
+def _extract_message_ids(payload):
+    ids = []
+    for entry in (payload or {}).get('entry', []):
+        for change in entry.get('changes', []):
+            for msg in change.get('value', {}).get('messages', []) or []:
+                msg_id = msg.get('id')
+                if msg_id:
+                    ids.append(msg_id)
+    return ids
+
 
 STEP_HANDLERS = {}
 EXTERNAL_HANDLERS = {}
@@ -349,18 +377,45 @@ def process_buffered_messages(numero):
 
 @webhook_bp.route('/webhook', methods=['GET', 'POST'])
 def webhook():
+    relevant_headers = {
+        header: request.headers.get(header)
+        for header in RELEVANT_HEADERS
+        if request.headers.get(header) is not None
+    }
+    payload = {}
+    masked_message_ids = []
+    if request.method == 'POST':
+        payload = request.get_json(silent=True) or {}
+        masked_message_ids = [_mask_identifier(mid) for mid in _extract_message_ids(payload)]
+
+    logger.info(
+        "Webhook request: method=%s headers=%s message_ids=%s",
+        request.method,
+        relevant_headers,
+        masked_message_ids,
+    )
+
     if request.method == 'GET':
         token     = request.args.get('hub.verify_token')
         challenge = request.args.get('hub.challenge', '')
 
         if token == VERIFY_TOKEN:
+            logger.info("Returning verification challenge with status=200")
             return Response(challenge, status=200, mimetype='text/plain')
 
+        logger.info("Verification failed: invalid token received; returning 403")
         return Response('Forbidden', status=403, mimetype='text/plain')
 
-    data = request.get_json() or {}
+    data = payload
     if not data.get('object'):
+        logger.info("Returning status=no_object reason=missing object field")
         return jsonify({'status': 'no_object'}), 400
+
+    summary = {
+        'processed': 0,
+        'duplicates': 0,
+        'unsupported': 0,
+    }
 
     for entry in data.get('entry', []):
         for change in entry.get('changes', []):
@@ -376,6 +431,11 @@ def webhook():
                 c.execute("SELECT 1 FROM mensajes_procesados WHERE mensaje_id = %s", (wa_id,))
                 if c.fetchone():
                     conn.close()
+                    summary['duplicates'] += 1
+                    logger.info(
+                        "Message skipped as duplicate: message_id=%s",
+                        _mask_identifier(wa_id),
+                    )
                     continue
                 c.execute("INSERT INTO mensajes_procesados (mensaje_id) VALUES (%s)", (wa_id,))
                 conn.commit(); conn.close()
@@ -440,6 +500,7 @@ def webhook():
                         logging.info("Audio encolado para transcripción: %s", media_id)
                     else:
                         logging.warning("No se pudo encolar audio %s para transcripción", media_id)
+                    summary['processed'] += 1
                     continue
 
                 if msg_type == 'video':
@@ -476,6 +537,7 @@ def webhook():
 
                     # 4) Registro interno
                     logging.info("Video recibido: %s", media_id)
+                    summary['processed'] += 1
                     continue
 
                 # IMAGEN
@@ -495,6 +557,7 @@ def webhook():
                     )
                     update_chat_state(from_number, step, 'sin_respuesta')
                     logging.info("Imagen recibida: %s", media_id)
+                    summary['processed'] += 1
                     continue
 
                 # TEXTO / INTERACTIVO
@@ -518,6 +581,10 @@ def webhook():
                         timer = threading.Timer(3, process_buffered_messages, args=(from_number,))
                         pending_timers[from_number] = timer
                     timer.start()
+                    summary['processed'] += 1
+                    logger.info(
+                        "Returning status=buffered reason=text message buffered for aggregation"
+                    )
                     return jsonify({'status': 'buffered'}), 200
                 elif 'interactive' in msg:
                     opt = msg['interactive'].get('list_reply') or msg['interactive'].get('button_reply') or {}
@@ -543,7 +610,16 @@ def webhook():
                         timer = threading.Timer(3, process_buffered_messages, args=(from_number,))
                         pending_timers[from_number] = timer
                     timer.start()
+                    summary['processed'] += 1
+                    logger.info(
+                        "Returning status=buffered reason=interactive response buffered for aggregation"
+                    )
                     return jsonify({'status': 'buffered'}), 200
                 else:
+                    summary['unsupported'] += 1
                     continue
+    logger.info(
+        "Returning status=received reason=processed payload summary=%s",
+        summary,
+    )
     return jsonify({'status':'received'}), 200
