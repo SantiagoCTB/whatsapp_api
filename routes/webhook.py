@@ -2,7 +2,7 @@ import os
 import logging
 import threading
 import json
-from flask import Blueprint, request, jsonify, url_for
+from flask import Blueprint, Response, jsonify, request, url_for
 from datetime import datetime
 from config import Config
 from services.db import (
@@ -351,10 +351,12 @@ def process_buffered_messages(numero):
 def webhook():
     if request.method == 'GET':
         token     = request.args.get('hub.verify_token')
-        challenge = request.args.get('hub.challenge')
+        challenge = request.args.get('hub.challenge', '')
+
         if token == VERIFY_TOKEN:
-            return challenge, 200
-        return 'Forbidden', 403
+            return Response(challenge, status=200, mimetype='text/plain')
+
+        return Response('Forbidden', status=403, mimetype='text/plain')
 
     data = request.get_json() or {}
     if not data.get('object'):
