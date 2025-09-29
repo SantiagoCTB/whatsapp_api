@@ -23,4 +23,4 @@ EXPOSE 8000
 
 # IMPORTANTE: usar rutas con "/" para Python en Windows
 # Si tu .key tiene contraseña, agrega: --ssl-keyfile-password "%SSL_KEY_PASSWORD%"
-CMD uvicorn asgi:asgi_app --host 0.0.0.0 --port %PORT% --ssl-keyfile certs/agestion-net.key --ssl-certfile certs/fullchain.crt --ssl-keyfile-password "%SSL_KEY_PASSWORD%"
+CMD uvicorn asgi:asgi_app --host 0.0.0.0 --port %PORT%  --ssl-keyfile certs/agestion-net.key --ssl-certfile certs/fullchain.crt --ssl-keyfile-password "%SSL_KEY_PASSWORD%"
