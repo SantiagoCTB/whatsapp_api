@@ -7,7 +7,7 @@ class Config:
     VERIFY_TOKEN = os.getenv('VERIFY_TOKEN',"my_secret_token")
     SESSION_TIMEOUT = 600
     INITIAL_STEP = os.getenv('INITIAL_STEP', 'menu_principal')
-
+    DEBUG = True
     MAX_TRANSCRIPTION_DURATION_MS = int(os.getenv('MAX_TRANSCRIPTION_DURATION_MS', 60000))
     TRANSCRIPTION_MAX_AVG_TIME_SEC = float(os.getenv('TRANSCRIPTION_MAX_AVG_TIME_SEC', 10))
 
