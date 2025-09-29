@@ -6,6 +6,6 @@
     env_file:
       - .env
     ports:
-      - "63443:8000"  
+      - "443:8000"  
     restart: unless-stopped
-    isolation: hyperv
+    #isolation: hyperv
