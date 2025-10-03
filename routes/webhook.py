@@ -8,6 +8,7 @@ from config import Config
 from services.db import (
     get_connection,
     guardar_mensaje,
+    guardar_flow_response,
     get_chat_state,
     update_chat_state,
     delete_chat_state,
@@ -587,7 +588,67 @@ def webhook():
                     )
                     return jsonify({'status': 'buffered'}), 200
                 elif 'interactive' in msg:
-                    opt = msg['interactive'].get('list_reply') or msg['interactive'].get('button_reply') or {}
+                    interactive = msg['interactive'] or {}
+                    interactive_type = interactive.get('type')
+                    if interactive_type == 'nfm_reply':
+                        nfm_reply = interactive.get('nfm_reply') or {}
+                        flow_name = (nfm_reply.get('name') or '').strip()
+                        response_payload = None
+                        for key in (
+                            'response_json',
+                            'response',
+                            'responses',
+                            'response_objects',
+                        ):
+                            value = nfm_reply.get(key)
+                            if value:
+                                response_payload = value
+                                break
+                        if response_payload is None:
+                            response_payload = nfm_reply.get('body') or ''
+                        if isinstance(response_payload, (dict, list)):
+                            response_json = json.dumps(response_payload, ensure_ascii=False)
+                        else:
+                            response_json = str(response_payload) if response_payload is not None else ''
+                        guardar_flow_response(
+                            numero=from_number,
+                            flow_name=flow_name,
+                            response_json=response_json,
+                            wa_id=wa_id,
+                        )
+                        text = (nfm_reply.get('body') or '').strip()
+                        if not text:
+                            text = response_json or flow_name
+                        text = (text or '').strip()
+                        step = get_current_step(from_number)
+                        if text:
+                            guardar_mensaje(
+                                from_number,
+                                text,
+                                'cliente',
+                                wa_id=wa_id,
+                                reply_to_wa_id=reply_to_id,
+                                step=step,
+                            )
+                            update_chat_state(from_number, step, 'sin_respuesta')
+                            normalized_text = normalize_text(text)
+                            with cache_lock:
+                                message_buffer.setdefault(from_number, []).append(normalized_text)
+                                if from_number in pending_timers:
+                                    pending_timers[from_number].cancel()
+                                timer = threading.Timer(3, process_buffered_messages, args=(from_number,))
+                                pending_timers[from_number] = timer
+                            timer.start()
+                            summary['processed'] += 1
+                            logger.info(
+                                "Returning status=buffered reason=nfm_reply response buffered for aggregation"
+                            )
+                            return jsonify({'status': 'buffered'}), 200
+                        else:
+                            update_chat_state(from_number, step, 'sin_respuesta')
+                            summary['processed'] += 1
+                            continue
+                    opt = interactive.get('list_reply') or interactive.get('button_reply') or {}
                     option_id = opt.get('id') or ''
                     text = (opt.get('title') or '').strip()
                     step = get_current_step(from_number)

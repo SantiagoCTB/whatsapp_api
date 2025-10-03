@@ -79,6 +79,18 @@ def init_db():
     ) ENGINE=InnoDB;
     """)
 
+    # respuestas de flujos (Flow)
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS flow_responses (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      numero VARCHAR(20) NOT NULL,
+      flow_name VARCHAR(255),
+      response_json LONGTEXT,
+      wa_id VARCHAR(255),
+      timestamp DATETIME
+    ) ENGINE=InnoDB;
+    """)
+
     # usuarios
     c.execute("""
     CREATE TABLE IF NOT EXISTS usuarios (
@@ -372,6 +384,21 @@ def guardar_mensaje(
     conn.commit()
     conn.close()
     return mensaje_id
+
+
+def guardar_flow_response(numero, flow_name, response_json, wa_id=None):
+    """Guarda la respuesta de un Flow (nfm_reply) en la tabla ``flow_responses``."""
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute(
+        """
+        INSERT INTO flow_responses (numero, flow_name, response_json, wa_id, timestamp)
+        VALUES (%s, %s, %s, %s, NOW())
+        """,
+        (numero, flow_name, response_json, wa_id),
+    )
+    conn.commit()
+    conn.close()
 
 
 def update_mensaje_texto(id_mensaje, texto):
