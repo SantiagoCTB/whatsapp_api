@@ -19,7 +19,11 @@ from routes.tablero_routes import tablero_bp
 from routes.export_routes import export_bp
 
 def create_app():
-    app = Flask(__name__)
+    app = Flask(
+        __name__,
+        static_folder=os.path.join(Config.BASEDIR, "static"),
+        template_folder=os.path.join(Config.BASEDIR, "templates"),
+    )
     # Si usas clase de config:
     app.config.from_object(Config)
 
