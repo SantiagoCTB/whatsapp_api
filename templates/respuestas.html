@@ -48,4 +48,44 @@
     </tr>
     {% endfor %}
 </table>
+{% if flows %}
+<h3>Flows recibidos</h3>
+<table class="fixed-table flow-table">
+    <tr>
+        <th>Numero</th>
+        <th>Nombre del Flow</th>
+        <th>Respuestas</th>
+    </tr>
+    {% for flow in flows %}
+    <tr>
+        <td>{{ flow.numero }}</td>
+        <td>{{ flow.flow_name or 'Sin nombre' }}</td>
+        <td>
+            <ul class="flow-response-list">
+                {% for resp in flow.responses %}
+                <li>
+                    <div class="flow-response-meta">
+                        {% if resp.timestamp %}<strong>{{ resp.timestamp }}</strong>{% endif %}
+                        {% if resp.wa_id %}<span class="flow-response-waid"> (WA: {{ resp.wa_id }})</span>{% endif %}
+                    </div>
+                    {% set payload = resp.data %}
+                    {% if payload is mapping %}
+                    <pre>{{ payload | tojson(indent=2) }}</pre>
+                    {% elif payload is string %}
+                    <pre>{{ payload }}</pre>
+                    {% elif payload is sequence %}
+                    <pre>{{ payload | tojson(indent=2) }}</pre>
+                    {% elif payload is none %}
+                    <em>Sin contenido</em>
+                    {% else %}
+                    <pre>{{ payload }}</pre>
+                    {% endif %}
+                </li>
+                {% endfor %}
+            </ul>
+        </td>
+    </tr>
+    {% endfor %}
+</table>
+{% endif %}
 {% endblock %}
