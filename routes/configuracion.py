@@ -182,6 +182,31 @@ def _reglas_view(template_name):
                             'sections': sections
                         }
                         opciones = json.dumps(opts)
+                elif tipo == 'flow':
+                    opciones_raw = (request.form.get('opciones') or '').strip()
+                    flow_payload = {}
+                    flow_keys = [k for k in request.form.keys() if k.startswith('flow_')]
+                    for key in flow_keys:
+                        value = request.form.get(key)
+                        if key in {'flow_payload', 'flow_data'} and value:
+                            try:
+                                flow_payload[key] = json.loads(value)
+                            except Exception:
+                                flow_payload[key] = value
+                        else:
+                            flow_payload[key] = value
+                    if flow_payload:
+                        try:
+                            opciones = json.dumps(flow_payload, ensure_ascii=False)
+                        except (TypeError, ValueError):
+                            opciones = json.dumps({k: str(v) if v is not None else '' for k, v in flow_payload.items()}, ensure_ascii=False)
+                    elif opciones_raw:
+                        try:
+                            opciones = json.dumps(json.loads(opciones_raw), ensure_ascii=False)
+                        except Exception:
+                            opciones = opciones_raw
+                    else:
+                        opciones = ''
                 rol_keyword = request.form.get('rol_keyword')
                 calculo = request.form.get('calculo')
                 handler = request.form.get('handler')
@@ -326,14 +351,26 @@ def _reglas_view(template_name):
                 'footer': None,
             }
             if d['opciones']:
+                parsed_opts = None
                 try:
-                    opts = json.loads(d['opciones'])
-                    if isinstance(opts, dict):
-                        d['header'] = opts.get('header')
-                        d['button'] = opts.get('button')
-                        d['footer'] = opts.get('footer')
+                    parsed_opts = json.loads(d['opciones'])
                 except Exception:
-                    pass
+                    parsed_opts = None
+
+                if d['tipo'] == 'lista' and isinstance(parsed_opts, dict):
+                    d['header'] = parsed_opts.get('header')
+                    d['button'] = parsed_opts.get('button')
+                    d['footer'] = parsed_opts.get('footer')
+                elif d['tipo'] == 'flow' and isinstance(parsed_opts, dict):
+                    for key, value in parsed_opts.items():
+                        if isinstance(value, (dict, list)):
+                            try:
+                                d[key] = json.dumps(value, ensure_ascii=False)
+                            except (TypeError, ValueError):
+                                d[key] = value
+                        else:
+                            d[key] = value
+                    d['flow_options'] = parsed_opts
             reglas.append(d)
         return render_template(template_name, reglas=reglas)
     finally:
