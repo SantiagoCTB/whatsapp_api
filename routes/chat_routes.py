@@ -143,6 +143,7 @@ def respuestas():
 
     data_by_numero = {}
     steps_set = set()
+    flow_data = []
 
     if numeros:
         formato = ','.join(['%s'] * len(numeros))
@@ -199,6 +200,47 @@ def respuestas():
                 base[key] = st
                 base[f'respuesta_{key}'] = user_map.get((numero, st))
                 steps_set.add(key)
+
+        c.execute(
+            f"""
+            SELECT numero, flow_name, response_json, wa_id, timestamp
+              FROM flow_responses
+             WHERE numero IN ({formato})
+             ORDER BY numero, flow_name, timestamp
+            """,
+            numeros,
+        )
+        flow_rows = c.fetchall()
+
+        grouped_flows = {}
+        for numero, flow_name, response_json, wa_id, timestamp in flow_rows:
+            key = (numero, flow_name or '')
+            grouped = grouped_flows.setdefault(
+                key,
+                {
+                    'numero': numero,
+                    'flow_name': flow_name,
+                    'responses': [],
+                },
+            )
+            parsed_json = None
+            if response_json:
+                try:
+                    parsed_json = json.loads(response_json)
+                except json.JSONDecodeError:
+                    parsed_json = response_json
+            grouped['responses'].append(
+                {
+                    'timestamp': timestamp,
+                    'wa_id': wa_id,
+                    'data': parsed_json,
+                }
+            )
+
+        flow_data = sorted(
+            grouped_flows.values(),
+            key=lambda item: (item['numero'], item['flow_name'] or ''),
+        )
     conversaciones = list(data_by_numero.values())
 
     step_counter = Counter(
@@ -212,7 +254,11 @@ def respuestas():
     steps = sorted(steps_set, key=lambda x: int(x[4:]))
     conn.close()
     return render_template(
-        'respuestas.html', conversaciones=conversaciones, steps=steps, summary=summary
+        'respuestas.html',
+        conversaciones=conversaciones,
+        steps=steps,
+        summary=summary,
+        flows=flow_data,
     )
 
 @chat_bp.route('/send_message', methods=['POST'])
