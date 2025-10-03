@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 import sys
@@ -115,3 +116,81 @@ def test_enviar_mensaje_logs_error_on_media_validation_status(monkeypatch, caplo
     assert record.status_code == 404
     assert record.numero == "222222222"
     assert record.media_link == "http://example.com/image.jpg"
+
+
+def test_enviar_mensaje_flow_payload_and_logging(monkeypatch, caplog):
+    posted_payload = {}
+
+    def fake_post(url, headers=None, json=None):
+        posted_payload["url"] = url
+        posted_payload["headers"] = headers
+        posted_payload["json"] = json
+        return DummyResponse(
+            ok=True,
+            status_code=200,
+            text="OK",
+            json_data={"messages": [{"id": "wa-id"}]},
+        )
+
+    monkeypatch.setattr(whatsapp_api.requests, "post", fake_post)
+    monkeypatch.setattr(whatsapp_api.requests, "head", lambda *args, **kwargs: pytest.fail("No se debe validar media_link en flow"))
+    monkeypatch.setattr(whatsapp_api, "guardar_mensaje", lambda *args, **kwargs: None)
+
+    opciones = json.dumps({
+        "flow_cta": "Ir al flujo",
+        "flow_name": "mi_flujo",
+        "mode": "draft",
+        "flow_token": "token-123",
+        "flow_action": "open",
+        "flow_action_payload": {"step": "1"},
+        "header": "Encabezado",
+        "footer": "Pie",
+    })
+
+    with caplog.at_level(logging.INFO):
+        resultado = whatsapp_api.enviar_mensaje(
+            "111222333",
+            "Mensaje base",
+            tipo_respuesta="flow",
+            opciones=opciones,
+        )
+
+    assert resultado is True
+
+    assert posted_payload["url"].endswith("/messages")
+    assert posted_payload["headers"]["Content-Type"] == "application/json"
+
+    esperado = {
+        "messaging_product": "whatsapp",
+        "to": "111222333",
+        "type": "interactive",
+        "interactive": {
+            "type": "flow",
+            "body": {"text": "Mensaje base"},
+            "header": {"type": "text", "text": "Encabezado"},
+            "footer": {"text": "Pie"},
+            "action": {
+                "name": "flow",
+                "parameters": {
+                    "flow_message_version": "3",
+                    "flow_cta": "Ir al flujo",
+                    "flow_name": "mi_flujo",
+                    "mode": "draft",
+                    "flow_token": "token-123",
+                    "flow_action": "open",
+                    "flow_action_payload": {"step": "1"},
+                },
+            },
+        },
+    }
+
+    assert posted_payload["json"] == esperado
+
+    records = [record for record in caplog.records if record.message == "Mensaje enviado a WhatsApp API"]
+    assert records, "No se registró el log de éxito"
+    record = records[-1]
+    assert record.levelno == logging.INFO
+    assert record.numero == "111222333"
+    assert record.tipo_respuesta == "flow"
+    assert record.status_code == 200
+    assert record.response_text == "OK"

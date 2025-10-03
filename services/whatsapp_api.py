@@ -169,6 +169,94 @@ def enviar_mensaje(numero, mensaje, tipo='bot', tipo_respuesta='texto', opciones
             }
         }
 
+    elif tipo_respuesta == 'flow':
+        if isinstance(opciones, str):
+            try:
+                opts = json.loads(opciones)
+            except json.JSONDecodeError as exc:
+                logger.error(
+                    "Opciones inválidas para flow",
+                    extra={
+                        "numero": numero,
+                        "tipo_respuesta": tipo_respuesta,
+                        "error": str(exc),
+                    },
+                )
+                return False
+        elif isinstance(opciones, dict):
+            opts = opciones
+        else:
+            logger.error(
+                "Opciones inválidas para flow",
+                extra={
+                    "numero": numero,
+                    "tipo_respuesta": tipo_respuesta,
+                },
+            )
+            return False
+
+        flow_message_version = opts.get("flow_message_version", "3")
+        flow_cta = opts.get("flow_cta")
+        flow_id = opts.get("flow_id")
+        flow_name = opts.get("flow_name")
+
+        if not flow_cta:
+            logger.error(
+                "Falta flow_cta para flow",
+                extra={
+                    "numero": numero,
+                    "tipo_respuesta": tipo_respuesta,
+                },
+            )
+            return False
+
+        if bool(flow_id) == bool(flow_name):
+            logger.error(
+                "Debe proporcionarse únicamente flow_id o flow_name",
+                extra={
+                    "numero": numero,
+                    "tipo_respuesta": tipo_respuesta,
+                },
+            )
+            return False
+
+        parameters = {
+            "flow_message_version": flow_message_version,
+            "flow_cta": flow_cta,
+        }
+
+        if flow_id:
+            parameters["flow_id"] = flow_id
+        if flow_name:
+            parameters["flow_name"] = flow_name
+
+        for key in ("mode", "flow_token", "flow_action", "flow_action_payload"):
+            if key in opts and opts[key] is not None:
+                parameters[key] = opts[key]
+
+        interactive = {
+            "type": "flow",
+            "body": {"text": opts.get("body_text", mensaje)},
+            "action": {
+                "name": "flow",
+                "parameters": parameters,
+            },
+        }
+
+        if "header" in opts and opts["header"] is not None:
+            interactive["header"] = {"type": "text", "text": opts["header"]}
+
+        if "footer" in opts and opts["footer"] is not None:
+            interactive["footer"] = {"text": opts["footer"]}
+
+        media_link = None
+        data = {
+            "messaging_product": "whatsapp",
+            "to": numero,
+            "type": "interactive",
+            "interactive": interactive,
+        }
+
     else:
         data = {
             "messaging_product": "whatsapp",
