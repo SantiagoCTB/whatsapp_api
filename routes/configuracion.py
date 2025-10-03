@@ -324,16 +324,49 @@ def _reglas_view(template_name):
                 'header': None,
                 'button': None,
                 'footer': None,
+                'flow': None,
+                'opciones_pretty': None,
             }
             if d['opciones']:
                 try:
                     opts = json.loads(d['opciones'])
-                    if isinstance(opts, dict):
+                except Exception:
+                    opts = None
+                if isinstance(opts, dict):
+                    if d['tipo'] == 'lista':
                         d['header'] = opts.get('header')
                         d['button'] = opts.get('button')
                         d['footer'] = opts.get('footer')
-                except Exception:
-                    pass
+                    if d['tipo'] == 'flow':
+                        flow_data = {
+                            'cta': opts.get('cta'),
+                            'flow_id': opts.get('flow_id'),
+                            'flow_name': opts.get('flow_name'),
+                            'version': opts.get('version'),
+                            'mode': opts.get('mode'),
+                            'token': opts.get('token'),
+                            'action': opts.get('action'),
+                            'initial_screen': opts.get('initial_screen'),
+                            'data': opts.get('data'),
+                            'header': opts.get('header'),
+                            'body': opts.get('body'),
+                            'footer': opts.get('footer'),
+                        }
+                        data_value = flow_data.get('data')
+                        if isinstance(data_value, (dict, list)):
+                            flow_data['data_display'] = json.dumps(data_value, ensure_ascii=False, indent=2)
+                        else:
+                            flow_data['data_display'] = data_value or ''
+                        flow_data['json_display'] = json.dumps(opts, ensure_ascii=False, indent=2)
+                        d['flow'] = flow_data
+                        d['header'] = flow_data.get('header')
+                        d['button'] = flow_data.get('body')
+                        d['footer'] = flow_data.get('footer')
+                    if d['tipo'] != 'flow':
+                        # Para otros tipos, ofrecer una vista formateada si es posible
+                        d['opciones_pretty'] = json.dumps(opts, ensure_ascii=False, indent=2)
+                    else:
+                        d['opciones_pretty'] = d['flow']['json_display'] if d['flow'] else None
             reglas.append(d)
         return render_template(template_name, reglas=reglas)
     finally:
