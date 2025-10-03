@@ -31,6 +31,7 @@
         <option value="texto">Texto</option>
         <option value="boton">Botón</option>
         <option value="lista">Lista</option>
+        <option value="flow">Flow</option>
         <option value="image">Imagen</option>
         <option value="document">Documento</option>
         <option value="video">Video</option>
@@ -66,6 +67,45 @@
 
     <label for="sections" class="list-field" style="display:none;">Secciones (formato JSON):</label><br>
     <textarea id="sections" name="sections" class="list-field" style="display:none;" rows="6" cols="60" placeholder='[{"title":"Rápido","rows":[{"id":"express","title":"Express","description":"1 día"}]}]'></textarea>
+
+    <div id="flow_fields" class="flow-field" style="display:none;">
+        <h4>Configuración de Flow</h4>
+        <label for="flow_cta">CTA:</label>
+        <input type="text" id="flow_cta" name="flow_cta" placeholder="Ej. flow_cta">
+
+        <label for="flow_id">ID del Flow:</label>
+        <input type="text" id="flow_id" name="flow_id" placeholder="flow_id">
+
+        <label for="flow_name">Nombre del Flow:</label>
+        <input type="text" id="flow_name" name="flow_name" placeholder="Nombre legible">
+
+        <label for="flow_version">Versión:</label>
+        <input type="text" id="flow_version" name="flow_version" placeholder="Ej. 1.0">
+
+        <label for="flow_mode">Modo:</label>
+        <input type="text" id="flow_mode" name="flow_mode" placeholder="Ej. draft o live">
+
+        <label for="flow_token">Token:</label>
+        <input type="text" id="flow_token" name="flow_token" placeholder="Token opcional">
+
+        <label for="flow_action">Acción:</label>
+        <input type="text" id="flow_action" name="flow_action" placeholder="Acción del flow">
+
+        <label for="flow_initial_screen">Pantalla inicial:</label>
+        <input type="text" id="flow_initial_screen" name="flow_initial_screen" placeholder="ID de pantalla inicial">
+
+        <label for="flow_data">Datos (JSON o texto):</label>
+        <textarea id="flow_data" name="flow_data" rows="4" placeholder='{"variable":"valor"}'></textarea>
+
+        <label for="flow_header">Encabezado (opcional):</label>
+        <input type="text" id="flow_header" name="flow_header" placeholder="Encabezado del mensaje">
+
+        <label for="flow_body">Cuerpo (opcional):</label>
+        <textarea id="flow_body" name="flow_body" rows="3" placeholder="Descripción para el Flow"></textarea>
+
+        <label for="flow_footer">Pie (opcional):</label>
+        <input type="text" id="flow_footer" name="flow_footer" placeholder="Texto de pie">
+    </div>
     <input type="hidden" name="opciones" id="opciones">
 
     <button type="submit" class="btn-primary">Guardar regla</button>
@@ -108,7 +148,34 @@
         <td><pre style="white-space: pre-wrap;">{{ regla.media_urls|join('\n') if regla.media_urls else '-' }}</pre></td>
         <td><pre style="white-space: pre-wrap;">{{ regla.media_tipos|join('\n') if regla.media_tipos else '-' }}</pre></td>
         <td>{{ regla.rol_keyword or '-' }}</td>
-        <td><pre style="white-space: pre-wrap;">{{ regla.opciones }}</pre></td>
+        <td>
+            {% if regla.tipo == 'flow' and regla.flow %}
+                <div><strong>CTA:</strong> {{ regla.flow.cta or '-' }}</div>
+                <div><strong>ID:</strong> {{ regla.flow.flow_id or '-' }}</div>
+                <div><strong>Nombre:</strong> {{ regla.flow.flow_name or '-' }}</div>
+                <div><strong>Versión:</strong> {{ regla.flow.version or '-' }}</div>
+                <div><strong>Modo:</strong> {{ regla.flow.mode or '-' }}</div>
+                <div><strong>Acción:</strong> {{ regla.flow.action or '-' }}</div>
+                <div><strong>Pantalla inicial:</strong> {{ regla.flow.initial_screen or '-' }}</div>
+                {% if regla.flow.token %}
+                <div><strong>Token:</strong> {{ regla.flow.token }}</div>
+                {% endif %}
+                {% if regla.flow.data_display %}
+                <details>
+                    <summary>Datos</summary>
+                    <pre style="white-space: pre-wrap;">{{ regla.flow.data_display }}</pre>
+                </details>
+                {% endif %}
+                {% if regla.flow.json_display %}
+                <details>
+                    <summary>JSON completo</summary>
+                    <pre style="white-space: pre-wrap;">{{ regla.flow.json_display }}</pre>
+                </details>
+                {% endif %}
+            {% else %}
+                <pre style="white-space: pre-wrap;">{{ regla.opciones_pretty or regla.opciones }}</pre>
+            {% endif %}
+        </td>
         <td>{{ regla.header or '-' }}</td>
         <td>{{ regla.button or '-' }}</td>
         <td>{{ regla.footer or '-' }}</td>
@@ -156,10 +223,71 @@ function toggleButtonFields() {
     });
 }
 
+function toggleFlowFields() {
+    const isFlow = document.getElementById('tipo').value === 'flow';
+    document.querySelectorAll('.flow-field').forEach(el => {
+        el.style.display = isFlow ? 'block' : 'none';
+    });
+}
+
 function prepareOptions(e) {
     const tipo = document.getElementById('tipo').value;
     const opcionesInput = document.getElementById('opciones');
-    if (tipo === 'lista') {
+    if (tipo === 'flow') {
+        const cta = document.getElementById('flow_cta').value.trim();
+        const flowId = document.getElementById('flow_id').value.trim();
+        const flowName = document.getElementById('flow_name').value.trim();
+        const version = document.getElementById('flow_version').value.trim();
+        const mode = document.getElementById('flow_mode').value.trim();
+        const token = document.getElementById('flow_token').value.trim();
+        const action = document.getElementById('flow_action').value.trim();
+        const initialScreen = document.getElementById('flow_initial_screen').value.trim();
+        const dataRaw = document.getElementById('flow_data').value.trim();
+        const header = document.getElementById('flow_header').value.trim();
+        const body = document.getElementById('flow_body').value.trim();
+        const footer = document.getElementById('flow_footer').value.trim();
+
+        if (!cta) {
+            alert('Debes ingresar el CTA del Flow.');
+            e.preventDefault();
+            return;
+        }
+        if (!flowId && !flowName) {
+            alert('Debes ingresar el ID o el nombre del Flow.');
+            e.preventDefault();
+            return;
+        }
+
+        let dataValue = undefined;
+        if (dataRaw) {
+            try {
+                dataValue = JSON.parse(dataRaw);
+            } catch (err) {
+                const looksJson = /^[\[{]/.test(dataRaw);
+                if (looksJson) {
+                    alert('El JSON de datos del Flow no es válido.');
+                    e.preventDefault();
+                    return;
+                }
+                dataValue = dataRaw;
+            }
+        }
+
+        const flowOptions = { type: 'flow', cta };
+        if (flowId) flowOptions.flow_id = flowId;
+        if (flowName) flowOptions.flow_name = flowName;
+        if (version) flowOptions.version = version;
+        if (mode) flowOptions.mode = mode;
+        if (token) flowOptions.token = token;
+        if (action) flowOptions.action = action;
+        if (initialScreen) flowOptions.initial_screen = initialScreen;
+        if (dataValue !== undefined && dataValue !== '') flowOptions.data = dataValue;
+        if (header) flowOptions.header = header;
+        if (body) flowOptions.body = body;
+        if (footer) flowOptions.footer = footer;
+
+        opcionesInput.value = JSON.stringify(flowOptions);
+    } else if (tipo === 'lista') {
         const header = document.getElementById('list_header').value;
         const button = document.getElementById('list_button').value;
         const footer = document.getElementById('list_footer').value;
@@ -200,6 +328,7 @@ document.getElementById('tipo').addEventListener('change', () => {
     toggleMediaFields();
     toggleListFields();
     toggleButtonFields();
+    toggleFlowFields();
 });
 const form = document.getElementById('reglaForm');
 form.addEventListener('submit', prepareOptions);
@@ -207,6 +336,7 @@ window.addEventListener('DOMContentLoaded', () => {
     toggleMediaFields();
     toggleListFields();
     toggleButtonFields();
+    toggleFlowFields();
 });
 
 function cargarRegla(regla) {
@@ -227,6 +357,18 @@ function cargarRegla(regla) {
     document.getElementById('sections').value = '';
     document.getElementById('button_options').value = '';
     document.getElementById('opciones').value = '';
+    document.getElementById('flow_cta').value = '';
+    document.getElementById('flow_id').value = '';
+    document.getElementById('flow_name').value = '';
+    document.getElementById('flow_version').value = '';
+    document.getElementById('flow_mode').value = '';
+    document.getElementById('flow_token').value = '';
+    document.getElementById('flow_action').value = '';
+    document.getElementById('flow_initial_screen').value = '';
+    document.getElementById('flow_data').value = '';
+    document.getElementById('flow_header').value = '';
+    document.getElementById('flow_body').value = '';
+    document.getElementById('flow_footer').value = '';
     if (regla.tipo === 'lista' && regla.opciones) {
         try {
             const opts = JSON.parse(regla.opciones);
@@ -241,12 +383,29 @@ function cargarRegla(regla) {
     } else if (regla.tipo === 'boton') {
         document.getElementById('button_options').value = regla.opciones || '';
         document.getElementById('opciones').value = regla.opciones || '';
+    } else if (regla.tipo === 'flow') {
+        document.getElementById('opciones').value = regla.opciones || '';
+        if (regla.flow) {
+            document.getElementById('flow_cta').value = regla.flow.cta || '';
+            document.getElementById('flow_id').value = regla.flow.flow_id || '';
+            document.getElementById('flow_name').value = regla.flow.flow_name || '';
+            document.getElementById('flow_version').value = regla.flow.version || '';
+            document.getElementById('flow_mode').value = regla.flow.mode || '';
+            document.getElementById('flow_token').value = regla.flow.token || '';
+            document.getElementById('flow_action').value = regla.flow.action || '';
+            document.getElementById('flow_initial_screen').value = regla.flow.initial_screen || '';
+            document.getElementById('flow_data').value = regla.flow.data_display || '';
+            document.getElementById('flow_header').value = regla.flow.header || '';
+            document.getElementById('flow_body').value = regla.flow.body || '';
+            document.getElementById('flow_footer').value = regla.flow.footer || '';
+        }
     } else {
         document.getElementById('opciones').value = regla.opciones || '';
     }
     toggleMediaFields();
     toggleListFields();
     toggleButtonFields();
+    toggleFlowFields();
 }
 </script>
 {% endblock %}

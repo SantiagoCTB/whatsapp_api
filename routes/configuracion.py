@@ -349,6 +349,8 @@ def _reglas_view(template_name):
                 'header': None,
                 'button': None,
                 'footer': None,
+                'flow': None,
+                'opciones_pretty': None,
             }
             if d['opciones']:
                 parsed_opts = None
