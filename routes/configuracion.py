@@ -182,6 +182,31 @@ def _reglas_view(template_name):
                             'sections': sections
                         }
                         opciones = json.dumps(opts)
+                elif tipo == 'flow':
+                    opciones_raw = (request.form.get('opciones') or '').strip()
+                    flow_payload = {}
+                    flow_keys = [k for k in request.form.keys() if k.startswith('flow_')]
+                    for key in flow_keys:
+                        value = request.form.get(key)
+                        if key in {'flow_payload', 'flow_data'} and value:
+                            try:
+                                flow_payload[key] = json.loads(value)
+                            except Exception:
+                                flow_payload[key] = value
+                        else:
+                            flow_payload[key] = value
+                    if flow_payload:
+                        try:
+                            opciones = json.dumps(flow_payload, ensure_ascii=False)
+                        except (TypeError, ValueError):
+                            opciones = json.dumps({k: str(v) if v is not None else '' for k, v in flow_payload.items()}, ensure_ascii=False)
+                    elif opciones_raw:
+                        try:
+                            opciones = json.dumps(json.loads(opciones_raw), ensure_ascii=False)
+                        except Exception:
+                            opciones = opciones_raw
+                    else:
+                        opciones = ''
                 rol_keyword = request.form.get('rol_keyword')
                 calculo = request.form.get('calculo')
                 handler = request.form.get('handler')
@@ -328,45 +353,26 @@ def _reglas_view(template_name):
                 'opciones_pretty': None,
             }
             if d['opciones']:
+                parsed_opts = None
                 try:
-                    opts = json.loads(d['opciones'])
+                    parsed_opts = json.loads(d['opciones'])
                 except Exception:
-                    opts = None
-                if isinstance(opts, dict):
-                    if d['tipo'] == 'lista':
-                        d['header'] = opts.get('header')
-                        d['button'] = opts.get('button')
-                        d['footer'] = opts.get('footer')
-                    if d['tipo'] == 'flow':
-                        flow_data = {
-                            'cta': opts.get('cta'),
-                            'flow_id': opts.get('flow_id'),
-                            'flow_name': opts.get('flow_name'),
-                            'version': opts.get('version'),
-                            'mode': opts.get('mode'),
-                            'token': opts.get('token'),
-                            'action': opts.get('action'),
-                            'initial_screen': opts.get('initial_screen'),
-                            'data': opts.get('data'),
-                            'header': opts.get('header'),
-                            'body': opts.get('body'),
-                            'footer': opts.get('footer'),
-                        }
-                        data_value = flow_data.get('data')
-                        if isinstance(data_value, (dict, list)):
-                            flow_data['data_display'] = json.dumps(data_value, ensure_ascii=False, indent=2)
+                    parsed_opts = None
+
+                if d['tipo'] == 'lista' and isinstance(parsed_opts, dict):
+                    d['header'] = parsed_opts.get('header')
+                    d['button'] = parsed_opts.get('button')
+                    d['footer'] = parsed_opts.get('footer')
+                elif d['tipo'] == 'flow' and isinstance(parsed_opts, dict):
+                    for key, value in parsed_opts.items():
+                        if isinstance(value, (dict, list)):
+                            try:
+                                d[key] = json.dumps(value, ensure_ascii=False)
+                            except (TypeError, ValueError):
+                                d[key] = value
                         else:
-                            flow_data['data_display'] = data_value or ''
-                        flow_data['json_display'] = json.dumps(opts, ensure_ascii=False, indent=2)
-                        d['flow'] = flow_data
-                        d['header'] = flow_data.get('header')
-                        d['button'] = flow_data.get('body')
-                        d['footer'] = flow_data.get('footer')
-                    if d['tipo'] != 'flow':
-                        # Para otros tipos, ofrecer una vista formateada si es posible
-                        d['opciones_pretty'] = json.dumps(opts, ensure_ascii=False, indent=2)
-                    else:
-                        d['opciones_pretty'] = d['flow']['json_display'] if d['flow'] else None
+                            d[key] = value
+                    d['flow_options'] = parsed_opts
             reglas.append(d)
         return render_template(template_name, reglas=reglas)
     finally:
