@@ -366,15 +366,33 @@ def handle_text_message(numero: str, texto: str, save: bool = True):
 
 def process_buffered_messages(numero):
     with cache_lock:
-        textos = message_buffer.pop(numero, None)
+        entries = message_buffer.pop(numero, None) or []
         timer = pending_timers.pop(numero, None)
     if timer:
         timer.cancel()
-    if not textos:
+    if not entries:
         return
-    combined = " ".join(textos)
-    normalized = normalize_text(combined)
-    handle_text_message(numero, normalized, save=False)
+
+    for entry in entries:
+        if isinstance(entry, dict):
+            raw_text = entry.get('raw', '')
+            normalized_text = entry.get('normalized')
+        else:
+            raw_text = entry
+            normalized_text = None
+
+        normalized_text = normalize_text(
+            (normalized_text if normalized_text is not None else raw_text) or ""
+        )
+
+        if not normalized_text:
+            continue
+
+        handle_text_message(
+            numero,
+            raw_text if raw_text else normalized_text,
+            save=False,
+        )
 
 @webhook_bp.route('/webhook', methods=['GET', 'POST'])
 def webhook():
@@ -576,7 +594,9 @@ def webhook():
                     )
                     update_chat_state(from_number, step, 'sin_respuesta')
                     with cache_lock:
-                        message_buffer.setdefault(from_number, []).append(normalized_text)
+                        message_buffer.setdefault(from_number, []).append(
+                            {'raw': text, 'normalized': normalized_text}
+                        )
                         if from_number in pending_timers:
                             pending_timers[from_number].cancel()
                         timer = threading.Timer(3, process_buffered_messages, args=(from_number,))
@@ -633,7 +653,9 @@ def webhook():
                             update_chat_state(from_number, step, 'sin_respuesta')
                             normalized_text = normalize_text(text)
                             with cache_lock:
-                                message_buffer.setdefault(from_number, []).append(normalized_text)
+                                message_buffer.setdefault(from_number, []).append(
+                                    {'raw': text, 'normalized': normalized_text}
+                                )
                                 if from_number in pending_timers:
                                     pending_timers[from_number].cancel()
                                 timer = threading.Timer(3, process_buffered_messages, args=(from_number,))
@@ -665,7 +687,9 @@ def webhook():
                         continue
                     normalized_text = normalize_text(text)
                     with cache_lock:
-                        message_buffer.setdefault(from_number, []).append(normalized_text)
+                        message_buffer.setdefault(from_number, []).append(
+                            {'raw': text, 'normalized': normalized_text}
+                        )
                         if from_number in pending_timers:
                             pending_timers[from_number].cancel()
                         timer = threading.Timer(3, process_buffered_messages, args=(from_number,))
