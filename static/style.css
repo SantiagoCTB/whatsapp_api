@@ -577,11 +577,32 @@
       padding: 14px;
     }
 
+    .flow-response-inline {
+      width: 100%;
+    }
+
+    .bubble .flow-response-card {
+      margin-top: 10px;
+    }
+
     .flow-text {
       margin: 0;
       color: var(--text-main);
       line-height: 1.4;
       white-space: pre-wrap;
+    }
+
+    .flow-user-response {
+      margin-top: 12px;
+      color: var(--text-main);
+      font-size: 0.95rem;
+      line-height: 1.4;
+    }
+
+    .flow-label {
+      font-weight: 600;
+      color: var(--accent-hover);
+      margin-right: 6px;
     }
 
     .flow-response-message {

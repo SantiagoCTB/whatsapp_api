@@ -54,14 +54,19 @@
                             {% if resp.segments %}
                             <div class="flow-response-card">
                                 {% for segment in resp.segments %}
-                                    {% if segment.kind == 'text' %}
+                                    {% if segment.kind == 'flow_name' %}
+                                        <p class="flow-text"><span class="flow-label">Flow:</span> {{ segment.content }}</p>
+                                    {% elif segment.kind == 'text' %}
                                         <p class="flow-text">{{ segment.content }}</p>
                                     {% elif segment.kind == 'data' %}
                                         {{ render_flow_node(segment.content) }}
                                     {% endif %}
                                 {% endfor %}
                             </div>
-                            {% else %}
+                            {% endif %}
+                            {% if resp.user_message %}
+                            <p class="flow-user-response"><span class="flow-label">Usuario:</span> {{ resp.user_message }}</p>
+                            {% elif not resp.segments %}
                             <div class="flow-response-message">{{ resp.mensaje }}</div>
                             {% endif %}
                         </div>

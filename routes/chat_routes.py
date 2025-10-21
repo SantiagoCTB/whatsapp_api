@@ -103,9 +103,11 @@ def get_chat(numero):
              m.link_url, m.link_title, m.link_body, m.link_thumb,
              m.wa_id, m.reply_to_wa_id,
              r.id AS reply_id,
-             r.mensaje AS reply_text, r.tipo AS reply_tipo, r.media_url AS reply_media_url
+             r.mensaje AS reply_text, r.tipo AS reply_tipo, r.media_url AS reply_media_url,
+             fr.flow_name, fr.response_json
       FROM mensajes m
       LEFT JOIN mensajes r ON r.wa_id = m.reply_to_wa_id
+      LEFT JOIN flow_responses fr ON fr.wa_id = m.wa_id
       WHERE m.numero = %s
       ORDER BY m.timestamp ASC
     """, (numero,))
@@ -164,30 +166,31 @@ def respuestas():
         return {'type': 'value', 'value': value}
 
     flow_rows = []
+    base_query = (
+        """
+        SELECT fr.numero, fr.flow_name, fr.response_json, fr.wa_id, fr.timestamp,
+               m.mensaje AS user_message
+          FROM flow_responses fr
+          LEFT JOIN mensajes m ON m.wa_id = fr.wa_id AND m.tipo = 'cliente'
+        """
+    )
+
     if rol == 'admin':
         c.execute(
-            """
-            SELECT numero, flow_name, response_json, wa_id, timestamp
-              FROM flow_responses
-             ORDER BY numero, flow_name, timestamp
-            """,
+            base_query + " ORDER BY fr.numero, fr.flow_name, fr.timestamp",
         )
         flow_rows = c.fetchall()
     elif numeros:
         formato = ','.join(['%s'] * len(numeros))
         c.execute(
-            f"""
-            SELECT numero, flow_name, response_json, wa_id, timestamp
-              FROM flow_responses
-             WHERE numero IN ({formato})
-             ORDER BY numero, flow_name, timestamp
-            """,
+            base_query
+            + f" WHERE fr.numero IN ({formato}) ORDER BY fr.numero, fr.flow_name, fr.timestamp",
             numeros,
         )
         flow_rows = c.fetchall()
 
     grouped_responses = {}
-    for numero, flow_name, response_json, wa_id, timestamp in flow_rows:
+    for numero, flow_name, response_json, wa_id, timestamp, user_message in flow_rows:
         try:
             parsed_json = json.loads(response_json) if response_json else None
         except json.JSONDecodeError:
@@ -205,7 +208,7 @@ def respuestas():
         message = None
 
         if flow_name:
-            segments.append({'kind': 'text', 'content': flow_name})
+            segments.append({'kind': 'flow_name', 'content': flow_name})
 
         if isinstance(parsed_json, (dict, list)):
             segments.append({'kind': 'data', 'content': build_flow_node(parsed_json)})
@@ -225,6 +228,7 @@ def respuestas():
                 'wa_id': wa_id,
                 'segments': segments if segments else None,
                 'mensaje': message or 'Sin contenido',
+                'user_message': (user_message or '').strip() or None,
             }
         )
 

@@ -83,6 +83,88 @@
         const lastChatTimestamps = {};
         const roleIcons = { ventas: '💼', soporte: '🛠', marketing: '📣' };
 
+        function buildFlowValueNode(value) {
+          if (Array.isArray(value)) {
+            const list = document.createElement('ol');
+            list.className = 'flow-data-list flow-data-array';
+            value.forEach(item => {
+              const li = document.createElement('li');
+              const wrapper = document.createElement('div');
+              wrapper.className = 'flow-value-wrapper';
+              wrapper.appendChild(buildFlowValueNode(item));
+              li.appendChild(wrapper);
+              list.appendChild(li);
+            });
+            return list;
+          }
+          if (value && typeof value === 'object') {
+            const list = document.createElement('ul');
+            list.className = 'flow-data-list flow-data-object';
+            Object.entries(value).forEach(([key, val]) => {
+              const li = document.createElement('li');
+              const keySpan = document.createElement('span');
+              keySpan.className = 'flow-key';
+              keySpan.textContent = key;
+              const wrapper = document.createElement('div');
+              wrapper.className = 'flow-value-wrapper';
+              wrapper.appendChild(buildFlowValueNode(val));
+              li.appendChild(keySpan);
+              li.appendChild(wrapper);
+              list.appendChild(li);
+            });
+            return list;
+          }
+          const span = document.createElement('span');
+          span.className = 'flow-value';
+          if (value === null || value === undefined || value === '') {
+            span.textContent = '—';
+          } else {
+            span.textContent = String(value);
+          }
+          return span;
+        }
+
+        function createFlowCard(flowName, flowJson) {
+          const name = (flowName || '').trim();
+          const raw = typeof flowJson === 'string' ? flowJson.trim() : '';
+          let parsed = null;
+          if (raw) {
+            try {
+              parsed = JSON.parse(raw);
+            } catch (err) {
+              parsed = raw;
+            }
+          }
+          const hasName = name.length > 0;
+          const hasContent = parsed !== null && parsed !== undefined && (typeof parsed !== 'string' || parsed.trim() !== '');
+          if (!hasName && !hasContent) {
+            return null;
+          }
+          const card = document.createElement('div');
+          card.className = 'flow-response-card flow-response-inline';
+          if (hasName) {
+            const title = document.createElement('p');
+            title.className = 'flow-text flow-name';
+            const label = document.createElement('span');
+            label.className = 'flow-label';
+            label.textContent = 'Flow:';
+            title.appendChild(label);
+            title.appendChild(document.createTextNode(' ' + name));
+            card.appendChild(title);
+          }
+          if (hasContent) {
+            if (typeof parsed === 'object') {
+              card.appendChild(buildFlowValueNode(parsed));
+            } else if (typeof parsed === 'string') {
+              const text = document.createElement('p');
+              text.className = 'flow-text';
+              text.textContent = parsed;
+              card.appendChild(text);
+            }
+          }
+          return card;
+        }
+
         function playAlertSound() {
           // El sonido de alerta se deshabilita para evitar el tono al ingresar a la interfaz.
         }
@@ -243,7 +325,8 @@
             }
             for (let i=lastCount; i<total; i++){
               const [txt, tipo, url, ts, linkUrl, linkTitle, linkBody, linkThumb,
-                     waId, replyWaId, replyId, replyText, replyTipo, replyUrl] = msgs[i];
+                     waId, replyWaId, replyId, replyText, replyTipo, replyUrl,
+                     flowName, flowJson] = msgs[i];
               const div = document.createElement('div');
               // map tipo a bubble class
               let bubble = 'cliente';
@@ -305,6 +388,11 @@
                 const p = document.createElement('p');
                 p.textContent = txt;
                 div.appendChild(p);
+              }
+
+              const flowCard = createFlowCard(flowName, flowJson);
+              if (flowCard) {
+                div.appendChild(flowCard);
               }
 
               // fecha y hora
