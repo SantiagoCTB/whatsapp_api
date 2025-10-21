@@ -1,6 +1,19 @@
 import mysql.connector
+from mysql.connector import errorcode
 from werkzeug.security import generate_password_hash
 from config import Config
+
+
+FLOW_RESPONSES_TABLE_DDL = """
+    CREATE TABLE IF NOT EXISTS flow_responses (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      numero VARCHAR(20) NOT NULL,
+      flow_name VARCHAR(255),
+      response_json LONGTEXT,
+      wa_id VARCHAR(255),
+      timestamp DATETIME
+    ) ENGINE=InnoDB;
+"""
 
 def get_connection():
     return mysql.connector.connect(
@@ -80,16 +93,7 @@ def init_db():
     """)
 
     # respuestas de flujos (Flow)
-    c.execute("""
-    CREATE TABLE IF NOT EXISTS flow_responses (
-      id INT AUTO_INCREMENT PRIMARY KEY,
-      numero VARCHAR(20) NOT NULL,
-      flow_name VARCHAR(255),
-      response_json LONGTEXT,
-      wa_id VARCHAR(255),
-      timestamp DATETIME
-    ) ENGINE=InnoDB;
-    """)
+    c.execute(FLOW_RESPONSES_TABLE_DDL)
 
     # usuarios
     c.execute("""
@@ -389,16 +393,30 @@ def guardar_mensaje(
 def guardar_flow_response(numero, flow_name, response_json, wa_id=None):
     """Guarda la respuesta de un Flow (nfm_reply) en la tabla ``flow_responses``."""
     conn = get_connection()
-    c = conn.cursor()
-    c.execute(
-        """
-        INSERT INTO flow_responses (numero, flow_name, response_json, wa_id, timestamp)
-        VALUES (%s, %s, %s, %s, NOW())
-        """,
-        (numero, flow_name, response_json, wa_id),
-    )
-    conn.commit()
-    conn.close()
+    try:
+        c = conn.cursor()
+        try:
+            c.execute(
+                """
+                INSERT INTO flow_responses (numero, flow_name, response_json, wa_id, timestamp)
+                VALUES (%s, %s, %s, %s, NOW())
+                """,
+                (numero, flow_name, response_json, wa_id),
+            )
+        except mysql.connector.errors.ProgrammingError as exc:
+            if exc.errno != errorcode.ER_NO_SUCH_TABLE:
+                raise
+            c.execute(FLOW_RESPONSES_TABLE_DDL)
+            c.execute(
+                """
+                INSERT INTO flow_responses (numero, flow_name, response_json, wa_id, timestamp)
+                VALUES (%s, %s, %s, %s, NOW())
+                """,
+                (numero, flow_name, response_json, wa_id),
+            )
+        conn.commit()
+    finally:
+        conn.close()
 
 
 def update_mensaje_texto(id_mensaje, texto):
