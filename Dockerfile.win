@@ -1,5 +1,5 @@
 ﻿# escape=`
-FROM python:3.12-windowsservercore-ltsc2022
+FROM python:3.12-windowsservercore-ltsc2025
 
 SHELL ["cmd", "/S", "/C"]
 

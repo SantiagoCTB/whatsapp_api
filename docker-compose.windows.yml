@@ -8,4 +8,4 @@
     ports:
       - "443:8000"  
     restart: unless-stopped
-    #isolation: hyperv
+    isolation: hyperv
