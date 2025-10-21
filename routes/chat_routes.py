@@ -1,7 +1,7 @@
 import os
 import uuid
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from queue import Empty
 from flask import (
     Blueprint,
@@ -67,6 +67,38 @@ def _table_exists(cursor, table_name):
     except ProgrammingError:
         # If the SHOW TABLES fails for any reason, behave as if the table is missing.
         return False
+
+
+def _parse_iso_datetime(raw_value):
+    """Parse ``raw_value`` as ISO-8601 timestamp returning a naive UTC datetime."""
+    if not raw_value:
+        return None
+
+    if isinstance(raw_value, datetime):
+        parsed = raw_value
+    else:
+        text = str(raw_value).strip()
+        if not text:
+            return None
+        if text.endswith('Z'):
+            text = text[:-1] + '+00:00'
+        try:
+            parsed = datetime.fromisoformat(text)
+        except ValueError:
+            return None
+
+    if parsed.tzinfo is not None:
+        parsed = parsed.astimezone(timezone.utc)
+    return parsed.replace(tzinfo=None)
+
+
+def _serialize_datetime(value):
+    """Return ``value`` serialised as ISO-8601 if it is a ``datetime``."""
+    if isinstance(value, datetime):
+        if value.tzinfo is not None:
+            return value.astimezone(timezone.utc).isoformat()
+        return value.isoformat()
+    return value
 
 
 def _parse_flow_json(raw_value):
@@ -301,34 +333,62 @@ def get_chat(numero):
         if not c.fetchone():
             conn.close()
             return jsonify({'error': 'No autorizado'}), 403
-    if _table_exists(c, 'flow_responses'):
-        c.execute("""
+    has_flow_table = _table_exists(c, 'flow_responses')
+
+    select_clause = """
           SELECT m.mensaje, m.tipo, m.media_url, m.timestamp,
                  m.link_url, m.link_title, m.link_body, m.link_thumb,
                  m.wa_id, m.reply_to_wa_id,
                  r.id AS reply_id,
                  r.mensaje AS reply_text, r.tipo AS reply_tipo, r.media_url AS reply_media_url,
-                 fr.flow_name, fr.response_json
-          FROM mensajes m
-          LEFT JOIN mensajes r ON r.wa_id = m.reply_to_wa_id
-          LEFT JOIN flow_responses fr ON fr.wa_id = m.wa_id
-          WHERE m.numero = %s
-          ORDER BY m.timestamp ASC
-        """, (numero,))
+    """
+    if has_flow_table:
+        select_clause += "                 fr.flow_name, fr.response_json\n"
     else:
-        c.execute("""
-          SELECT m.mensaje, m.tipo, m.media_url, m.timestamp,
-                 m.link_url, m.link_title, m.link_body, m.link_thumb,
-                 m.wa_id, m.reply_to_wa_id,
-                 r.id AS reply_id,
-                 r.mensaje AS reply_text, r.tipo AS reply_tipo, r.media_url AS reply_media_url,
-                 NULL AS flow_name, NULL AS response_json
+        select_clause += "                 NULL AS flow_name, NULL AS response_json\n"
+
+    from_clause = """
           FROM mensajes m
           LEFT JOIN mensajes r ON r.wa_id = m.reply_to_wa_id
-          WHERE m.numero = %s
-          ORDER BY m.timestamp ASC
-        """, (numero,))
+    """
+    if has_flow_table:
+        from_clause += "          LEFT JOIN flow_responses fr ON fr.wa_id = m.wa_id\n"
+
+    conditions = ["m.numero = %s"]
+    params = [numero]
+
+    since_ts_raw = request.args.get('since_ts')
+    last_id = request.args.get('last_id')
+    since_ts = _parse_iso_datetime(since_ts_raw)
+
+    if since_ts is not None and last_id:
+        conditions.append("(m.timestamp > %s OR (m.timestamp = %s AND m.wa_id > %s))")
+        params.extend([since_ts, since_ts, last_id])
+    elif since_ts is not None:
+        conditions.append("m.timestamp > %s")
+        params.append(since_ts)
+    elif last_id:
+        conditions.append("m.wa_id > %s")
+        params.append(last_id)
+
+    where_clause = " WHERE " + " AND ".join(conditions)
+    order_clause = " ORDER BY m.timestamp ASC, m.wa_id ASC"
+    query = f"{select_clause}{from_clause}{where_clause}{order_clause}"
+
+    c.execute(query, tuple(params))
     mensajes = c.fetchall()
+
+    c.execute(
+        """
+        SELECT m.timestamp, m.wa_id
+          FROM mensajes m
+         WHERE m.numero = %s
+         ORDER BY m.timestamp DESC, m.wa_id DESC
+         LIMIT 1
+        """,
+        (numero,),
+    )
+    marker_row = c.fetchone()
     conn.close()
 
     formatted = []
@@ -340,7 +400,14 @@ def get_chat(numero):
         row.append(segments)
         formatted.append(row)
 
-    return jsonify({'mensajes': formatted})
+    last_timestamp = marker_row[0] if marker_row else None
+    last_wa_id = marker_row[1] if marker_row else None
+    meta = {
+        'last_timestamp': _serialize_datetime(last_timestamp),
+        'last_wa_id': last_wa_id,
+    }
+
+    return jsonify({'mensajes': formatted, 'meta': meta})
 
 
 @chat_bp.route('/respuestas')

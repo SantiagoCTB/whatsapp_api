@@ -61,7 +61,8 @@
 
   <script>
     document.addEventListener('DOMContentLoaded', () => {
-      let currentChat = null, todosChats = [], lastCount = 0, replyTo = null;
+      let currentChat = null, todosChats = [], replyTo = null;
+      const chatStates = {};
       let selectedBubble = null;
       const chatListEl = document.getElementById('chatList');
       const chatBoxEl  = document.getElementById('chatBox');
@@ -84,6 +85,33 @@
         const roleIcons = { ventas: '💼', soporte: '🛠', marketing: '📣' };
 
         const FLOW_SUMMARY_MAX_ITEMS = 10;
+
+        function getChatState(numero) {
+          if (!chatStates[numero]) {
+            chatStates[numero] = {
+              count: 0,
+              marker: null,
+              renderedIds: new Set(),
+            };
+          }
+          return chatStates[numero];
+        }
+
+        function normaliseTimestamp(value) {
+          if (!value) return null;
+          if (typeof value === 'string') {
+            return value;
+          }
+          try {
+            const date = new Date(value);
+            if (!Number.isNaN(date.getTime())) {
+              return date.toISOString();
+            }
+          } catch (err) {
+            // ignore malformed values
+          }
+          return null;
+        }
 
         function formatFlowValue(value) {
           if (value === null || value === undefined) {
@@ -519,38 +547,93 @@
       // Seleccionar chat
       function selectChat(numero, liEl) {
         currentChat = numero;
-        lastCount = 0; // reset count so the initial load doesn't trigger alerts
         // marcar activo
         document.querySelectorAll('#chatList li').forEach(li => li.classList.remove('active'));
         liEl.classList.add('active');
-        loadMessages();
+        replyTo = null;
+        replyPreviewEl.style.display = 'none';
+        replyPreviewEl.innerHTML = '';
+        loadMessages({ resync: true });
         loadBotonera();
       }
 
       // Cargar mensajes
-      function loadMessages() {
+      function loadMessages(options = {}) {
         if (!currentChat) return;
-        // no interrumpir si hay media reproduciéndose
         const mediaEls = chatBoxEl.querySelectorAll('audio, video');
         for (let m of mediaEls) if (!m.paused) return;
 
-        fetch(`/get_chat/${currentChat}`)
-          .then(r=>r.json())
+        const state = getChatState(currentChat);
+        const { resync = false } = options;
+        let previousCount = state.count || 0;
+
+        if (!(state.renderedIds instanceof Set)) {
+          state.renderedIds = new Set();
+        }
+
+        if (resync) {
+          previousCount = 0;
+          state.count = 0;
+          state.marker = null;
+          state.renderedIds.clear();
+          chatBoxEl.innerHTML = '';
+        }
+
+        const params = new URLSearchParams();
+        if (!resync && state.marker) {
+          if (state.marker.timestamp) params.set('since_ts', state.marker.timestamp);
+          if (state.marker.waId) params.set('last_id', state.marker.waId);
+        }
+
+        const query = params.toString();
+        const requestUrl = query ? `/get_chat/${currentChat}?${query}` : `/get_chat/${currentChat}`;
+
+        fetch(requestUrl)
+          .then(r => r.json())
           .then(data => {
-            const msgs = data.mensajes, total = msgs.length;
-            const atBottom = chatBoxEl.scrollTop + chatBoxEl.clientHeight >= chatBoxEl.scrollHeight - 5;
-            if (lastCount===0 || total<lastCount) {
-              chatBoxEl.innerHTML = ''; lastCount = 0;
+            const msgs = Array.isArray(data.mensajes) ? data.mensajes : [];
+            const meta = data.meta || {};
+            if (meta && meta.force_resync && !resync) {
+              loadMessages({ resync: true });
+              return;
             }
-            for (let i=lastCount; i<total; i++){
-              const [txt, tipo, url, ts, linkUrl, linkTitle, linkBody, linkThumb,
-                     waId, replyWaId, replyId, replyText, replyTipo, replyUrl,
-                     flowName, flowJson, flowSegments] = msgs[i];
+
+            const atBottom = resync || (chatBoxEl.scrollTop + chatBoxEl.clientHeight >= chatBoxEl.scrollHeight - 5);
+            const shouldAlert = previousCount > 0;
+            let alerted = false;
+            let needsResync = false;
+
+            for (const message of msgs) {
+              if (needsResync) break;
+              const [
+                txt,
+                tipo = '',
+                url,
+                ts,
+                linkUrl,
+                linkTitle,
+                linkBody,
+                linkThumb,
+                waId,
+                replyWaId,
+                replyId,
+                replyText,
+                replyTipo,
+                replyUrl,
+                flowName,
+                flowJson,
+                flowSegments,
+              ] = message;
+
+              if (!resync && waId && state.renderedIds.has(waId)) {
+                needsResync = true;
+                break;
+              }
+
               const div = document.createElement('div');
-              // map tipo a bubble class
               let bubble = 'cliente';
-              if (tipo.startsWith('bot'))    bubble='bot';
-              if (tipo.startsWith('asesor')) bubble='asesor';
+              if (tipo && tipo.startsWith('bot')) bubble = 'bot';
+              if (tipo && tipo.startsWith('asesor')) bubble = 'asesor';
               div.className = `bubble ${bubble} message`;
 
               if (replyWaId) {
@@ -563,10 +646,14 @@
                   replyDiv.appendChild(img);
                 } else if (replyTipo && replyTipo.includes('audio') && replyUrl) {
                   const a = document.createElement('audio');
-                  a.controls = true; a.src = replyUrl; replyDiv.appendChild(a);
+                  a.controls = true;
+                  a.src = replyUrl;
+                  replyDiv.appendChild(a);
                 } else if (replyTipo && replyTipo.includes('video') && replyUrl) {
                   const v = document.createElement('video');
-                  v.controls = true; v.src = replyUrl; v.style.maxWidth = '100px';
+                  v.controls = true;
+                  v.src = replyUrl;
+                  v.style.maxWidth = '100px';
                   replyDiv.appendChild(v);
                 }
                 if (replyText) {
@@ -577,32 +664,41 @@
                 div.appendChild(replyDiv);
               }
 
-              // insertar media o texto
               if (tipo === 'referral' && linkUrl) {
                 const a = document.createElement('a');
-                a.href = linkUrl; a.target = '_blank'; a.style.textDecoration = 'none';
+                a.href = linkUrl;
+                a.target = '_blank';
+                a.style.textDecoration = 'none';
                 const card = document.createElement('div');
                 card.style.display = 'flex';
                 const img = document.createElement('img');
-                img.src = linkThumb; img.style.width = '100px'; img.style.marginRight = '8px';
+                img.src = linkThumb;
+                img.style.width = '100px';
+                img.style.marginRight = '8px';
                 const textBox = document.createElement('div');
                 textBox.innerHTML = `<strong>${linkTitle}</strong><br>${linkBody}`;
-                card.appendChild(img); card.appendChild(textBox); a.appendChild(card);
+                card.appendChild(img);
+                card.appendChild(textBox);
+                a.appendChild(card);
                 div.appendChild(a);
-              } else if (tipo.endsWith('_image') && url) {
+              } else if (tipo && tipo.endsWith('_image') && url) {
                 const img = document.createElement('img');
-                img.src = url; img.style.maxWidth='200px';
+                img.src = url;
+                img.style.maxWidth = '200px';
                 div.appendChild(img);
-              } else if (tipo.includes('audio') && url) {
+              } else if (tipo && tipo.includes('audio') && url) {
                 const a = document.createElement('audio');
-                a.controls=true; a.src=url; div.appendChild(a);
-              } else if (tipo.includes('video') && url) {
+                a.controls = true;
+                a.src = url;
+                div.appendChild(a);
+              } else if (tipo && tipo.includes('video') && url) {
                 const v = document.createElement('video');
-                v.controls=true; v.src=url; v.style.maxWidth='200px';
+                v.controls = true;
+                v.src = url;
+                v.style.maxWidth = '200px';
                 div.appendChild(v);
               }
 
-              // texto (caption o mensajes)
               if (txt) {
                 const p = document.createElement('p');
                 p.textContent = txt;
@@ -619,17 +715,18 @@
                 div.appendChild(segmentsCard);
               }
 
-              // fecha y hora
               if (ts) {
                 const date = new Date(ts);
-                const timeSpan = document.createElement('div');
-                const dia = String(date.getDate()).padStart(2, '0');
-                const mes = String(date.getMonth() + 1).padStart(2, '0');
-                const hora = String(date.getHours()).padStart(2, '0');
-                const min = String(date.getMinutes()).padStart(2, '0');
-                timeSpan.className = 'timestamp';
-                timeSpan.textContent = `${dia}/${mes} ${hora}:${min}`;
-                div.appendChild(timeSpan);
+                if (!Number.isNaN(date.getTime())) {
+                  const timeSpan = document.createElement('div');
+                  const dia = String(date.getDate()).padStart(2, '0');
+                  const mes = String(date.getMonth() + 1).padStart(2, '0');
+                  const hora = String(date.getHours()).padStart(2, '0');
+                  const min = String(date.getMinutes()).padStart(2, '0');
+                  timeSpan.className = 'timestamp';
+                  timeSpan.textContent = `${dia}/${mes} ${hora}:${min}`;
+                  div.appendChild(timeSpan);
+                }
               }
 
               if (waId) {
@@ -648,14 +745,44 @@
               }
 
               chatBoxEl.appendChild(div);
-
-              if (lastCount > 0 && bubble !== 'asesor') {
-                const mediaPlaying = Array.from(chatBoxEl.querySelectorAll('audio, video')).some(m => !m.paused);
-                if (!mediaPlaying) playAlertSound();
+              if (waId) {
+                state.renderedIds.add(waId);
               }
-              lastCount = i + 1;
+
+              if (shouldAlert && !alerted && bubble !== 'asesor') {
+                const mediaPlaying = Array.from(chatBoxEl.querySelectorAll('audio, video')).some(m => !m.paused);
+                if (!mediaPlaying) {
+                  playAlertSound();
+                  alerted = true;
+                }
+              }
             }
-            if (atBottom) chatBoxEl.scrollTop = chatBoxEl.scrollHeight;
+
+            if (needsResync && !resync) {
+              console.warn('Desincronización detectada, recargando historial completo');
+              loadMessages({ resync: true });
+              return;
+            }
+
+            if ((atBottom || resync) && chatBoxEl.scrollHeight) {
+              chatBoxEl.scrollTop = chatBoxEl.scrollHeight;
+            }
+
+            const lastMessage = msgs.length ? msgs[msgs.length - 1] : null;
+            const metaTimestamp = meta.last_timestamp || normaliseTimestamp(lastMessage ? lastMessage[3] : null);
+            const metaWaId = meta.last_wa_id || (lastMessage ? lastMessage[8] || null : null);
+
+            if (metaTimestamp || metaWaId) {
+              state.marker = {
+                timestamp: metaTimestamp || (state.marker ? state.marker.timestamp : null),
+                waId: metaWaId || (state.marker ? state.marker.waId : null),
+              };
+            }
+
+            state.count = chatBoxEl.querySelectorAll('.message').length;
+          })
+          .catch(err => {
+            console.error('No se pudo cargar el chat', err);
           });
       }
 
