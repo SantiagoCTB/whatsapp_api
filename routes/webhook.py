@@ -2,7 +2,7 @@ import os
 import logging
 import threading
 import json
-from flask import Blueprint, Response, jsonify, request, url_for
+from flask import Blueprint, Response, jsonify, request, url_for, current_app
 from datetime import datetime
 from config import Config
 from services.db import (
@@ -380,7 +380,7 @@ def handle_text_message(numero: str, texto: str, save: bool = True):
     process_step_chain(numero, text_norm)
 
 
-def process_buffered_messages(numero):
+def process_buffered_messages(numero, app=None, environ=None):
     with cache_lock:
         textos = message_buffer.pop(numero, None)
         timer = pending_timers.pop(numero, None)
@@ -390,10 +390,30 @@ def process_buffered_messages(numero):
         return
     combined = " ".join(textos)
     normalized = normalize_text(combined)
-    handle_text_message(numero, normalized, save=False)
+    app_ctx = app
+    if app_ctx is None:
+        try:
+            app_ctx = current_app._get_current_object()
+        except RuntimeError:  # No active application context
+            app_ctx = None
+    if app_ctx is not None:
+        if environ is not None:
+            # Rehydrate the original request context so helpers like url_for
+            # (with _external=True) continue to work in the timer thread.
+            with app_ctx.request_context(environ):
+                handle_text_message(numero, normalized, save=False)
+        else:
+            with app_ctx.app_context():
+                handle_text_message(numero, normalized, save=False)
+    else:
+        handle_text_message(numero, normalized, save=False)
 
 @webhook_bp.route('/webhook', methods=['GET', 'POST'])
 def webhook():
+    flask_app = current_app._get_current_object()
+    # Preserve the current request environment so background timers can
+    # recreate the context when processing buffered messages.
+    request_environ = request.environ.copy()
     relevant_headers = {
         header: request.headers.get(header)
         for header in RELEVANT_HEADERS
@@ -600,7 +620,7 @@ def webhook():
                         message_buffer.setdefault(from_number, []).append(normalized_text)
                         if from_number in pending_timers:
                             pending_timers[from_number].cancel()
-                        timer = threading.Timer(3, process_buffered_messages, args=(from_number,))
+                        timer = threading.Timer(3, process_buffered_messages, args=(from_number, flask_app, request_environ))
                         pending_timers[from_number] = timer
                     timer.start()
                     summary['processed'] += 1
@@ -658,7 +678,7 @@ def webhook():
                                 message_buffer.setdefault(from_number, []).append(normalized_text)
                                 if from_number in pending_timers:
                                     pending_timers[from_number].cancel()
-                                timer = threading.Timer(3, process_buffered_messages, args=(from_number,))
+                                timer = threading.Timer(3, process_buffered_messages, args=(from_number, flask_app, request_environ))
                                 pending_timers[from_number] = timer
                             timer.start()
                             summary['processed'] += 1
@@ -691,7 +711,7 @@ def webhook():
                         message_buffer.setdefault(from_number, []).append(normalized_text)
                         if from_number in pending_timers:
                             pending_timers[from_number].cancel()
-                        timer = threading.Timer(3, process_buffered_messages, args=(from_number,))
+                        timer = threading.Timer(3, process_buffered_messages, args=(from_number, flask_app, request_environ))
                         pending_timers[from_number] = timer
                     timer.start()
                     summary['processed'] += 1
