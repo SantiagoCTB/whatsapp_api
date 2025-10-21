@@ -168,23 +168,51 @@
         }
 
         function createFlowCard(flowName, flowJson) {
-          const name = (flowName || '').trim();
-          const raw = typeof flowJson === 'string' ? flowJson.trim() : '';
+          const name = typeof flowName === 'string' ? flowName.trim() : '';
           let parsed = null;
-          if (raw) {
-            try {
-              parsed = JSON.parse(raw);
-            } catch (err) {
-              parsed = raw;
+
+          if (flowJson === null || flowJson === undefined) {
+            parsed = null;
+          } else if (typeof flowJson === 'string') {
+            const raw = flowJson.trim();
+            if (raw) {
+              try {
+                parsed = JSON.parse(raw);
+              } catch (err) {
+                parsed = raw;
+              }
+            } else {
+              parsed = '';
+            }
+          } else if (typeof flowJson === 'object') {
+            parsed = flowJson;
+          } else {
+            const raw = String(flowJson).trim();
+            parsed = raw;
+          }
+
+          const hasRawContent = parsed !== null && parsed !== undefined;
+          let hasContent = false;
+          if (hasRawContent) {
+            if (typeof parsed === 'string') {
+              hasContent = parsed.trim().length > 0;
+            } else if (Array.isArray(parsed)) {
+              hasContent = parsed.length > 0;
+            } else if (typeof parsed === 'object') {
+              hasContent = Object.keys(parsed).length > 0;
+            } else {
+              hasContent = String(parsed).trim().length > 0;
             }
           }
+
           const hasName = name.length > 0;
-          const hasContent = parsed !== null && parsed !== undefined && (typeof parsed !== 'string' || parsed.trim() !== '');
           if (!hasName && !hasContent) {
             return null;
           }
+
           const card = document.createElement('div');
           card.className = 'flow-response-card flow-response-inline';
+
           if (hasName) {
             const title = document.createElement('p');
             title.className = 'flow-text flow-name';
@@ -195,7 +223,10 @@
             title.appendChild(document.createTextNode(' ' + name));
             card.appendChild(title);
           }
-          if (hasContent) {
+
+          let appendedContent = false;
+
+          if (hasRawContent) {
             if (parsed && typeof parsed === 'object') {
               const summaryItems = flattenFlowData(parsed);
               if (summaryItems.length) {
@@ -215,6 +246,7 @@
                   list.appendChild(li);
                 });
                 card.appendChild(list);
+                appendedContent = true;
                 if (summaryItems.length > FLOW_SUMMARY_MAX_ITEMS) {
                   const remaining = summaryItems.length - FLOW_SUMMARY_MAX_ITEMS;
                   const more = document.createElement('div');
@@ -230,8 +262,10 @@
                   placeholder.className = 'flow-text';
                   placeholder.textContent = 'Sin contenido';
                   card.appendChild(placeholder);
+                  appendedContent = true;
                 } else {
                   card.appendChild(buildFlowValueNode(parsed));
+                  appendedContent = true;
                 }
               }
             } else if (typeof parsed === 'string') {
@@ -241,14 +275,24 @@
                 text.className = 'flow-text';
                 text.textContent = textValue;
                 card.appendChild(text);
+                appendedContent = true;
               }
-            } else if (parsed !== null && parsed !== undefined) {
+            } else {
               const text = document.createElement('p');
               text.className = 'flow-text';
               text.textContent = formatFlowValue(parsed);
               card.appendChild(text);
+              appendedContent = true;
             }
           }
+
+          if (!appendedContent && hasName) {
+            const placeholder = document.createElement('p');
+            placeholder.className = 'flow-text';
+            placeholder.textContent = 'Sin contenido';
+            card.appendChild(placeholder);
+          }
+
           return card;
         }
 
