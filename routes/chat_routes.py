@@ -3,6 +3,7 @@ import uuid
 import json
 from flask import Blueprint, render_template, request, redirect, session, url_for, jsonify
 from werkzeug.utils import secure_filename
+from mysql.connector.errors import ProgrammingError
 from config import Config
 from services.whatsapp_api import enviar_mensaje
 from services.db import get_connection, get_chat_state, update_chat_state
@@ -12,6 +13,16 @@ chat_bp = Blueprint('chat', __name__)
 # Carpeta de subida debe coincidir con la de whatsapp_api
 MEDIA_ROOT = Config.MEDIA_ROOT
 os.makedirs(Config.MEDIA_ROOT, exist_ok=True)
+
+
+def _table_exists(cursor, table_name):
+    """Return True if the given table exists in the current schema."""
+    try:
+        cursor.execute("SHOW TABLES LIKE %s", (table_name,))
+        return cursor.fetchone() is not None
+    except ProgrammingError:
+        # If the SHOW TABLES fails for any reason, behave as if the table is missing.
+        return False
 
 @chat_bp.route('/')
 def index():
@@ -98,19 +109,33 @@ def get_chat(numero):
         if not c.fetchone():
             conn.close()
             return jsonify({'error': 'No autorizado'}), 403
-    c.execute("""
-      SELECT m.mensaje, m.tipo, m.media_url, m.timestamp,
-             m.link_url, m.link_title, m.link_body, m.link_thumb,
-             m.wa_id, m.reply_to_wa_id,
-             r.id AS reply_id,
-             r.mensaje AS reply_text, r.tipo AS reply_tipo, r.media_url AS reply_media_url,
-             fr.flow_name, fr.response_json
-      FROM mensajes m
-      LEFT JOIN mensajes r ON r.wa_id = m.reply_to_wa_id
-      LEFT JOIN flow_responses fr ON fr.wa_id = m.wa_id
-      WHERE m.numero = %s
-      ORDER BY m.timestamp ASC
-    """, (numero,))
+    if _table_exists(c, 'flow_responses'):
+        c.execute("""
+          SELECT m.mensaje, m.tipo, m.media_url, m.timestamp,
+                 m.link_url, m.link_title, m.link_body, m.link_thumb,
+                 m.wa_id, m.reply_to_wa_id,
+                 r.id AS reply_id,
+                 r.mensaje AS reply_text, r.tipo AS reply_tipo, r.media_url AS reply_media_url,
+                 fr.flow_name, fr.response_json
+          FROM mensajes m
+          LEFT JOIN mensajes r ON r.wa_id = m.reply_to_wa_id
+          LEFT JOIN flow_responses fr ON fr.wa_id = m.wa_id
+          WHERE m.numero = %s
+          ORDER BY m.timestamp ASC
+        """, (numero,))
+    else:
+        c.execute("""
+          SELECT m.mensaje, m.tipo, m.media_url, m.timestamp,
+                 m.link_url, m.link_title, m.link_body, m.link_thumb,
+                 m.wa_id, m.reply_to_wa_id,
+                 r.id AS reply_id,
+                 r.mensaje AS reply_text, r.tipo AS reply_tipo, r.media_url AS reply_media_url,
+                 NULL AS flow_name, NULL AS response_json
+          FROM mensajes m
+          LEFT JOIN mensajes r ON r.wa_id = m.reply_to_wa_id
+          WHERE m.numero = %s
+          ORDER BY m.timestamp ASC
+        """, (numero,))
     mensajes = c.fetchall()
     conn.close()
     return jsonify({'mensajes': [list(m) for m in mensajes]})
@@ -166,6 +191,7 @@ def respuestas():
         return {'type': 'value', 'value': value}
 
     flow_rows = []
+    has_flow_table = _table_exists(c, 'flow_responses')
     base_query = (
         """
         SELECT fr.numero, fr.flow_name, fr.response_json, fr.wa_id, fr.timestamp,
@@ -175,19 +201,20 @@ def respuestas():
         """
     )
 
-    if rol == 'admin':
-        c.execute(
-            base_query + " ORDER BY fr.numero, fr.flow_name, fr.timestamp",
-        )
-        flow_rows = c.fetchall()
-    elif numeros:
-        formato = ','.join(['%s'] * len(numeros))
-        c.execute(
-            base_query
-            + f" WHERE fr.numero IN ({formato}) ORDER BY fr.numero, fr.flow_name, fr.timestamp",
-            numeros,
-        )
-        flow_rows = c.fetchall()
+    if has_flow_table:
+        if rol == 'admin':
+            c.execute(
+                base_query + " ORDER BY fr.numero, fr.flow_name, fr.timestamp",
+            )
+            flow_rows = c.fetchall()
+        elif numeros:
+            formato = ','.join(['%s'] * len(numeros))
+            c.execute(
+                base_query
+                + f" WHERE fr.numero IN ({formato}) ORDER BY fr.numero, fr.flow_name, fr.timestamp",
+                numeros,
+            )
+            flow_rows = c.fetchall()
 
     grouped_responses = {}
     for numero, flow_name, response_json, wa_id, timestamp, user_message in flow_rows:
