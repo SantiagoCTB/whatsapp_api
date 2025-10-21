@@ -9,83 +9,71 @@
 </div>
 
 <h2>Respuestas</h2>
-{% if summary %}
-<h3>Resumen</h3>
-<table class="summary-table">
-    <tr>
-        <th>Regla/Step</th>
-        <th>Cantidad</th>
-    </tr>
-    {% for step, count in summary.items() %}
-    <tr>
-        <td>{{ step }}</td>
-        <td>{{ count }}</td>
-    </tr>
-    {% endfor %}
-</table>
-{% endif %}
+{% macro render_flow_node(node) %}
+    {% if node['type'] == 'object' %}
+        <ul class="flow-data-list flow-data-object">
+            {% for item in node['items'] %}
+            <li>
+                <span class="flow-key">{{ item['key'] }}</span>
+                <div class="flow-value-wrapper">{{ render_flow_node(item['value']) }}</div>
+            </li>
+            {% endfor %}
+        </ul>
+    {% elif node['type'] == 'list' %}
+        <ol class="flow-data-list flow-data-array">
+            {% for item in node['items'] %}
+            <li>
+                <div class="flow-value-wrapper">{{ render_flow_node(item) }}</div>
+            </li>
+            {% endfor %}
+        </ol>
+    {% else %}
+        <span class="flow-value">{{ node['value'] if node['value'] is not none and node['value'] != '' else '—' }}</span>
+    {% endif %}
+{% endmacro %}
+{% if flow_responses %}
 <table class="fixed-table">
-    <tr>
-        <th>Numero</th>
-        <th>Fecha</th>
-        <th>Mensaje</th>
-        <th>Tipo</th>
-        {% for step in steps %}
-        <th>{{ step|capitalize }}</th>
-        <th>Respuesta usuario {{ step }}</th>
+    <thead>
+        <tr>
+            <th>Número</th>
+            <th>Respuestas del flow</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for response in flow_responses %}
+        <tr>
+            <td>{{ response.numero }}</td>
+            <td>
+                <ul class="flow-responses-list">
+                    {% for resp in response.respuestas %}
+                    <li class="flow-response-item">
+                        <div class="flow-response-header">
+                            <span class="flow-response-timestamp">{{ resp.timestamp }}</span>
+                        </div>
+                        <div class="flow-response-body">
+                            {% if resp.segments %}
+                            <div class="flow-response-card">
+                                {% for segment in resp.segments %}
+                                    {% if segment.kind == 'text' %}
+                                        <p class="flow-text">{{ segment.content }}</p>
+                                    {% elif segment.kind == 'data' %}
+                                        {{ render_flow_node(segment.content) }}
+                                    {% endif %}
+                                {% endfor %}
+                            </div>
+                            {% else %}
+                            <div class="flow-response-message">{{ resp.mensaje }}</div>
+                            {% endif %}
+                        </div>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </td>
+        </tr>
         {% endfor %}
-    </tr>
-    {% for r in conversaciones %}
-    <tr>
-        <td>{{ r.numero }}</td>
-        <td>{{ r.fecha }}</td>
-        <td>{{ r.mensaje }}</td>
-        <td>{{ r.tipo }}</td>
-        {% for step in steps %}
-        <td>{{ r.get(step, '-') }}</td>
-        <td>{{ r.get('respuesta_' ~ step, '-') }}</td>
-        {% endfor %}
-    </tr>
-    {% endfor %}
+    </tbody>
 </table>
-{% if flows %}
-<h3>Flows recibidos</h3>
-<table class="fixed-table flow-table">
-    <tr>
-        <th>Numero</th>
-        <th>Nombre del Flow</th>
-        <th>Respuestas</th>
-    </tr>
-    {% for flow in flows %}
-    <tr>
-        <td>{{ flow.numero }}</td>
-        <td>{{ flow.flow_name or 'Sin nombre' }}</td>
-        <td>
-            <ul class="flow-response-list">
-                {% for resp in flow.responses %}
-                <li>
-                    <div class="flow-response-meta">
-                        {% if resp.timestamp %}<strong>{{ resp.timestamp }}</strong>{% endif %}
-                        {% if resp.wa_id %}<span class="flow-response-waid"> (WA: {{ resp.wa_id }})</span>{% endif %}
-                    </div>
-                    {% set payload = resp.data %}
-                    {% if payload is mapping %}
-                    <pre>{{ payload | tojson(indent=2) }}</pre>
-                    {% elif payload is string %}
-                    <pre>{{ payload }}</pre>
-                    {% elif payload is sequence %}
-                    <pre>{{ payload | tojson(indent=2) }}</pre>
-                    {% elif payload is none %}
-                    <em>Sin contenido</em>
-                    {% else %}
-                    <pre>{{ payload }}</pre>
-                    {% endif %}
-                </li>
-                {% endfor %}
-            </ul>
-        </td>
-    </tr>
-    {% endfor %}
-</table>
+{% else %}
+<p>No hay respuestas de flows disponibles.</p>
 {% endif %}
 {% endblock %}
