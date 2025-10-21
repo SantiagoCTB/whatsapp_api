@@ -2,18 +2,61 @@ import os
 import uuid
 import json
 from datetime import datetime
-from flask import Blueprint, render_template, request, redirect, session, url_for, jsonify
+from queue import Empty
+from flask import (
+    Blueprint,
+    Response,
+    render_template,
+    request,
+    redirect,
+    session,
+    stream_with_context,
+    url_for,
+    jsonify,
+)
 from werkzeug.utils import secure_filename
 from mysql.connector.errors import ProgrammingError
 from config import Config
 from services.whatsapp_api import enviar_mensaje
 from services.db import get_connection, get_chat_state, update_chat_state
+from services.event_bus import message_broadcaster
 
 chat_bp = Blueprint('chat', __name__)
 
 # Carpeta de subida debe coincidir con la de whatsapp_api
 MEDIA_ROOT = Config.MEDIA_ROOT
 os.makedirs(Config.MEDIA_ROOT, exist_ok=True)
+
+
+@chat_bp.route('/chat/stream')
+def chat_stream():
+    """Server-Sent Events endpoint for chat updates."""
+
+    def event_stream():
+        subscriber = message_broadcaster.subscribe()
+        try:
+            yield 'retry: 5000\n\n'
+            while True:
+                try:
+                    event = subscriber.get(timeout=25)
+                except Empty:
+                    yield ': keep-alive\n\n'
+                    continue
+                try:
+                    payload = json.dumps(event, ensure_ascii=False)
+                except (TypeError, ValueError):
+                    continue
+                yield f'data: {payload}\n\n'
+        finally:
+            message_broadcaster.unsubscribe(subscriber)
+
+    headers = {
+        'Cache-Control': 'no-cache',
+        'Content-Type': 'text/event-stream',
+        'Connection': 'keep-alive',
+        'X-Accel-Buffering': 'no',
+    }
+    return Response(stream_with_context(event_stream()), headers=headers)
 
 
 def _table_exists(cursor, table_name):

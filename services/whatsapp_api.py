@@ -6,6 +6,7 @@ import requests
 from flask import url_for
 from config import Config
 from services.db import guardar_mensaje
+from services.event_bus import message_broadcaster
 
 
 logger = logging.getLogger(__name__)
@@ -330,7 +331,7 @@ def enviar_mensaje(numero, mensaje, tipo='bot', tipo_respuesta='texto', opciones
     else:
         media_url_db = opciones
 
-    guardar_mensaje(
+    mensaje_id = guardar_mensaje(
         numero,
         mensaje,
         tipo_db,
@@ -341,6 +342,15 @@ def enviar_mensaje(numero, mensaje, tipo='bot', tipo_respuesta='texto', opciones
         step=step,
         regla_id=regla_id,
     )
+    payload = {
+        'event': 'mensaje',
+        'numero': numero,
+        'tipo': tipo_db,
+        'mensaje_id': mensaje_id,
+    }
+    if wa_id:
+        payload['wa_id'] = wa_id
+    message_broadcaster.publish(payload)
     return True
 
 def get_media_url(media_id):

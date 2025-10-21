@@ -61,7 +61,7 @@
 
   <script>
     document.addEventListener('DOMContentLoaded', () => {
-      let currentChat = null, autoRefresh = null, todosChats = [], lastCount = 0, replyTo = null;
+      let currentChat = null, todosChats = [], lastCount = 0, replyTo = null;
       let selectedBubble = null;
       const chatListEl = document.getElementById('chatList');
       const chatBoxEl  = document.getElementById('chatBox');
@@ -523,9 +523,8 @@
         // marcar activo
         document.querySelectorAll('#chatList li').forEach(li => li.classList.remove('active'));
         liEl.classList.add('active');
-        if (autoRefresh) clearInterval(autoRefresh);
-        autoRefresh = setInterval(loadMessages, 3000);
-        loadMessages(); loadBotonera();
+        loadMessages();
+        loadBotonera();
       }
 
       // Cargar mensajes
@@ -825,10 +824,34 @@
         });
       });
 
+      // Suscribirse al canal de eventos push
+      const eventSource = new EventSource('/chat/stream');
+      eventSource.addEventListener('message', event => {
+        if (!event.data) {
+          return;
+        }
+        let payload;
+        try {
+          payload = JSON.parse(event.data);
+        } catch (err) {
+          console.warn('Evento push inválido recibido', err);
+          return;
+        }
+        if (!payload || payload.event !== 'mensaje') {
+          fetchChatList();
+          return;
+        }
+        fetchChatList();
+        if (payload.numero && payload.numero === currentChat) {
+          loadMessages();
+        }
+      });
+      eventSource.addEventListener('error', () => {
+        console.warn('Canal SSE desconectado, intentando reconectar...');
+      });
+
       // Inicializa
       fetchChatList();
-      setInterval(fetchChatList, 5000); // intervalo según necesidad
-      // TODO: sustituir el sondeo por WebSockets o Server-Sent Events para actualizaciones en tiempo real
     });
   </script>
 {% endblock %}

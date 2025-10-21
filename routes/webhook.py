@@ -17,6 +17,7 @@ from services.whatsapp_api import download_audio, get_media_url, enviar_mensaje
 from services.job_queue import enqueue_transcription
 from services.normalize_text import normalize_text
 from services.global_commands import handle_global_command
+from services.event_bus import message_broadcaster
 
 webhook_bp = Blueprint('webhook', __name__)
 logger = logging.getLogger(__name__)
@@ -35,6 +36,20 @@ RELEVANT_HEADERS = (
     'User-Agent',
     'Content-Type',
 )
+
+
+def _broadcast_new_message(numero, tipo, mensaje_id, wa_id=None):
+    if not numero or mensaje_id is None:
+        return
+    payload = {
+        'event': 'mensaje',
+        'numero': numero,
+        'tipo': tipo,
+        'mensaje_id': mensaje_id,
+    }
+    if wa_id:
+        payload['wa_id'] = wa_id
+    message_broadcaster.publish(payload)
 
 
 def _mask_identifier(value, visible=4):
@@ -348,7 +363,8 @@ def handle_text_message(numero: str, texto: str, save: bool = True):
         update_chat_state(numero, step_db)
 
     if texto and save:
-        guardar_mensaje(numero, texto, 'cliente', step=step_db)
+        mensaje_id = guardar_mensaje(numero, texto, 'cliente', step=step_db)
+        _broadcast_new_message(numero, 'cliente', mensaje_id)
 
     text_norm = normalize_text(texto or "")
 
@@ -444,7 +460,7 @@ def webhook():
                 if msg.get("referral"):
                     ref = msg["referral"]
                     step = get_current_step(from_number)
-                    guardar_mensaje(
+                    mensaje_id = guardar_mensaje(
                         from_number,
                         "",
                         "referral",
@@ -456,6 +472,7 @@ def webhook():
                         link_thumb=ref.get("thumbnail_url"),
                         step=step,
                     )
+                    _broadcast_new_message(from_number, 'referral', mensaje_id, wa_id)
                     update_chat_state(from_number, step, 'sin_respuesta')
                     continue
 
@@ -486,6 +503,7 @@ def webhook():
                         mime_type=mime_clean,
                         step=step,
                     )
+                    _broadcast_new_message(from_number, 'audio', db_id, wa_id)
 
                     update_chat_state(from_number, step, 'sin_respuesta')
 
@@ -522,7 +540,7 @@ def webhook():
 
                     # 3) Guardar en BD
                     step = get_current_step(from_number)
-                    guardar_mensaje(
+                    mensaje_id = guardar_mensaje(
                         from_number,
                         "",               # sin texto
                         'video',
@@ -533,6 +551,7 @@ def webhook():
                         mime_type=mime_clean,
                         step=step,
                     )
+                    _broadcast_new_message(from_number, 'video', mensaje_id, wa_id)
 
                     update_chat_state(from_number, step, 'sin_respuesta')
 
@@ -546,7 +565,7 @@ def webhook():
                     media_id  = msg['image']['id']
                     media_url = get_media_url(media_id)
                     step = get_current_step(from_number)
-                    guardar_mensaje(
+                    mensaje_id = guardar_mensaje(
                         from_number,
                         "",
                         'cliente_image',
@@ -556,6 +575,7 @@ def webhook():
                         media_url=media_url,
                         step=step,
                     )
+                    _broadcast_new_message(from_number, 'cliente_image', mensaje_id, wa_id)
                     update_chat_state(from_number, step, 'sin_respuesta')
                     logging.info("Imagen recibida: %s", media_id)
                     summary['processed'] += 1
@@ -566,7 +586,7 @@ def webhook():
                     text = msg['text']['body'].strip()
                     normalized_text = normalize_text(text)
                     step = get_current_step(from_number)
-                    guardar_mensaje(
+                    mensaje_id = guardar_mensaje(
                         from_number,
                         text,
                         'cliente',
@@ -574,6 +594,7 @@ def webhook():
                         reply_to_wa_id=reply_to_id,
                         step=step,
                     )
+                    _broadcast_new_message(from_number, 'cliente', mensaje_id, wa_id)
                     update_chat_state(from_number, step, 'sin_respuesta')
                     with cache_lock:
                         message_buffer.setdefault(from_number, []).append(normalized_text)
@@ -622,7 +643,7 @@ def webhook():
                         text = (text or '').strip()
                         step = get_current_step(from_number)
                         if text:
-                            guardar_mensaje(
+                            mensaje_id = guardar_mensaje(
                                 from_number,
                                 text,
                                 'cliente',
@@ -630,6 +651,7 @@ def webhook():
                                 reply_to_wa_id=reply_to_id,
                                 step=step,
                             )
+                            _broadcast_new_message(from_number, 'cliente', mensaje_id, wa_id)
                             update_chat_state(from_number, step, 'sin_respuesta')
                             normalized_text = normalize_text(text)
                             with cache_lock:
@@ -652,7 +674,7 @@ def webhook():
                     option_id = opt.get('id') or ''
                     text = (opt.get('title') or '').strip()
                     step = get_current_step(from_number)
-                    guardar_mensaje(
+                    mensaje_id = guardar_mensaje(
                         from_number,
                         text,
                         'cliente',
@@ -660,6 +682,7 @@ def webhook():
                         reply_to_wa_id=reply_to_id,
                         step=step,
                     )
+                    _broadcast_new_message(from_number, 'cliente', mensaje_id, wa_id)
                     update_chat_state(from_number, step, 'sin_respuesta')
                     if handle_option_reply(from_number, option_id):
                         continue
