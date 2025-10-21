@@ -61,7 +61,8 @@
 
   <script>
     document.addEventListener('DOMContentLoaded', () => {
-      let currentChat = null, todosChats = [], replyTo = null;
+      let currentChat = null, replyTo = null;
+      const todosChats = new Map();
       const chatStates = {};
       let selectedBubble = null;
       const chatListEl = document.getElementById('chatList');
@@ -72,6 +73,7 @@
       const replyAction = document.getElementById('replyAction');
       const sidebar = document.querySelector('.sidebar');
       const menuToggle = document.getElementById('menuToggle');
+      const searchInput = document.getElementById('buscador');
       menuToggle.addEventListener('click', () => {
         sidebar.classList.toggle('visible');
       });
@@ -82,6 +84,8 @@
       });
         const userRole   = "{{ rol }}";
         const lastChatTimestamps = {};
+        const chatItems = new Map();
+        let lastChatSync = null;
         const roleIcons = { ventas: '💼', soporte: '🛠', marketing: '📣' };
 
         const FLOW_SUMMARY_MAX_ITEMS = 10;
@@ -111,6 +115,69 @@
             // ignore malformed values
           }
           return null;
+        }
+
+        function toMillis(value) {
+          const normalised = normaliseTimestamp(value);
+          if (!normalised) return null;
+          const millis = Date.parse(normalised);
+          return Number.isNaN(millis) ? null : millis;
+        }
+
+        function placeChatItem(li) {
+          const sortKey = Number(li.dataset.sortKey || '0');
+          let inserted = false;
+          for (const child of chatListEl.children) {
+            if (child === li) {
+              continue;
+            }
+            const childKey = Number(child.dataset.sortKey || '0');
+            if (sortKey > childKey) {
+              chatListEl.insertBefore(li, child);
+              inserted = true;
+              break;
+            }
+          }
+          if (!inserted) {
+            chatListEl.appendChild(li);
+          }
+        }
+
+        function applyChatFilter() {
+          const term = (searchInput.value || '').toLowerCase();
+          chatListEl.querySelectorAll('li').forEach(li => {
+            const text = (li.textContent || '').toLowerCase();
+            li.style.display = text.includes(term) ? '' : 'none';
+          });
+        }
+
+        function ensureChatItem(numero) {
+          let li = chatItems.get(numero);
+          if (li) {
+            return li;
+          }
+          li = document.createElement('li');
+          li.dataset.numero = numero;
+          li.draggable = true;
+          li.addEventListener('dragstart', e => {
+            e.dataTransfer.setData('text/plain', numero);
+          });
+          li.addEventListener('click', () => selectChat(numero, li));
+          li.addEventListener('contextmenu', e => {
+            e.preventDefault();
+            const chatData = todosChats.get(numero);
+            const aliasActual = chatData && chatData.alias ? chatData.alias : '';
+            const nombre = prompt("Asignar alias a: " + numero, aliasActual);
+            if (nombre !== null && nombre.trim() !== "") {
+              fetch('/set_alias', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ numero, nombre })
+              }).then(() => fetchChatList({ forceFull: true }));
+            }
+          });
+          chatItems.set(numero, li);
+          return li;
         }
 
         function formatFlowValue(value) {
@@ -427,15 +494,15 @@
             e.preventDefault();
             icon.classList.remove('drag-over');
             const numero = e.dataTransfer.getData('text/plain');
-            const chat   = todosChats.find(c => c.numero === numero);
+            const chat   = todosChats.get(numero);
             const role   = icon.dataset.role;
-            const action = (chat && chat.roles_kw && chat.roles_kw.includes(role)) ? 'remove' : 'add';
+            const action = (chat && Array.isArray(chat.roles_kw) && chat.roles_kw.includes(role)) ? 'remove' : 'add';
             const res = await fetch('/assign_chat_role', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ numero, role, action })
             });
-            if (res.ok) fetchChatList();
+            if (res.ok) fetchChatList({ forceFull: true });
           });
         });
 
@@ -480,68 +547,131 @@
 
 
       // Cargar lista de chats
-      function fetchChatList() {
-        fetch('/get_chat_list')
-          .then(r=>r.json())
-          .then(data=>{
-            todosChats = data;
-            chatListEl.innerHTML='';
-            data.forEach(c => {
-              if (userRole !== 'admin') {
-                const roles = c.roles_kw || [];
-                if (!roles.includes(userRole)) return;
-              }
-              const serverTime = c.last_timestamp ? new Date(c.last_timestamp).getTime() : null;
-              const prevTime = lastChatTimestamps[c.numero];
-              if (serverTime && prevTime && serverTime > prevTime && c.numero !== currentChat) {
-                const mediaPlaying = Array.from(document.querySelectorAll('audio, video')).some(m => !m.paused);
-                if (!mediaPlaying) playAlertSound();
-              }
-              if (serverTime) lastChatTimestamps[c.numero] = serverTime;
-              const li = document.createElement('li');
-              li.textContent = c.alias ? `${c.alias} (${c.numero})` : c.numero;
-              if (c.estado) li.classList.add('estado-' + c.estado);
+      async function fetchChatList(options = {}) {
+        const { forceFull = false } = options;
+        const incremental = !forceFull && lastChatSync !== null;
+        const params = new URLSearchParams();
+        if (incremental) {
+          params.set('updated_after', new Date(lastChatSync).toISOString());
+        }
+        const url = params.toString() ? `/get_chat_list?${params.toString()}` : '/get_chat_list';
 
-              li.draggable = true;
-              li.addEventListener('dragstart', e => {
-                e.dataTransfer.setData('text/plain', c.numero);
-              });
+        let data;
+        try {
+          const response = await fetch(url);
+          if (!response.ok) {
+            return;
+          }
+          data = await response.json();
+        } catch (err) {
+          console.warn('No se pudo actualizar la lista de chats', err);
+          return;
+        }
 
-              // Badges por roles
-              li.querySelectorAll('.badge').forEach(b => b.remove());
-              li.querySelectorAll('.badges').forEach(bc => bc.remove());
-              const badgeContainer = document.createElement('span');
-              badgeContainer.className = 'badges';
-              if (c.roles_kw && c.roles_kw.length) {
-                c.roles_kw.forEach(r => {
-                  const badge = document.createElement('span');
-                  badge.className = 'badge';
-                  badge.textContent = roleIcons[r] || r.charAt(0).toUpperCase();
-                  badgeContainer.appendChild(badge);
-                });
-                li.appendChild(badgeContainer);
-              }
+        if (!Array.isArray(data)) {
+          return;
+        }
 
-              // Al hacer clic, seleccionar el chat
-              li.onclick = () => selectChat(c.numero, li);
+        const seen = new Set();
+        let localMax = lastChatSync;
 
-              // ✅ Clic derecho para asignar alias
-              li.addEventListener('contextmenu', function (e) {
-                e.preventDefault(); // evita el menú del navegador
+        data.forEach(chat => {
+          if (!chat || !chat.numero) {
+            return;
+          }
+          if (userRole !== 'admin') {
+            const roles = Array.isArray(chat.roles_kw) ? chat.roles_kw : [];
+            if (!roles.includes(userRole)) {
+              return;
+            }
+          }
 
-                const nombre = prompt("Asignar alias a: " + c.numero, c.alias || "");
-                if (nombre !== null && nombre.trim() !== "") {
-                  fetch('/set_alias', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ numero: c.numero, nombre })
-                  }).then(() => fetchChatList());
-                }
-              });
+          const numero = chat.numero;
+          const serverTime = toMillis(chat.last_timestamp);
+          let modifiedTime = toMillis(chat.last_modified);
+          if (modifiedTime === null) {
+            modifiedTime = serverTime;
+          }
 
-              chatListEl.appendChild(li);
-            });
+          const previousTime = lastChatTimestamps[numero];
+          if (serverTime && previousTime && serverTime > previousTime && numero !== currentChat) {
+            const mediaPlaying = Array.from(document.querySelectorAll('audio, video')).some(m => !m.paused);
+            if (!mediaPlaying) {
+              playAlertSound();
+            }
+          }
+          if (serverTime) {
+            lastChatTimestamps[numero] = serverTime;
+          }
+
+          const existing = todosChats.get(numero) || {};
+          const merged = { ...existing, ...chat };
+          todosChats.set(numero, merged);
+
+          const li = ensureChatItem(numero);
+          li.textContent = merged.alias ? `${merged.alias} (${numero})` : numero;
+
+          Array.from(li.classList).forEach(cls => {
+            if (cls.startsWith('estado-')) {
+              li.classList.remove(cls);
+            }
           });
+          if (merged.estado) {
+            li.classList.add('estado-' + merged.estado);
+          }
+
+          if (merged.roles_kw && merged.roles_kw.length) {
+            const badgeContainer = document.createElement('span');
+            badgeContainer.className = 'badges';
+            merged.roles_kw.forEach(r => {
+              const badge = document.createElement('span');
+              badge.className = 'badge';
+              badge.textContent = roleIcons[r] || r.charAt(0).toUpperCase();
+              badgeContainer.appendChild(badge);
+            });
+            li.appendChild(badgeContainer);
+          }
+
+          const sortKey = serverTime !== null ? serverTime : 0;
+          li.dataset.sortKey = String(sortKey);
+          if (numero === currentChat) {
+            li.classList.add('active');
+          } else {
+            li.classList.remove('active');
+          }
+
+          seen.add(numero);
+          placeChatItem(li);
+
+          if (modifiedTime !== null) {
+            if (localMax === null || modifiedTime > localMax) {
+              localMax = modifiedTime;
+            }
+          }
+        });
+
+        if (!incremental) {
+          for (const [numero, li] of chatItems.entries()) {
+            if (seen.has(numero)) {
+              continue;
+            }
+            chatItems.delete(numero);
+            todosChats.delete(numero);
+            delete lastChatTimestamps[numero];
+            if (li.parentNode === chatListEl) {
+              chatListEl.removeChild(li);
+            }
+            if (numero === currentChat) {
+              currentChat = null;
+            }
+          }
+        }
+
+        if (localMax !== null) {
+          lastChatSync = localMax;
+        }
+
+        applyChatFilter();
       }
 
       // Seleccionar chat
@@ -944,12 +1074,7 @@
       vidIn.onchange = () => sendFile(vidIn, 'send_video');
 
       // Filtrar chats
-      document.getElementById('buscador').addEventListener('input', function(){
-        const v = this.value.toLowerCase();
-        chatListEl.querySelectorAll('li').forEach(li => {
-          li.style.display = li.textContent.toLowerCase().includes(v) ? '' : 'none';
-        });
-      });
+      searchInput.addEventListener('input', applyChatFilter);
 
       // Suscribirse al canal de eventos push
       const eventSource = new EventSource('/chat/stream');
@@ -965,7 +1090,6 @@
           return;
         }
         if (!payload || payload.event !== 'mensaje') {
-          fetchChatList();
           return;
         }
         fetchChatList();
