@@ -86,6 +86,93 @@ def _flatten_flow_data(value, prefix=None):
     items.append({'label': label, 'value': _format_flow_value(value)})
     return items
 
+
+def _normalize_flow_node(node):
+    """Return ``node`` with JSON-like containers normalised for display."""
+    if isinstance(node, dict):
+        return {str(key): _normalize_flow_node(val) for key, val in node.items()}
+    if isinstance(node, list):
+        return [_normalize_flow_node(item) for item in node]
+    return node
+
+
+def _parse_flow_segments(raw_message):
+    """Split ``raw_message`` into structured/text segments for Flow replies."""
+    if not raw_message:
+        return []
+
+    if not isinstance(raw_message, str):
+        raw_message = str(raw_message)
+
+    segments = []
+    for line in raw_message.splitlines():
+        trimmed = line.strip()
+        if not trimmed:
+            continue
+
+        parsed = None
+        if trimmed.startswith('{') or trimmed.startswith('['):
+            try:
+                parsed = json.loads(trimmed)
+            except json.JSONDecodeError:
+                parsed = None
+
+        if parsed is None:
+            segments.append({'kind': 'text', 'content': trimmed})
+        else:
+            segments.append({'kind': 'data', 'content': _normalize_flow_node(parsed)})
+
+    return segments
+
+
+def _extract_flow_segments(raw_message):
+    """Return parsed segments enriched with summaries for UI rendering."""
+    if not raw_message:
+        return []
+
+    segments = _parse_flow_segments(raw_message)
+    if not segments:
+        return []
+
+    prepared = []
+    for segment in segments:
+        kind = segment.get('kind')
+        content = segment.get('content')
+        if kind == 'data':
+            summary = []
+            display = ''
+            if isinstance(content, (dict, list)):
+                summary = _flatten_flow_data(content)
+                display = json.dumps(content, ensure_ascii=False, indent=2)
+            else:
+                display = _format_flow_value(content)
+            if display:
+                display = display.strip()
+            prepared.append(
+                {
+                    'kind': 'data',
+                    'content': content,
+                    'summary': summary,
+                    'display': display or None,
+                }
+            )
+        else:
+            text = (content or '').strip()
+            if not text:
+                continue
+            prepared.append({'kind': 'text', 'content': text})
+
+    if not prepared:
+        return []
+
+    if len(prepared) == 1 and prepared[0]['kind'] == 'text':
+        original = raw_message.strip() if isinstance(raw_message, str) else ''
+        if prepared[0]['content'] == original:
+            return []
+
+    return prepared
+
+
 @chat_bp.route('/')
 def index():
     # Autenticación
@@ -200,7 +287,17 @@ def get_chat(numero):
         """, (numero,))
     mensajes = c.fetchall()
     conn.close()
-    return jsonify({'mensajes': [list(m) for m in mensajes]})
+
+    formatted = []
+    for row in mensajes:
+        row = list(row)
+        mensaje_txt = row[0] or ''
+        tipo_msg = row[1] or ''
+        segments = _extract_flow_segments(mensaje_txt) if tipo_msg.startswith('cliente') else []
+        row.append(segments)
+        formatted.append(row)
+
+    return jsonify({'mensajes': formatted})
 
 
 @chat_bp.route('/respuestas')
@@ -323,6 +420,7 @@ def respuestas():
                 'agent_replied': bool(agent_replied),
                 'agent_reply_timestamp': agent_reply_timestamp,
                 'raw_json': parsed_json if isinstance(parsed_json, (dict, list)) else None,
+                'segments': _extract_flow_segments(user_message) if user_message else [],
             }
         )
 
