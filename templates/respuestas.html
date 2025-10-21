@@ -9,75 +9,78 @@
 </div>
 
 <h2>Respuestas</h2>
-{% macro render_flow_node(node) %}
-    {% if node['type'] == 'object' %}
-        <ul class="flow-data-list flow-data-object">
-            {% for item in node['items'] %}
-            <li>
-                <span class="flow-key">{{ item['key'] }}</span>
-                <div class="flow-value-wrapper">{{ render_flow_node(item['value']) }}</div>
-            </li>
-            {% endfor %}
-        </ul>
-    {% elif node['type'] == 'list' %}
-        <ol class="flow-data-list flow-data-array">
-            {% for item in node['items'] %}
-            <li>
-                <div class="flow-value-wrapper">{{ render_flow_node(item) }}</div>
-            </li>
-            {% endfor %}
-        </ol>
-    {% else %}
-        <span class="flow-value">{{ node['value'] if node['value'] is not none and node['value'] != '' else '—' }}</span>
-    {% endif %}
-{% endmacro %}
+{% set max_summary_items = 10 %}
 {% if flow_responses %}
-<table class="fixed-table">
-    <thead>
-        <tr>
-            <th>Número</th>
-            <th>Respuestas del flow</th>
-        </tr>
-    </thead>
-    <tbody>
-        {% for response in flow_responses %}
-        <tr>
-            <td>{{ response.numero }}</td>
-            <td>
-                <ul class="flow-responses-list">
-                    {% for resp in response.respuestas %}
-                    <li class="flow-response-item">
-                        <div class="flow-response-header">
-                            <span class="flow-response-timestamp">{{ resp.timestamp }}</span>
-                        </div>
-                        <div class="flow-response-body">
-                            {% if resp.segments %}
-                            <div class="flow-response-card">
-                                {% for segment in resp.segments %}
-                                    {% if segment.kind == 'flow_name' %}
-                                        <p class="flow-text"><span class="flow-label">Flow:</span> {{ segment.content }}</p>
-                                    {% elif segment.kind == 'text' %}
-                                        <p class="flow-text">{{ segment.content }}</p>
-                                    {% elif segment.kind == 'data' %}
-                                        {{ render_flow_node(segment.content) }}
-                                    {% endif %}
+<div class="flow-responses-table">
+    <table class="fixed-table">
+        <thead>
+            <tr>
+                <th>Número</th>
+                <th>Fecha y hora</th>
+                <th>Resumen del flow</th>
+                <th>Respuesta del usuario</th>
+                <th>Estado del asesor</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for resp in flow_responses %}
+            <tr class="flow-response-row">
+                <td class="flow-response-number">{{ resp.numero }}</td>
+                <td class="flow-response-timestamp">
+                    {% if resp.timestamp %}
+                        {{ resp.timestamp.strftime('%d/%m/%Y %H:%M') }}
+                    {% else %}
+                        —
+                    {% endif %}
+                </td>
+                <td class="flow-response-summary">
+                    <div class="flow-response-card">
+                        {% if resp.flow_name %}
+                            <p class="flow-text"><span class="flow-label">Flow:</span> {{ resp.flow_name }}</p>
+                        {% endif %}
+                        {% set summary = resp.summary or [] %}
+                        {% if summary %}
+                            <ul class="flow-summary">
+                                {% for item in summary[:max_summary_items] %}
+                                <li class="flow-summary-item">
+                                    <span class="flow-summary-key">{{ item.label }}</span>
+                                    <span class="flow-summary-value">{{ item.value }}</span>
+                                </li>
                                 {% endfor %}
-                            </div>
+                            </ul>
+                            {% if summary|length > max_summary_items %}
+                                {% set remaining = summary|length - max_summary_items %}
+                                <div class="flow-summary-more">+ {{ remaining }} dato{% if remaining != 1 %}s{% endif %} adicional{% if remaining != 1 %}es{% endif %}</div>
                             {% endif %}
-                            {% if resp.user_message %}
-                            <p class="flow-user-response"><span class="flow-label">Usuario:</span> {{ resp.user_message }}</p>
-                            {% elif not resp.segments %}
+                        {% elif resp.mensaje %}
                             <div class="flow-response-message">{{ resp.mensaje }}</div>
-                            {% endif %}
-                        </div>
-                    </li>
-                    {% endfor %}
-                </ul>
-            </td>
-        </tr>
-        {% endfor %}
-    </tbody>
-</table>
+                        {% else %}
+                            <div class="flow-response-message">Sin contenido</div>
+                        {% endif %}
+                    </div>
+                </td>
+                <td class="flow-response-user">
+                    {% if resp.user_message %}
+                        <p class="flow-user-response"><span class="flow-label">Usuario:</span> {{ resp.user_message }}</p>
+                    {% else %}
+                        <span class="flow-empty">—</span>
+                    {% endif %}
+                </td>
+                <td class="flow-response-status">
+                    {% if resp.agent_replied %}
+                        <span class="status-badge status-resolved">Respondido</span>
+                        {% if resp.agent_reply_timestamp %}
+                            <span class="status-time">{{ resp.agent_reply_timestamp.strftime('%d/%m/%Y %H:%M') }}</span>
+                        {% endif %}
+                    {% else %}
+                        <span class="status-badge status-pending">Pendiente</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
 {% else %}
 <p>No hay respuestas de flows disponibles.</p>
 {% endif %}
