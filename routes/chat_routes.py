@@ -1,6 +1,7 @@
 import os
 import uuid
 import json
+from datetime import datetime
 from flask import Blueprint, render_template, request, redirect, session, url_for, jsonify
 from werkzeug.utils import secure_filename
 from mysql.connector.errors import ProgrammingError
@@ -23,6 +24,67 @@ def _table_exists(cursor, table_name):
     except ProgrammingError:
         # If the SHOW TABLES fails for any reason, behave as if the table is missing.
         return False
+
+
+def _parse_flow_json(raw_value):
+    """Attempt to decode ``raw_value`` as JSON and return the parsed object."""
+    if raw_value is None:
+        return None
+    if isinstance(raw_value, (dict, list)):
+        return raw_value
+    if isinstance(raw_value, (bytes, bytearray)):
+        try:
+            raw_value = raw_value.decode('utf-8')
+        except Exception:
+            raw_value = raw_value.decode('utf-8', errors='ignore')
+    if isinstance(raw_value, str):
+        raw_value = raw_value.strip()
+        if not raw_value:
+            return ''
+        try:
+            return json.loads(raw_value)
+        except json.JSONDecodeError:
+            return raw_value
+    return raw_value
+
+
+def _format_flow_value(value):
+    """Return a human friendly representation for a Flow field value."""
+    if value is None:
+        return '—'
+    if isinstance(value, bool):
+        return 'Sí' if value else 'No'
+    if isinstance(value, (int, float)):
+        return str(value)
+    if isinstance(value, str):
+        text = value.strip()
+        return text if text else '—'
+    return str(value)
+
+
+def _flatten_flow_data(value, prefix=None):
+    """Flatten a JSON-like structure into labelled key/value summaries."""
+    prefix = list(prefix or [])
+    items = []
+    if isinstance(value, list):
+        for idx, item in enumerate(value, start=1):
+            label = f'Elemento {idx}' if prefix else f'Respuesta {idx}'
+            new_prefix = prefix + [label]
+            if isinstance(item, (dict, list)):
+                items.extend(_flatten_flow_data(item, new_prefix))
+            else:
+                items.append({
+                    'label': ' › '.join(new_prefix) if new_prefix else label,
+                    'value': _format_flow_value(item),
+                })
+        return items
+    if isinstance(value, dict):
+        for key, val in value.items():
+            items.extend(_flatten_flow_data(val, prefix + [str(key)]))
+        return items
+    label = ' › '.join(prefix) if prefix else 'Respuesta'
+    items.append({'label': label, 'value': _format_flow_value(value)})
+    return items
 
 @chat_bp.route('/')
 def index():
@@ -174,28 +236,28 @@ def respuestas():
         )
         numeros = [row[0] for row in c.fetchall()]
 
-    def build_flow_node(value):
-        if isinstance(value, dict):
-            return {
-                'type': 'object',
-                'items': [
-                    {'key': str(key), 'value': build_flow_node(val)}
-                    for key, val in value.items()
-                ],
-            }
-        if isinstance(value, list):
-            return {
-                'type': 'list',
-                'items': [build_flow_node(item) for item in value],
-            }
-        return {'type': 'value', 'value': value}
-
     flow_rows = []
     has_flow_table = _table_exists(c, 'flow_responses')
     base_query = (
         """
         SELECT fr.numero, fr.flow_name, fr.response_json, fr.wa_id, fr.timestamp,
-               m.mensaje AS user_message
+               m.mensaje AS user_message,
+               EXISTS(
+                   SELECT 1
+                     FROM mensajes ma
+                    WHERE ma.numero = fr.numero
+                      AND ma.tipo LIKE 'asesor%'
+                      AND ma.timestamp > fr.timestamp
+               ) AS agent_replied,
+               (
+                   SELECT ma.timestamp
+                     FROM mensajes ma
+                    WHERE ma.numero = fr.numero
+                      AND ma.tipo LIKE 'asesor%'
+                      AND ma.timestamp > fr.timestamp
+                    ORDER BY ma.timestamp ASC
+                    LIMIT 1
+               ) AS agent_reply_timestamp
           FROM flow_responses fr
           LEFT JOIN mensajes m ON m.wa_id = fr.wa_id AND m.tipo = 'cliente'
         """
@@ -204,62 +266,71 @@ def respuestas():
     if has_flow_table:
         if rol == 'admin':
             c.execute(
-                base_query + " ORDER BY fr.numero, fr.flow_name, fr.timestamp",
+                base_query + " ORDER BY fr.timestamp DESC",
             )
             flow_rows = c.fetchall()
         elif numeros:
             formato = ','.join(['%s'] * len(numeros))
             c.execute(
                 base_query
-                + f" WHERE fr.numero IN ({formato}) ORDER BY fr.numero, fr.flow_name, fr.timestamp",
+                + f" WHERE fr.numero IN ({formato}) ORDER BY fr.timestamp DESC",
                 numeros,
             )
             flow_rows = c.fetchall()
 
-    grouped_responses = {}
-    for numero, flow_name, response_json, wa_id, timestamp, user_message in flow_rows:
-        try:
-            parsed_json = json.loads(response_json) if response_json else None
-        except json.JSONDecodeError:
-            parsed_json = response_json
+    flow_entries = []
+    for (
+        numero,
+        flow_name,
+        response_json,
+        wa_id,
+        timestamp,
+        user_message,
+        agent_replied,
+        agent_reply_timestamp,
+    ) in flow_rows:
+        parsed_json = _parse_flow_json(response_json)
 
-        entry = grouped_responses.setdefault(
-            numero,
-            {
-                'numero': numero,
-                'respuestas': [],
-            },
-        )
-
-        segments = []
-        message = None
-
-        if flow_name:
-            segments.append({'kind': 'flow_name', 'content': flow_name})
-
+        summary_items = []
         if isinstance(parsed_json, (dict, list)):
-            segments.append({'kind': 'data', 'content': build_flow_node(parsed_json)})
+            summary_items = _flatten_flow_data(parsed_json)
         elif isinstance(parsed_json, str):
             text = parsed_json.strip()
             if text:
-                segments.append({'kind': 'text', 'content': text})
-        elif parsed_json is not None:
-            segments.append({'kind': 'text', 'content': str(parsed_json)})
+                summary_items = [{'label': 'Respuesta', 'value': text}]
+        elif parsed_json not in (None, ''):
+            summary_items = [{'label': 'Respuesta', 'value': _format_flow_value(parsed_json)}]
 
-        if not segments:
-            message = (response_json or flow_name or '').strip()
+        message = None
+        if not summary_items:
+            raw_message = (response_json or flow_name or '').strip()
+            if isinstance(parsed_json, (dict, list)):
+                message = 'Sin contenido'
+            else:
+                message = raw_message
+        if not message or message in {'{}', '[]'}:
+            message = 'Sin contenido'
 
-        entry['respuestas'].append(
+        flow_entries.append(
             {
+                'numero': numero,
                 'timestamp': timestamp,
                 'wa_id': wa_id,
-                'segments': segments if segments else None,
+                'flow_name': flow_name,
+                'summary': summary_items,
                 'mensaje': message or 'Sin contenido',
                 'user_message': (user_message or '').strip() or None,
+                'agent_replied': bool(agent_replied),
+                'agent_reply_timestamp': agent_reply_timestamp,
+                'raw_json': parsed_json if isinstance(parsed_json, (dict, list)) else None,
             }
         )
 
-    flow_responses = sorted(grouped_responses.values(), key=lambda item: item['numero'])
+    flow_responses = sorted(
+        flow_entries,
+        key=lambda item: item['timestamp'] or datetime.min,
+        reverse=True,
+    )
 
     conn.close()
     return render_template(

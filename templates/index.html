@@ -83,6 +83,53 @@
         const lastChatTimestamps = {};
         const roleIcons = { ventas: '💼', soporte: '🛠', marketing: '📣' };
 
+        const FLOW_SUMMARY_MAX_ITEMS = 10;
+
+        function formatFlowValue(value) {
+          if (value === null || value === undefined) {
+            return '—';
+          }
+          if (typeof value === 'boolean') {
+            return value ? 'Sí' : 'No';
+          }
+          if (typeof value === 'number') {
+            return String(value);
+          }
+          if (typeof value === 'string') {
+            const text = value.trim();
+            return text.length ? text : '—';
+          }
+          return String(value);
+        }
+
+        function flattenFlowData(value, prefix = []) {
+          const items = [];
+          if (Array.isArray(value)) {
+            value.forEach((item, idx) => {
+              const label = prefix.length ? `Elemento ${idx + 1}` : `Respuesta ${idx + 1}`;
+              const nextPrefix = prefix.concat(label);
+              if (item && typeof item === 'object') {
+                items.push(...flattenFlowData(item, nextPrefix));
+              } else {
+                items.push({
+                  label: nextPrefix.join(' › '),
+                  value: formatFlowValue(item),
+                });
+              }
+            });
+            return items;
+          }
+          if (value && typeof value === 'object') {
+            Object.entries(value).forEach(([key, val]) => {
+              items.push(...flattenFlowData(val, prefix.concat(String(key))));
+            });
+            return items;
+          }
+          const label = prefix.length ? prefix.join(' › ') : 'Respuesta';
+          items.push({ label, value: formatFlowValue(value) });
+          return items;
+        }
+
         function buildFlowValueNode(value) {
           if (Array.isArray(value)) {
             const list = document.createElement('ol');
@@ -116,11 +163,7 @@
           }
           const span = document.createElement('span');
           span.className = 'flow-value';
-          if (value === null || value === undefined || value === '') {
-            span.textContent = '—';
-          } else {
-            span.textContent = String(value);
-          }
+          span.textContent = formatFlowValue(value);
           return span;
         }
 
@@ -153,12 +196,56 @@
             card.appendChild(title);
           }
           if (hasContent) {
-            if (typeof parsed === 'object') {
-              card.appendChild(buildFlowValueNode(parsed));
+            if (parsed && typeof parsed === 'object') {
+              const summaryItems = flattenFlowData(parsed);
+              if (summaryItems.length) {
+                const list = document.createElement('ul');
+                list.className = 'flow-summary';
+                summaryItems.slice(0, FLOW_SUMMARY_MAX_ITEMS).forEach(item => {
+                  const li = document.createElement('li');
+                  li.className = 'flow-summary-item';
+                  const key = document.createElement('span');
+                  key.className = 'flow-summary-key';
+                  key.textContent = item.label;
+                  const value = document.createElement('span');
+                  value.className = 'flow-summary-value';
+                  value.textContent = item.value;
+                  li.appendChild(key);
+                  li.appendChild(value);
+                  list.appendChild(li);
+                });
+                card.appendChild(list);
+                if (summaryItems.length > FLOW_SUMMARY_MAX_ITEMS) {
+                  const remaining = summaryItems.length - FLOW_SUMMARY_MAX_ITEMS;
+                  const more = document.createElement('div');
+                  more.className = 'flow-summary-more';
+                  more.textContent = `+ ${remaining} dato${remaining !== 1 ? 's' : ''} adicional${remaining !== 1 ? 'es' : ''}`;
+                  card.appendChild(more);
+                }
+              } else {
+                const isEmptyObject = parsed && !Array.isArray(parsed) && Object.keys(parsed).length === 0;
+                const isEmptyArray = Array.isArray(parsed) && parsed.length === 0;
+                if (isEmptyObject || isEmptyArray) {
+                  const placeholder = document.createElement('p');
+                  placeholder.className = 'flow-text';
+                  placeholder.textContent = 'Sin contenido';
+                  card.appendChild(placeholder);
+                } else {
+                  card.appendChild(buildFlowValueNode(parsed));
+                }
+              }
             } else if (typeof parsed === 'string') {
+              const textValue = formatFlowValue(parsed);
+              if (textValue && textValue !== '—') {
+                const text = document.createElement('p');
+                text.className = 'flow-text';
+                text.textContent = textValue;
+                card.appendChild(text);
+              }
+            } else if (parsed !== null && parsed !== undefined) {
               const text = document.createElement('p');
               text.className = 'flow-text';
-              text.textContent = parsed;
+              text.textContent = formatFlowValue(parsed);
               card.appendChild(text);
             }
           }
