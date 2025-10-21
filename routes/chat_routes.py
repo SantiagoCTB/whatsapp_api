@@ -1,7 +1,6 @@
 import os
 import uuid
 import json
-from collections import Counter
 from flask import Blueprint, render_template, request, redirect, session, url_for, jsonify
 from werkzeug.utils import secure_filename
 from config import Config
@@ -141,66 +140,41 @@ def respuestas():
         c.execute("SELECT DISTINCT numero FROM mensajes")
     numeros = [row[0] for row in c.fetchall()]
 
-    data_by_numero = {}
-    steps_set = set()
-    flow_data = []
+    if rol != 'admin' and not numeros and role_id is not None:
+        c.execute(
+            "SELECT DISTINCT numero FROM chat_roles WHERE role_id = %s",
+            (role_id,),
+        )
+        numeros = [row[0] for row in c.fetchall()]
 
-    if numeros:
+    def build_flow_node(value):
+        if isinstance(value, dict):
+            return {
+                'type': 'object',
+                'items': [
+                    {'key': str(key), 'value': build_flow_node(val)}
+                    for key, val in value.items()
+                ],
+            }
+        if isinstance(value, list):
+            return {
+                'type': 'list',
+                'items': [build_flow_node(item) for item in value],
+            }
+        return {'type': 'value', 'value': value}
+
+    flow_rows = []
+    if rol == 'admin':
+        c.execute(
+            """
+            SELECT numero, flow_name, response_json, wa_id, timestamp
+              FROM flow_responses
+             ORDER BY numero, flow_name, timestamp
+            """,
+        )
+        flow_rows = c.fetchall()
+    elif numeros:
         formato = ','.join(['%s'] * len(numeros))
-
-        c.execute(
-            f"""
-            SELECT numero, step, GROUP_CONCAT(mensaje ORDER BY timestamp SEPARATOR ' | ')
-              FROM mensajes
-             WHERE numero IN ({formato}) AND tipo NOT LIKE 'bot%%' AND step IS NOT NULL
-             GROUP BY numero, step
-            """,
-            numeros,
-        )
-        user_rows = c.fetchall()
-        user_map = {(n, s): msg for n, s, msg in user_rows}
-
-        c.execute(
-            f"""
-            SELECT m.numero, m.timestamp, m.mensaje, m.tipo,
-                   r.step, r.siguiente_step, m.regla_id, r.id
-              FROM mensajes m
-              JOIN reglas r ON m.regla_id = r.id
-             WHERE m.numero IN ({formato}) AND m.tipo LIKE 'bot%%'
-             ORDER BY m.numero, r.id
-            """,
-            numeros,
-        )
-        rows = c.fetchall()
-
-        for row in rows:
-            numero, timestamp, mensaje, tipo, step, siguiente, regla_id, regla_id_join = row
-            base = data_by_numero.setdefault(
-                numero,
-                {
-                    'numero': numero,
-                    'fecha': timestamp,
-                    'mensaje': mensaje,
-                    'tipo': tipo,
-                },
-            )
-            chain = []
-            if regla_id_join:
-                chain.append((regla_id_join, step))
-            if siguiente:
-                for s in siguiente.split(','):
-                    s = s.strip()
-                    if not s:
-                        continue
-                    if not s.isdigit():
-                        continue  # o registrar un warning
-                    chain.append((int(s), s))
-            for rid, st in chain:
-                key = f'step{rid}'
-                base[key] = st
-                base[f'respuesta_{key}'] = user_map.get((numero, st))
-                steps_set.add(key)
-
         c.execute(
             f"""
             SELECT numero, flow_name, response_json, wa_id, timestamp
@@ -212,53 +186,54 @@ def respuestas():
         )
         flow_rows = c.fetchall()
 
-        grouped_flows = {}
-        for numero, flow_name, response_json, wa_id, timestamp in flow_rows:
-            key = (numero, flow_name or '')
-            grouped = grouped_flows.setdefault(
-                key,
-                {
-                    'numero': numero,
-                    'flow_name': flow_name,
-                    'responses': [],
-                },
-            )
-            parsed_json = None
-            if response_json:
-                try:
-                    parsed_json = json.loads(response_json)
-                except json.JSONDecodeError:
-                    parsed_json = response_json
-            grouped['responses'].append(
-                {
-                    'timestamp': timestamp,
-                    'wa_id': wa_id,
-                    'data': parsed_json,
-                }
-            )
+    grouped_responses = {}
+    for numero, flow_name, response_json, wa_id, timestamp in flow_rows:
+        try:
+            parsed_json = json.loads(response_json) if response_json else None
+        except json.JSONDecodeError:
+            parsed_json = response_json
 
-        flow_data = sorted(
-            grouped_flows.values(),
-            key=lambda item: (item['numero'], item['flow_name'] or ''),
+        entry = grouped_responses.setdefault(
+            numero,
+            {
+                'numero': numero,
+                'respuestas': [],
+            },
         )
-    conversaciones = list(data_by_numero.values())
 
-    step_counter = Counter(
-        step
-        for r in conversaciones
-        for key, step in r.items()
-        if key.startswith('step')
-    )
-    summary = dict(step_counter)
+        segments = []
+        message = None
 
-    steps = sorted(steps_set, key=lambda x: int(x[4:]))
+        if flow_name:
+            segments.append({'kind': 'text', 'content': flow_name})
+
+        if isinstance(parsed_json, (dict, list)):
+            segments.append({'kind': 'data', 'content': build_flow_node(parsed_json)})
+        elif isinstance(parsed_json, str):
+            text = parsed_json.strip()
+            if text:
+                segments.append({'kind': 'text', 'content': text})
+        elif parsed_json is not None:
+            segments.append({'kind': 'text', 'content': str(parsed_json)})
+
+        if not segments:
+            message = (response_json or flow_name or '').strip()
+
+        entry['respuestas'].append(
+            {
+                'timestamp': timestamp,
+                'wa_id': wa_id,
+                'segments': segments if segments else None,
+                'mensaje': message or 'Sin contenido',
+            }
+        )
+
+    flow_responses = sorted(grouped_responses.values(), key=lambda item: item['numero'])
+
     conn.close()
     return render_template(
         'respuestas.html',
-        conversaciones=conversaciones,
-        steps=steps,
-        summary=summary,
-        flows=flow_data,
+        flow_responses=flow_responses,
     )
 
 @chat_bp.route('/send_message', methods=['POST'])
