@@ -234,20 +234,29 @@ def enviar_mensaje(numero, mensaje, tipo='bot', tipo_respuesta='texto', opciones
             if key in opts and opts[key] is not None:
                 parameters[key] = opts[key]
 
+        body_text = (
+            opts.get("flow_body")
+            or opts.get("body")
+            or opts.get("body_text")
+            or mensaje
+        )
+
         interactive = {
             "type": "flow",
-            "body": {"text": opts.get("body_text", mensaje)},
+            "body": {"text": body_text},
             "action": {
                 "name": "flow",
                 "parameters": parameters,
             },
         }
 
-        if "header" in opts and opts["header"] is not None:
-            interactive["header"] = {"type": "text", "text": opts["header"]}
+        header_text = opts.get("flow_header") or opts.get("header")
+        if header_text:
+            interactive["header"] = {"type": "text", "text": header_text}
 
-        if "footer" in opts and opts["footer"] is not None:
-            interactive["footer"] = {"text": opts["footer"]}
+        footer_text = opts.get("flow_footer") or opts.get("footer")
+        if footer_text:
+            interactive["footer"] = {"text": footer_text}
 
         media_link = None
         data = {
