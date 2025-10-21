@@ -252,6 +252,95 @@
           return card;
         }
 
+        function createFlowSegmentsCard(segments, originalText) {
+          if (!Array.isArray(segments) || !segments.length) {
+            return null;
+          }
+
+          const card = document.createElement('div');
+          card.className = 'flow-response-card flow-response-inline flow-segments-card';
+
+          let hasContent = false;
+          let userLabelShown = false;
+
+          segments.forEach(segment => {
+            if (!segment || typeof segment !== 'object') {
+              return;
+            }
+
+            if (segment.kind === 'text') {
+              const content = (segment.content || '').trim();
+              if (!content) {
+                return;
+              }
+              const original = (originalText || '').trim();
+              if (!userLabelShown && content === original && segments.length === 1) {
+                return;
+              }
+              const p = document.createElement('p');
+              p.className = 'flow-text';
+              if (!userLabelShown) {
+                const label = document.createElement('span');
+                label.className = 'flow-label';
+                label.textContent = 'Usuario:';
+                p.appendChild(label);
+                p.appendChild(document.createTextNode(' ' + content));
+                userLabelShown = true;
+              } else {
+                p.textContent = content;
+              }
+              card.appendChild(p);
+              hasContent = true;
+              return;
+            }
+
+            if (segment.kind === 'data') {
+              const summary = Array.isArray(segment.summary) ? segment.summary : [];
+              if (summary.length) {
+                const list = document.createElement('ul');
+                list.className = 'flow-summary';
+                summary.slice(0, FLOW_SUMMARY_MAX_ITEMS).forEach(item => {
+                  if (!item) return;
+                  const li = document.createElement('li');
+                  li.className = 'flow-summary-item';
+                  const key = document.createElement('span');
+                  key.className = 'flow-summary-key';
+                  key.textContent = item.label;
+                  const value = document.createElement('span');
+                  value.className = 'flow-summary-value';
+                  value.textContent = item.value;
+                  li.appendChild(key);
+                  li.appendChild(value);
+                  list.appendChild(li);
+                });
+                card.appendChild(list);
+                if (summary.length > FLOW_SUMMARY_MAX_ITEMS) {
+                  const remaining = summary.length - FLOW_SUMMARY_MAX_ITEMS;
+                  const more = document.createElement('div');
+                  more.className = 'flow-summary-more';
+                  more.textContent = `+ ${remaining} dato${remaining !== 1 ? 's' : ''} adicional${remaining !== 1 ? 'es' : ''}`;
+                  card.appendChild(more);
+                }
+                hasContent = true;
+              } else if (segment.display) {
+                const pre = document.createElement('pre');
+                pre.className = 'flow-json';
+                pre.textContent = segment.display;
+                card.appendChild(pre);
+                hasContent = true;
+              } else if (segment.content !== null && segment.content !== undefined) {
+                const p = document.createElement('p');
+                p.className = 'flow-text';
+                p.textContent = formatFlowValue(segment.content);
+                card.appendChild(p);
+                hasContent = true;
+              }
+            }
+          });
+
+          return hasContent ? card : null;
+        }
+
         function playAlertSound() {
           // El sonido de alerta se deshabilita para evitar el tono al ingresar a la interfaz.
         }
@@ -413,7 +502,7 @@
             for (let i=lastCount; i<total; i++){
               const [txt, tipo, url, ts, linkUrl, linkTitle, linkBody, linkThumb,
                      waId, replyWaId, replyId, replyText, replyTipo, replyUrl,
-                     flowName, flowJson] = msgs[i];
+                     flowName, flowJson, flowSegments] = msgs[i];
               const div = document.createElement('div');
               // map tipo a bubble class
               let bubble = 'cliente';
@@ -480,6 +569,11 @@
               const flowCard = createFlowCard(flowName, flowJson);
               if (flowCard) {
                 div.appendChild(flowCard);
+              }
+
+              const segmentsCard = createFlowSegmentsCard(flowSegments, txt);
+              if (segmentsCard) {
+                div.appendChild(segmentsCard);
               }
 
               // fecha y hora

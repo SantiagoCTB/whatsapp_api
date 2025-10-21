@@ -60,7 +60,43 @@
                     </div>
                 </td>
                 <td class="flow-response-user">
-                    {% if resp.user_message %}
+                    {% set segments = resp.segments or [] %}
+                    {% if segments %}
+                        {% set ns = namespace(first_text=True) %}
+                        {% for segment in segments %}
+                            {% if segment.kind == 'text' %}
+                                <p class="flow-user-response">
+                                    {% if ns.first_text %}
+                                        <span class="flow-label">Usuario:</span>
+                                        {% set ns.first_text = False %}
+                                    {% endif %}
+                                    {{ segment.content }}
+                                </p>
+                            {% elif segment.kind == 'data' %}
+                                <div class="flow-response-card flow-response-inline flow-segments-card">
+                                    {% set summary = segment.summary or [] %}
+                                    {% if summary %}
+                                        <ul class="flow-summary">
+                                            {% for item in summary[:max_summary_items] %}
+                                            <li class="flow-summary-item">
+                                                <span class="flow-summary-key">{{ item.label }}</span>
+                                                <span class="flow-summary-value">{{ item.value }}</span>
+                                            </li>
+                                            {% endfor %}
+                                        </ul>
+                                        {% if summary|length > max_summary_items %}
+                                            {% set remaining = summary|length - max_summary_items %}
+                                            <div class="flow-summary-more">+ {{ remaining }} dato{% if remaining != 1 %}s{% endif %} adicional{% if remaining != 1 %}es{% endif %}</div>
+                                        {% endif %}
+                                    {% elif segment.display %}
+                                        <pre class="flow-json">{{ segment.display }}</pre>
+                                    {% else %}
+                                        <div class="flow-response-message">Sin contenido</div>
+                                    {% endif %}
+                                </div>
+                            {% endif %}
+                        {% endfor %}
+                    {% elif resp.user_message %}
                         <p class="flow-user-response"><span class="flow-label">Usuario:</span> {{ resp.user_message }}</p>
                     {% else %}
                         <span class="flow-empty">—</span>

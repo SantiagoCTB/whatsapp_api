@@ -581,6 +581,22 @@
       width: 100%;
     }
 
+    .flow-segments-card {
+      margin-top: 10px;
+      gap: 10px;
+    }
+
+    .flow-json {
+      background: rgba(0, 0, 0, 0.03);
+      border-radius: 8px;
+      padding: 10px;
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 0.85rem;
+      white-space: pre-wrap;
+      word-break: break-word;
+      color: var(--text-main);
+    }
+
     .bubble .flow-response-card {
       margin-top: 10px;
     }
