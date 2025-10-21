@@ -615,82 +615,115 @@ def get_chat_list():
     if "user" not in session:
         return redirect(url_for("auth.login"))
 
-    conn = get_connection()
-    c    = conn.cursor()
-    rol  = session.get('rol')
-    role_id = None
-    if rol != 'admin':
-        c.execute("SELECT id FROM roles WHERE keyword=%s", (rol,))
-        row = c.fetchone()
-        role_id = row[0] if row else None
+    updated_after_raw = request.args.get('updated_after')
+    updated_after = _parse_iso_datetime(updated_after_raw)
 
-    # Únicos números filtrados por rol
-    if rol == 'admin':
-        c.execute("SELECT DISTINCT numero FROM mensajes")
-    else:
-        c.execute(
+    conn = get_connection()
+    try:
+        c = conn.cursor(dictionary=True)
+        rol = session.get('rol')
+
+        role_id = None
+        if rol != 'admin':
+            c.execute("SELECT id FROM roles WHERE keyword=%s", (rol,))
+            row = c.fetchone()
+            role_id = row[0] if row else None
+            if role_id is None:
+                return jsonify([])
+
+        if rol == 'admin':
+            numbers_sql = "SELECT DISTINCT numero FROM mensajes"
+            params = []
+        else:
+            numbers_sql = """
+                SELECT DISTINCT m.numero
+                  FROM mensajes AS m
+                  INNER JOIN chat_roles AS cr ON cr.numero = m.numero
+                 WHERE cr.role_id = %s
             """
-            SELECT DISTINCT m.numero
-            FROM mensajes m
-            INNER JOIN chat_roles cr ON m.numero = cr.numero
-            WHERE cr.role_id = %s
-            """,
-            (role_id,)
+            params = [role_id]
+
+        last_message_sql = """
+            SELECT numero, mensaje, timestamp
+              FROM (
+                SELECT numero,
+                       mensaje,
+                       timestamp,
+                       ROW_NUMBER() OVER (PARTITION BY numero ORDER BY timestamp DESC, id DESC) AS rn
+                  FROM mensajes
+              ) AS ranked
+             WHERE rn = 1
+        """
+
+        base_query = f"""
+            SELECT
+                nums.numero AS numero,
+                a.nombre    AS alias,
+                lm.mensaje  AS last_message,
+                lm.timestamp AS last_timestamp,
+                cs.estado   AS estado,
+                cs.last_activity AS last_activity,
+                GROUP_CONCAT(DISTINCT cr.role_id ORDER BY cr.role_id) AS role_ids,
+                GROUP_CONCAT(DISTINCT COALESCE(r.keyword, r.name) ORDER BY r.id) AS role_keywords
+              FROM ({numbers_sql}) AS nums
+              LEFT JOIN alias AS a ON a.numero = nums.numero
+              LEFT JOIN ({last_message_sql}) AS lm ON lm.numero = nums.numero
+              LEFT JOIN chat_state AS cs ON cs.numero = nums.numero
+              LEFT JOIN chat_roles AS cr ON cr.numero = nums.numero
+              LEFT JOIN roles AS r ON r.id = cr.role_id
+             GROUP BY nums.numero, a.nombre, lm.mensaje, lm.timestamp, cs.estado, cs.last_activity
+        """
+
+        greatest_expr = (
+            "GREATEST(" \
+            "IFNULL(inner_query.last_timestamp, '1970-01-01 00:00:00'), " \
+            "IFNULL(inner_query.last_activity, '1970-01-01 00:00:00')" \
+            ")"
         )
-    numeros = [row[0] for row in c.fetchall()]
+
+        final_query = f"""
+            SELECT inner_query.*,
+                   NULLIF({greatest_expr}, '1970-01-01 00:00:00') AS last_modified
+              FROM ({base_query}) AS inner_query
+        """
+
+        if updated_after:
+            final_query += f" WHERE {greatest_expr} > %s"
+            params.append(updated_after)
+
+        final_query += " ORDER BY last_modified DESC, inner_query.numero ASC"
+
+        c.execute(final_query, tuple(params))
+        rows = c.fetchall()
+    finally:
+        conn.close()
 
     chats = []
-    for numero in numeros:
-        # Alias
-        c.execute("SELECT nombre FROM alias WHERE numero = %s", (numero,))
-        fila = c.fetchone()
-        alias = fila[0] if fila else None
+    for row in rows:
+        last_timestamp = row.get('last_timestamp')
+        last_modified = row.get('last_modified')
+        last_message = row.get('last_message') or ''
+        requiere_asesor = 'asesor' in last_message.lower()
 
-        # Último mensaje y su timestamp
-        c.execute(
-            "SELECT mensaje, timestamp FROM mensajes WHERE numero = %s "
-            "ORDER BY timestamp DESC LIMIT 1",
-            (numero,)
-        )
-        fila = c.fetchone()
-        last_ts = fila[1].isoformat() if fila and fila[1] else None
-        ultimo = fila[0] if fila else ""
-        requiere_asesor = "asesor" in ultimo.lower()
+        role_keywords_raw = row.get('role_keywords')
+        role_keywords = []
+        if role_keywords_raw:
+            role_keywords = [part.strip() for part in role_keywords_raw.split(',') if part and part.strip()]
 
-        # Roles asociados al número y nombre/keyword
-        c.execute(
-            """
-            SELECT GROUP_CONCAT(cr.role_id) AS ids,
-                   GROUP_CONCAT(COALESCE(r.keyword, r.name) ORDER BY r.id) AS nombres
-            FROM chat_roles cr
-            LEFT JOIN roles r ON cr.role_id = r.id
-            WHERE cr.numero = %s
-            """,
-            (numero,),
-        )
-        fila_roles = c.fetchone()
-        roles = fila_roles[0] if fila_roles else None
-        nombres_roles = fila_roles[1] if fila_roles else None
-        role_keywords = [n.strip() for n in nombres_roles.split(',')] if nombres_roles else []
         inicial_rol = role_keywords[0][0].upper() if role_keywords else None
 
-        # Estado actual del chat
-        c.execute("SELECT estado FROM chat_state WHERE numero = %s", (numero,))
-        fila = c.fetchone()
-        estado = fila[0] if fila else None
-
         chats.append({
-            "numero": numero,
-            "alias":  alias,
-            "asesor": requiere_asesor,
-            "roles": roles,
-            "roles_kw": role_keywords,
-            "inicial_rol": inicial_rol,
-            "estado": estado,
-            "last_timestamp": last_ts,
+            'numero': row.get('numero'),
+            'alias': row.get('alias'),
+            'asesor': requiere_asesor,
+            'roles': row.get('role_ids'),
+            'roles_kw': role_keywords,
+            'inicial_rol': inicial_rol,
+            'estado': row.get('estado'),
+            'last_timestamp': last_timestamp.isoformat() if isinstance(last_timestamp, datetime) else None,
+            'last_modified': last_modified.isoformat() if isinstance(last_modified, datetime) else None,
         })
 
-    conn.close()
     return jsonify(chats)
 
 @chat_bp.route('/set_alias', methods=['POST'])
