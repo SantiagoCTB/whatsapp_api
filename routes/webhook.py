@@ -30,11 +30,17 @@ message_buffer     = {}
 pending_timers     = {}
 cache_lock         = threading.Lock()
 
+MAX_AUTO_STEPS = 25
+
 RELEVANT_HEADERS = (
     'X-Hub-Signature-256',
     'User-Agent',
     'Content-Type',
 )
+
+
+def _normalize_step_name(step):
+    return (step or '').strip().lower()
 
 
 def _mask_identifier(value, visible=4):
@@ -129,10 +135,15 @@ def handle_option_reply(numero, option_id):
     return False
 
 
-def dispatch_rule(numero, regla, step=None):
+def dispatch_rule(numero, regla, step=None, visited=None):
     """Envía la respuesta definida en una regla y asigna roles si aplica."""
+    if visited is None:
+        visited = set()
     regla_id, resp, next_step, tipo_resp, media_urls, opts, rol_kw, _ = regla
     current_step = step or get_current_step(numero)
+    current_step_norm = _normalize_step_name(current_step)
+    if current_step_norm:
+        visited.add(current_step_norm)
     media_list = media_urls.split('||') if media_urls else []
     if tipo_resp in ['image', 'video', 'audio', 'document'] and media_list:
         enviar_mensaje(
@@ -172,53 +183,83 @@ def dispatch_rule(numero, regla, step=None):
             )
             conn.commit()
         conn.close()
-    advance_steps(numero, next_step)
+    advance_steps(numero, next_step, visited=visited)
 
 
-def advance_steps(numero: str, steps_str: str):
+def advance_steps(numero: str, steps_str: str, visited=None):
     """Avanza múltiples pasos enviando las reglas comodín correspondientes.
 
     El procesamiento de la lista de pasos ocurre únicamente en memoria; solo
     se persiste el último paso mediante ``set_user_step``. No se almacena el
     detalle de la lista en la base de datos.
     """
-    steps = [s.strip().lower() for s in (steps_str or '').split(',') if s.strip()]
+    steps = [_normalize_step_name(s) for s in (steps_str or '').split(',') if s.strip()]
     if not steps:
         return
+    if visited is None:
+        visited = set()
     for step in steps[:-1]:
+        if step in visited:
+            logging.warning(
+                "Se detectó un ciclo de pasos; se omite la regla comodín",
+                extra={"numero": numero, "step": step},
+            )
+            continue
+        if len(visited) >= MAX_AUTO_STEPS:
+            logging.warning(
+                "Se alcanzó el límite de pasos automáticos encadenados",
+                extra={"numero": numero, "step": step},
+            )
+            return
+        visited.add(step)
         conn = get_connection(); c = conn.cursor()
-        c.execute(
-            """
-            SELECT r.id, r.respuesta, r.siguiente_step, r.tipo,
-                   GROUP_CONCAT(m.media_url SEPARATOR '||') AS media_urls,
-                   r.opciones, r.rol_keyword, r.input_text
-              FROM reglas r
-              LEFT JOIN regla_medias m ON r.id = m.regla_id
-             WHERE r.step=%s AND r.input_text='*'
-             GROUP BY r.id
-             ORDER BY r.id
-             LIMIT 1
-            """,
-            (step,),
-        )
-        regla = c.fetchone(); conn.close()
+        try:
+            c.execute(
+                """
+                SELECT r.id, r.respuesta, r.siguiente_step, r.tipo,
+                       GROUP_CONCAT(m.media_url SEPARATOR '||') AS media_urls,
+                       r.opciones, r.rol_keyword, r.input_text
+                  FROM reglas r
+                  LEFT JOIN regla_medias m ON r.id = m.regla_id
+                 WHERE r.step=%s AND r.input_text='*'
+                 GROUP BY r.id
+                 ORDER BY r.id
+                 LIMIT 1
+                """,
+                (step,),
+            )
+            regla = c.fetchone()
+        finally:
+            conn.close()
         if regla:
-            dispatch_rule(numero, regla, step)
-    set_user_step(numero, steps[-1])
+            dispatch_rule(numero, regla, step, visited=visited)
+    final_step = steps[-1]
+    if final_step in visited and len(steps) > 1:
+        logging.warning(
+            "Paso final ya procesado; se evita actualizar el estado para prevenir bucles",
+            extra={"numero": numero, "step": final_step},
+        )
+        return
+    set_user_step(numero, final_step)
 
 
 
 
-def process_step_chain(numero, text_norm=None):
+def process_step_chain(numero, text_norm=None, visited=None):
     """Procesa el step actual una sola vez.
 
     Las reglas con ``input_text='*'`` pueden ejecutarse incluso si no se
     recibió texto del usuario, pero tras la primera ejecución el flujo se
     detiene y espera una nueva entrada.
     """
+    if visited is None:
+        visited = set()
     step = get_current_step(numero)
     if not step:
         return
+    step_norm = _normalize_step_name(step)
+    if step_norm:
+        visited.add(step_norm)
 
     conn = get_connection(); c = conn.cursor()
     # Ordenar reglas para evaluar primero las de menor ID (o prioridad).
@@ -249,12 +290,12 @@ def process_step_chain(numero, text_norm=None):
     for r in reglas:
         patt = (r[7] or '').strip()
         if patt and patt != '*' and normalize_text(patt) == text_norm:
-            dispatch_rule(numero, r, step)
+            dispatch_rule(numero, r, step, visited=visited)
             return
 
     # Regla comodín
     if comodines:
-        dispatch_rule(numero, comodines[0], step)
+        dispatch_rule(numero, comodines[0], step, visited=visited)
         # No procesar recursivamente otros comodines; esperar nueva entrada
         return
 
