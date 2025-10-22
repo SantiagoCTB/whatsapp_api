@@ -245,7 +245,13 @@ def advance_steps(numero: str, steps_str: str, visited=None):
 
 
 
-def process_step_chain(numero, text_norm=None, visited=None):
+def process_step_chain(
+    numero,
+    text_norm=None,
+    visited=None,
+    *,
+    allow_wildcard_with_text=True,
+):
     """Procesa el step actual una sola vez.
 
     Las reglas con ``input_text='*'`` pueden ejecutarse incluso si no se
@@ -281,6 +287,11 @@ def process_step_chain(numero, text_norm=None, visited=None):
         return
 
     comodines = [r for r in reglas if (r[7] or '').strip() == '*']
+    specific_rules = [r for r in reglas if (r[7] or '').strip() not in ('', '*')]
+
+    wildcard_allowed = (
+        text_norm is None or allow_wildcard_with_text or not specific_rules
+    )
 
     # No avanzar si no hay texto del usuario, salvo que existan comodines
     if text_norm is None and not comodines:
@@ -294,9 +305,19 @@ def process_step_chain(numero, text_norm=None, visited=None):
             return
 
     # Regla comodín
-    if comodines:
+    if comodines and wildcard_allowed:
         dispatch_rule(numero, comodines[0], step, visited=visited)
         # No procesar recursivamente otros comodines; esperar nueva entrada
+        return
+
+    if text_norm is None:
+        return
+
+    if specific_rules and not wildcard_allowed:
+        # Se recibió texto pero no hay coincidencias y se decidió no ejecutar
+        # comodines. Esto ocurre, por ejemplo, en el primer mensaje del
+        # usuario tras iniciar el flujo, donde se espera que el bot ya haya
+        # enviado las instrucciones y aguarde una nueva respuesta válida.
         return
 
     logging.warning("Fallback en step '%s' para entrada '%s'", step, text_norm)
@@ -382,6 +403,7 @@ def handle_text_message(numero: str, texto: str, save: bool = True):
     row = get_chat_state(numero)
     step_db = row[0] if row else None
     last_time = row[1] if row else None
+    bootstrapped = False
     if last_time and (now - last_time).total_seconds() > SESSION_TIMEOUT:
         delete_chat_state(numero)
         step_db = None
@@ -394,6 +416,7 @@ def handle_text_message(numero: str, texto: str, save: bool = True):
     text_norm = normalize_text(texto or "")
 
     if not step_db:
+        bootstrapped = True
         set_user_step(numero, Config.INITIAL_STEP)
         process_step_chain(numero, 'iniciar')
         if not text_norm or text_norm == 'iniciar':
@@ -402,7 +425,11 @@ def handle_text_message(numero: str, texto: str, save: bool = True):
     if handle_global_command(numero, texto):
         return
 
-    process_step_chain(numero, text_norm)
+    process_step_chain(
+        numero,
+        text_norm,
+        allow_wildcard_with_text=not bootstrapped,
+    )
 
 
 def process_buffered_messages(numero):
