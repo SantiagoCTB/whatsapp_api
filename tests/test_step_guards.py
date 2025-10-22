@@ -1,4 +1,5 @@
 import sys
+from datetime import datetime
 from types import SimpleNamespace
 
 import pytest
@@ -125,3 +126,93 @@ def test_advance_steps_unique_chain(monkeypatch, patch_dependencies):
     assert numero == '5215559999'
     assert mensaje == 'hola'
     assert step == 'intro'
+
+
+def test_process_step_chain_skips_wildcard_when_disabled(monkeypatch, patch_dependencies):
+    responses = {
+        'menu': [
+            (
+                21,
+                'elige una opción',
+                'espera',
+                'texto',
+                None,
+                None,
+                None,
+                '*',
+            ),
+            (
+                22,
+                'opción 1',
+                'final',
+                'texto',
+                None,
+                None,
+                None,
+                '1',
+            ),
+        ],
+        'final': [],
+    }
+
+    monkeypatch.setattr(
+        webhook_module,
+        'get_connection',
+        lambda: DummyConnection(responses),
+    )
+    monkeypatch.setattr(
+        webhook_module,
+        'get_chat_state',
+        lambda numero: ('menu', datetime.now()),
+    )
+    monkeypatch.setattr(webhook_module, 'update_chat_state', lambda *args, **kwargs: None)
+
+    webhook_module.process_step_chain(
+        '5215557777',
+        'hola',
+        allow_wildcard_with_text=False,
+    )
+
+    assert patch_dependencies.sent_messages == []
+
+
+def test_process_step_chain_allows_wildcard_without_specific_rules(monkeypatch, patch_dependencies):
+    responses = {
+        'captura': [
+            (
+                30,
+                'Ingresa tu nombre',
+                'final',
+                'texto',
+                None,
+                None,
+                None,
+                '*',
+            ),
+        ],
+        'final': [],
+    }
+
+    monkeypatch.setattr(
+        webhook_module,
+        'get_connection',
+        lambda: DummyConnection(responses),
+    )
+    monkeypatch.setattr(
+        webhook_module,
+        'get_chat_state',
+        lambda numero: ('captura', datetime.now()),
+    )
+    monkeypatch.setattr(webhook_module, 'update_chat_state', lambda *args, **kwargs: None)
+
+    webhook_module.process_step_chain(
+        '5215558888',
+        'Juan',
+        allow_wildcard_with_text=False,
+    )
+
+    assert len(patch_dependencies.sent_messages) == 1
+    numero, mensaje, step = patch_dependencies.sent_messages[0]
+    assert numero == '5215558888'
+    assert mensaje == 'Ingresa tu nombre'
+    assert step == 'captura'
