@@ -760,7 +760,7 @@ def webhook():
                         )
                         if from_number in pending_timers:
                             pending_timers[from_number].cancel()
-                        timer = threading.Timer(3, process_buffered_messages, args=(from_number,))
+                        timer = threading.Timer(0, process_buffered_messages, args=(from_number,))
                         pending_timers[from_number] = timer
                     timer.start()
                     summary['processed'] += 1
