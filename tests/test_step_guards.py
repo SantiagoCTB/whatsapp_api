@@ -48,6 +48,7 @@ class DummyConnection:
 def patch_dependencies(monkeypatch):
     sent_messages = []
     steps_set = []
+    chat_states = {}
 
     def fake_enviar(numero, mensaje, **kwargs):
         sent_messages.append((numero, mensaje, kwargs.get('step')))
@@ -55,9 +56,22 @@ def patch_dependencies(monkeypatch):
 
     def fake_set_user_step(numero, step, estado='espera_usuario'):
         steps_set.append((numero, step, estado))
+        chat_states[numero] = (step, datetime.now())
+
+    def fake_get_chat_state(numero):
+        return chat_states.get(numero)
+
+    def fake_update_chat_state(numero, step, estado='espera_usuario'):
+        chat_states[numero] = (step, datetime.now())
+
+    def fake_delete_chat_state(numero):
+        chat_states.pop(numero, None)
 
     monkeypatch.setattr(webhook_module, 'enviar_mensaje', fake_enviar)
     monkeypatch.setattr(webhook_module, 'set_user_step', fake_set_user_step)
+    monkeypatch.setattr(webhook_module, 'get_chat_state', fake_get_chat_state)
+    monkeypatch.setattr(webhook_module, 'update_chat_state', fake_update_chat_state)
+    monkeypatch.setattr(webhook_module, 'delete_chat_state', fake_delete_chat_state)
 
     return SimpleNamespace(sent_messages=sent_messages, steps_set=steps_set)
 
@@ -160,12 +174,8 @@ def test_process_step_chain_skips_wildcard_when_disabled(monkeypatch, patch_depe
         'get_connection',
         lambda: DummyConnection(responses),
     )
-    monkeypatch.setattr(
-        webhook_module,
-        'get_chat_state',
-        lambda numero: ('menu', datetime.now()),
-    )
-    monkeypatch.setattr(webhook_module, 'update_chat_state', lambda *args, **kwargs: None)
+
+    webhook_module.set_user_step('5215557777', 'menu')
 
     webhook_module.process_step_chain(
         '5215557777',
@@ -198,12 +208,8 @@ def test_process_step_chain_allows_wildcard_without_specific_rules(monkeypatch, 
         'get_connection',
         lambda: DummyConnection(responses),
     )
-    monkeypatch.setattr(
-        webhook_module,
-        'get_chat_state',
-        lambda numero: ('captura', datetime.now()),
-    )
-    monkeypatch.setattr(webhook_module, 'update_chat_state', lambda *args, **kwargs: None)
+
+    webhook_module.set_user_step('5215558888', 'captura')
 
     webhook_module.process_step_chain(
         '5215558888',
@@ -216,3 +222,80 @@ def test_process_step_chain_allows_wildcard_without_specific_rules(monkeypatch, 
     assert numero == '5215558888'
     assert mensaje == 'Ingresa tu nombre'
     assert step == 'captura'
+
+
+def test_branching_chain_processes_common_steps(monkeypatch, patch_dependencies):
+    responses = {
+        'menu': [
+            (
+                40,
+                'elige opción 1',
+                'rama_a_intro,rama_comun',
+                'texto',
+                None,
+                None,
+                None,
+                '1',
+            ),
+            (
+                41,
+                'elige opción 2',
+                'rama_b_intro,rama_comun',
+                'texto',
+                None,
+                None,
+                None,
+                '2',
+            ),
+        ],
+        'rama_a_intro': [
+            (
+                42,
+                'mensaje rama A',
+                'rama_comun',
+                'texto',
+                None,
+                None,
+                None,
+                '*',
+            )
+        ],
+        'rama_b_intro': [
+            (
+                43,
+                'mensaje rama B',
+                'rama_comun',
+                'texto',
+                None,
+                None,
+                None,
+                '*',
+            )
+        ],
+        'rama_comun': [
+            (
+                44,
+                'mensaje común',
+                'final',
+                'texto',
+                None,
+                None,
+                None,
+                '*',
+            )
+        ],
+        'final': [],
+    }
+
+    monkeypatch.setattr(
+        webhook_module,
+        'get_connection',
+        lambda: DummyConnection(responses),
+    )
+
+    regla = responses['menu'][0]
+    webhook_module.dispatch_rule('5215554321', regla, step='menu')
+
+    mensajes = [msg for _, msg, _ in patch_dependencies.sent_messages]
+    assert mensajes == ['elige opción 1', 'mensaje rama A', 'mensaje común']
+    assert patch_dependencies.steps_set[-1][1] == 'final'

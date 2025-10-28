@@ -234,13 +234,20 @@ def advance_steps(numero: str, steps_str: str, visited=None):
         if regla:
             dispatch_rule(numero, regla, step, visited=visited)
     final_step = steps[-1]
-    if final_step in visited and len(steps) > 1:
+    final_step_norm = _normalize_step_name(final_step)
+    if final_step_norm in visited and len(steps) > 1:
         logging.warning(
             "Paso final ya procesado; se evita actualizar el estado para prevenir bucles",
             extra={"numero": numero, "step": final_step},
         )
         return
     set_user_step(numero, final_step)
+    if final_step_norm and final_step_norm not in visited:
+        process_step_chain(
+            numero,
+            text_norm=None,
+            visited=visited,
+        )
 
 
 
