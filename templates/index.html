@@ -69,6 +69,8 @@
       const replyPreviewEl = document.getElementById('replyPreview');
       const contextMenu = document.getElementById('contextMenu');
       const replyAction = document.getElementById('replyAction');
+      const sendBtn = document.getElementById('sendBtn');
+      const messageInput = document.getElementById('messageInput');
       const sidebar = document.querySelector('.sidebar');
       const menuToggle = document.getElementById('menuToggle');
       menuToggle.addEventListener('click', () => {
@@ -82,6 +84,30 @@
         const userRole   = "{{ rol }}";
         const lastChatTimestamps = {};
         const roleIcons = { ventas: '💼', soporte: '🛠', marketing: '📣' };
+        let isSending = false;
+        let sendUnlockTimeout = null;
+        let lastSentMessage = '';
+        let lastSentTimestamp = 0;
+
+        function startSending() {
+          if (sendUnlockTimeout) clearTimeout(sendUnlockTimeout);
+          isSending = true;
+          sendBtn.disabled = true;
+          messageInput.readOnly = true;
+          sendUnlockTimeout = setTimeout(() => {
+            stopSending();
+          }, 8000);
+        }
+
+        function stopSending() {
+          if (sendUnlockTimeout) {
+            clearTimeout(sendUnlockTimeout);
+            sendUnlockTimeout = null;
+          }
+          isSending = false;
+          sendBtn.disabled = false;
+          messageInput.readOnly = false;
+        }
 
         const FLOW_SUMMARY_MAX_ITEMS = 10;
 
@@ -700,10 +726,15 @@
       }
 
       // Enviar texto
-      document.getElementById('sendBtn').onclick = () => {
-        const inp = document.getElementById('messageInput');
-        const txt = inp.value.trim();
+      sendBtn.onclick = () => {
+        if (isSending) return;
+        const txt = messageInput.value.trim();
         if (!txt||!currentChat) return;
+        const now = Date.now();
+        if (txt === lastSentMessage && now - lastSentTimestamp < 1500) return;
+        lastSentMessage = txt;
+        lastSentTimestamp = now;
+        startSending();
         fetch('/send_message',{
           method:'POST',
           headers:{'Content-Type':'application/json'},
@@ -711,20 +742,29 @@
         }).then(res=>{
           if(!res.ok){
             alert('No se pudo enviar el mensaje');
+            lastSentMessage = '';
+            lastSentTimestamp = 0;
+            stopSending();
             return;
           }
-          inp.value='';
+          messageInput.value='';
           replyTo=null;
           replyPreviewEl.style.display='none';
           replyPreviewEl.innerHTML='';
           loadMessages(); fetchChatList();
+          stopSending();
+        }).catch(err=>{
+          console.error('Error enviando mensaje', err);
+          lastSentMessage = '';
+          lastSentTimestamp = 0;
+          stopSending();
         });
       };
 
-      document.getElementById('messageInput').addEventListener('keydown', function(e) {
+      messageInput.addEventListener('keydown', function(e) {
         if (e.key === 'Enter' && !e.shiftKey) {
           e.preventDefault();
-          document.getElementById('sendBtn').click();
+          if (!isSending) sendBtn.click();
         }
       });
 
