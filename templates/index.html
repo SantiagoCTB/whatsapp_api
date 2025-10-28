@@ -62,6 +62,10 @@
   <script>
     document.addEventListener('DOMContentLoaded', () => {
       let currentChat = null, autoRefresh = null, todosChats = [], lastCount = 0, replyTo = null;
+      let lastIncomingWaId = null;
+      let typingSignalTimeout = null;
+      let lastTypingSent = 0;
+      const TYPING_SIGNAL_THROTTLE = 2500;
       let selectedBubble = null;
       const chatListEl = document.getElementById('chatList');
       const chatBoxEl  = document.getElementById('chatBox');
@@ -635,6 +639,8 @@
       function selectChat(numero, liEl) {
         currentChat = numero;
         lastCount = 0; // reset count so the initial load doesn't trigger alerts
+        lastIncomingWaId = null;
+        lastTypingSent = 0;
         // marcar activo
         document.querySelectorAll('#chatList li').forEach(li => li.classList.remove('active'));
         liEl.classList.add('active');
@@ -658,6 +664,7 @@
             if (lastCount===0 || total<lastCount) {
               chatBoxEl.innerHTML = ''; lastCount = 0;
             }
+            let newestIncoming = lastIncomingWaId;
             for (let i=lastCount; i<total; i++){
               const [txt, tipo, url, ts, linkUrl, linkTitle, linkBody, linkThumb,
                      waId, replyWaId, replyId, replyText, replyTipo, replyUrl,
@@ -753,6 +760,9 @@
                 if (txt) div.dataset.text = txt;
                 if (url) div.dataset.url = url;
                 div.dataset.tipo = tipo;
+                if (tipo && tipo.startsWith('cliente')) {
+                  newestIncoming = waId;
+                }
                 div.addEventListener('contextmenu', e => {
                   e.preventDefault();
                   e.stopPropagation();
@@ -771,6 +781,7 @@
               }
               lastCount = i + 1;
             }
+            lastIncomingWaId = newestIncoming;
             if (atBottom) chatBoxEl.scrollTop = chatBoxEl.scrollHeight;
           });
       }
@@ -849,6 +860,30 @@
           stopSending();
         });
       };
+
+      function triggerTypingSignal() {
+        if (!currentChat) return;
+        const now = Date.now();
+        if (now - lastTypingSent < TYPING_SIGNAL_THROTTLE) return;
+        lastTypingSent = now;
+        fetch('/typing_signal', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({
+            numero: currentChat,
+            message_id: lastIncomingWaId,
+            include_read: true
+          })
+        }).catch(err => console.error('Error enviando indicador de escritura', err));
+      }
+
+      messageInput.addEventListener('input', () => {
+        if (typingSignalTimeout) clearTimeout(typingSignalTimeout);
+        typingSignalTimeout = setTimeout(() => {
+          typingSignalTimeout = null;
+          triggerTypingSignal();
+        }, 300);
+      });
 
       messageInput.addEventListener('keydown', function(e) {
         if (e.key === 'Enter' && !e.shiftKey) {

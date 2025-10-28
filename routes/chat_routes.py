@@ -6,7 +6,7 @@ from flask import Blueprint, render_template, request, redirect, session, url_fo
 from werkzeug.utils import secure_filename
 from mysql.connector.errors import ProgrammingError
 from config import Config
-from services.whatsapp_api import enviar_mensaje
+from services.whatsapp_api import enviar_mensaje, trigger_typing_indicator
 from services.db import get_connection, get_chat_state, update_chat_state
 
 chat_bp = Blueprint('chat', __name__)
@@ -344,6 +344,46 @@ def get_chat(numero):
         formatted.append(row)
 
     return jsonify({'mensajes': formatted})
+
+
+@chat_bp.route('/typing_signal', methods=['POST'])
+def typing_signal():
+    if "user" not in session:
+        return jsonify({'error': 'No autorizado'}), 401
+
+    data = request.get_json(silent=True) or {}
+    numero = data.get('numero')
+    message_id = data.get('message_id')
+    include_read = data.get('include_read', True)
+
+    if not numero:
+        return jsonify({'error': 'Número requerido'}), 400
+
+    rol = session.get('rol')
+    if rol != 'admin':
+        conn = get_connection()
+        c = conn.cursor()
+        c.execute("SELECT id FROM roles WHERE keyword=%s", (rol,))
+        row = c.fetchone()
+        role_id = row[0] if row else None
+        c.execute(
+            "SELECT 1 FROM chat_roles WHERE numero = %s AND role_id = %s",
+            (numero, role_id),
+        )
+        autorizado = c.fetchone()
+        conn.close()
+        if not autorizado:
+            return jsonify({'error': 'No autorizado'}), 403
+
+    ok = trigger_typing_indicator(
+        numero,
+        message_id=message_id,
+        include_read=bool(include_read),
+    )
+    if not ok:
+        return jsonify({'error': 'No se pudo enviar el indicador'}), 502
+
+    return jsonify({'status': 'ok'}), 200
 
 
 @chat_bp.route('/respuestas')

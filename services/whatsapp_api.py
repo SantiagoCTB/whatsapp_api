@@ -2,6 +2,7 @@ import os
 import json
 import logging
 import mimetypes
+import threading
 import requests
 from flask import url_for
 from config import Config
@@ -12,10 +13,19 @@ logger = logging.getLogger(__name__)
 
 TOKEN    = Config.META_TOKEN
 PHONE_ID = Config.PHONE_NUMBER_ID
+API_VERSION = os.getenv("WHATSAPP_API_VERSION", "v19.0")
+GRAPH_BASE_URL = f"https://graph.facebook.com/{API_VERSION}"
+MESSAGES_URL = f"{GRAPH_BASE_URL}/{PHONE_ID}/messages"
+
+_typing_lock = threading.Lock()
+_typing_sessions = {}
+_TYPING_INITIAL_DELAY = 2.0
+_TYPING_INTERVAL = 6.0
+
 os.makedirs(Config.MEDIA_ROOT, exist_ok=True)
 
 def enviar_mensaje(numero, mensaje, tipo='bot', tipo_respuesta='texto', opciones=None, reply_to_wa_id=None, step=None, regla_id=None):
-    url = f"https://graph.facebook.com/v19.0/{PHONE_ID}/messages"
+    url = MESSAGES_URL
     headers = {
         "Authorization": f"Bearer {TOKEN}",
         "Content-Type": "application/json"
@@ -314,6 +324,7 @@ def enviar_mensaje(numero, mensaje, tipo='bot', tipo_respuesta='texto', opciones
         logger.error("Error en la respuesta de WhatsApp API", extra=log_payload)
         return False
     logger.info("Mensaje enviado a WhatsApp API", extra=log_payload)
+    stop_typing_feedback(numero)
     try:
         wa_id = resp.json().get("messages", [{}])[0].get("id")
     except Exception:
@@ -343,9 +354,121 @@ def enviar_mensaje(numero, mensaje, tipo='bot', tipo_respuesta='texto', opciones
     )
     return True
 
+
+def _send_read_and_typing(numero, message_id=None, include_read=True, typing_type="text"):
+    if not numero:
+        return False
+
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": numero,
+        "typing_indicator": {"type": typing_type},
+    }
+
+    if include_read and message_id:
+        payload["status"] = "read"
+        payload["message_id"] = message_id
+
+    headers = {
+        "Authorization": f"Bearer {TOKEN}",
+        "Content-Type": "application/json",
+    }
+
+    try:
+        response = requests.post(MESSAGES_URL, headers=headers, json=payload, timeout=10)
+    except requests.RequestException as exc:
+        logger.error(
+            "Error enviando indicador de escritura/lectura",
+            extra={"numero": numero, "message_id": message_id, "error": str(exc)},
+        )
+        return False
+
+    log_payload = {
+        "numero": numero,
+        "message_id": message_id,
+        "status_code": response.status_code,
+        "response_text": response.text,
+    }
+
+    if not response.ok:
+        logger.error("Fallo al enviar indicador de escritura/lectura", extra=log_payload)
+        return False
+
+    logger.info("Indicador de escritura/lectura enviado", extra=log_payload)
+    return True
+
+
+def trigger_typing_indicator(numero, message_id=None, include_read=True, typing_type="text"):
+    return _send_read_and_typing(numero, message_id=message_id, include_read=include_read, typing_type=typing_type)
+
+
+def _typing_tick(numero):
+    with _typing_lock:
+        session = _typing_sessions.get(numero)
+        if not session:
+            return
+        stop_event = session["stop"]
+        message_id = session.get("message_id")
+        has_read = session.get("has_read", False)
+
+    if stop_event.is_set():
+        return
+
+    include_read = bool(message_id) and not has_read
+    _send_read_and_typing(numero, message_id=message_id if include_read else None, include_read=include_read)
+
+    if include_read:
+        with _typing_lock:
+            session = _typing_sessions.get(numero)
+            if session:
+                session["has_read"] = True
+
+    with _typing_lock:
+        session = _typing_sessions.get(numero)
+        if not session or session["stop"].is_set():
+            return
+        timer = threading.Timer(_TYPING_INTERVAL, _typing_tick, args=(numero,))
+        session["timer"] = timer
+    timer.start()
+
+
+def start_typing_feedback(numero, message_id=None):
+    if not numero:
+        return
+
+    with _typing_lock:
+        session = _typing_sessions.get(numero)
+        if session:
+            timer = session.get("timer")
+            if timer:
+                timer.cancel()
+        else:
+            session = {"stop": threading.Event()}
+            _typing_sessions[numero] = session
+        session["stop"].clear()
+        session["message_id"] = message_id
+        session["has_read"] = False
+        timer = threading.Timer(_TYPING_INITIAL_DELAY, _typing_tick, args=(numero,))
+        session["timer"] = timer
+
+    timer.start()
+
+
+def stop_typing_feedback(numero):
+    with _typing_lock:
+        session = _typing_sessions.pop(numero, None)
+
+    if not session:
+        return
+
+    session["stop"].set()
+    timer = session.get("timer")
+    if timer:
+        timer.cancel()
+
 def get_media_url(media_id):
     resp1 = requests.get(
-        f"https://graph.facebook.com/v19.0/{media_id}",
+        f"{GRAPH_BASE_URL}/{media_id}",
         params={"access_token": TOKEN}
     )
     resp1.raise_for_status()
@@ -367,7 +490,7 @@ def subir_media(ruta_archivo):
     if not mime_type:
         raise ValueError(f"No se pudo inferir el MIME type de {ruta_archivo}")
 
-    url = f"https://graph.facebook.com/v19.0/{PHONE_ID}/media"
+    url = f"{GRAPH_BASE_URL}/{PHONE_ID}/media"
     headers = {"Authorization": f"Bearer {TOKEN}"}
     data = {
         "messaging_product": "whatsapp",
@@ -381,7 +504,7 @@ def subir_media(ruta_archivo):
 
 def download_audio(media_id):
     # sirve tanto para audio como para video
-    url_media = f"https://graph.facebook.com/v19.0/{media_id}"
+    url_media = f"{GRAPH_BASE_URL}/{media_id}"
     r1        = requests.get(url_media, params={"access_token": TOKEN})
     r1.raise_for_status()
     media_url = r1.json()["url"]

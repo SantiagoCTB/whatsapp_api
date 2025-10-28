@@ -13,7 +13,12 @@ from services.db import (
     update_chat_state,
     delete_chat_state,
 )
-from services.whatsapp_api import download_audio, get_media_url, enviar_mensaje
+from services.whatsapp_api import (
+    download_audio,
+    get_media_url,
+    enviar_mensaje,
+    start_typing_feedback,
+)
 from services.job_queue import enqueue_transcription
 from services.normalize_text import normalize_text
 from services.global_commands import handle_global_command
@@ -603,6 +608,7 @@ def webhook():
                         step=step,
                     )
                     update_chat_state(from_number, step, 'sin_respuesta')
+                    start_typing_feedback(from_number, wa_id)
                     continue
 
                 # AUDIO
@@ -634,6 +640,7 @@ def webhook():
                     )
 
                     update_chat_state(from_number, step, 'sin_respuesta')
+                    start_typing_feedback(from_number, wa_id)
 
                     queued = enqueue_transcription(
                         path,
@@ -681,6 +688,7 @@ def webhook():
                     )
 
                     update_chat_state(from_number, step, 'sin_respuesta')
+                    start_typing_feedback(from_number, wa_id)
 
                     # 4) Registro interno
                     logging.info("Video recibido: %s", media_id)
@@ -703,6 +711,7 @@ def webhook():
                         step=step,
                     )
                     update_chat_state(from_number, step, 'sin_respuesta')
+                    start_typing_feedback(from_number, wa_id)
                     logging.info("Imagen recibida: %s", media_id)
                     summary['processed'] += 1
                     continue
@@ -721,6 +730,7 @@ def webhook():
                         step=step,
                     )
                     update_chat_state(from_number, step, 'sin_respuesta')
+                    start_typing_feedback(from_number, wa_id)
                     with cache_lock:
                         message_buffer.setdefault(from_number, []).append(
                             {'raw': text, 'normalized': normalized_text}
@@ -779,6 +789,7 @@ def webhook():
                                 step=step,
                             )
                             update_chat_state(from_number, step, 'sin_respuesta')
+                            start_typing_feedback(from_number, wa_id)
                             normalized_text = normalize_text(text)
                             with cache_lock:
                                 message_buffer.setdefault(from_number, []).append(
@@ -796,6 +807,7 @@ def webhook():
                             return jsonify({'status': 'buffered'}), 200
                         else:
                             update_chat_state(from_number, step, 'sin_respuesta')
+                            start_typing_feedback(from_number, wa_id)
                             summary['processed'] += 1
                             continue
                     opt = interactive.get('list_reply') or interactive.get('button_reply') or {}
@@ -811,6 +823,7 @@ def webhook():
                         step=step,
                     )
                     update_chat_state(from_number, step, 'sin_respuesta')
+                    start_typing_feedback(from_number, wa_id)
                     if handle_option_reply(from_number, option_id):
                         continue
                     normalized_text = normalize_text(text)
