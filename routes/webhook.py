@@ -2,6 +2,7 @@ import os
 import logging
 import threading
 import json
+import unicodedata
 from flask import Blueprint, Response, jsonify, request, url_for
 from datetime import datetime
 from config import Config
@@ -125,7 +126,20 @@ def handle_option_reply(numero, option_id):
     if not current_step:
         return False
 
-    def _fetch_rule(step_filter=None):
+    def _normalize_option_value(value):
+        if not isinstance(value, str):
+            return ''
+        normalized = unicodedata.normalize('NFKD', value)
+        normalized = ''.join(
+            ch for ch in normalized if unicodedata.category(ch) != 'Mn'
+        )
+        return normalized.strip().lower()
+
+    option_norm = _normalize_option_value(option_id)
+    if not option_norm:
+        return False
+
+    def _fetch_rules(step_filter=None):
         conn = get_connection(); c = conn.cursor()
         try:
             if step_filter is not None:
@@ -135,14 +149,13 @@ def handle_option_reply(numero, option_id):
                            r.id, r.respuesta, r.siguiente_step, r.tipo,
                            GROUP_CONCAT(m.media_url SEPARATOR '||') AS media_urls,
                            r.opciones, r.rol_keyword, r.input_text
-                      FROM reglas r
-                      LEFT JOIN regla_medias m ON r.id = m.regla_id
-                     WHERE r.step=%s AND r.input_text=%s
+                     FROM reglas r
+                     LEFT JOIN regla_medias m ON r.id = m.regla_id
+                     WHERE r.step=%s
                      GROUP BY r.step, r.id
                      ORDER BY r.id
-                     LIMIT 1
                     """,
-                    (step_filter, option_id),
+                    (step_filter,),
                 )
             else:
                 c.execute(
@@ -153,21 +166,34 @@ def handle_option_reply(numero, option_id):
                            r.opciones, r.rol_keyword, r.input_text
                       FROM reglas r
                       LEFT JOIN regla_medias m ON r.id = m.regla_id
-                     WHERE r.input_text=%s
+                     WHERE LOWER(r.input_text)=LOWER(%s)
                      GROUP BY r.step, r.id
                      ORDER BY r.id
-                     LIMIT 1
                     """,
                     (option_id,),
                 )
-            row = c.fetchone()
+            rows = c.fetchall()
         finally:
             conn.close()
-        return row
+        return rows
 
-    rule_row = _fetch_rule(current_step)
+    def _select_rule(rows):
+        if not rows:
+            return None
+        matches = [
+            row for row in rows
+            if _normalize_option_value((row[8] or '').strip()) == option_norm
+        ]
+        if not matches:
+            return None
+        for row in matches:
+            if _normalize_option_value((row[0] or '').strip()) == option_norm:
+                return row
+        return matches[0]
+
+    rule_row = _select_rule(_fetch_rules(current_step))
     if not rule_row:
-        rule_row = _fetch_rule()
+        rule_row = _select_rule(_fetch_rules())
 
     if rule_row:
         rule_step = (rule_row[0] or '').strip().lower()
