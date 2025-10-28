@@ -110,6 +110,54 @@
         }
 
         const FLOW_SUMMARY_MAX_ITEMS = 10;
+        const EXCLUDED_FLOW_KEYS = new Set(['flow_token']);
+
+        function isExcludedFlowKey(key) {
+          return typeof key === 'string' && EXCLUDED_FLOW_KEYS.has(key.toLowerCase());
+        }
+
+        function isEmptyFlowValue(value) {
+          if (value === null || value === undefined) {
+            return true;
+          }
+          if (typeof value === 'string') {
+            return value.trim().length === 0;
+          }
+          if (Array.isArray(value)) {
+            return value.every(item => isEmptyFlowValue(item));
+          }
+          if (typeof value === 'object') {
+            return Object.values(value).every(item => isEmptyFlowValue(item));
+          }
+          return false;
+        }
+
+        function normalizeFlowNode(value) {
+          if (Array.isArray(value)) {
+            const normalized = [];
+            value.forEach(item => {
+              const normalizedItem = normalizeFlowNode(item);
+              if (!isEmptyFlowValue(normalizedItem)) {
+                normalized.push(normalizedItem);
+              }
+            });
+            return normalized;
+          }
+          if (value && typeof value === 'object') {
+            const normalized = {};
+            Object.entries(value).forEach(([key, val]) => {
+              if (isExcludedFlowKey(key)) {
+                return;
+              }
+              const normalizedValue = normalizeFlowNode(val);
+              if (!isEmptyFlowValue(normalizedValue)) {
+                normalized[String(key)] = normalizedValue;
+              }
+            });
+            return normalized;
+          }
+          return value;
+        }
 
         function formatFlowValue(value) {
           if (value === null || value === undefined) {
@@ -129,13 +177,19 @@
         }
 
         function flattenFlowData(value, prefix = []) {
+          if (Array.isArray(value) || (value && typeof value === 'object')) {
+            value = normalizeFlowNode(value);
+          }
           const items = [];
           if (Array.isArray(value)) {
             value.forEach((item, idx) => {
               const label = prefix.length ? `Elemento ${idx + 1}` : `Respuesta ${idx + 1}`;
               const nextPrefix = prefix.concat(label);
               if (item && typeof item === 'object') {
-                items.push(...flattenFlowData(item, nextPrefix));
+                const nested = flattenFlowData(item, nextPrefix);
+                if (nested.length) {
+                  items.push(...nested);
+                }
               } else {
                 items.push({
                   label: nextPrefix.join(' › '),
@@ -147,7 +201,13 @@
           }
           if (value && typeof value === 'object') {
             Object.entries(value).forEach(([key, val]) => {
-              items.push(...flattenFlowData(val, prefix.concat(String(key))));
+              if (isExcludedFlowKey(key)) {
+                return;
+              }
+              const nested = flattenFlowData(val, prefix.concat(String(key)));
+              if (nested.length) {
+                items.push(...nested);
+              }
             });
             return items;
           }
@@ -157,35 +217,49 @@
         }
 
         function buildFlowValueNode(value) {
+          if (Array.isArray(value) || (value && typeof value === 'object')) {
+            value = normalizeFlowNode(value);
+          }
           if (Array.isArray(value)) {
             const list = document.createElement('ol');
             list.className = 'flow-data-list flow-data-array';
             value.forEach(item => {
+              const node = buildFlowValueNode(item);
+              if (!node) {
+                return;
+              }
               const li = document.createElement('li');
               const wrapper = document.createElement('div');
               wrapper.className = 'flow-value-wrapper';
-              wrapper.appendChild(buildFlowValueNode(item));
+              wrapper.appendChild(node);
               li.appendChild(wrapper);
               list.appendChild(li);
             });
-            return list;
+            return list.children.length ? list : null;
           }
           if (value && typeof value === 'object') {
             const list = document.createElement('ul');
             list.className = 'flow-data-list flow-data-object';
             Object.entries(value).forEach(([key, val]) => {
+              if (isExcludedFlowKey(key)) {
+                return;
+              }
+              const node = buildFlowValueNode(val);
+              if (!node) {
+                return;
+              }
               const li = document.createElement('li');
               const keySpan = document.createElement('span');
               keySpan.className = 'flow-key';
               keySpan.textContent = key;
               const wrapper = document.createElement('div');
               wrapper.className = 'flow-value-wrapper';
-              wrapper.appendChild(buildFlowValueNode(val));
+              wrapper.appendChild(node);
               li.appendChild(keySpan);
               li.appendChild(wrapper);
               list.appendChild(li);
             });
-            return list;
+            return list.children.length ? list : null;
           }
           const span = document.createElement('span');
           span.className = 'flow-value';
@@ -217,6 +291,10 @@
             parsed = raw;
           }
 
+          if (parsed && typeof parsed === 'object') {
+            parsed = normalizeFlowNode(parsed);
+          }
+
           const hasRawContent = parsed !== null && parsed !== undefined;
           let hasContent = false;
           if (hasRawContent) {
@@ -242,11 +320,7 @@
           if (hasName) {
             const title = document.createElement('p');
             title.className = 'flow-text flow-name';
-            const label = document.createElement('span');
-            label.className = 'flow-label';
-            label.textContent = 'Flow:';
-            title.appendChild(label);
-            title.appendChild(document.createTextNode(' ' + name));
+            title.textContent = name;
             card.appendChild(title);
           }
 
@@ -290,8 +364,11 @@
                   card.appendChild(placeholder);
                   appendedContent = true;
                 } else {
-                  card.appendChild(buildFlowValueNode(parsed));
-                  appendedContent = true;
+                  const node = buildFlowValueNode(parsed);
+                  if (node) {
+                    card.appendChild(node);
+                    appendedContent = true;
+                  }
                 }
               }
             } else if (typeof parsed === 'string') {
@@ -365,7 +442,15 @@
             }
 
             if (segment.kind === 'data') {
-              const summary = Array.isArray(segment.summary) ? segment.summary : [];
+              const content = Array.isArray(segment.content) || (segment.content && typeof segment.content === 'object')
+                ? normalizeFlowNode(segment.content)
+                : segment.content;
+              if (isEmptyFlowValue(content)) {
+                return;
+              }
+              const summary = Array.isArray(segment.summary)
+                ? segment.summary.filter(item => item && typeof item.label === 'string' && !item.label.toLowerCase().includes('flow_token'))
+                : [];
               if (summary.length) {
                 const list = document.createElement('ul');
                 list.className = 'flow-summary';
@@ -393,15 +478,19 @@
                 }
                 hasContent = true;
               } else if (segment.display) {
+                const trimmed = segment.display.trim();
+                if (!trimmed || trimmed === '{}' || trimmed === '[]') {
+                  return;
+                }
                 const pre = document.createElement('pre');
                 pre.className = 'flow-json';
-                pre.textContent = segment.display;
+                pre.textContent = trimmed;
                 card.appendChild(pre);
                 hasContent = true;
-              } else if (segment.content !== null && segment.content !== undefined) {
+              } else if (content !== null && content !== undefined) {
                 const p = document.createElement('p');
                 p.className = 'flow-text';
-                p.textContent = formatFlowValue(segment.content);
+                p.textContent = formatFlowValue(content);
                 card.appendChild(p);
                 hasContent = true;
               }

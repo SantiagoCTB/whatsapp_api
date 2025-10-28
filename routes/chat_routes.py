@@ -16,6 +16,29 @@ MEDIA_ROOT = Config.MEDIA_ROOT
 os.makedirs(Config.MEDIA_ROOT, exist_ok=True)
 
 
+EXCLUDED_FLOW_FIELDS = {"flow_token"}
+
+
+def _is_excluded_flow_key(key):
+    """Return True if ``key`` should be hidden from Flow summaries."""
+    if key is None:
+        return False
+    return str(key).lower() in EXCLUDED_FLOW_FIELDS
+
+
+def _is_empty_flow_value(value):
+    """Return True if ``value`` is an empty structure for Flow display."""
+    if value is None:
+        return True
+    if isinstance(value, str):
+        return not value.strip()
+    if isinstance(value, dict):
+        return all(_is_empty_flow_value(v) for v in value.values())
+    if isinstance(value, (list, tuple)):
+        return all(_is_empty_flow_value(item) for item in value)
+    return False
+
+
 def _table_exists(cursor, table_name):
     """Return True if the given table exists in the current schema."""
     try:
@@ -80,7 +103,11 @@ def _flatten_flow_data(value, prefix=None):
         return items
     if isinstance(value, dict):
         for key, val in value.items():
-            items.extend(_flatten_flow_data(val, prefix + [str(key)]))
+            if _is_excluded_flow_key(key):
+                continue
+            nested = _flatten_flow_data(val, prefix + [str(key)])
+            if nested:
+                items.extend(nested)
         return items
     label = ' › '.join(prefix) if prefix else 'Respuesta'
     items.append({'label': label, 'value': _format_flow_value(value)})
@@ -90,9 +117,24 @@ def _flatten_flow_data(value, prefix=None):
 def _normalize_flow_node(node):
     """Return ``node`` with JSON-like containers normalised for display."""
     if isinstance(node, dict):
-        return {str(key): _normalize_flow_node(val) for key, val in node.items()}
+        result = {}
+        for key, val in node.items():
+            if _is_excluded_flow_key(key):
+                continue
+            normalised_key = str(key)
+            normalised_val = _normalize_flow_node(val)
+            if _is_empty_flow_value(normalised_val):
+                continue
+            result[normalised_key] = normalised_val
+        return result
     if isinstance(node, list):
-        return [_normalize_flow_node(item) for item in node]
+        normalised = []
+        for item in node:
+            normalised_item = _normalize_flow_node(item)
+            if _is_empty_flow_value(normalised_item):
+                continue
+            normalised.append(normalised_item)
+        return normalised
     return node
 
 
@@ -139,11 +181,15 @@ def _extract_flow_segments(raw_message):
         kind = segment.get('kind')
         content = segment.get('content')
         if kind == 'data':
+            if _is_empty_flow_value(content):
+                continue
             summary = []
             display = ''
             if isinstance(content, (dict, list)):
                 summary = _flatten_flow_data(content)
                 display = json.dumps(content, ensure_ascii=False, indent=2)
+                if display in ('{}', '[]'):
+                    display = ''
             else:
                 display = _format_flow_value(content)
             if display:
@@ -387,16 +433,17 @@ def respuestas():
         agent_reply_timestamp,
     ) in flow_rows:
         parsed_json = _parse_flow_json(response_json)
+        normalized_json = _normalize_flow_node(parsed_json)
 
         summary_items = []
-        if isinstance(parsed_json, (dict, list)):
-            summary_items = _flatten_flow_data(parsed_json)
-        elif isinstance(parsed_json, str):
-            text = parsed_json.strip()
+        if isinstance(normalized_json, (dict, list)) and not _is_empty_flow_value(normalized_json):
+            summary_items = _flatten_flow_data(normalized_json)
+        elif isinstance(normalized_json, str):
+            text = normalized_json.strip()
             if text:
                 summary_items = [{'label': 'Respuesta', 'value': text}]
-        elif parsed_json not in (None, ''):
-            summary_items = [{'label': 'Respuesta', 'value': _format_flow_value(parsed_json)}]
+        elif normalized_json not in (None, ''):
+            summary_items = [{'label': 'Respuesta', 'value': _format_flow_value(normalized_json)}]
 
         message = None
         if not summary_items:
@@ -419,7 +466,7 @@ def respuestas():
                 'user_message': (user_message or '').strip() or None,
                 'agent_replied': bool(agent_replied),
                 'agent_reply_timestamp': agent_reply_timestamp,
-                'raw_json': parsed_json if isinstance(parsed_json, (dict, list)) else None,
+                'raw_json': normalized_json if isinstance(normalized_json, (dict, list)) and not _is_empty_flow_value(normalized_json) else None,
                 'segments': _extract_flow_segments(user_message) if user_message else [],
             }
         )

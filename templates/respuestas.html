@@ -36,9 +36,16 @@
                 <td class="flow-response-summary">
                     <div class="flow-response-card">
                         {% if resp.flow_name %}
-                            <p class="flow-text"><span class="flow-label">Flow:</span> {{ resp.flow_name }}</p>
+                            <p class="flow-text">{{ resp.flow_name }}</p>
                         {% endif %}
                         {% set summary = resp.summary or [] %}
+                        {% set filtered = namespace(items=[]) %}
+                        {% for item in summary %}
+                            {% if item and item.label and 'flow_token' not in item.label|lower %}
+                                {% set filtered.items = filtered.items + [item] %}
+                            {% endif %}
+                        {% endfor %}
+                        {% set summary = filtered.items %}
                         {% if summary %}
                             <ul class="flow-summary">
                                 {% for item in summary[:max_summary_items] %}
@@ -75,6 +82,13 @@
                             {% elif segment.kind == 'data' %}
                                 <div class="flow-response-card flow-response-inline flow-segments-card">
                                     {% set summary = segment.summary or [] %}
+                                    {% set filtered_segments = namespace(items=[]) %}
+                                    {% for item in summary %}
+                                        {% if item and item.label and 'flow_token' not in item.label|lower %}
+                                            {% set filtered_segments.items = filtered_segments.items + [item] %}
+                                        {% endif %}
+                                    {% endfor %}
+                                    {% set summary = filtered_segments.items %}
                                     {% if summary %}
                                         <ul class="flow-summary">
                                             {% for item in summary[:max_summary_items] %}
@@ -89,7 +103,10 @@
                                             <div class="flow-summary-more">+ {{ remaining }} dato{% if remaining != 1 %}s{% endif %} adicional{% if remaining != 1 %}es{% endif %}</div>
                                         {% endif %}
                                     {% elif segment.display %}
-                                        <pre class="flow-json">{{ segment.display }}</pre>
+                                        {% set display_text = segment.display|trim %}
+                                        {% if display_text and display_text not in ['{}', '[]'] %}
+                                            <pre class="flow-json">{{ display_text }}</pre>
+                                        {% endif %}
                                     {% else %}
                                         <div class="flow-response-message">Sin contenido</div>
                                     {% endif %}
