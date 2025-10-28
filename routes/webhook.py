@@ -121,11 +121,64 @@ def _get_step_from_options(opciones_json, option_id):
 def handle_option_reply(numero, option_id):
     if not option_id:
         return False
-    step = get_current_step(numero)
-    if not step:
+    current_step = get_current_step(numero)
+    if not current_step:
         return False
+
+    def _fetch_rule(step_filter=None):
+        conn = get_connection(); c = conn.cursor()
+        try:
+            if step_filter is not None:
+                c.execute(
+                    """
+                    SELECT r.step,
+                           r.id, r.respuesta, r.siguiente_step, r.tipo,
+                           GROUP_CONCAT(m.media_url SEPARATOR '||') AS media_urls,
+                           r.opciones, r.rol_keyword, r.input_text
+                      FROM reglas r
+                      LEFT JOIN regla_medias m ON r.id = m.regla_id
+                     WHERE r.step=%s AND r.input_text=%s
+                     GROUP BY r.step, r.id
+                     ORDER BY r.id
+                     LIMIT 1
+                    """,
+                    (step_filter, option_id),
+                )
+            else:
+                c.execute(
+                    """
+                    SELECT r.step,
+                           r.id, r.respuesta, r.siguiente_step, r.tipo,
+                           GROUP_CONCAT(m.media_url SEPARATOR '||') AS media_urls,
+                           r.opciones, r.rol_keyword, r.input_text
+                      FROM reglas r
+                      LEFT JOIN regla_medias m ON r.id = m.regla_id
+                     WHERE r.input_text=%s
+                     GROUP BY r.step, r.id
+                     ORDER BY r.id
+                     LIMIT 1
+                    """,
+                    (option_id,),
+                )
+            row = c.fetchone()
+        finally:
+            conn.close()
+        return row
+
+    rule_row = _fetch_rule(current_step)
+    if not rule_row:
+        rule_row = _fetch_rule()
+
+    if rule_row:
+        rule_step = (rule_row[0] or '').strip().lower()
+        rule = rule_row[1:]
+        effective_step = rule_step or current_step
+        set_user_step(numero, effective_step)
+        dispatch_rule(numero, rule, step=effective_step)
+        return True
+
     conn = get_connection(); c = conn.cursor()
-    c.execute("SELECT opciones FROM reglas WHERE step=%s", (step,))
+    c.execute("SELECT opciones FROM reglas WHERE step=%s", (current_step,))
     rows = c.fetchall(); conn.close()
     for (opcs,) in rows:
         nxt = _get_step_from_options(opcs or '', option_id)
