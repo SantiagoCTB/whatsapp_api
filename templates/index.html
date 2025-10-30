@@ -592,6 +592,9 @@
               const li = document.createElement('li');
               li.textContent = c.alias ? `${c.alias} (${c.numero})` : c.numero;
               if (c.estado) li.classList.add('estado-' + c.estado);
+              if (currentChat && c.numero === currentChat) {
+                li.classList.add('active');
+              }
 
               li.draggable = true;
               li.addEventListener('dragstart', e => {
