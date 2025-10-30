@@ -18,7 +18,28 @@ from routes.webhook import webhook_bp
 from routes.tablero_routes import tablero_bp
 from routes.export_routes import export_bp
 
+def _ensure_media_root():
+    """Create the directory where user uploads are stored."""
+    media_root = Config.MEDIA_ROOT
+    try:
+        os.makedirs(media_root, exist_ok=True)
+        logging.getLogger(__name__).info("MEDIA_ROOT inicializado en %s", media_root)
+    except OSError as exc:
+        raise RuntimeError(
+            f"No se pudo preparar el directorio de medios en '{media_root}'."
+        ) from exc
+
+    static_uploads = os.path.join(Config.BASEDIR, "static", "uploads")
+    if os.path.abspath(static_uploads) != media_root:
+        logging.getLogger(__name__).warning(
+            "MEDIA_ROOT (%s) es distinto del directorio estándar de static/uploads. "
+            "Asegúrate de exponerlo correctamente en tu servidor.",
+            media_root,
+        )
+
+
 def create_app():
+    _ensure_media_root()
     app = Flask(
         __name__,
         static_folder=os.path.join(Config.BASEDIR, "static"),
