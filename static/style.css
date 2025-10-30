@@ -172,6 +172,13 @@
       font-size: 12px;
       pointer-events: none;
     }
+    .chat-alert {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      margin-right: 8px;
+      font-size: 1.1rem;
+    }
     .estado-sin_regla { background-color: #ff4d4f; color: var(--text-light); }
     .estado-sin_respuesta { background-color: #ff4d4f; color: var(--text-light); }
     .estado-espera_usuario { background-color: #ffc107; color: var(--text-main); }

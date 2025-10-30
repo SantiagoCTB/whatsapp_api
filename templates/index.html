@@ -591,6 +591,13 @@
               if (serverTime) lastChatTimestamps[c.numero] = serverTime;
               const li = document.createElement('li');
               li.textContent = c.alias ? `${c.alias} (${c.numero})` : c.numero;
+              if (c.estado === 'sin_regla') {
+                const alertIcon = document.createElement('span');
+                alertIcon.className = 'chat-alert';
+                alertIcon.textContent = '⚠️';
+                alertIcon.title = 'Atención requerida';
+                li.insertBefore(alertIcon, li.firstChild);
+              }
               if (c.estado) li.classList.add('estado-' + c.estado);
               if (currentChat && c.numero === currentChat) {
                 li.classList.add('active');
