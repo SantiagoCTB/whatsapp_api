@@ -157,4 +157,6 @@ Si se utilizan para pruebas locales, realiza copias de seguridad en un almacenam
 
 Los archivos generados por los usuarios se guardan en la ruta indicada por la variable de entorno `MEDIA_ROOT`. Esta ruta debe apuntar a un volumen externo o a un directorio persistente fuera del repositorio. Si no se define, la aplicación usará `static/uploads` dentro del proyecto.
 
+La aplicación crea automáticamente el directorio configurado en `MEDIA_ROOT` durante el arranque. Para despliegues con Docker asigna dicho directorio a un volumen persistente. Por ejemplo, en `docker-compose.windows.yml` se incluye un volumen llamado `media_uploads` que se monta en `C:\app\static\uploads` para que los archivos sobrevivan a recreaciones del contenedor.
+
 Estos archivos no deben versionarse en Git; durante los despliegues, mantén `MEDIA_ROOT` en un volumen persistente o en un almacenamiento externo para evitar su borrado accidental.
