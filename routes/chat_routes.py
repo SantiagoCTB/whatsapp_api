@@ -8,7 +8,13 @@ from mysql.connector.errors import ProgrammingError
 from config import Config
 from services.whatsapp_api import enviar_mensaje, trigger_typing_indicator
 from routes.webhook import clear_chat_runtime_state
-from services.db import get_connection, get_chat_state, update_chat_state, delete_chat_state
+from services.db import (
+    get_connection,
+    get_chat_state,
+    update_chat_state,
+    delete_chat_state,
+    delete_chat as delete_chat_from_db,
+)
 
 chat_bp = Blueprint('chat', __name__)
 
@@ -716,6 +722,31 @@ def finalizar_chat():
         return jsonify({"error": "Número requerido"}), 400
 
     delete_chat_state(numero)
+    clear_chat_runtime_state(numero)
+
+    return jsonify({"status": "ok"}), 200
+
+
+@chat_bp.route('/delete_chat', methods=['POST'])
+def delete_chat():
+    if 'user' not in session:
+        return jsonify({"error": "No autorizado"}), 403
+
+    roles = session.get('roles') or []
+    if isinstance(roles, str):
+        roles = [roles]
+    is_admin = 'admin' in roles
+    if not is_admin:
+        is_admin = session.get('rol') == 'admin'
+    if not is_admin:
+        return jsonify({"error": "No autorizado"}), 403
+
+    data = request.get_json() or {}
+    numero = data.get('numero')
+    if not numero:
+        return jsonify({"error": "Número requerido"}), 400
+
+    delete_chat_from_db(numero)
     clear_chat_runtime_state(numero)
 
     return jsonify({"status": "ok"}), 200
