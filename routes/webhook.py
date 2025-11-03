@@ -38,6 +38,30 @@ cache_lock         = threading.Lock()
 
 MAX_AUTO_STEPS = 25
 
+
+def clear_chat_runtime_state(numero: str):
+    """Limpia timers y mensajes en memoria asociados a un chat."""
+
+    with cache_lock:
+        timer = pending_timers.pop(numero, None)
+        entries = message_buffer.pop(numero, None)
+
+    if timer:
+        try:
+            timer.cancel()
+        except Exception:  # pragma: no cover - cancel solo falla en casos extremos
+            logger.exception(
+                "No se pudo cancelar el temporizador pendiente del chat",
+                extra={"numero": numero},
+            )
+
+    if entries:
+        logger.debug(
+            "Se descartaron %d entradas en buffer para el chat finalizado",
+            len(entries),
+            extra={"numero": numero},
+        )
+
 RELEVANT_HEADERS = (
     'X-Hub-Signature-256',
     'User-Agent',

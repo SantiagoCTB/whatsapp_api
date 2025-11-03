@@ -1,4 +1,5 @@
 from flask import Blueprint, render_template, request, redirect, session, url_for, jsonify
+from mysql.connector import Error as MySQLError
 from services.db import get_connection
 from openpyxl import load_workbook
 from werkzeug.utils import secure_filename
@@ -34,6 +35,33 @@ def _url_ok(url):
         return ok, mime
     except requests.RequestException:
         return False, None
+
+
+def _botones_opciones_column(c, conn):
+    """Asegura que la columna ``opciones`` exista en ``botones``.
+
+    Devuelve la expresión SQL a utilizar en el SELECT para soportar
+    instalaciones antiguas donde aún no existe la columna. En esos casos
+    se intentará crearla y, si no es posible, se regresa ``NULL`` como
+    marcador para evitar errores ``Unknown column``.
+    """
+
+    has_opciones = True
+    try:
+        c.execute("SHOW COLUMNS FROM botones LIKE 'opciones';")
+        has_opciones = c.fetchone() is not None
+        if not has_opciones:
+            try:
+                c.execute("ALTER TABLE botones ADD COLUMN opciones TEXT NULL;")
+                conn.commit()
+                has_opciones = True
+            except MySQLError:
+                conn.rollback()
+                has_opciones = False
+    except MySQLError:
+        has_opciones = False
+
+    return "b.opciones" if has_opciones else "NULL AS opciones"
 
 def _reglas_view(template_name):
     """Renderiza las vistas de reglas.
@@ -529,9 +557,10 @@ def botones():
                         )
                     conn.commit()
 
+        opciones_expr = _botones_opciones_column(c, conn)
         c.execute(
-            """
-            SELECT b.id, b.mensaje, b.tipo, b.nombre, b.opciones,
+            f"""
+            SELECT b.id, b.mensaje, b.tipo, b.nombre, {opciones_expr},
                    GROUP_CONCAT(m.media_url SEPARATOR '||') AS media_urls,
                    GROUP_CONCAT(m.media_tipo SEPARATOR '||') AS media_tipos
               FROM botones b
@@ -586,9 +615,10 @@ def get_botones():
     conn = get_connection()
     c = conn.cursor()
     try:
+        opciones_expr = _botones_opciones_column(c, conn)
         c.execute(
-            """
-            SELECT b.id, b.mensaje, b.tipo, b.nombre, b.opciones,
+            f"""
+            SELECT b.id, b.mensaje, b.tipo, b.nombre, {opciones_expr},
                    GROUP_CONCAT(m.media_url SEPARATOR '||') AS media_urls,
                    GROUP_CONCAT(m.media_tipo SEPARATOR '||') AS media_tipos
               FROM botones b
@@ -604,7 +634,7 @@ def get_botones():
                 'mensaje': r[1] or '',
                 'tipo': r[2] or 'texto',
                 'nombre': r[3],
-                'opciones': r[4],
+                'opciones': r[4] or '',
                 'media_urls': r[5].split('||') if r[5] else [],
                 'media_tipos': r[6].split('||') if r[6] else []
             }
