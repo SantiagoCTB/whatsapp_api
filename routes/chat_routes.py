@@ -7,6 +7,7 @@ from werkzeug.utils import secure_filename
 from mysql.connector.errors import ProgrammingError
 from config import Config
 from services.whatsapp_api import enviar_mensaje, trigger_typing_indicator
+from routes.webhook import clear_chat_runtime_state
 from services.db import get_connection, get_chat_state, update_chat_state, delete_chat_state
 
 chat_bp = Blueprint('chat', __name__)
@@ -715,6 +716,7 @@ def finalizar_chat():
         return jsonify({"error": "Número requerido"}), 400
 
     delete_chat_state(numero)
+    clear_chat_runtime_state(numero)
 
     return jsonify({"status": "ok"}), 200
 
