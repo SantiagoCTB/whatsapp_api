@@ -183,6 +183,15 @@
     .estado-sin_respuesta { background-color: #ff4d4f; color: var(--text-light); }
     .estado-espera_usuario { background-color: #ffc107; color: var(--text-main); }
     .estado-asesor { background-color: #28a745; color: var(--text-light); }
+    .state-color-dot {
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      margin-right: 8px;
+      border: 1px solid rgba(0, 0, 0, 0.2);
+      vertical-align: middle;
+    }
 
     /* Chat window */
     .chatWindow {
@@ -268,8 +277,26 @@
     .context-menu div {
       padding:8px 12px; cursor:pointer;
     }
-    .context-menu div:hover {
+    .context-menu div:not(.menu-header):not(.menu-divider):hover {
       background:var(--accent); color:var(--text-light);
+    }
+    .context-menu .menu-divider {
+      height:1px;
+      background:#e0e0e0;
+      margin:4px 0;
+      cursor:default;
+    }
+    .context-menu .menu-header {
+      font-weight:600;
+      cursor:default;
+      color:var(--text-main);
+    }
+    .context-menu .menu-header:hover {
+      background:inherit;
+      color:inherit;
+    }
+    .context-menu .context-option {
+      display:block;
     }
     .reply-preview {
       margin:8px 12px; padding:4px 8px;
