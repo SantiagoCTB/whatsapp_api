@@ -7,7 +7,7 @@ from werkzeug.utils import secure_filename
 from mysql.connector.errors import ProgrammingError
 from config import Config
 from services.whatsapp_api import enviar_mensaje, trigger_typing_indicator
-from services.db import get_connection, get_chat_state, update_chat_state
+from services.db import get_connection, get_chat_state, update_chat_state, delete_chat_state
 
 chat_bp = Blueprint('chat', __name__)
 
@@ -699,6 +699,22 @@ def set_alias():
     )
     conn.commit()
     conn.close()
+
+    return jsonify({"status": "ok"}), 200
+
+
+@chat_bp.route('/finalizar_chat', methods=['POST'])
+def finalizar_chat():
+    if "user" not in session:
+        return jsonify({"error": "No autorizado"}), 401
+
+    data = request.get_json() or {}
+    numero = data.get('numero')
+
+    if not numero:
+        return jsonify({"error": "Número requerido"}), 400
+
+    delete_chat_state(numero)
 
     return jsonify({"status": "ok"}), 200
 

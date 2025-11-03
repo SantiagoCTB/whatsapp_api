@@ -58,6 +58,7 @@
   <div id="contextMenu" class="context-menu"><div id="replyAction">Responder</div></div>
   <div id="chatContextMenu" class="context-menu chat-context-menu">
     <div id="chatAliasAction">Asignar alias</div>
+    <div id="chatFinishAction" class="danger-action">Finalizar chat</div>
     <div class="menu-divider"></div>
     <div class="menu-header">Estado</div>
     <div id="chatStateOptions" class="menu-options"></div>
@@ -82,6 +83,7 @@
       const replyAction = document.getElementById('replyAction');
       const chatContextMenu = document.getElementById('chatContextMenu');
       const chatAliasAction = document.getElementById('chatAliasAction');
+      const chatFinishAction = document.getElementById('chatFinishAction');
       const chatStateOptionsContainer = document.getElementById('chatStateOptions');
       let chatStateOptions = [];
       const chatStateDefinitions = {{ chat_state_definitions | tojson }};
@@ -712,6 +714,34 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ numero: chatData.numero, nombre: trimmed })
         }).then(() => fetchChatList());
+      });
+
+      chatFinishAction.addEventListener('click', () => {
+        if (!chatContextTarget) return;
+        const chatData = chatContextTarget;
+        hideChatContextMenu();
+        fetch('/finalizar_chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ numero: chatData.numero })
+        })
+        .then(resp => {
+          if (!resp.ok) throw new Error('No se pudo finalizar el chat');
+          if (currentChat === chatData.numero) {
+            currentChat = null;
+            lastCount = 0;
+            if (autoRefresh) {
+              clearInterval(autoRefresh);
+              autoRefresh = null;
+            }
+            chatBoxEl.innerHTML = '';
+            botoneraEl.innerHTML = '';
+            replyPreviewEl.style.display = 'none';
+            replyPreviewEl.innerHTML = '';
+          }
+          fetchChatList();
+        })
+        .catch(err => console.error(err));
       });
 
       function updateChatState(numero, estado) {
