@@ -9,8 +9,3 @@
       - "443:8000"
     restart: unless-stopped
     isolation: hyperv
-    volumes:
-      - media_uploads:C:\\app\\static\\uploads
-
-volumes:
-  media_uploads:

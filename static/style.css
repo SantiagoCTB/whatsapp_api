@@ -811,6 +811,34 @@
       color: var(--timestamp-color);
       font-style: italic;
     }
+    /* Asegura que las opciones de estado se comporten igual que las demás acciones */
+    .chat-context-menu .menu-options {
+      display: flex;
+      flex-direction: column;
+      padding: 6px 8px;
+      gap: 0; /* sin gap para que el hover no se mezcle */
+    }
+
+    /* Cada opción independiente */
+    .chat-context-menu .menu-options .context-option {
+      display: block;
+      padding: 8px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background 0.2s, color 0.2s;
+    }
+
+    /* ✅ Hover individual en verde (igual que las demás acciones del menú) */
+    .chat-context-menu .menu-options .context-option:hover {
+      background: var(--accent);
+      color: var(--text-light);
+    }
+
+    /* Línea divisoria entre cada opción */
+    .chat-context-menu .menu-options .context-option + .context-option {
+      border-top: 1px solid rgba(0, 0, 0, 0.08);
+    }
+
 @media (min-width: 769px) {
   body.chat {
     overflow: hidden;
