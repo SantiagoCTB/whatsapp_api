@@ -236,6 +236,9 @@ def init_db():
     c.execute("SHOW COLUMNS FROM botones LIKE 'nombre';")
     if not c.fetchone():
         c.execute("ALTER TABLE botones ADD COLUMN nombre VARCHAR(100) NULL;")
+    c.execute("SHOW COLUMNS FROM botones LIKE 'opciones';")
+    if not c.fetchone():
+        c.execute("ALTER TABLE botones ADD COLUMN opciones TEXT NULL;")
 
     # boton_medias: soporta múltiples archivos por botón
     c.execute("""

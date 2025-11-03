@@ -421,6 +421,13 @@ def botones():
                     mensaje = fila[1] if len(fila) > 1 else None
                     tipo = fila[2] if len(fila) > 2 else None
                     media_url = fila[3] if len(fila) > 3 else None
+                    opciones = fila[4] if len(fila) > 4 else None
+                    if isinstance(opciones, (dict, list)):
+                        opciones = json.dumps(opciones, ensure_ascii=False)
+                    elif opciones is not None:
+                        opciones = str(opciones).strip()
+                        if not opciones:
+                            opciones = None
                     medias = []
                     if media_url:
                         urls = [u.strip() for u in re.split(r'[\n,]+', str(media_url)) if u and u.strip()]
@@ -430,8 +437,8 @@ def botones():
                                 medias.append((url, mime))
                     if mensaje:
                         c.execute(
-                            "INSERT INTO botones (nombre, mensaje, tipo) VALUES (%s, %s, %s)",
-                            (nombre, mensaje, tipo)
+                            "INSERT INTO botones (nombre, mensaje, tipo, opciones) VALUES (%s, %s, %s, %s)",
+                            (nombre, mensaje, tipo, opciones)
                         )
                         boton_id = c.lastrowid
                         for url, mime in medias:
@@ -440,6 +447,55 @@ def botones():
                                 (boton_id, url, mime)
                             )
                 conn.commit()
+            elif request.form.get('regla_id'):
+                regla_id = request.form.get('regla_id')
+                try:
+                    regla_id = int(regla_id)
+                except (TypeError, ValueError):
+                    regla_id = None
+
+                if regla_id:
+                    c.execute(
+                        """
+                        SELECT r.respuesta, r.tipo, r.opciones,
+                               GROUP_CONCAT(m.media_url SEPARATOR '||') AS media_urls,
+                               GROUP_CONCAT(m.media_tipo SEPARATOR '||') AS media_tipos
+                          FROM reglas r
+                          LEFT JOIN regla_medias m ON r.id = m.regla_id
+                         WHERE r.id = %s
+                         GROUP BY r.id
+                        """,
+                        (regla_id,)
+                    )
+                    row = c.fetchone()
+                else:
+                    row = None
+
+                if row and row[0]:
+                    nombre = request.form.get('nombre')
+                    respuesta = row[0]
+                    tipo = row[1] or 'texto'
+                    opciones = row[2]
+                    media_urls_raw = row[3].split('||') if row[3] else []
+                    media_tipos_raw = row[4].split('||') if row[4] else []
+                    medias = []
+                    for idx, url in enumerate(media_urls_raw):
+                        if not url:
+                            continue
+                        mime = media_tipos_raw[idx] if idx < len(media_tipos_raw) else None
+                        medias.append((url, mime))
+
+                    c.execute(
+                        "INSERT INTO botones (nombre, mensaje, tipo, opciones) VALUES (%s, %s, %s, %s)",
+                        (nombre, respuesta, tipo, opciones)
+                    )
+                    boton_id = c.lastrowid
+                    for url, mime in medias:
+                        c.execute(
+                            "INSERT INTO boton_medias (boton_id, media_url, media_tipo) VALUES (%s, %s, %s)",
+                            (boton_id, url, mime)
+                        )
+                    conn.commit()
             # Agregar botón manual
             elif 'mensaje' in request.form:
                 nombre = request.form.get('nombre')
@@ -463,8 +519,8 @@ def botones():
                         medias.append((url, mime))
                 if nuevo_mensaje:
                     c.execute(
-                        "INSERT INTO botones (nombre, mensaje, tipo) VALUES (%s, %s, %s)",
-                        (nombre, nuevo_mensaje, tipo)
+                        "INSERT INTO botones (nombre, mensaje, tipo, opciones) VALUES (%s, %s, %s, %s)",
+                        (nombre, nuevo_mensaje, tipo, None)
                     )
                     boton_id = c.lastrowid
                     for url, mime in medias:
@@ -476,7 +532,7 @@ def botones():
 
         c.execute(
             """
-            SELECT b.id, b.mensaje, b.tipo, b.nombre,
+            SELECT b.id, b.mensaje, b.tipo, b.nombre, b.opciones,
                    GROUP_CONCAT(m.media_url SEPARATOR '||') AS media_urls,
                    GROUP_CONCAT(m.media_tipo SEPARATOR '||') AS media_tipos
               FROM botones b
@@ -485,8 +541,44 @@ def botones():
              ORDER BY b.id
             """
         )
-        botones = c.fetchall()
-        return render_template('botones.html', botones=botones)
+        botones = []
+        for row in c.fetchall():
+            media_urls = row[5].split('||') if row[5] else []
+            media_tipos = row[6].split('||') if row[6] else []
+            botones.append({
+                'id': row[0],
+                'mensaje': row[1] or '',
+                'tipo': row[2] or 'texto',
+                'nombre': row[3],
+                'opciones': row[4],
+                'media_urls': media_urls,
+                'media_tipos': media_tipos,
+                'media_urls_display': '<br>'.join(media_urls),
+            })
+        c.execute(
+            """
+            SELECT r.id, r.step, r.input_text, r.respuesta, r.tipo, r.opciones,
+                   GROUP_CONCAT(m.media_url SEPARATOR '||') AS media_urls,
+                   GROUP_CONCAT(m.media_tipo SEPARATOR '||') AS media_tipos
+              FROM reglas r
+              LEFT JOIN regla_medias m ON r.id = m.regla_id
+             GROUP BY r.id
+             ORDER BY r.step, r.id
+            """
+        )
+        reglas = []
+        for row in c.fetchall():
+            reglas.append({
+                'id': row[0],
+                'step': row[1] or '',
+                'input_text': row[2] or '',
+                'respuesta': row[3] or '',
+                'tipo': row[4] or '',
+                'opciones': row[5] or '',
+                'media_urls': row[6] or '',
+                'media_tipos': row[7] or '',
+            })
+        return render_template('botones.html', botones=botones, reglas=reglas)
     finally:
         conn.close()
 
@@ -511,7 +603,7 @@ def get_botones():
     try:
         c.execute(
             """
-            SELECT b.id, b.mensaje, b.tipo, b.nombre,
+            SELECT b.id, b.mensaje, b.tipo, b.nombre, b.opciones,
                    GROUP_CONCAT(m.media_url SEPARATOR '||') AS media_urls,
                    GROUP_CONCAT(m.media_tipo SEPARATOR '||') AS media_tipos
               FROM botones b
@@ -524,11 +616,12 @@ def get_botones():
         return jsonify([
             {
                 'id': r[0],
-                'mensaje': r[1],
-                'tipo': r[2],
+                'mensaje': r[1] or '',
+                'tipo': r[2] or 'texto',
                 'nombre': r[3],
-                'media_urls': r[4].split('||') if r[4] else [],
-                'media_tipos': r[5].split('||') if r[5] else []
+                'opciones': r[4],
+                'media_urls': r[5].split('||') if r[5] else [],
+                'media_tipos': r[6].split('||') if r[6] else []
             }
             for r in rows
         ])
