@@ -10,6 +10,32 @@
 
 <h2>Botones rápidos para el chat</h2>
 
+<h3>Crear botón desde una regla existente</h3>
+<form method="POST" id="form-regla">
+    <label for="regla_id">Selecciona una regla:</label>
+    <select name="regla_id" id="regla_id" required>
+        <option value="">-- Selecciona una regla --</option>
+        {% for regla in reglas %}
+        <option value="{{ regla.id }}">{{ regla.step or 'sin step' }} | {{ regla.input_text or 'sin input' }}</option>
+        {% endfor %}
+    </select>
+
+    <div id="regla_detalle" style="display:none;">
+        <p><strong>Respuesta:</strong> <span id="regla_respuesta"></span></p>
+        <p><strong>Tipo:</strong> <span id="regla_tipo"></span></p>
+        <div id="regla_medias" style="display:none;">
+            <strong>Medios:</strong>
+            <ul></ul>
+        </div>
+    </div>
+
+    <label for="nombre_regla">Nombre del botón (opcional):</label>
+    <input type="text" name="nombre" id="nombre_regla" placeholder="Nombre para el botón">
+
+    <button type="submit" class="btn-primary">Agregar botón desde regla</button>
+</form>
+
+<h3>Crear botón manualmente</h3>
 <form method="POST" enctype="multipart/form-data">
     <label for="nombre">Nombre del botón:</label>
     <input type="text" name="nombre" id="nombre">
@@ -59,6 +85,7 @@
     {% endfor %}
 </table>
 
+<script id="reglas-data" type="application/json">{{ reglas|tojson }}</script>
 <script>
 function toggleMediaFields() {
     const tipo = document.getElementById('tipo').value;
@@ -77,5 +104,58 @@ function toggleMediaFields() {
 
 document.getElementById('tipo').addEventListener('change', toggleMediaFields);
 window.addEventListener('DOMContentLoaded', toggleMediaFields);
+
+const reglasRaw = document.getElementById('reglas-data');
+let reglasList = [];
+if (reglasRaw) {
+    try {
+        reglasList = JSON.parse(reglasRaw.textContent);
+    } catch (err) {
+        console.error('No se pudo parsear la información de reglas', err);
+    }
+}
+
+const reglaSelect = document.getElementById('regla_id');
+const detalle = document.getElementById('regla_detalle');
+const respuestaEl = document.getElementById('regla_respuesta');
+const tipoEl = document.getElementById('regla_tipo');
+const mediasEl = document.querySelector('#regla_medias ul');
+const mediasWrapper = document.getElementById('regla_medias');
+
+function mostrarDetalleRegla(reglaId) {
+    const regla = reglasList.find(r => String(r.id) === String(reglaId));
+    if (!regla) {
+        detalle.style.display = 'none';
+        mediasWrapper.style.display = 'none';
+        mediasEl.innerHTML = '';
+        return;
+    }
+    detalle.style.display = 'block';
+    respuestaEl.textContent = regla.respuesta || '';
+    tipoEl.textContent = regla.tipo || 'texto';
+
+    mediasEl.innerHTML = '';
+    if (regla.media_urls) {
+        const urls = regla.media_urls.split('||').filter(Boolean);
+        const tipos = regla.media_tipos ? regla.media_tipos.split('||') : [];
+        urls.forEach((url, index) => {
+            const li = document.createElement('li');
+            const mime = tipos[index] || '';
+            li.textContent = mime ? `${url} (${mime})` : url;
+            mediasEl.appendChild(li);
+        });
+        mediasWrapper.style.display = urls.length ? 'block' : 'none';
+    } else {
+        mediasWrapper.style.display = 'none';
+    }
+}
+
+reglaSelect && reglaSelect.addEventListener('change', (event) => {
+    mostrarDetalleRegla(event.target.value);
+});
+
+if (reglaSelect) {
+    mostrarDetalleRegla(reglaSelect.value);
+}
 </script>
 {% endblock %}
