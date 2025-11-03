@@ -280,6 +280,14 @@
     .context-menu div:not(.menu-header):not(.menu-divider):hover {
       background:var(--accent); color:var(--text-light);
     }
+    .context-menu .danger-action {
+      color:#b00020;
+      font-weight:600;
+    }
+    .context-menu .danger-action:hover {
+      background:#b00020;
+      color:#ffffff;
+    }
     .context-menu .menu-divider {
       height:1px;
       background:#e0e0e0;
