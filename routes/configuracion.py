@@ -485,7 +485,9 @@ def botones():
                 if regla_id:
                     c.execute(
                         """
-                        SELECT r.respuesta, r.tipo,
+                        SELECT r.respuesta,
+                               r.tipo,
+                               r.opciones,
                                GROUP_CONCAT(m.media_url SEPARATOR '||') AS media_urls,
                                GROUP_CONCAT(m.media_tipo SEPARATOR '||') AS media_tipos
                           FROM reglas r
@@ -503,8 +505,9 @@ def botones():
                     nombre = request.form.get('nombre')
                     respuesta = row[0]
                     tipo = row[1] or 'texto'
-                    media_urls_raw = row[2].split('||') if row[2] else []
-                    media_tipos_raw = row[3].split('||') if row[3] else []
+                    opciones_raw = row[2]
+                    media_urls_raw = row[3].split('||') if row[3] else []
+                    media_tipos_raw = row[4].split('||') if row[4] else []
                     medias = []
                     for idx, url in enumerate(media_urls_raw):
                         if not url:
@@ -512,9 +515,10 @@ def botones():
                         mime = media_tipos_raw[idx] if idx < len(media_tipos_raw) else None
                         medias.append((url, mime))
 
+                    opciones_value = opciones_raw if opciones_raw else None
                     c.execute(
-                        "INSERT INTO botones (nombre, mensaje, tipo) VALUES (%s, %s, %s)",
-                        (nombre, respuesta, tipo)
+                        "INSERT INTO botones (nombre, mensaje, tipo, opciones) VALUES (%s, %s, %s, %s)",
+                        (nombre, respuesta, tipo, opciones_value)
                     )
                     boton_id = c.lastrowid
                     for url, mime in medias:
