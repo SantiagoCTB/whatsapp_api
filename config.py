@@ -76,7 +76,11 @@ class Config:
     META_TOKEN = os.getenv('META_TOKEN')
     PHONE_NUMBER_ID = os.getenv('PHONE_NUMBER_ID')
     VERIFY_TOKEN = os.getenv('VERIFY_TOKEN',"my_secret_token")
-    SESSION_TIMEOUT = 600
+    SESSION_TIMEOUT = int(os.getenv('SESSION_TIMEOUT_SECONDS', 1800))
+    SESSION_TIMEOUT_MESSAGE = os.getenv(
+        'SESSION_TIMEOUT_MESSAGE',
+        'Tu sesión ha terminado por inactividad. Hemos reiniciado la conversación.',
+    )
     INITIAL_STEP = os.getenv('INITIAL_STEP', 'menu_principal')
     MAX_TRANSCRIPTION_DURATION_MS = int(os.getenv('MAX_TRANSCRIPTION_DURATION_MS', 60000))
     TRANSCRIPTION_MAX_AVG_TIME_SEC = float(os.getenv('TRANSCRIPTION_MAX_AVG_TIME_SEC', 10))

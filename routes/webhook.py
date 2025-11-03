@@ -28,6 +28,7 @@ logger = logging.getLogger(__name__)
 
 VERIFY_TOKEN    = Config.VERIFY_TOKEN
 SESSION_TIMEOUT = Config.SESSION_TIMEOUT
+SESSION_TIMEOUT_MESSAGE = Config.SESSION_TIMEOUT_MESSAGE
 DEFAULT_FALLBACK_TEXT = "No entendí tu respuesta, intenta de nuevo."
 
 # Mapa numero -> lista de textos recibidos para procesar tras un delay
@@ -471,6 +472,8 @@ def handle_text_message(numero: str, texto: str, save: bool = True):
     if last_time and (now - last_time).total_seconds() > SESSION_TIMEOUT:
         delete_chat_state(numero)
         step_db = None
+        if SESSION_TIMEOUT_MESSAGE:
+            enviar_mensaje(numero, SESSION_TIMEOUT_MESSAGE)
     elif row:
         update_chat_state(numero, step_db)
 
