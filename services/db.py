@@ -1,5 +1,6 @@
 import mysql.connector
 from mysql.connector import errorcode
+from mysql.connector.errors import ProgrammingError
 from werkzeug.security import generate_password_hash
 from config import Config
 
@@ -458,6 +459,35 @@ def update_chat_state(numero, step, estado=None):
     )
     conn.commit()
     conn.close()
+
+
+def delete_chat(numero):
+    """Elimina toda la información persistida asociada a un número de chat."""
+    conn = get_connection()
+    try:
+        cursor = conn.cursor()
+        tables = (
+            ("mensajes", "numero"),
+            ("alias", "numero"),
+            ("chat_roles", "numero"),
+            ("chat_state", "numero"),
+        )
+        for table, column in tables:
+            try:
+                cursor.execute(f"DELETE FROM {table} WHERE {column} = %s", (numero,))
+            except ProgrammingError as exc:
+                if exc.errno != errorcode.ER_NO_SUCH_TABLE:
+                    raise
+
+        try:
+            cursor.execute("DELETE FROM flow_responses WHERE numero = %s", (numero,))
+        except ProgrammingError as exc:
+            if exc.errno != errorcode.ER_NO_SUCH_TABLE:
+                raise
+
+        conn.commit()
+    finally:
+        conn.close()
 
 
 def delete_chat_state(numero):
