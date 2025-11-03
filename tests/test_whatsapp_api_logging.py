@@ -194,3 +194,52 @@ def test_enviar_mensaje_flow_payload_and_logging(monkeypatch, caplog):
     assert record.tipo_respuesta == "flow"
     assert record.status_code == 200
     assert record.response_text == "OK"
+
+
+def test_enviar_mensaje_flow_normaliza_aliases(monkeypatch):
+    posted_payload = {}
+
+    def fake_post(url, headers=None, json=None):
+        posted_payload["json"] = json
+        return DummyResponse(
+            ok=True,
+            status_code=200,
+            text="OK",
+            json_data={"messages": [{"id": "wa-id"}]},
+        )
+
+    monkeypatch.setattr(whatsapp_api.requests, "post", fake_post)
+    monkeypatch.setattr(whatsapp_api, "guardar_mensaje", lambda *args, **kwargs: None)
+
+    opciones = json.dumps({
+        "cta": "Abrir flow",
+        "flow_id": "FLOW-123",
+        "version": "5",
+        "token": "token-xyz",
+        "action": "navigate",
+        "initial_screen": "screen-1",
+        "data": {"foo": "bar"},
+        "header": "Encabezado",
+        "body": "Descripción",
+        "footer": "Pie",
+    })
+
+    whatsapp_api.enviar_mensaje(
+        "300111222",
+        "Mensaje base",
+        tipo_respuesta="flow",
+        opciones=opciones,
+    )
+
+    interactive = posted_payload["json"]["interactive"]
+    params = interactive["action"]["parameters"]
+
+    assert params["flow_message_version"] == "5"
+    assert params["flow_cta"] == "Abrir flow"
+    assert params["flow_id"] == "FLOW-123"
+    assert params["flow_token"] == "token-xyz"
+    assert params["flow_action"] == "navigate"
+    assert params["flow_action_payload"] == {"screen": "screen-1", "data": {"foo": "bar"}}
+    assert interactive["body"]["text"] == "Descripción"
+    assert interactive["header"]["text"] == "Encabezado"
+    assert interactive["footer"]["text"] == "Pie"

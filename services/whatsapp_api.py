@@ -3,8 +3,11 @@ import json
 import logging
 import mimetypes
 import threading
+from typing import Any, Dict, Optional
+
 import requests
 from flask import url_for
+
 from config import Config
 from services.db import guardar_mensaje
 
@@ -23,6 +26,73 @@ _TYPING_INITIAL_DELAY = 2.0
 _TYPING_INTERVAL = 6.0
 
 os.makedirs(Config.MEDIA_ROOT, exist_ok=True)
+
+
+def _normalize_flow_options(raw_options: Dict[str, Any]) -> Dict[str, Any]:
+    """Normaliza las opciones de un flow provenientes del panel."""
+
+    if not isinstance(raw_options, dict):
+        return {}
+
+    options = {}
+    for key, value in raw_options.items():
+        if isinstance(value, str):
+            value = value.strip()
+        options[key] = value
+
+    alias_map = {
+        "cta": "flow_cta",
+        "version": "flow_message_version",
+        "token": "flow_token",
+        "action": "flow_action",
+        "header": "flow_header",
+        "body": "flow_body",
+        "footer": "flow_footer",
+    }
+
+    for alias, target in alias_map.items():
+        alias_value = options.get(alias)
+        if alias_value and target not in options:
+            options[target] = alias_value
+
+    payload = options.get("flow_action_payload")
+    payload_obj: Optional[Dict[str, Any]]
+    if isinstance(payload, str) and payload:
+        try:
+            payload_obj = json.loads(payload)
+        except json.JSONDecodeError:
+            payload_obj = None
+    elif isinstance(payload, dict):
+        payload_obj = dict(payload)
+    else:
+        payload_obj = None
+
+    if payload_obj is None:
+        payload_obj = {}
+
+    initial_screen = options.get("initial_screen") or options.get("flow_initial_screen")
+    if initial_screen and "screen" not in payload_obj:
+        payload_obj["screen"] = initial_screen
+
+    data_value = options.get("data") or options.get("flow_data")
+    if data_value not in (None, "") and "data" not in payload_obj:
+        if isinstance(data_value, str):
+            stripped = data_value.strip()
+            if stripped:
+                try:
+                    data_value = json.loads(stripped)
+                except json.JSONDecodeError:
+                    data_value = stripped
+                else:
+                    data_value = data_value
+        payload_obj["data"] = data_value
+
+    if payload_obj:
+        options["flow_action_payload"] = payload_obj
+    else:
+        options.pop("flow_action_payload", None)
+
+    return options
 
 def enviar_mensaje(numero, mensaje, tipo='bot', tipo_respuesta='texto', opciones=None, reply_to_wa_id=None, step=None, regla_id=None):
     url = MESSAGES_URL
@@ -181,20 +251,24 @@ def enviar_mensaje(numero, mensaje, tipo='bot', tipo_respuesta='texto', opciones
 
     elif tipo_respuesta == 'flow':
         if isinstance(opciones, str):
-            try:
-                opts = json.loads(opciones)
-            except json.JSONDecodeError as exc:
-                logger.error(
-                    "Opciones inválidas para flow",
-                    extra={
-                        "numero": numero,
-                        "tipo_respuesta": tipo_respuesta,
-                        "error": str(exc),
-                    },
-                )
-                return False
+            opciones_str = opciones.strip()
+            if not opciones_str:
+                opts = {}
+            else:
+                try:
+                    opts = json.loads(opciones_str)
+                except json.JSONDecodeError as exc:
+                    logger.error(
+                        "Opciones inválidas para flow",
+                        extra={
+                            "numero": numero,
+                            "tipo_respuesta": tipo_respuesta,
+                            "error": str(exc),
+                        },
+                    )
+                    return False
         elif isinstance(opciones, dict):
-            opts = opciones
+            opts = dict(opciones)
         else:
             logger.error(
                 "Opciones inválidas para flow",
@@ -205,7 +279,9 @@ def enviar_mensaje(numero, mensaje, tipo='bot', tipo_respuesta='texto', opciones
             )
             return False
 
-        flow_message_version = opts.get("flow_message_version", "3")
+        opts = _normalize_flow_options(opts)
+
+        flow_message_version = opts.get("flow_message_version") or "3"
         flow_cta = opts.get("flow_cta")
         flow_id = opts.get("flow_id")
         flow_name = opts.get("flow_name")
