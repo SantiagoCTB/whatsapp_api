@@ -440,6 +440,54 @@ def botones():
                                 (boton_id, url, mime)
                             )
                 conn.commit()
+            elif request.form.get('regla_id'):
+                regla_id = request.form.get('regla_id')
+                try:
+                    regla_id = int(regla_id)
+                except (TypeError, ValueError):
+                    regla_id = None
+
+                if regla_id:
+                    c.execute(
+                        """
+                        SELECT r.respuesta, r.tipo,
+                               GROUP_CONCAT(m.media_url SEPARATOR '||') AS media_urls,
+                               GROUP_CONCAT(m.media_tipo SEPARATOR '||') AS media_tipos
+                          FROM reglas r
+                          LEFT JOIN regla_medias m ON r.id = m.regla_id
+                         WHERE r.id = %s
+                         GROUP BY r.id
+                        """,
+                        (regla_id,)
+                    )
+                    row = c.fetchone()
+                else:
+                    row = None
+
+                if row and row[0]:
+                    nombre = request.form.get('nombre')
+                    respuesta = row[0]
+                    tipo = row[1] or 'texto'
+                    media_urls_raw = row[2].split('||') if row[2] else []
+                    media_tipos_raw = row[3].split('||') if row[3] else []
+                    medias = []
+                    for idx, url in enumerate(media_urls_raw):
+                        if not url:
+                            continue
+                        mime = media_tipos_raw[idx] if idx < len(media_tipos_raw) else None
+                        medias.append((url, mime))
+
+                    c.execute(
+                        "INSERT INTO botones (nombre, mensaje, tipo) VALUES (%s, %s, %s)",
+                        (nombre, respuesta, tipo)
+                    )
+                    boton_id = c.lastrowid
+                    for url, mime in medias:
+                        c.execute(
+                            "INSERT INTO boton_medias (boton_id, media_url, media_tipo) VALUES (%s, %s, %s)",
+                            (boton_id, url, mime)
+                        )
+                    conn.commit()
             # Agregar botón manual
             elif 'mensaje' in request.form:
                 nombre = request.form.get('nombre')
@@ -486,7 +534,29 @@ def botones():
             """
         )
         botones = c.fetchall()
-        return render_template('botones.html', botones=botones)
+        c.execute(
+            """
+            SELECT r.id, r.step, r.input_text, r.respuesta, r.tipo,
+                   GROUP_CONCAT(m.media_url SEPARATOR '||') AS media_urls,
+                   GROUP_CONCAT(m.media_tipo SEPARATOR '||') AS media_tipos
+              FROM reglas r
+              LEFT JOIN regla_medias m ON r.id = m.regla_id
+             GROUP BY r.id
+             ORDER BY r.step, r.id
+            """
+        )
+        reglas = []
+        for row in c.fetchall():
+            reglas.append({
+                'id': row[0],
+                'step': row[1] or '',
+                'input_text': row[2] or '',
+                'respuesta': row[3] or '',
+                'tipo': row[4] or '',
+                'media_urls': row[5] or '',
+                'media_tipos': row[6] or '',
+            })
+        return render_template('botones.html', botones=botones, reglas=reglas)
     finally:
         conn.close()
 
