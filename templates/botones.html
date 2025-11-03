@@ -69,15 +69,26 @@
 
 <h3>Botones actuales</h3>
 <table class="fixed-table">
-    <tr><th>ID</th><th>Nombre</th><th>Mensaje</th><th>URLs</th><th>Acción</th></tr>
+    <tr><th>ID</th><th>Nombre</th><th>Tipo</th><th>Mensaje</th><th>Adjuntos / Opciones</th><th>Acción</th></tr>
     {% for b in botones %}
     <tr>
-        <td>{{ b[0] }}</td>
-        <td>{{ b[3]|default('') }}</td>
-        <td style="white-space: pre-line;">{{ b[1] }}</td>
-        <td style="word-break: break-all;">{{ b[4]|default('')|replace('||', '<br>')|safe }}</td>
+        <td>{{ b.id }}</td>
+        <td>{{ b.nombre|default('') }}</td>
+        <td>{{ b.tipo }}</td>
+        <td style="white-space: pre-line;">{{ b.mensaje }}</td>
+        <td style="word-break: break-all;">
+            {% if b.media_urls %}
+                {{ b.media_urls_display|safe }}
+            {% endif %}
+            {% if b.opciones %}
+                <div class="boton-opciones">
+                    <strong>Opciones:</strong>
+                    <pre>{{ b.opciones }}</pre>
+                </div>
+            {% endif %}
+        </td>
         <td>
-            <form method="POST" action="{{ url_for('configuracion.eliminar_boton', boton_id=b[0]) }}">
+            <form method="POST" action="{{ url_for('configuracion.eliminar_boton', boton_id=b.id) }}">
                 <button class="delete-btn btn-primary" type="submit">Eliminar</button>
             </form>
         </td>

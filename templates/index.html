@@ -970,18 +970,38 @@
               btn.textContent = b.nombre || i+1;
               btn.onclick = () => {
                 if (!currentChat) return;
-                const urls = (b.media_urls && b.media_urls.length) ? b.media_urls : [null];
-                const envios = urls.map((url, index) => fetch('/send_message', {
-                  method:'POST',
-                  headers:{'Content-Type':'application/json'},
-                  body:JSON.stringify({
-                    numero: currentChat,
-                    mensaje: index === 0 ? b.mensaje : '',
-                    tipo_respuesta: b.tipo,
-                    opciones: url,
-                    reply_to_wa_id: replyTo
-                  })
-                }));
+                const tipoRespuesta = b.tipo || 'texto';
+                const envios = [];
+
+                if (['image','video','audio','document'].includes(tipoRespuesta)) {
+                  const urls = (b.media_urls && b.media_urls.length) ? b.media_urls : [null];
+                  urls.forEach((url, index) => {
+                    envios.push(fetch('/send_message', {
+                      method:'POST',
+                      headers:{'Content-Type':'application/json'},
+                      body:JSON.stringify({
+                        numero: currentChat,
+                        mensaje: index === 0 ? (b.mensaje || '') : '',
+                        tipo_respuesta: tipoRespuesta,
+                        opciones: url,
+                        reply_to_wa_id: replyTo
+                      })
+                    }));
+                  });
+                } else {
+                  envios.push(fetch('/send_message', {
+                    method:'POST',
+                    headers:{'Content-Type':'application/json'},
+                    body:JSON.stringify({
+                      numero: currentChat,
+                      mensaje: b.mensaje || '',
+                      tipo_respuesta: tipoRespuesta,
+                      opciones: b.opciones,
+                      reply_to_wa_id: replyTo
+                    })
+                  }));
+                }
+
                 Promise.all(envios).then(responses => {
                   if (responses.every(r => r.ok)) {
                     replyTo=null;

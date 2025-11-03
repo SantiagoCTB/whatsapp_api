@@ -421,6 +421,13 @@ def botones():
                     mensaje = fila[1] if len(fila) > 1 else None
                     tipo = fila[2] if len(fila) > 2 else None
                     media_url = fila[3] if len(fila) > 3 else None
+                    opciones = fila[4] if len(fila) > 4 else None
+                    if isinstance(opciones, (dict, list)):
+                        opciones = json.dumps(opciones, ensure_ascii=False)
+                    elif opciones is not None:
+                        opciones = str(opciones).strip()
+                        if not opciones:
+                            opciones = None
                     medias = []
                     if media_url:
                         urls = [u.strip() for u in re.split(r'[\n,]+', str(media_url)) if u and u.strip()]
@@ -430,8 +437,8 @@ def botones():
                                 medias.append((url, mime))
                     if mensaje:
                         c.execute(
-                            "INSERT INTO botones (nombre, mensaje, tipo) VALUES (%s, %s, %s)",
-                            (nombre, mensaje, tipo)
+                            "INSERT INTO botones (nombre, mensaje, tipo, opciones) VALUES (%s, %s, %s, %s)",
+                            (nombre, mensaje, tipo, opciones)
                         )
                         boton_id = c.lastrowid
                         for url, mime in medias:
@@ -511,8 +518,8 @@ def botones():
                         medias.append((url, mime))
                 if nuevo_mensaje:
                     c.execute(
-                        "INSERT INTO botones (nombre, mensaje, tipo) VALUES (%s, %s, %s)",
-                        (nombre, nuevo_mensaje, tipo)
+                        "INSERT INTO botones (nombre, mensaje, tipo, opciones) VALUES (%s, %s, %s, %s)",
+                        (nombre, nuevo_mensaje, tipo, None)
                     )
                     boton_id = c.lastrowid
                     for url, mime in medias:
@@ -524,7 +531,7 @@ def botones():
 
         c.execute(
             """
-            SELECT b.id, b.mensaje, b.tipo, b.nombre,
+            SELECT b.id, b.mensaje, b.tipo, b.nombre, b.opciones,
                    GROUP_CONCAT(m.media_url SEPARATOR '||') AS media_urls,
                    GROUP_CONCAT(m.media_tipo SEPARATOR '||') AS media_tipos
               FROM botones b
@@ -581,7 +588,7 @@ def get_botones():
     try:
         c.execute(
             """
-            SELECT b.id, b.mensaje, b.tipo, b.nombre,
+            SELECT b.id, b.mensaje, b.tipo, b.nombre, b.opciones,
                    GROUP_CONCAT(m.media_url SEPARATOR '||') AS media_urls,
                    GROUP_CONCAT(m.media_tipo SEPARATOR '||') AS media_tipos
               FROM botones b
@@ -594,11 +601,12 @@ def get_botones():
         return jsonify([
             {
                 'id': r[0],
-                'mensaje': r[1],
-                'tipo': r[2],
+                'mensaje': r[1] or '',
+                'tipo': r[2] or 'texto',
                 'nombre': r[3],
-                'media_urls': r[4].split('||') if r[4] else [],
-                'media_tipos': r[5].split('||') if r[5] else []
+                'opciones': r[4],
+                'media_urls': r[5].split('||') if r[5] else [],
+                'media_tipos': r[6].split('||') if r[6] else []
             }
             for r in rows
         ])
