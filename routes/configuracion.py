@@ -569,7 +569,29 @@ def botones():
              ORDER BY b.id
             """
         )
-        botones = c.fetchall()
+        botones = []
+        for row in c.fetchall():
+            media_urls = row[5].split('||') if row[5] else []
+            media_tipos = row[6].split('||') if row[6] else []
+            if media_urls:
+                items = []
+                for idx, url in enumerate(media_urls):
+                    mime = media_tipos[idx] if idx < len(media_tipos) else ''
+                    texto = f"{url} ({mime})" if mime else url
+                    items.append(f"<li>{texto}</li>")
+                media_urls_display = f"<ul>{''.join(items)}</ul>"
+            else:
+                media_urls_display = ''
+            botones.append({
+                'id': row[0],
+                'mensaje': row[1] or '',
+                'tipo': row[2] or 'texto',
+                'nombre': row[3],
+                'opciones': row[4] or '',
+                'media_urls': media_urls,
+                'media_tipos': media_tipos,
+                'media_urls_display': media_urls_display,
+            })
         c.execute(
             """
             SELECT r.id, r.step, r.input_text, r.respuesta, r.tipo,
