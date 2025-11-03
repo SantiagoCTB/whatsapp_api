@@ -15,6 +15,9 @@ chat_bp = Blueprint('chat', __name__)
 MEDIA_ROOT = Config.MEDIA_ROOT
 os.makedirs(Config.MEDIA_ROOT, exist_ok=True)
 
+CHAT_STATE_DEFINITIONS = Config.CHAT_STATE_DEFINITIONS
+CHAT_STATE_KEYS = {item["key"] for item in CHAT_STATE_DEFINITIONS if item.get("key")}
+
 
 EXCLUDED_FLOW_FIELDS = {"flow_token"}
 
@@ -279,7 +282,15 @@ def index():
     roles_db = c.fetchall()
 
     conn.close()
-    return render_template('index.html', chats=chats, botones=botones, rol=rol, role_id=role_id, roles=roles_db)
+    return render_template(
+        'index.html',
+        chats=chats,
+        botones=botones,
+        rol=rol,
+        role_id=role_id,
+        roles=roles_db,
+        chat_state_definitions=CHAT_STATE_DEFINITIONS,
+    )
 
 @chat_bp.route('/get_chat/<numero>')
 def get_chat(numero):
@@ -690,6 +701,45 @@ def set_alias():
     conn.close()
 
     return jsonify({"status": "ok"}), 200
+
+@chat_bp.route('/set_chat_state', methods=['POST'])
+def set_chat_state():
+    if "user" not in session:
+        return jsonify({"error": "No autorizado"}), 401
+
+    data = request.get_json() or {}
+    numero = data.get('numero')
+    estado = data.get('estado')
+
+    if not numero:
+        return jsonify({"error": "Número requerido"}), 400
+
+    if isinstance(estado, str):
+        estado = estado.strip().lower()
+        if estado == "":
+            estado = None
+    elif estado is not None:
+        estado = None
+
+    if estado is not None and estado not in CHAT_STATE_KEYS:
+        return jsonify({"error": "Estado no permitido"}), 400
+
+    conn = get_connection()
+    c = conn.cursor()
+    try:
+        if estado is None:
+            c.execute("DELETE FROM chat_state WHERE numero = %s", (numero,))
+        else:
+            c.execute(
+                "INSERT INTO chat_state (numero, estado) VALUES (%s, %s) "
+                "ON DUPLICATE KEY UPDATE estado = VALUES(estado)",
+                (numero, estado),
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+    return jsonify({"status": "ok", "estado": estado}), 200
 
 @chat_bp.route('/assign_chat_role', methods=['POST'])
 def assign_chat_role():

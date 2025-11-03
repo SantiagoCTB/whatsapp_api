@@ -457,7 +457,7 @@ def botones():
                 if regla_id:
                     c.execute(
                         """
-                        SELECT r.respuesta, r.tipo, r.opciones,
+                        SELECT r.respuesta, r.tipo,
                                GROUP_CONCAT(m.media_url SEPARATOR '||') AS media_urls,
                                GROUP_CONCAT(m.media_tipo SEPARATOR '||') AS media_tipos
                           FROM reglas r
@@ -475,9 +475,8 @@ def botones():
                     nombre = request.form.get('nombre')
                     respuesta = row[0]
                     tipo = row[1] or 'texto'
-                    opciones = row[2]
-                    media_urls_raw = row[3].split('||') if row[3] else []
-                    media_tipos_raw = row[4].split('||') if row[4] else []
+                    media_urls_raw = row[2].split('||') if row[2] else []
+                    media_tipos_raw = row[3].split('||') if row[3] else []
                     medias = []
                     for idx, url in enumerate(media_urls_raw):
                         if not url:
@@ -486,8 +485,8 @@ def botones():
                         medias.append((url, mime))
 
                     c.execute(
-                        "INSERT INTO botones (nombre, mensaje, tipo, opciones) VALUES (%s, %s, %s, %s)",
-                        (nombre, respuesta, tipo, opciones)
+                        "INSERT INTO botones (nombre, mensaje, tipo) VALUES (%s, %s, %s)",
+                        (nombre, respuesta, tipo)
                     )
                     boton_id = c.lastrowid
                     for url, mime in medias:
@@ -541,23 +540,10 @@ def botones():
              ORDER BY b.id
             """
         )
-        botones = []
-        for row in c.fetchall():
-            media_urls = row[5].split('||') if row[5] else []
-            media_tipos = row[6].split('||') if row[6] else []
-            botones.append({
-                'id': row[0],
-                'mensaje': row[1] or '',
-                'tipo': row[2] or 'texto',
-                'nombre': row[3],
-                'opciones': row[4],
-                'media_urls': media_urls,
-                'media_tipos': media_tipos,
-                'media_urls_display': '<br>'.join(media_urls),
-            })
+        botones = c.fetchall()
         c.execute(
             """
-            SELECT r.id, r.step, r.input_text, r.respuesta, r.tipo, r.opciones,
+            SELECT r.id, r.step, r.input_text, r.respuesta, r.tipo,
                    GROUP_CONCAT(m.media_url SEPARATOR '||') AS media_urls,
                    GROUP_CONCAT(m.media_tipo SEPARATOR '||') AS media_tipos
               FROM reglas r
@@ -574,9 +560,8 @@ def botones():
                 'input_text': row[2] or '',
                 'respuesta': row[3] or '',
                 'tipo': row[4] or '',
-                'opciones': row[5] or '',
-                'media_urls': row[6] or '',
-                'media_tipos': row[7] or '',
+                'media_urls': row[5] or '',
+                'media_tipos': row[6] or '',
             })
         return render_template('botones.html', botones=botones, reglas=reglas)
     finally:

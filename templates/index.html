@@ -56,6 +56,12 @@
 </div>
 
   <div id="contextMenu" class="context-menu"><div id="replyAction">Responder</div></div>
+  <div id="chatContextMenu" class="context-menu chat-context-menu">
+    <div id="chatAliasAction">Asignar alias</div>
+    <div class="menu-divider"></div>
+    <div class="menu-header">Estado</div>
+    <div id="chatStateOptions" class="menu-options"></div>
+  </div>
 
   <div class="role-indicator">{{ rol }}</div>
 
@@ -67,12 +73,24 @@
       let lastTypingSent = 0;
       const TYPING_SIGNAL_THROTTLE = 2500;
       let selectedBubble = null;
+      let chatContextTarget = null;
       const chatListEl = document.getElementById('chatList');
       const chatBoxEl  = document.getElementById('chatBox');
       const botoneraEl = document.getElementById('botonera');
       const replyPreviewEl = document.getElementById('replyPreview');
       const contextMenu = document.getElementById('contextMenu');
       const replyAction = document.getElementById('replyAction');
+      const chatContextMenu = document.getElementById('chatContextMenu');
+      const chatAliasAction = document.getElementById('chatAliasAction');
+      const chatStateOptionsContainer = document.getElementById('chatStateOptions');
+      let chatStateOptions = [];
+      const chatStateDefinitions = {{ chat_state_definitions | tojson }};
+      const chatStateDefinitionMap = new Map();
+      chatStateDefinitions.forEach(def => {
+        if (def && def.key) {
+          chatStateDefinitionMap.set(def.key, def);
+        }
+      });
       const sendBtn = document.getElementById('sendBtn');
       const messageInput = document.getElementById('messageInput');
       const sidebar = document.querySelector('.sidebar');
@@ -85,6 +103,81 @@
       roleToggle.addEventListener('click', () => {
         roleDropZone.classList.toggle('show');
       });
+      function injectChatStateStyles(definitions) {
+        if (!Array.isArray(definitions) || definitions.length === 0) {
+          const existing = document.getElementById('chat-state-dynamic-styles');
+          if (existing) existing.remove();
+          return;
+        }
+
+        const styleId = 'chat-state-dynamic-styles';
+        let styleEl = document.getElementById(styleId);
+        if (!styleEl) {
+          styleEl = document.createElement('style');
+          styleEl.id = styleId;
+          document.head.appendChild(styleEl);
+        }
+
+        const rules = [];
+        definitions.forEach(def => {
+          if (!def || !def.key) return;
+          const bg = def.color || '#666666';
+          const text = def.text_color || '#ffffff';
+          const key = def.key;
+          rules.push(`#chatList li.estado-${key} { background-color: ${bg}; color: ${text}; }`);
+          rules.push(`#chatList li.estado-${key}:hover { background-color: ${bg}; color: ${text}; }`);
+          rules.push(`#chatList li.estado-${key} .badge { background: rgba(0, 0, 0, 0.18); color: ${text}; }`);
+        });
+        styleEl.textContent = rules.join('\n');
+      }
+
+      function rebuildChatStateOptions() {
+        chatStateOptionsContainer.innerHTML = '';
+
+        if (Array.isArray(chatStateDefinitions) && chatStateDefinitions.length) {
+          chatStateDefinitions.forEach(def => {
+            if (!def || !def.key) return;
+            const option = document.createElement('div');
+            option.className = 'context-option';
+            option.dataset.estado = def.key;
+
+            if (def.color) {
+              const colorDot = document.createElement('span');
+              colorDot.className = 'state-color-dot';
+              colorDot.style.backgroundColor = def.color;
+              option.appendChild(colorDot);
+            }
+
+            const label = document.createElement('span');
+            label.textContent = def.label || def.key;
+            option.appendChild(label);
+
+            chatStateOptionsContainer.appendChild(option);
+          });
+        }
+
+        const clearOption = document.createElement('div');
+        clearOption.className = 'context-option';
+        clearOption.dataset.estado = '';
+        clearOption.textContent = 'Sin estado';
+        chatStateOptionsContainer.appendChild(clearOption);
+
+        chatStateOptions = Array.from(chatStateOptionsContainer.querySelectorAll('[data-estado]'));
+        chatStateOptions.forEach(option => {
+          option.addEventListener('click', () => {
+            if (!chatContextTarget) return;
+            const chatData = chatContextTarget;
+            const estado = option.dataset.estado || null;
+            hideChatContextMenu();
+            updateChatState(chatData.numero, estado)
+              .then(() => fetchChatList())
+              .catch(err => console.error(err));
+          });
+        });
+      }
+
+      injectChatStateStyles(chatStateDefinitions);
+      rebuildChatStateOptions();
         const userRole   = "{{ rol }}";
         const lastChatTimestamps = {};
         const roleIcons = { ventas: '💼', soporte: '🛠', marketing: '📣' };
@@ -567,11 +660,76 @@
         e.stopPropagation();
         settingsMenu.classList.toggle('show');
       };
-      document.addEventListener('click', () => settingsMenu.classList.remove('show'));
+      function hideChatContextMenu() {
+        chatContextMenu.classList.remove('show');
+        chatContextMenu.style.visibility = '';
+        chatContextTarget = null;
+      }
 
+      function openChatContextMenu(event, chatData) {
+        chatContextTarget = chatData;
+        chatContextMenu.style.visibility = 'hidden';
+        chatContextMenu.classList.add('show');
+        chatContextMenu.style.left = `${event.pageX}px`;
+        chatContextMenu.style.top = `${event.pageY}px`;
+        const rect = chatContextMenu.getBoundingClientRect();
+        let left = event.pageX;
+        let top = event.pageY;
+        if (rect.right > window.innerWidth) {
+          left = Math.max(0, window.innerWidth - rect.width - 8);
+        }
+        if (rect.bottom > window.innerHeight) {
+          top = Math.max(0, window.innerHeight - rect.height - 8);
+        }
+        chatContextMenu.style.left = `${left}px`;
+        chatContextMenu.style.top = `${top}px`;
+        chatContextMenu.style.visibility = 'visible';
+      }
+
+      document.addEventListener('click', e => {
+        if (!settingsMenu.contains(e.target) && e.target !== settingsBtn) {
+          settingsMenu.classList.remove('show');
+        }
+        if (chatContextMenu.classList.contains('show') && !chatContextMenu.contains(e.target)) {
+          hideChatContextMenu();
+        }
+      });
+      window.addEventListener('resize', hideChatContextMenu);
+      chatListEl.addEventListener('scroll', hideChatContextMenu);
+      chatContextMenu.addEventListener('contextmenu', e => e.preventDefault());
+
+
+      chatAliasAction.addEventListener('click', () => {
+        if (!chatContextTarget) return;
+        const chatData = chatContextTarget;
+        hideChatContextMenu();
+        const nombre = prompt(`Asignar alias a: ${chatData.numero}`, chatData.alias || "");
+        if (nombre === null) return;
+        const trimmed = nombre.trim();
+        if (!trimmed) return;
+        fetch('/set_alias', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ numero: chatData.numero, nombre: trimmed })
+        }).then(() => fetchChatList());
+      });
+
+      function updateChatState(numero, estado) {
+        const payload = { numero };
+        payload.estado = estado ? estado : null;
+        return fetch('/set_chat_state', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        }).then(resp => {
+          if (!resp.ok) throw new Error('No se pudo actualizar el estado');
+          return resp.json();
+        });
+      }
 
       // Cargar lista de chats
       function fetchChatList() {
+        hideChatContextMenu();
         fetch('/get_chat_list')
           .then(r=>r.json())
           .then(data=>{
@@ -598,7 +756,17 @@
                 alertIcon.title = 'Atención requerida';
                 li.insertBefore(alertIcon, li.firstChild);
               }
-              if (c.estado) li.classList.add('estado-' + c.estado);
+              if (c.estado) {
+                li.classList.add('estado-' + c.estado);
+                const estadoDef = chatStateDefinitionMap.get(c.estado);
+                if (estadoDef && estadoDef.label) {
+                  li.title = `Estado: ${estadoDef.label}`;
+                } else {
+                  li.title = `Estado: ${c.estado}`;
+                }
+              } else {
+                li.removeAttribute('title');
+              }
               if (currentChat && c.numero === currentChat) {
                 li.classList.add('active');
               }
@@ -624,20 +792,15 @@
               }
 
               // Al hacer clic, seleccionar el chat
-              li.onclick = () => selectChat(c.numero, li);
+              li.onclick = () => {
+                hideChatContextMenu();
+                selectChat(c.numero, li);
+              };
 
-              // ✅ Clic derecho para asignar alias
-              li.addEventListener('contextmenu', function (e) {
-                e.preventDefault(); // evita el menú del navegador
-
-                const nombre = prompt("Asignar alias a: " + c.numero, c.alias || "");
-                if (nombre !== null && nombre.trim() !== "") {
-                  fetch('/set_alias', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ numero: c.numero, nombre })
-                  }).then(() => fetchChatList());
-                }
+              // Contextual: alias y estado
+              li.addEventListener('contextmenu', e => {
+                e.preventDefault();
+                openChatContextMenu(e, c);
               });
 
               chatListEl.appendChild(li);

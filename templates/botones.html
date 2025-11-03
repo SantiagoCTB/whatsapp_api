@@ -23,10 +23,6 @@
     <div id="regla_detalle" style="display:none;">
         <p><strong>Respuesta:</strong> <span id="regla_respuesta"></span></p>
         <p><strong>Tipo:</strong> <span id="regla_tipo"></span></p>
-        <div id="regla_opciones" style="display:none;">
-            <strong>Opciones:</strong>
-            <pre></pre>
-        </div>
         <div id="regla_medias" style="display:none;">
             <strong>Medios:</strong>
             <ul></ul>
@@ -136,8 +132,6 @@ const respuestaEl = document.getElementById('regla_respuesta');
 const tipoEl = document.getElementById('regla_tipo');
 const mediasEl = document.querySelector('#regla_medias ul');
 const mediasWrapper = document.getElementById('regla_medias');
-const opcionesWrapper = document.getElementById('regla_opciones');
-const opcionesPre = opcionesWrapper ? opcionesWrapper.querySelector('pre') : null;
 
 function mostrarDetalleRegla(reglaId) {
     const regla = reglasList.find(r => String(r.id) === String(reglaId));
@@ -145,31 +139,11 @@ function mostrarDetalleRegla(reglaId) {
         detalle.style.display = 'none';
         mediasWrapper.style.display = 'none';
         mediasEl.innerHTML = '';
-        if (opcionesWrapper) {
-            opcionesWrapper.style.display = 'none';
-            if (opcionesPre) opcionesPre.textContent = '';
-        }
         return;
     }
     detalle.style.display = 'block';
     respuestaEl.textContent = regla.respuesta || '';
     tipoEl.textContent = regla.tipo || 'texto';
-
-    if (opcionesWrapper) {
-        const opcionesTexto = regla.opciones || '';
-        if (opcionesTexto) {
-            try {
-                const parsed = JSON.parse(opcionesTexto);
-                opcionesPre.textContent = JSON.stringify(parsed, null, 2);
-            } catch (err) {
-                opcionesPre.textContent = opcionesTexto;
-            }
-            opcionesWrapper.style.display = 'block';
-        } else {
-            opcionesWrapper.style.display = 'none';
-            if (opcionesPre) opcionesPre.textContent = '';
-        }
-    }
 
     mediasEl.innerHTML = '';
     if (regla.media_urls) {
