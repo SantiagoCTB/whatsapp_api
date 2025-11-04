@@ -431,20 +431,7 @@ def enviar_mensaje(numero, mensaje, tipo='bot', tipo_respuesta='texto', opciones
     return True
 
 
-def _send_read_and_typing(numero, message_id=None, include_read=True, typing_type="text"):
-    if not numero:
-        return False
-
-    payload = {
-        "messaging_product": "whatsapp",
-        "to": numero,
-        "typing_indicator": {"type": typing_type},
-    }
-
-    if include_read and message_id:
-        payload["status"] = "read"
-        payload["message_id"] = message_id
-
+def _post_to_messages(payload, log_context):
     headers = {
         "Authorization": f"Bearer {TOKEN}",
         "Content-Type": "application/json",
@@ -453,29 +440,58 @@ def _send_read_and_typing(numero, message_id=None, include_read=True, typing_typ
     try:
         response = requests.post(MESSAGES_URL, headers=headers, json=payload, timeout=10)
     except requests.RequestException as exc:
-        logger.error(
-            "Error enviando indicador de escritura/lectura",
-            extra={"numero": numero, "message_id": message_id, "error": str(exc)},
-        )
+        log_extra = {"error": str(exc)}
+        log_extra.update(log_context)
+        logger.error("Error enviando solicitud a WhatsApp API", extra=log_extra)
         return False
 
     log_payload = {
-        "numero": numero,
-        "message_id": message_id,
         "status_code": response.status_code,
         "response_text": response.text,
     }
+    log_payload.update(log_context)
 
     if not response.ok:
-        logger.error("Fallo al enviar indicador de escritura/lectura", extra=log_payload)
+        logger.error("Fallo al enviar solicitud a WhatsApp API", extra=log_payload)
         return False
 
-    logger.info("Indicador de escritura/lectura enviado", extra=log_payload)
+    logger.info("Solicitud a WhatsApp API completada", extra=log_payload)
     return True
 
 
-def trigger_typing_indicator(numero, message_id=None, include_read=True, typing_type="text"):
-    return _send_read_and_typing(numero, message_id=message_id, include_read=include_read, typing_type=typing_type)
+def _send_read_and_typing(numero, message_id=None, include_read=True, typing_status="typing"):
+    if not numero:
+        return False
+
+    if include_read and message_id:
+        read_payload = {
+            "messaging_product": "whatsapp",
+            "status": "read",
+            "message_id": message_id,
+        }
+        if not _post_to_messages(read_payload, {"numero": numero, "message_id": message_id, "action": "read"}):
+            return False
+
+    typing_payload = {
+        "messaging_product": "whatsapp",
+        "to": numero,
+        "type": "typing",
+        "typing": {"status": typing_status},
+    }
+
+    return _post_to_messages(
+        typing_payload,
+        {"numero": numero, "message_id": message_id, "action": "typing", "typing_status": typing_status},
+    )
+
+
+def trigger_typing_indicator(numero, message_id=None, include_read=True, typing_status="typing"):
+    return _send_read_and_typing(
+        numero,
+        message_id=message_id,
+        include_read=include_read,
+        typing_status=typing_status,
+    )
 
 
 def _typing_tick(numero):
@@ -541,6 +557,8 @@ def stop_typing_feedback(numero):
     timer = session.get("timer")
     if timer:
         timer.cancel()
+
+    _send_read_and_typing(numero, include_read=False, typing_status="paused")
 
 def get_media_url(media_id):
     resp1 = requests.get(
