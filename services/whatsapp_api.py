@@ -28,6 +28,32 @@ _TYPING_INTERVAL = 6.0
 os.makedirs(Config.MEDIA_ROOT, exist_ok=True)
 
 
+def _extract_error_details(response: requests.Response) -> Dict[str, Any]:
+    """Extrae información útil de un error devuelto por la API de WhatsApp."""
+
+    try:
+        payload = response.json()
+    except ValueError:
+        text = response.text.strip()
+        return {"raw_text": text[:1000]} if text else {}
+
+    if not isinstance(payload, dict):
+        return {"response_json": payload}
+
+    error_obj = payload.get("error")
+    if isinstance(error_obj, dict):
+        details: Dict[str, Any] = {}
+        for key in ("message", "type", "code", "error_subcode", "fbtrace_id"):
+            value = error_obj.get(key)
+            if value not in (None, ""):
+                details[key] = value
+        if error_obj.get("details"):
+            details["details"] = error_obj["details"]
+        return details or {"response_json": payload}
+
+    return {"response_json": payload}
+
+
 def _normalize_flow_options(raw_options: Dict[str, Any]) -> Dict[str, Any]:
     """Normaliza las opciones de un flow provenientes del panel."""
 
@@ -397,7 +423,14 @@ def enviar_mensaje(numero, mensaje, tipo='bot', tipo_respuesta='texto', opciones
         "response_text": resp.text,
     }
     if not resp.ok:
-        logger.error("Error en la respuesta de WhatsApp API", extra=log_payload)
+        error_details = _extract_error_details(resp)
+        log_payload["error_details"] = error_details
+        reason = error_details.get("message") or error_details.get("raw_text") or resp.text
+        logger.error(
+            "Error en la respuesta de WhatsApp API: %s",
+            (reason or "sin motivo proporcionado"),
+            extra=log_payload,
+        )
         return False
     logger.info("Mensaje enviado a WhatsApp API", extra=log_payload)
     stop_typing_feedback(numero)
@@ -452,7 +485,14 @@ def _post_to_messages(payload, log_context):
     log_payload.update(log_context)
 
     if not response.ok:
-        logger.error("Fallo al enviar solicitud a WhatsApp API", extra=log_payload)
+        error_details = _extract_error_details(response)
+        log_payload["error_details"] = error_details
+        reason = error_details.get("message") or error_details.get("raw_text") or response.text
+        logger.error(
+            "Fallo al enviar solicitud a WhatsApp API: %s",
+            (reason or "sin motivo proporcionado"),
+            extra=log_payload,
+        )
         return False
 
     logger.info("Solicitud a WhatsApp API completada", extra=log_payload)
