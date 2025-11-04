@@ -24,6 +24,7 @@ _typing_lock = threading.Lock()
 _typing_sessions = {}
 _TYPING_INITIAL_DELAY = 2.0
 _TYPING_INTERVAL = 6.0
+_TYPING_ENABLED = bool(getattr(Config, "ENABLE_TYPING_INDICATOR", False))
 
 os.makedirs(Config.MEDIA_ROOT, exist_ok=True)
 
@@ -512,6 +513,13 @@ def _send_read_and_typing(numero, message_id=None, include_read=True, typing_sta
         if not _post_to_messages(read_payload, {"numero": numero, "message_id": message_id, "action": "read"}):
             return False
 
+    if not _TYPING_ENABLED:
+        return True
+
+    if include_read and message_id:
+        message_id = None
+        include_read = False
+
     typing_payload = {
         "messaging_product": "whatsapp",
         "to": numero,
@@ -535,6 +543,9 @@ def trigger_typing_indicator(numero, message_id=None, include_read=True, typing_
 
 
 def _typing_tick(numero):
+    if not _TYPING_ENABLED:
+        return
+
     with _typing_lock:
         session = _typing_sessions.get(numero)
         if not session:
@@ -566,6 +577,11 @@ def _typing_tick(numero):
 
 def start_typing_feedback(numero, message_id=None):
     if not numero:
+        return
+
+    if not _TYPING_ENABLED:
+        if message_id:
+            _send_read_and_typing(numero, message_id=message_id, include_read=True)
         return
 
     with _typing_lock:
