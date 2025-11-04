@@ -97,3 +97,9 @@ class Config:
         os.getenv("MEDIA_ROOT", _DEFAULT_MEDIA_ROOT)
     )
     CHAT_STATE_DEFINITIONS = _load_chat_state_definitions()
+    ENABLE_TYPING_INDICATOR = os.getenv('ENABLE_TYPING_INDICATOR', 'false').strip().lower() in {
+        '1',
+        'true',
+        'yes',
+        'on',
+    }
