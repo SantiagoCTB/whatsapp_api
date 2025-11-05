@@ -63,6 +63,37 @@ def clear_chat_runtime_state(numero: str):
             extra={"numero": numero},
         )
 
+
+def notify_session_closed(numero: str, *, origin: str = "timeout") -> bool:
+    """Envía al usuario el mensaje configurado al cerrar la sesión del chat."""
+
+    message = (SESSION_TIMEOUT_MESSAGE or "").strip()
+    if not numero or not message:
+        return False
+
+    log_extra = {"numero": numero, "origin": origin}
+    try:
+        sent = enviar_mensaje(numero, message, tipo="bot")
+    except Exception:  # pragma: no cover - enviar_mensaje ya maneja errores comunes
+        logger.exception(
+            "Error inesperado al enviar mensaje de cierre de sesión",
+            extra=log_extra,
+        )
+        return False
+
+    if not sent:
+        logger.warning(
+            "No se pudo enviar el mensaje de cierre de sesión",
+            extra=log_extra,
+        )
+        return False
+
+    logger.info(
+        "Mensaje de cierre de sesión enviado",
+        extra=log_extra,
+    )
+    return True
+
 RELEVANT_HEADERS = (
     'X-Hub-Signature-256',
     'User-Agent',
@@ -521,9 +552,9 @@ def handle_text_message(numero: str, texto: str, save: bool = True):
     bootstrapped = False
     if last_time and (now - last_time).total_seconds() > SESSION_TIMEOUT:
         delete_chat_state(numero)
+        clear_chat_runtime_state(numero)
         step_db = None
-        if SESSION_TIMEOUT_MESSAGE:
-            enviar_mensaje(numero, SESSION_TIMEOUT_MESSAGE)
+        notify_session_closed(numero, origin="timeout")
     elif row:
         update_chat_state(numero, step_db)
 
