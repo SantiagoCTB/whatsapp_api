@@ -7,7 +7,7 @@ from werkzeug.utils import secure_filename
 from mysql.connector.errors import ProgrammingError
 from config import Config
 from services.whatsapp_api import enviar_mensaje, trigger_typing_indicator
-from routes.webhook import clear_chat_runtime_state
+from routes.webhook import clear_chat_runtime_state, notify_session_closed
 from services.db import (
     get_connection,
     get_chat_state,
@@ -723,6 +723,8 @@ def finalizar_chat():
 
     delete_chat_state(numero)
     clear_chat_runtime_state(numero)
+
+    notify_session_closed(numero, origin="manual")
 
     return jsonify({"status": "ok"}), 200
 
