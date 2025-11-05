@@ -183,7 +183,47 @@
       rebuildChatStateOptions();
         const userRole   = "{{ rol }}";
         const lastChatTimestamps = {};
-        const roleIcons = { ventas: '💼', soporte: '🛠', marketing: '📣' };
+        const predefinedRoleIcons = { ventas: '💼', soporte: '🛠', marketing: '📣' };
+
+        function computeRoleAbbreviation(source) {
+          if (!source || typeof source !== 'string') return '';
+          const normalized = source.trim();
+          if (!normalized) return '';
+          const parts = normalized.split(/[\s_\-]+/).filter(Boolean);
+          if (!parts.length) return normalized.slice(0, 2).toUpperCase();
+          const abbreviation = parts.map(part => part.charAt(0).toUpperCase()).join('');
+          if (abbreviation.length >= 2) return abbreviation;
+          const firstPart = parts[0];
+          return (firstPart.slice(0, 2).toUpperCase()) || abbreviation || normalized.charAt(0).toUpperCase();
+        }
+
+        function buildRoleBadgeMap(roles) {
+          const map = {};
+          if (!Array.isArray(roles)) return map;
+          roles.forEach(roleEntry => {
+            if (!roleEntry) return;
+            const [id, name, keyword] = roleEntry;
+            const key = keyword || name;
+            if (!key) return;
+            if (predefinedRoleIcons[key]) {
+              map[key] = predefinedRoleIcons[key];
+              return;
+            }
+            const source = name || key;
+            const abbreviation = computeRoleAbbreviation(source);
+            map[key] = abbreviation || key.charAt(0).toUpperCase();
+          });
+          return map;
+        }
+
+        const roleIcons = buildRoleBadgeMap(availableRoles);
+
+        function getRoleBadge(keyword) {
+          if (!keyword) return '';
+          if (predefinedRoleIcons[keyword]) return predefinedRoleIcons[keyword];
+          if (roleIcons[keyword]) return roleIcons[keyword];
+          return computeRoleAbbreviation(keyword) || keyword.charAt(0).toUpperCase();
+        }
         let isSending = false;
         let sendUnlockTimeout = null;
         let lastSentMessage = '';
@@ -878,7 +918,7 @@
                 c.roles_kw.forEach(r => {
                   const badge = document.createElement('span');
                   badge.className = 'badge';
-                  badge.textContent = roleIcons[r] || r.charAt(0).toUpperCase();
+                  badge.textContent = getRoleBadge(r);
                   badgeContainer.appendChild(badge);
                 });
                 li.appendChild(badgeContainer);
