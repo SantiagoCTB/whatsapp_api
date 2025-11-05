@@ -15,6 +15,7 @@
         <a href="{{ url_for('configuracion.botones') }}">Botones</a>
         {% if session.get('roles') and 'admin' in session['roles'] %}
         <a href="{{ url_for('roles.roles') }}">Roles</a>
+        <a href="{{ url_for('usuarios.manage_users') }}">Usuarios</a>
         {% endif %}
         <a href="{{ url_for('tablero.tablero') }}">Tablero</a>
         <a id="respuestasLink" href="{{ url_for('chat.respuestas') }}">Respuestas</a>
