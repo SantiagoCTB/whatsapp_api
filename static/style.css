@@ -559,6 +559,136 @@
       width: 100%;
     }
 
+    .rules-grid {
+      display: grid;
+      gap: 16px;
+      margin-top: 16px;
+    }
+
+    .rule-card {
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      background: #fff;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+      overflow: hidden;
+    }
+
+    .rule-card > summary {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 16px;
+      cursor: pointer;
+      list-style: none;
+      background: rgba(0, 168, 132, 0.08);
+    }
+
+    .rule-card > summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .rule-card[open] > summary {
+      border-bottom: 1px solid var(--border-color);
+      background: rgba(0, 168, 132, 0.15);
+    }
+
+    .rule-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 40px;
+      padding: 6px 12px;
+      border-radius: 999px;
+      background: var(--accent);
+      color: var(--text-light);
+      font-weight: 600;
+    }
+
+    .rule-summary-text {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px 24px;
+      color: var(--text-main);
+      font-size: 0.95rem;
+    }
+
+    .rule-content {
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .rule-fields {
+      display: grid;
+      gap: 12px;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    }
+
+    .rule-field {
+      padding: 12px;
+      border-radius: 10px;
+      background: rgba(0, 168, 132, 0.05);
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      color: var(--text-main);
+    }
+
+    .rule-field dt {
+      font-weight: 600;
+      text-transform: uppercase;
+      font-size: 0.75rem;
+      letter-spacing: 0.02em;
+      color: #00856b;
+    }
+
+    .rule-field dd {
+      margin: 0;
+      font-size: 0.95rem;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .rule-field--wide {
+      grid-column: 1 / -1;
+    }
+
+    .rule-pre {
+      background: #fff;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 8px;
+      max-height: 200px;
+      overflow: auto;
+      font-family: 'SFMono-Regular', Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+      font-size: 0.85rem;
+    }
+
+    .flow-block {
+      margin-bottom: 6px;
+    }
+
+    .rule-subdetails {
+      margin-top: 8px;
+    }
+
+    .rule-subdetails summary {
+      cursor: pointer;
+      color: var(--accent);
+      font-weight: 600;
+    }
+
+    .rule-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .rule-actions form {
+      flex: 1 1 160px;
+    }
+
     .top-right {
       position: absolute;
       top: 20px;
