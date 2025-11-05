@@ -289,12 +289,38 @@
     }
     .context-menu .menu-header {
       font-weight:600;
-      cursor:default;
       color:var(--text-main);
+    }
+    .context-menu .menu-header:not(.collapsible) {
+      cursor:default;
+    }
+    .context-menu .menu-header.collapsible {
+      cursor:pointer;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:8px;
     }
     .context-menu .menu-header:hover {
       background:inherit;
       color:inherit;
+    }
+    .context-menu .menu-header.collapsible:hover {
+      background:rgba(0,0,0,0.05);
+    }
+    .context-menu .menu-header-icon {
+      font-size:0.8em;
+      opacity:0.7;
+    }
+    .context-menu .menu-section {
+      display:flex;
+      flex-direction:column;
+    }
+    .context-menu .menu-section.collapsed .menu-options {
+      display:none;
+    }
+    .context-menu .menu-section.expanded .menu-options {
+      display:block;
     }
     .context-menu .context-option {
       display:block;
