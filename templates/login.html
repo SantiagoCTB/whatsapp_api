@@ -37,58 +37,142 @@
 </head>
 <body class="min-h-screen flex items-center justify-center relative overflow-hidden" style="background-image: url('https://images.unsplash.com/photo-1501785888041-af3ef285b470?auto=format&fit=crop&w=1920&q=80'); background-size: cover; background-position: center;">
 
-  <div class="relative z-10 w-full max-w-sm p-8 bg-white/20 backdrop-blur-lg shadow-lg rounded-xl">
-    <h2 class="text-3xl font-bold text-center text-white drop-shadow mb-6">Iniciar sesión</h2>
-    <form method="POST" id="loginForm" class="space-y-6">
-      <div class="relative">
-        <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-          <!-- user icon -->
-          <svg class="w-5 h-5 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.121 17.804A11.955 11.955 0 0112 15c2.5 0 4.847.767 6.879 2.076M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
-          </svg>
-        </span>
-        <input id="username" name="username" required placeholder="Usuario"
-          class="w-full pl-10 pr-3 py-2 rounded-lg bg-white/60 focus:bg-white/80 placeholder-gray-600 text-gray-800 focus:outline-none focus:ring-2 focus:ring-primary"/>
-      </div>
+  <div class="relative z-10 w-full max-w-md p-8 bg-white/20 backdrop-blur-lg shadow-lg rounded-xl">
+    <h2 class="text-3xl font-bold text-center text-white drop-shadow mb-2">Acceso a la plataforma</h2>
+    <p class="text-center text-white/80 text-sm mb-6">Gestiona la cuenta iniciando sesión o actualiza tu contraseña de forma segura.</p>
 
-      <div class="relative">
-        <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-          <!-- lock icon -->
-          <svg class="w-5 h-5 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 11c1.657 0 3-1.343 3-3V6a3 3 0 10-6 0v2c0 1.657 1.343 3 3 3z"/>
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 11h14v10H5z"/>
-          </svg>
-        </span>
-        <input type="password" id="password" name="password" required placeholder="Contraseña"
-          class="w-full pl-10 pr-10 py-2 rounded-lg bg-white/60 focus:bg-white/80 placeholder-gray-600 text-gray-800 focus:outline-none focus:ring-2 focus:ring-primary"/>
-        <span class="absolute inset-y-0 right-0 pr-3 flex items-center cursor-pointer text-gray-700" id="togglePassword">
-          <svg id="eyeOpen" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.477 0 8.268 2.943 9.542 7-1.274 4.057-5.065 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
-          </svg>
-          <svg id="eyeClosed" class="w-5 h-5 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.542-7 0.758-2.414 2.485-4.436 4.708-5.727"/>
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.88 9.88a3 3 0 104.24 4.24"/>
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3l18 18"/>
-          </svg>
-        </span>
-      </div>
-
-      <button type="submit" id="submitBtn"
-        class="w-full py-2 flex items-center justify-center rounded-lg bg-primary text-white font-semibold hover:bg-primary-dark transition transform active:scale-95">
-        <span id="btnText">Ingresar</span>
-        <svg id="btnSpinner" class="w-5 h-5 ml-2 hidden animate-spin" viewBox="0 0 24 24" fill="none">
-          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 00-8 8h4z"></path>
-        </svg>
+    <div class="flex bg-white/10 rounded-lg p-1 mb-6">
+      <button type="button" data-tab-target="login" class="flex-1 px-4 py-2 text-sm font-semibold rounded-lg transition text-white focus:outline-none focus:ring-2 focus:ring-white/40">
+        Iniciar sesión
       </button>
-    </form>
+      <button type="button" data-tab-target="change" class="flex-1 px-4 py-2 text-sm font-semibold rounded-lg transition text-white focus:outline-none focus:ring-2 focus:ring-white/40">
+        Cambiar contraseña
+      </button>
+    </div>
+
+    <div id="loginSection">
+      <form method="POST" id="loginForm" class="space-y-6">
+        <div class="relative">
+          <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+            <svg class="w-5 h-5 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.121 17.804A11.955 11.955 0 0112 15c2.5 0 4.847.767 6.879 2.076M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
+            </svg>
+          </span>
+          <input id="username" name="username" required placeholder="Usuario" autocomplete="username"
+            class="w-full pl-10 pr-3 py-2 rounded-lg bg-white/60 focus:bg-white/80 placeholder-gray-600 text-gray-800 focus:outline-none focus:ring-2 focus:ring-primary"/>
+        </div>
+
+        <div class="relative">
+          <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+            <svg class="w-5 h-5 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 11c1.657 0 3-1.343 3-3V6a3 3 0 10-6 0v2c0 1.657 1.343 3 3 3z"/>
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 11h14v10H5z"/>
+            </svg>
+          </span>
+          <input type="password" id="password" name="password" required placeholder="Contraseña" autocomplete="current-password"
+            class="w-full pl-10 pr-10 py-2 rounded-lg bg-white/60 focus:bg-white/80 placeholder-gray-600 text-gray-800 focus:outline-none focus:ring-2 focus:ring-primary"/>
+          <span class="absolute inset-y-0 right-0 pr-3 flex items-center cursor-pointer text-gray-700" id="togglePassword">
+            <svg id="eyeOpen" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.477 0 8.268 2.943 9.542 7-1.274 4.057-5.065 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+            </svg>
+            <svg id="eyeClosed" class="w-5 h-5 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.542-7 0.758-2.414 2.485-4.436 4.708-5.727"/>
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.88 9.88a3 3 0 104.24 4.24"/>
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3l18 18"/>
+            </svg>
+          </span>
+        </div>
+
+        <button type="submit" id="submitBtn"
+          class="w-full py-2 flex items-center justify-center rounded-lg bg-primary text-white font-semibold hover:bg-primary-dark transition transform active:scale-95">
+          <span id="btnText">Ingresar</span>
+          <svg id="btnSpinner" class="w-5 h-5 ml-2 hidden animate-spin" viewBox="0 0 24 24" fill="none">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 00-8 8h4z"></path>
+          </svg>
+        </button>
+      </form>
+    </div>
+
+    <div id="changeSection" class="hidden">
+      <form method="POST" action="{{ url_for('auth.password_change') }}" id="changePasswordForm" class="space-y-6">
+        <div class="relative">
+          <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+            <svg class="w-5 h-5 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.121 17.804A11.955 11.955 0 0112 15c2.5 0 4.847.767 6.879 2.076M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
+            </svg>
+          </span>
+          <input id="changeUsername" name="username" required placeholder="Usuario" autocomplete="username"
+            class="w-full pl-10 pr-3 py-2 rounded-lg bg-white/60 focus:bg-white/80 placeholder-gray-600 text-gray-800 focus:outline-none focus:ring-2 focus:ring-secondary"/>
+        </div>
+
+        <div class="relative">
+          <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+            <svg class="w-5 h-5 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 11c1.657 0 3-1.343 3-3V6a3 3 0 10-6 0v2c0 1.657 1.343 3 3 3z"/>
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 11h14v10H5z"/>
+            </svg>
+          </span>
+          <input type="password" id="currentPassword" name="current_password" required placeholder="Contraseña actual" autocomplete="current-password"
+            class="w-full pl-10 pr-3 py-2 rounded-lg bg-white/60 focus:bg-white/80 placeholder-gray-600 text-gray-800 focus:outline-none focus:ring-2 focus:ring-secondary"/>
+        </div>
+
+        <div class="relative">
+          <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+            <svg class="w-5 h-5 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 10-8 0v4"/>
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 11h14v10H5z"/>
+            </svg>
+          </span>
+          <input type="password" id="newPassword" name="new_password" required placeholder="Nueva contraseña" minlength="8"
+            pattern="^(?=.*[A-Za-z])(?=.*\d)\S{8,}$" title="Debe tener al menos 8 caracteres, incluyendo letras y números, sin espacios" autocomplete="new-password"
+            class="w-full pl-10 pr-3 py-2 rounded-lg bg-white/60 focus:bg-white/80 placeholder-gray-600 text-gray-800 focus:outline-none focus:ring-2 focus:ring-secondary"/>
+        </div>
+
+        <div class="relative">
+          <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+            <svg class="w-5 h-5 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 10-8 0v4"/>
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 11h14v10H5z"/>
+            </svg>
+          </span>
+          <input type="password" id="confirmPassword" name="confirm_password" required placeholder="Confirmar nueva contraseña" minlength="8" autocomplete="new-password"
+            class="w-full pl-10 pr-3 py-2 rounded-lg bg-white/60 focus:bg-white/80 placeholder-gray-600 text-gray-800 focus:outline-none focus:ring-2 focus:ring-secondary"/>
+        </div>
+
+        <p class="text-xs text-white/80">La contraseña debe tener al menos 8 caracteres, contener letras y números y no incluir espacios.</p>
+
+        <button type="submit" id="changeSubmitBtn"
+          class="w-full py-2 flex items-center justify-center rounded-lg bg-secondary text-white font-semibold hover:bg-teal-500 transition transform active:scale-95">
+          <span id="changeBtnText">Actualizar contraseña</span>
+          <svg id="changeBtnSpinner" class="w-5 h-5 ml-2 hidden animate-spin" viewBox="0 0 24 24" fill="none">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 00-8 8h4z"></path>
+          </svg>
+        </button>
+      </form>
+    </div>
   </div>
 
   {% if error %}
-  <div id="toast" class="fixed top-4 right-4 bg-red-500 text-white px-4 py-2 rounded shadow-lg flex items-center space-x-2 z-20">
+  <div id="toastLoginError" class="fixed top-4 right-4 bg-red-500/95 text-white px-4 py-2 rounded shadow-lg flex items-center space-x-2 z-20">
     <span>{{ error }}</span>
-    <button onclick="hideToast()" class="focus:outline-none">&times;</button>
+    <button type="button" class="focus:outline-none" data-dismiss>&times;</button>
+  </div>
+  {% endif %}
+
+  {% if change_error %}
+  <div id="toastChangeError" class="fixed top-4 right-4 bg-amber-500/95 text-white px-4 py-2 rounded shadow-lg flex items-center space-x-2 z-20">
+    <span>{{ change_error }}</span>
+    <button type="button" class="focus:outline-none" data-dismiss>&times;</button>
+  </div>
+  {% endif %}
+
+  {% if success %}
+  <div id="toastSuccess" class="fixed top-4 right-4 bg-emerald-500/95 text-white px-4 py-2 rounded shadow-lg flex items-center space-x-2 z-20">
+    <span>{{ success }}</span>
+    <button type="button" class="focus:outline-none" data-dismiss>&times;</button>
   </div>
   {% endif %}
 
@@ -97,28 +181,81 @@
     const password = document.getElementById('password');
     const eyeOpen = document.getElementById('eyeOpen');
     const eyeClosed = document.getElementById('eyeClosed');
-    togglePassword.addEventListener('click', () => {
-      const isPassword = password.type === 'password';
-      password.type = isPassword ? 'text' : 'password';
-      eyeOpen.classList.toggle('hidden', !isPassword);
-      eyeClosed.classList.toggle('hidden', isPassword);
-    });
+    if (togglePassword && password && eyeOpen && eyeClosed) {
+      togglePassword.addEventListener('click', () => {
+        const isPassword = password.type === 'password';
+        password.type = isPassword ? 'text' : 'password';
+        eyeOpen.classList.toggle('hidden', !isPassword);
+        eyeClosed.classList.toggle('hidden', isPassword);
+      });
+    }
 
     const form = document.getElementById('loginForm');
-    form.addEventListener('submit', () => {
-      document.getElementById('submitBtn').disabled = true;
-      document.getElementById('btnText').classList.add('hidden');
-      document.getElementById('btnSpinner').classList.remove('hidden');
+    if (form) {
+      form.addEventListener('submit', () => {
+        const submitBtn = document.getElementById('submitBtn');
+        if (submitBtn) submitBtn.disabled = true;
+        const btnText = document.getElementById('btnText');
+        const btnSpinner = document.getElementById('btnSpinner');
+        if (btnText) btnText.classList.add('hidden');
+        if (btnSpinner) btnSpinner.classList.remove('hidden');
+      });
+    }
+
+    const changeForm = document.getElementById('changePasswordForm');
+    if (changeForm) {
+      changeForm.addEventListener('submit', () => {
+        const submitBtn = document.getElementById('changeSubmitBtn');
+        if (submitBtn) submitBtn.disabled = true;
+        const btnText = document.getElementById('changeBtnText');
+        const btnSpinner = document.getElementById('changeBtnSpinner');
+        if (btnText) btnText.classList.add('hidden');
+        if (btnSpinner) btnSpinner.classList.remove('hidden');
+      });
+    }
+
+    const tabButtons = document.querySelectorAll('[data-tab-target]');
+    const sections = {
+      login: document.getElementById('loginSection'),
+      change: document.getElementById('changeSection')
+    };
+
+    function activateTab(target) {
+      tabButtons.forEach((button) => {
+        const isActive = button.dataset.tabTarget === target;
+        button.classList.toggle('bg-white/80', isActive);
+        button.classList.toggle('text-primary', isActive);
+        button.classList.toggle('text-white', !isActive);
+        button.classList.toggle('shadow', isActive);
+        button.setAttribute('aria-selected', String(isActive));
+      });
+      Object.entries(sections).forEach(([name, section]) => {
+        if (section) {
+          section.classList.toggle('hidden', name !== target);
+        }
+      });
+    }
+
+    const initialTab = '{{ "change" if show_change else "login" }}';
+    activateTab(initialTab);
+
+    tabButtons.forEach((button) => {
+      button.addEventListener('click', () => activateTab(button.dataset.tabTarget));
     });
 
-    function hideToast() {
-      const toast = document.getElementById('toast');
-      if (toast) toast.classList.add('hidden');
+    function setupToast(id) {
+      const toast = document.getElementById(id);
+      if (!toast) return;
+      const dismissBtn = toast.querySelector('[data-dismiss]');
+      if (dismissBtn) {
+        dismissBtn.addEventListener('click', () => toast.classList.add('hidden'));
+      }
+      setTimeout(() => {
+        toast.classList.add('hidden');
+      }, 5000);
     }
-    window.addEventListener('load', () => {
-      const toast = document.getElementById('toast');
-      if (toast) setTimeout(hideToast, 5000);
-    });
+
+    ['toastLoginError', 'toastChangeError', 'toastSuccess'].forEach(setupToast);
   </script>
 </body>
 </html>
