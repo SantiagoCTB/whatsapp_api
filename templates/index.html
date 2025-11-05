@@ -1085,6 +1085,7 @@
         if (txt === lastSentMessage && now - lastSentTimestamp < 1500) return;
         lastSentMessage = txt;
         lastSentTimestamp = now;
+        triggerTypingSignal(true);
         startSending();
         fetch('/send_message',{
           method:'POST',
@@ -1112,10 +1113,10 @@
         });
       };
 
-      function triggerTypingSignal() {
+      function triggerTypingSignal(force = false) {
         if (!currentChat) return;
         const now = Date.now();
-        if (now - lastTypingSent < TYPING_SIGNAL_THROTTLE) return;
+        if (!force && now - lastTypingSent < TYPING_SIGNAL_THROTTLE) return;
         lastTypingSent = now;
         fetch('/typing_signal', {
           method: 'POST',
