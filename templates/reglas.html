@@ -118,80 +118,112 @@
 </form>
 
 <h3>Reglas existentes</h3>
-<table class="fixed-table">
-    <tr>
-        <th>ID</th>
-        <th>Paso</th>
-        <th>Input</th>
-        <th>Respuesta</th>
-        <th>Siguiente paso</th>
-        <th>Tipo</th>
-        <th>Media URL</th>
-        <th>Media Tipo</th>
-        <th>Rol</th>
-        <th>Opciones</th>
-        <th>Encabezado</th>
-        <th>Botón</th>
-        <th>Pie</th>
-        <th>Cálculo</th>
-        <th>Handler</th>
-        <th>Acción</th>
-    </tr>
+<div class="rules-grid">
     {% for regla in reglas %}
-    <tr>
-        <td>{{ regla.id }}</td>
-        <td>{{ regla.step }}</td>
-        <td>{{ regla.input_text }}</td>
-        <td>{{ regla.respuesta }}</td>
-        <td>{{ regla.siguiente_step or '-' }}</td>
-        <td>{{ regla.tipo }}</td>
-        <td><pre style="white-space: pre-wrap;">{{ regla.media_urls|join('\n') if regla.media_urls else '-' }}</pre></td>
-        <td><pre style="white-space: pre-wrap;">{{ regla.media_tipos|join('\n') if regla.media_tipos else '-' }}</pre></td>
-        <td>{{ regla.rol_keyword or '-' }}</td>
-        <td>
-            {% if regla.tipo == 'flow' and regla.flow %}
-                <div><strong>CTA:</strong> {{ regla.flow.cta or '-' }}</div>
-                <div><strong>ID:</strong> {{ regla.flow.flow_id or '-' }}</div>
-                <div><strong>Nombre:</strong> {{ regla.flow.flow_name or '-' }}</div>
-                <div><strong>Versión:</strong> {{ regla.flow.version or '-' }}</div>
-                <div><strong>Modo:</strong> {{ regla.flow.mode or '-' }}</div>
-                <div><strong>Acción:</strong> {{ regla.flow.action or '-' }}</div>
-                <div><strong>Pantalla inicial:</strong> {{ regla.flow.initial_screen or '-' }}</div>
-                {% if regla.flow.token %}
-                <div><strong>Token:</strong> {{ regla.flow.token }}</div>
-                {% endif %}
-                {% if regla.flow.data_display %}
-                <details>
-                    <summary>Datos</summary>
-                    <pre style="white-space: pre-wrap;">{{ regla.flow.data_display }}</pre>
-                </details>
-                {% endif %}
-                {% if regla.flow.json_display %}
-                <details>
-                    <summary>JSON completo</summary>
-                    <pre style="white-space: pre-wrap;">{{ regla.flow.json_display }}</pre>
-                </details>
-                {% endif %}
-            {% else %}
-                <pre style="white-space: pre-wrap;">{{ regla.opciones_pretty or regla.opciones }}</pre>
-            {% endif %}
-        </td>
-        <td>{{ regla.header or '-' }}</td>
-        <td>{{ regla.button or '-' }}</td>
-        <td>{{ regla.footer or '-' }}</td>
-        <td>{{ regla.calculo or '-' }}</td>
-        <td>{{ regla.handler or '-' }}</td>
-        <td class="action-cell">
-            <form onsubmit="event.preventDefault();">
-                <button class="edit-btn btn-primary" type="button" onclick='cargarRegla({{ regla|tojson }})'>Editar</button>
-            </form>
-            <form method="POST" action="{{ url_for('configuracion.eliminar_regla', regla_id=regla.id) }}">
-                <button class="delete-btn btn-primary" type="submit">Eliminar</button>
-            </form>
-        </td>
-    </tr>
+    <details class="rule-card">
+        <summary>
+            <span class="rule-badge">#{{ regla.id }}</span>
+            <div class="rule-summary-text">
+                <span><strong>Paso:</strong> {{ regla.step }}</span>
+                <span><strong>Entrada:</strong> {{ regla.input_text }}</span>
+                <span><strong>Tipo:</strong> {{ regla.tipo }}</span>
+                <span><strong>Siguiente:</strong> {{ regla.siguiente_step or '-' }}</span>
+            </div>
+        </summary>
+        <div class="rule-content">
+            <dl class="rule-fields">
+                <div class="rule-field">
+                    <dt>Respuesta</dt>
+                    <dd>{{ regla.respuesta }}</dd>
+                </div>
+                <div class="rule-field">
+                    <dt>Rol</dt>
+                    <dd>{{ regla.rol_keyword or '-' }}</dd>
+                </div>
+                <div class="rule-field">
+                    <dt>Media URL</dt>
+                    <dd>
+                        {% if regla.media_urls %}
+                            <pre class="rule-pre">{{ regla.media_urls|join('\n') }}</pre>
+                        {% else %}
+                            -
+                        {% endif %}
+                    </dd>
+                </div>
+                <div class="rule-field">
+                    <dt>Media tipo</dt>
+                    <dd>
+                        {% if regla.media_tipos %}
+                            <pre class="rule-pre">{{ regla.media_tipos|join('\n') }}</pre>
+                        {% else %}
+                            -
+                        {% endif %}
+                    </dd>
+                </div>
+                <div class="rule-field">
+                    <dt>Cálculo</dt>
+                    <dd>{{ regla.calculo or '-' }}</dd>
+                </div>
+                <div class="rule-field">
+                    <dt>Handler</dt>
+                    <dd>{{ regla.handler or '-' }}</dd>
+                </div>
+                <div class="rule-field">
+                    <dt>Encabezado</dt>
+                    <dd>{{ regla.header or '-' }}</dd>
+                </div>
+                <div class="rule-field">
+                    <dt>Botón</dt>
+                    <dd>{{ regla.button or '-' }}</dd>
+                </div>
+                <div class="rule-field">
+                    <dt>Pie</dt>
+                    <dd>{{ regla.footer or '-' }}</dd>
+                </div>
+                <div class="rule-field rule-field--wide">
+                    <dt>Opciones</dt>
+                    <dd>
+                        {% if regla.tipo == 'flow' and regla.flow %}
+                            <div class="flow-block"><strong>CTA:</strong> {{ regla.flow.cta or '-' }}</div>
+                            <div class="flow-block"><strong>ID:</strong> {{ regla.flow.flow_id or '-' }}</div>
+                            <div class="flow-block"><strong>Nombre:</strong> {{ regla.flow.flow_name or '-' }}</div>
+                            <div class="flow-block"><strong>Versión:</strong> {{ regla.flow.version or '-' }}</div>
+                            <div class="flow-block"><strong>Modo:</strong> {{ regla.flow.mode or '-' }}</div>
+                            <div class="flow-block"><strong>Acción:</strong> {{ regla.flow.action or '-' }}</div>
+                            <div class="flow-block"><strong>Pantalla inicial:</strong> {{ regla.flow.initial_screen or '-' }}</div>
+                            {% if regla.flow.token %}
+                            <div class="flow-block"><strong>Token:</strong> {{ regla.flow.token }}</div>
+                            {% endif %}
+                            {% if regla.flow.data_display %}
+                            <details class="rule-subdetails">
+                                <summary>Datos</summary>
+                                <pre class="rule-pre">{{ regla.flow.data_display }}</pre>
+                            </details>
+                            {% endif %}
+                            {% if regla.flow.json_display %}
+                            <details class="rule-subdetails">
+                                <summary>JSON completo</summary>
+                                <pre class="rule-pre">{{ regla.flow.json_display }}</pre>
+                            </details>
+                            {% endif %}
+                        {% else %}
+                            <pre class="rule-pre">{{ regla.opciones_pretty or regla.opciones or '-' }}</pre>
+                        {% endif %}
+                    </dd>
+                </div>
+            </dl>
+            <div class="rule-actions">
+                <form onsubmit="event.preventDefault();">
+                    <button class="edit-btn btn-primary" type="button" onclick='cargarRegla({{ regla|tojson }})'>Editar</button>
+                </form>
+                <form method="POST" action="{{ url_for('configuracion.eliminar_regla', regla_id=regla.id) }}">
+                    <button class="delete-btn btn-primary" type="submit">Eliminar</button>
+                </form>
+            </div>
+        </div>
+    </details>
     {% endfor %}
-</table>
+</div>
 
 <script>
 function toggleMediaFields() {
@@ -339,15 +371,61 @@ window.addEventListener('DOMContentLoaded', () => {
     toggleFlowFields();
 });
 
+function valueOrEmpty(value, joiner = ', ') {
+    if (Array.isArray(value)) {
+        return value.filter(item => item !== null && item !== undefined && item !== '').join(joiner);
+    }
+    if (value === null || value === undefined) {
+        return '';
+    }
+    return String(value);
+}
+
+function toPrettyJson(value) {
+    if (value === null || value === undefined || value === '') {
+        return '';
+    }
+    if (typeof value === 'string') {
+        try {
+            const parsed = JSON.parse(value);
+            return JSON.stringify(parsed, null, 2);
+        } catch (err) {
+            return value;
+        }
+    }
+    try {
+        return JSON.stringify(value, null, 2);
+    } catch (err) {
+        return '';
+    }
+}
+
+function parseOptions(raw) {
+    if (!raw && raw !== 0) {
+        return undefined;
+    }
+    if (typeof raw === 'object') {
+        return raw;
+    }
+    if (typeof raw === 'string' && raw.trim() === '') {
+        return undefined;
+    }
+    try {
+        return JSON.parse(raw);
+    } catch (err) {
+        return raw;
+    }
+}
+
 function cargarRegla(regla) {
     document.getElementById('regla_id').value = regla.id;
-    document.getElementById('step').value = regla.step || '';
-    document.getElementById('input_text').value = regla.input_text || '';
+    document.getElementById('step').value = valueOrEmpty(regla.step);
+    document.getElementById('input_text').value = valueOrEmpty(regla.input_text, ', ');
     document.getElementById('respuesta').value = regla.respuesta || '';
-    document.getElementById('siguiente_step').value = regla.siguiente_step || '';
+    document.getElementById('siguiente_step').value = valueOrEmpty(regla.siguiente_step);
     document.getElementById('tipo').value = regla.tipo || 'texto';
     document.getElementById('media').value = '';
-    document.getElementById('media_url').value = (regla.media_urls || []).filter(u => u).join('\n');
+    document.getElementById('media_url').value = valueOrEmpty(regla.media_urls, '\n');
     document.getElementById('rol_keyword').value = regla.rol_keyword || '';
     document.getElementById('calculo').value = regla.calculo || '';
     document.getElementById('handler').value = regla.handler || '';
@@ -369,22 +447,23 @@ function cargarRegla(regla) {
     document.getElementById('flow_header').value = '';
     document.getElementById('flow_body').value = '';
     document.getElementById('flow_footer').value = '';
-    if (regla.tipo === 'lista' && regla.opciones) {
-        try {
-            const opts = JSON.parse(regla.opciones);
-            document.getElementById('list_header').value = opts.header || '';
-            document.getElementById('list_button').value = opts.button || '';
-            document.getElementById('list_footer').value = opts.footer || '';
-            document.getElementById('sections').value = JSON.stringify(opts.sections || []);
-            document.getElementById('opciones').value = JSON.stringify(opts);
-        } catch (e) {
-            document.getElementById('opciones').value = regla.opciones || '';
+    const opcionesParsed = parseOptions(regla.opciones);
+    if (regla.tipo === 'lista') {
+        if (opcionesParsed && typeof opcionesParsed === 'object') {
+            document.getElementById('list_header').value = opcionesParsed.header || '';
+            document.getElementById('list_button').value = opcionesParsed.button || '';
+            document.getElementById('list_footer').value = opcionesParsed.footer || '';
+            document.getElementById('sections').value = toPrettyJson(opcionesParsed.sections || []);
+            document.getElementById('opciones').value = JSON.stringify(opcionesParsed);
+        } else {
+            document.getElementById('sections').value = toPrettyJson(opcionesParsed || '');
+            document.getElementById('opciones').value = opcionesParsed || '';
         }
     } else if (regla.tipo === 'boton') {
-        document.getElementById('button_options').value = regla.opciones || '';
-        document.getElementById('opciones').value = regla.opciones || '';
+        document.getElementById('button_options').value = toPrettyJson(opcionesParsed || '');
+        document.getElementById('opciones').value = typeof opcionesParsed === 'object' ? JSON.stringify(opcionesParsed) : (opcionesParsed || '');
     } else if (regla.tipo === 'flow') {
-        document.getElementById('opciones').value = regla.opciones || '';
+        document.getElementById('opciones').value = typeof opcionesParsed === 'object' ? JSON.stringify(opcionesParsed) : (opcionesParsed || '');
         if (regla.flow) {
             document.getElementById('flow_cta').value = regla.flow.cta || '';
             document.getElementById('flow_id').value = regla.flow.flow_id || '';
@@ -394,13 +473,13 @@ function cargarRegla(regla) {
             document.getElementById('flow_token').value = regla.flow.token || '';
             document.getElementById('flow_action').value = regla.flow.action || '';
             document.getElementById('flow_initial_screen').value = regla.flow.initial_screen || '';
-            document.getElementById('flow_data').value = regla.flow.data_display || '';
+            document.getElementById('flow_data').value = toPrettyJson(regla.flow.data_display || regla.flow.data || '');
             document.getElementById('flow_header').value = regla.flow.header || '';
             document.getElementById('flow_body').value = regla.flow.body || '';
             document.getElementById('flow_footer').value = regla.flow.footer || '';
         }
     } else {
-        document.getElementById('opciones').value = regla.opciones || '';
+        document.getElementById('opciones').value = typeof opcionesParsed === 'object' ? JSON.stringify(opcionesParsed) : (opcionesParsed || '');
     }
     toggleMediaFields();
     toggleListFields();
