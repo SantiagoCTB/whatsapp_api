@@ -355,7 +355,7 @@ def _reglas_view(template_name):
               FROM reglas r
               LEFT JOIN regla_medias m ON r.id = m.regla_id
              GROUP BY r.id
-             ORDER BY r.step, r.id
+             ORDER BY r.id DESC
             """
         )
         rows = c.fetchall()
