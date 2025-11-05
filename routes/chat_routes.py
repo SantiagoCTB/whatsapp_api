@@ -795,6 +795,10 @@ def assign_chat_role():
     if 'user' not in session:
         return jsonify({'error': 'No autorizado'}), 401
 
+    rol = session.get('rol')
+    if rol != 'admin':
+        return jsonify({'error': 'No autorizado'}), 403
+
     data = request.get_json()
     numero = data.get('numero')
     # "role" es el campo enviado desde el frontend, pero aceptamos

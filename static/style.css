@@ -67,16 +67,6 @@
       cursor: pointer;
     }
 
-    #roleToggle {
-      display: none;
-      background: var(--accent-neon);
-      border: none;
-      color: var(--text-light);
-      padding: 8px;
-      font-size: 24px;
-      cursor: pointer;
-      margin-top: 10px;
-    }
     /* Sidebar */
     .sidebar {
       width:25%; background:var(--bg-sidebar);
@@ -410,32 +400,6 @@
       font-size: 12px;
       color: rgba(0, 0, 0, 0.4);
       pointer-events: none;
-    }
-
-    .role-drop-zone {
-      position: absolute;
-      bottom: 8px;
-      left: 8px;
-      display: flex;
-      gap: 12px;
-    }
-
-    .role-icon {
-      min-width: 60px;
-      height: 60px;
-      border-radius: 12px;
-      background: var(--accent);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      cursor: pointer;
-      font-size: 24px;
-      color: var(--text-light);
-      padding: 0 12px;
-    }
-
-    .role-icon.drag-over {
-      background: var(--accent-hover);
     }
 
     /* Generic form and table styles for admin pages */
@@ -981,6 +945,42 @@
       color: var(--text-light);
     }
 
+    .chat-context-menu .menu-options .context-option.role-option {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .chat-context-menu .menu-options .context-option.role-option .role-option-label {
+      flex: 1;
+    }
+
+    .chat-context-menu .menu-options .context-option.role-option .role-option-check {
+      font-size: 0.85em;
+    }
+
+    .chat-context-menu .menu-options .context-option.role-option.active {
+      background: rgba(0, 0, 0, 0.08);
+      font-weight: 600;
+    }
+
+    .chat-context-menu .menu-options .context-option.role-option.active:hover {
+      background: var(--accent);
+      color: var(--text-light);
+    }
+
+    .chat-context-menu .menu-options .context-option.disabled {
+      cursor: default;
+      opacity: 0.6;
+      pointer-events: none;
+    }
+
+    .chat-context-menu .menu-options .context-option.disabled:hover {
+      background: inherit;
+      color: inherit;
+    }
+
     /* Línea divisoria entre cada opción */
     .chat-context-menu .menu-options .context-option + .context-option {
       border-top: 1px solid rgba(0, 0, 0, 0.08);
@@ -1027,21 +1027,6 @@
   #chatBox {
     flex: 1;
     overflow-y: auto;
-  }
-
-  .role-drop-zone {
-    position: static;
-    justify-content: center;
-    margin-top: 10px;
-    display: none;
-  }
-
-  .role-drop-zone.show {
-    display: flex;
-  }
-
-  #roleToggle {
-    display: block;
   }
 
   .role-indicator {
