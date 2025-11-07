@@ -19,6 +19,7 @@ from services.whatsapp_api import (
     get_media_url,
     enviar_mensaje,
     start_typing_feedback,
+    stop_typing_feedback,
 )
 from services.job_queue import enqueue_transcription
 from services.normalize_text import normalize_text
@@ -62,6 +63,8 @@ def clear_chat_runtime_state(numero: str):
             len(entries),
             extra={"numero": numero},
         )
+
+    stop_typing_feedback(numero)
 
 
 def notify_session_closed(numero: str, *, origin: str = "timeout") -> bool:

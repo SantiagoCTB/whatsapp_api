@@ -92,6 +92,19 @@
       const chatBoxEl  = document.getElementById('chatBox');
       const botoneraEl = document.getElementById('botonera');
       const replyPreviewEl = document.getElementById('replyPreview');
+      const typingIndicatorEl = document.createElement('div');
+      typingIndicatorEl.id = 'typingIndicator';
+      typingIndicatorEl.className = 'typing-indicator bubble bot message';
+      typingIndicatorEl.innerHTML = `
+        <div class="typing-dots" aria-hidden="true">
+          <span class="dot"></span>
+          <span class="dot"></span>
+          <span class="dot"></span>
+        </div>
+        <span class="typing-text">IA está escribiendo…</span>
+      `;
+      typingIndicatorEl.setAttribute('role', 'status');
+      typingIndicatorEl.setAttribute('aria-live', 'polite');
       const contextMenu = document.getElementById('contextMenu');
       const replyAction = document.getElementById('replyAction');
       const chatContextMenu = document.getElementById('chatContextMenu');
@@ -274,7 +287,6 @@
           if (sendUnlockTimeout) clearTimeout(sendUnlockTimeout);
           isSending = true;
           sendBtn.disabled = true;
-          messageInput.readOnly = true;
           sendUnlockTimeout = setTimeout(() => {
             stopSending();
           }, 8000);
@@ -287,7 +299,6 @@
           }
           isSending = false;
           sendBtn.disabled = false;
-          messageInput.readOnly = false;
         }
 
         const FLOW_SUMMARY_MAX_ITEMS = 10;
@@ -990,12 +1001,30 @@
         lastCount = 0; // reset count so the initial load doesn't trigger alerts
         lastIncomingWaId = null;
         lastTypingSent = 0;
+        updateTypingIndicator(false);
         // marcar activo
         document.querySelectorAll('#chatList li').forEach(li => li.classList.remove('active'));
         liEl.classList.add('active');
         if (autoRefresh) clearInterval(autoRefresh);
         autoRefresh = setInterval(loadMessages, 3000);
         loadMessages(); loadBotonera();
+      }
+
+      function updateTypingIndicator(isActive, shouldMaintainScroll = false) {
+        if (isActive) {
+          if (!typingIndicatorEl.parentElement) {
+            chatBoxEl.appendChild(typingIndicatorEl);
+          }
+          typingIndicatorEl.classList.add('visible');
+          if (shouldMaintainScroll) {
+            chatBoxEl.scrollTop = chatBoxEl.scrollHeight;
+          }
+        } else {
+          typingIndicatorEl.classList.remove('visible');
+          if (typingIndicatorEl.parentElement) {
+            typingIndicatorEl.parentElement.removeChild(typingIndicatorEl);
+          }
+        }
       }
 
       // Cargar mensajes
@@ -1131,6 +1160,7 @@
               lastCount = i + 1;
             }
             lastIncomingWaId = newestIncoming;
+            updateTypingIndicator(Boolean(data.is_typing), atBottom);
             if (atBottom) chatBoxEl.scrollTop = chatBoxEl.scrollHeight;
           });
       }
@@ -1203,12 +1233,18 @@
         if (txt === lastSentMessage && now - lastSentTimestamp < 1500) return;
         lastSentMessage = txt;
         lastSentTimestamp = now;
+        const replyTarget = replyTo;
+        messageInput.value='';
+        messageInput.focus();
+        replyTo=null;
+        replyPreviewEl.style.display='none';
+        replyPreviewEl.innerHTML='';
         triggerTypingSignal(true);
         startSending();
         fetch('/send_message',{
           method:'POST',
           headers:{'Content-Type':'application/json'},
-          body:JSON.stringify({numero:currentChat,mensaje:txt,reply_to_wa_id:replyTo})
+          body:JSON.stringify({numero:currentChat,mensaje:txt,reply_to_wa_id:replyTarget})
         }).then(res=>{
           if(!res.ok){
             alert('No se pudo enviar el mensaje');
@@ -1217,10 +1253,6 @@
             stopSending();
             return;
           }
-          messageInput.value='';
-          replyTo=null;
-          replyPreviewEl.style.display='none';
-          replyPreviewEl.innerHTML='';
           loadMessages(); fetchChatList();
           stopSending();
         }).catch(err=>{

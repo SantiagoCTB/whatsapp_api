@@ -22,6 +22,7 @@ MESSAGES_URL = f"{GRAPH_BASE_URL}/{PHONE_ID}/messages"
 
 _typing_lock = threading.Lock()
 _typing_sessions = {}
+_typing_ui_state = set()
 _TYPING_INITIAL_DELAY = 2.0
 _TYPING_INTERVAL = 6.0
 _TYPING_ENABLED = bool(getattr(Config, "ENABLE_TYPING_INDICATOR", False))
@@ -128,6 +129,10 @@ def enviar_mensaje(numero, mensaje, tipo='bot', tipo_respuesta='texto', opciones
         "Content-Type": "application/json"
     }
     media_link = None
+
+    def _fail():
+        stop_typing_feedback(numero)
+        return False
 
     if tipo_respuesta == 'texto':
         data = {
@@ -293,7 +298,7 @@ def enviar_mensaje(numero, mensaje, tipo='bot', tipo_respuesta='texto', opciones
                             "error": str(exc),
                         },
                     )
-                    return False
+                    return _fail()
         elif isinstance(opciones, dict):
             opts = dict(opciones)
         else:
@@ -304,7 +309,7 @@ def enviar_mensaje(numero, mensaje, tipo='bot', tipo_respuesta='texto', opciones
                     "tipo_respuesta": tipo_respuesta,
                 },
             )
-            return False
+            return _fail()
 
         opts = _normalize_flow_options(opts)
 
@@ -321,7 +326,7 @@ def enviar_mensaje(numero, mensaje, tipo='bot', tipo_respuesta='texto', opciones
                     "tipo_respuesta": tipo_respuesta,
                 },
             )
-            return False
+            return _fail()
 
         if bool(flow_id) == bool(flow_name):
             logger.error(
@@ -331,7 +336,7 @@ def enviar_mensaje(numero, mensaje, tipo='bot', tipo_respuesta='texto', opciones
                     "tipo_respuesta": tipo_respuesta,
                 },
             )
-            return False
+            return _fail()
 
         parameters = {
             "flow_message_version": flow_message_version,
@@ -404,7 +409,7 @@ def enviar_mensaje(numero, mensaje, tipo='bot', tipo_respuesta='texto', opciones
                     "error": str(exc),
                 }
             )
-            return False
+            return _fail()
         if check.status_code != 200:
             logger.error(
                 "Respuesta no exitosa al validar la URL de medios",
@@ -415,7 +420,7 @@ def enviar_mensaje(numero, mensaje, tipo='bot', tipo_respuesta='texto', opciones
                     "status_code": check.status_code,
                 }
             )
-            return False
+            return _fail()
     resp = requests.post(url, headers=headers, json=data)
     log_payload = {
         "numero": numero,
@@ -432,7 +437,7 @@ def enviar_mensaje(numero, mensaje, tipo='bot', tipo_respuesta='texto', opciones
             (reason or "sin motivo proporcionado"),
             extra=log_payload,
         )
-        return False
+        return _fail()
     logger.info("Mensaje enviado a WhatsApp API", extra=log_payload)
     stop_typing_feedback(numero)
     try:
@@ -579,6 +584,9 @@ def start_typing_feedback(numero, message_id=None):
     if not numero:
         return
 
+    with _typing_lock:
+        _typing_ui_state.add(numero)
+
     if not _TYPING_ENABLED:
         if message_id:
             _send_read_and_typing(numero, message_id=message_id, include_read=True)
@@ -604,6 +612,9 @@ def start_typing_feedback(numero, message_id=None):
 
 def stop_typing_feedback(numero):
     with _typing_lock:
+        _typing_ui_state.discard(numero)
+
+    with _typing_lock:
         session = _typing_sessions.pop(numero, None)
 
     if not session:
@@ -615,6 +626,13 @@ def stop_typing_feedback(numero):
         timer.cancel()
 
     _send_read_and_typing(numero, include_read=False, typing_status="paused")
+
+
+def is_typing_feedback_active(numero):
+    if not numero:
+        return False
+    with _typing_lock:
+        return numero in _typing_ui_state
 
 def get_media_url(media_id):
     resp1 = requests.get(
