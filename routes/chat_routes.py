@@ -6,7 +6,11 @@ from flask import Blueprint, render_template, request, redirect, session, url_fo
 from werkzeug.utils import secure_filename
 from mysql.connector.errors import ProgrammingError
 from config import Config
-from services.whatsapp_api import enviar_mensaje, trigger_typing_indicator
+from services.whatsapp_api import (
+    enviar_mensaje,
+    trigger_typing_indicator,
+    is_typing_feedback_active,
+)
 from routes.webhook import clear_chat_runtime_state, notify_session_closed
 from services.db import (
     get_connection,
@@ -361,7 +365,9 @@ def get_chat(numero):
         row.append(segments)
         formatted.append(row)
 
-    return jsonify({'mensajes': formatted})
+    typing_active = is_typing_feedback_active(numero)
+
+    return jsonify({'mensajes': formatted, 'is_typing': typing_active})
 
 
 @chat_bp.route('/typing_signal', methods=['POST'])
