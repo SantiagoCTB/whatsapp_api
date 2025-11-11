@@ -79,6 +79,11 @@
 
   <div class="role-indicator">{{ rol }}</div>
 
+  <div id="imageModal" class="image-modal" role="dialog" aria-modal="true" aria-hidden="true">
+    <button type="button" class="close-modal" aria-label="Cerrar vista de imagen">×</button>
+    <img id="imageModalContent" alt="Imagen del mensaje" />
+  </div>
+
   <script>
     document.addEventListener('DOMContentLoaded', () => {
       let currentChat = null, autoRefresh = null, todosChats = [], lastCount = 0, replyTo = null;
@@ -93,6 +98,9 @@
       const botoneraEl = document.getElementById('botonera');
       const replyPreviewEl = document.getElementById('replyPreview');
       const typingIndicatorEl = document.createElement('div');
+      const imageModalEl = document.getElementById('imageModal');
+      const imageModalImg = document.getElementById('imageModalContent');
+      const imageModalCloseBtn = imageModalEl.querySelector('.close-modal');
       typingIndicatorEl.id = 'typingIndicator';
       typingIndicatorEl.className = 'typing-indicator bubble bot message';
       typingIndicatorEl.innerHTML = `
@@ -134,6 +142,44 @@
 
       const COLLAPSED_ICON = '▶';
       const EXPANDED_ICON = '▼';
+
+      function openImageModal(src, altText = 'Imagen del mensaje') {
+        if (!src) return;
+        imageModalImg.src = src;
+        imageModalImg.alt = altText;
+        imageModalEl.classList.add('show');
+        imageModalEl.setAttribute('aria-hidden', 'false');
+      }
+
+      function closeImageModal() {
+        imageModalEl.classList.remove('show');
+        imageModalEl.setAttribute('aria-hidden', 'true');
+        imageModalImg.src = '';
+        imageModalImg.alt = 'Imagen del mensaje';
+      }
+
+      if (imageModalCloseBtn) {
+        imageModalCloseBtn.addEventListener('click', closeImageModal);
+      }
+
+      imageModalEl.addEventListener('click', event => {
+        if (event.target === imageModalEl) {
+          closeImageModal();
+        }
+      });
+
+      document.addEventListener('keydown', event => {
+        if (event.key === 'Escape' && imageModalEl.classList.contains('show')) {
+          closeImageModal();
+        }
+      });
+
+      chatBoxEl.addEventListener('click', event => {
+        const target = event.target;
+        if (target instanceof HTMLImageElement && target.classList.contains('chat-image')) {
+          openImageModal(target.src, target.alt || 'Imagen del mensaje');
+        }
+      });
 
       function setSectionExpanded(section, expanded) {
         if (!section) return;
@@ -707,7 +753,10 @@
         const text = selectedBubble.dataset.text;
         if (url && tipo.endsWith('_image')) {
           const img = document.createElement('img');
-          img.src = url; replyPreviewEl.appendChild(img);
+          img.src = url;
+          img.alt = text || 'Imagen del mensaje';
+          img.classList.add('chat-image');
+          replyPreviewEl.appendChild(img);
         } else if (url && tipo.includes('audio')) {
           const a = document.createElement('audio'); a.controls=true; a.src=url; replyPreviewEl.appendChild(a);
         } else if (url && tipo.includes('video')) {
@@ -720,11 +769,17 @@
         contextMenu.classList.remove('show');
       };
 
-      replyPreviewEl.onclick = () => {
+      replyPreviewEl.addEventListener('click', event => {
+        const target = event.target;
+        if (target instanceof HTMLImageElement && target.classList.contains('chat-image')) {
+          openImageModal(target.src, target.alt || 'Imagen del mensaje');
+          event.stopPropagation();
+          return;
+        }
         replyTo = null;
         replyPreviewEl.style.display = 'none';
         replyPreviewEl.innerHTML = '';
-      };
+      });
 
       // Mostrar u ocultar menú settings
       const settingsBtn = document.getElementById('settingsBtn');
@@ -1060,7 +1115,8 @@
                 if (replyTipo && replyTipo.endsWith('_image') && replyUrl) {
                   const img = document.createElement('img');
                   img.src = replyUrl;
-                  img.style.maxWidth = '100px';
+                  img.alt = replyText || 'Imagen del mensaje citado';
+                  img.classList.add('chat-image');
                   replyDiv.appendChild(img);
                 } else if (replyTipo && replyTipo.includes('audio') && replyUrl) {
                   const a = document.createElement('audio');
@@ -1092,7 +1148,9 @@
                 div.appendChild(a);
               } else if (tipo.endsWith('_image') && url) {
                 const img = document.createElement('img');
-                img.src = url; img.style.maxWidth='200px';
+                img.src = url;
+                img.alt = txt || 'Imagen del mensaje';
+                img.classList.add('chat-image');
                 div.appendChild(img);
               } else if (tipo.includes('audio') && url) {
                 const a = document.createElement('audio');
