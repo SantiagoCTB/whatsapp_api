@@ -3,6 +3,7 @@ import json
 import logging
 import mimetypes
 import threading
+import time
 from typing import Any, Dict, Optional
 
 import requests
@@ -395,6 +396,35 @@ def enviar_mensaje(numero, mensaje, tipo='bot', tipo_respuesta='texto', opciones
     if reply_to_wa_id:
         data["context"] = {"message_id": reply_to_wa_id}
 
+    should_emit_typing = (
+        _TYPING_ENABLED
+        and numero
+        and isinstance(tipo, str)
+        and tipo.lower().startswith("bot")
+    )
+
+    typing_delay = 0.0
+    if should_emit_typing:
+        text_content = ""
+        if isinstance(mensaje, str):
+            text_content = mensaje.strip()
+        elif mensaje is not None:
+            text_content = str(mensaje).strip()
+
+        if text_content:
+            typing_delay = max(0.6, min(len(text_content) / 25.0, 2.5))
+        else:
+            typing_delay = 0.6
+
+        try:
+            trigger_typing_indicator(numero, include_read=False)
+        except Exception:  # pragma: no cover - envío de typing depende de la API externa
+            logger.exception(
+                "No se pudo enviar el indicador de escritura",
+                extra={"numero": numero, "tipo": tipo},
+            )
+            typing_delay = 0.0
+
     # Validar URLs externas antes de enviar a la API de WhatsApp
     if media_link and isinstance(media_link, str) and media_link.startswith(('http://', 'https://')):
         try:
@@ -421,6 +451,9 @@ def enviar_mensaje(numero, mensaje, tipo='bot', tipo_respuesta='texto', opciones
                 }
             )
             return _fail()
+    if typing_delay:
+        time.sleep(typing_delay)
+
     resp = requests.post(url, headers=headers, json=data)
     log_payload = {
         "numero": numero,
