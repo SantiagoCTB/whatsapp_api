@@ -692,6 +692,7 @@ def get_chat_list():
         })
 
     conn.close()
+    chats.sort(key=lambda chat: chat["last_timestamp"] or "", reverse=True)
     return jsonify(chats)
 
 @chat_bp.route('/set_alias', methods=['POST'])

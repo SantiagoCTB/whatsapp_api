@@ -979,6 +979,8 @@
         fetch('/get_chat_list')
           .then(r=>r.json())
           .then(data=>{
+            const getTimestamp = ts => ts ? new Date(ts).getTime() : 0;
+            data.sort((a, b) => getTimestamp(b.last_timestamp) - getTimestamp(a.last_timestamp));
             todosChats = data;
             chatListEl.innerHTML='';
             data.forEach(c => {
