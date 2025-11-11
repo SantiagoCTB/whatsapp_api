@@ -48,6 +48,10 @@ if sys.platform.startswith("win"):
         )
 
 from app import app as flask_app  # <-- si tu Flask está en app.py y la instancia se llama 'app'
-from asgiref.wsgi import WsgiToAsgi
 
-asgi_app = WsgiToAsgi(flask_app)
+try:  # pragma: no cover - la importación falla únicamente si falta la dependencia extra
+    from a2wsgi import WSGIMiddleware
+except ImportError:  # pragma: no cover - a2wsgi es parte de requirements pero añadimos un plan B
+    from uvicorn.middleware.wsgi import WSGIMiddleware
+
+asgi_app = WSGIMiddleware(flask_app)

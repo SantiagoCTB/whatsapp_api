@@ -9,7 +9,7 @@ WORKDIR C:\app
 COPY requirements.txt .
 RUN python -m pip install --upgrade pip `
  && pip install -r requirements.txt `
- && pip install uvicorn[standard] asgiref
+ && pip install uvicorn[standard] a2wsgi asgiref
 
 # Código + certificados
 COPY . .
