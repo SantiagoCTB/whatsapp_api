@@ -1,8 +1,8 @@
 import os
 import uuid
 import json
-from datetime import datetime, timedelta, timezone
-from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+from datetime import datetime
+from zoneinfo import ZoneInfo
 from flask import Blueprint, render_template, request, redirect, session, url_for, jsonify
 from werkzeug.utils import secure_filename
 from mysql.connector.errors import ProgrammingError
@@ -23,13 +23,7 @@ from services.db import (
 
 chat_bp = Blueprint('chat', __name__)
 
-try:
-    BOGOTA_TZ = ZoneInfo('America/Bogota')
-except ZoneInfoNotFoundError:
-    # Windows deployments require the tzdata package to provide IANA zones.
-    # Fall back to the fixed -05:00 offset used by Bogotá so the app keeps
-    # working even if the package is missing.
-    BOGOTA_TZ = timezone(timedelta(hours=-5))
+BOGOTA_TZ = ZoneInfo('America/Bogota')
 
 # Carpeta de subida debe coincidir con la de whatsapp_api
 MEDIA_ROOT = Config.MEDIA_ROOT

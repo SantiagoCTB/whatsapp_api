@@ -426,31 +426,45 @@ def enviar_mensaje(numero, mensaje, tipo='bot', tipo_respuesta='texto', opciones
             typing_delay = 0.0
 
     # Validar URLs externas antes de enviar a la API de WhatsApp
-    if media_link and isinstance(media_link, str) and media_link.startswith(('http://', 'https://')):
+    if media_link and isinstance(media_link, str) and media_link.startswith(("http://", "https://")):
+        validation_response = None
         try:
-            check = requests.head(media_link, allow_redirects=True, timeout=5)
+            validation_response = requests.head(media_link, allow_redirects=True, timeout=5)
+            if validation_response.status_code == 405:
+                validation_response.close()
+                validation_response = requests.get(
+                    media_link,
+                    allow_redirects=True,
+                    timeout=5,
+                    stream=True,
+                )
+
+            if validation_response.status_code >= 400:
+                logger.warning(
+                    "Respuesta no exitosa al validar la URL de medios",
+                    extra={
+                        "numero": numero,
+                        "tipo_respuesta": tipo_respuesta,
+                        "media_link": media_link,
+                        "status_code": validation_response.status_code,
+                    },
+                )
         except requests.RequestException as exc:
-            logger.error(
+            logger.warning(
                 "Error al validar la URL de medios",
                 extra={
                     "numero": numero,
                     "tipo_respuesta": tipo_respuesta,
                     "media_link": media_link,
                     "error": str(exc),
-                }
+                },
             )
-            return _fail()
-        if check.status_code != 200:
-            logger.error(
-                "Respuesta no exitosa al validar la URL de medios",
-                extra={
-                    "numero": numero,
-                    "tipo_respuesta": tipo_respuesta,
-                    "media_link": media_link,
-                    "status_code": check.status_code,
-                }
-            )
-            return _fail()
+        finally:
+            if validation_response is not None:
+                try:
+                    validation_response.close()
+                except Exception:  # pragma: no cover - close() shouldn't fail
+                    pass
     if typing_delay:
         time.sleep(typing_delay)
 
@@ -617,13 +631,13 @@ def start_typing_feedback(numero, message_id=None):
     if not numero:
         return
 
-    with _typing_lock:
-        _typing_ui_state.add(numero)
-
     if not _TYPING_ENABLED:
         if message_id:
             _send_read_and_typing(numero, message_id=message_id, include_read=True)
         return
+
+    with _typing_lock:
+        _typing_ui_state.add(numero)
 
     with _typing_lock:
         session = _typing_sessions.get(numero)
@@ -662,7 +676,7 @@ def stop_typing_feedback(numero):
 
 
 def is_typing_feedback_active(numero):
-    if not numero:
+    if not numero or not _TYPING_ENABLED:
         return False
     with _typing_lock:
         return numero in _typing_ui_state
