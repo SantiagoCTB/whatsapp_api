@@ -131,6 +131,35 @@
           chatStateDefinitionMap.set(def.key, def);
         }
       });
+      const bogotaFormatter = new Intl.DateTimeFormat('es-CO', {
+        timeZone: 'America/Bogota',
+        hour12: false,
+        day: '2-digit',
+        month: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+
+      function formatBogotaTimestamp(value) {
+        if (!value) return '';
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) return '';
+        const parts = bogotaFormatter.formatToParts(date);
+        const lookup = {};
+        for (const part of parts) {
+          if (part.type !== 'literal') {
+            lookup[part.type] = part.value;
+          }
+        }
+        const day = lookup.day;
+        const month = lookup.month;
+        const hour = lookup.hour;
+        const minute = lookup.minute;
+        if (day && month && hour && minute) {
+          return `${day}/${month} ${hour}:${minute}`;
+        }
+        return bogotaFormatter.format(date);
+      }
       const sendBtn = document.getElementById('sendBtn');
       const messageInput = document.getElementById('messageInput');
       const sidebar = document.querySelector('.sidebar');
@@ -1181,14 +1210,10 @@
 
               // fecha y hora
               if (ts) {
-                const date = new Date(ts);
                 const timeSpan = document.createElement('div');
-                const dia = String(date.getDate()).padStart(2, '0');
-                const mes = String(date.getMonth() + 1).padStart(2, '0');
-                const hora = String(date.getHours()).padStart(2, '0');
-                const min = String(date.getMinutes()).padStart(2, '0');
                 timeSpan.className = 'timestamp';
-                timeSpan.textContent = `${dia}/${mes} ${hora}:${min}`;
+                const formattedTs = formatBogotaTimestamp(ts);
+                timeSpan.textContent = formattedTs || ts;
                 div.appendChild(timeSpan);
               }
 

@@ -11,3 +11,4 @@ uvicorn[standard]
 a2wsgi>=1.10
 asgiref
 concurrent-futures; python_version < "3.2"
+tzdata
