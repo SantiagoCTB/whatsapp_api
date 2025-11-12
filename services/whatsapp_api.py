@@ -617,13 +617,13 @@ def start_typing_feedback(numero, message_id=None):
     if not numero:
         return
 
-    with _typing_lock:
-        _typing_ui_state.add(numero)
-
     if not _TYPING_ENABLED:
         if message_id:
             _send_read_and_typing(numero, message_id=message_id, include_read=True)
         return
+
+    with _typing_lock:
+        _typing_ui_state.add(numero)
 
     with _typing_lock:
         session = _typing_sessions.get(numero)
@@ -662,7 +662,7 @@ def stop_typing_feedback(numero):
 
 
 def is_typing_feedback_active(numero):
-    if not numero:
+    if not numero or not _TYPING_ENABLED:
         return False
     with _typing_lock:
         return numero in _typing_ui_state
