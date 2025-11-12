@@ -426,31 +426,45 @@ def enviar_mensaje(numero, mensaje, tipo='bot', tipo_respuesta='texto', opciones
             typing_delay = 0.0
 
     # Validar URLs externas antes de enviar a la API de WhatsApp
-    if media_link and isinstance(media_link, str) and media_link.startswith(('http://', 'https://')):
+    if media_link and isinstance(media_link, str) and media_link.startswith(("http://", "https://")):
+        validation_response = None
         try:
-            check = requests.head(media_link, allow_redirects=True, timeout=5)
+            validation_response = requests.head(media_link, allow_redirects=True, timeout=5)
+            if validation_response.status_code == 405:
+                validation_response.close()
+                validation_response = requests.get(
+                    media_link,
+                    allow_redirects=True,
+                    timeout=5,
+                    stream=True,
+                )
+
+            if validation_response.status_code >= 400:
+                logger.warning(
+                    "Respuesta no exitosa al validar la URL de medios",
+                    extra={
+                        "numero": numero,
+                        "tipo_respuesta": tipo_respuesta,
+                        "media_link": media_link,
+                        "status_code": validation_response.status_code,
+                    },
+                )
         except requests.RequestException as exc:
-            logger.error(
+            logger.warning(
                 "Error al validar la URL de medios",
                 extra={
                     "numero": numero,
                     "tipo_respuesta": tipo_respuesta,
                     "media_link": media_link,
                     "error": str(exc),
-                }
+                },
             )
-            return _fail()
-        if check.status_code != 200:
-            logger.error(
-                "Respuesta no exitosa al validar la URL de medios",
-                extra={
-                    "numero": numero,
-                    "tipo_respuesta": tipo_respuesta,
-                    "media_link": media_link,
-                    "status_code": check.status_code,
-                }
-            )
-            return _fail()
+        finally:
+            if validation_response is not None:
+                try:
+                    validation_response.close()
+                except Exception:  # pragma: no cover - close() shouldn't fail
+                    pass
     if typing_delay:
         time.sleep(typing_delay)
 
