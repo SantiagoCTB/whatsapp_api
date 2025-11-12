@@ -2,6 +2,7 @@ import os
 import uuid
 import json
 from datetime import datetime
+from zoneinfo import ZoneInfo
 from flask import Blueprint, render_template, request, redirect, session, url_for, jsonify
 from werkzeug.utils import secure_filename
 from mysql.connector.errors import ProgrammingError
@@ -21,6 +22,8 @@ from services.db import (
 )
 
 chat_bp = Blueprint('chat', __name__)
+
+BOGOTA_TZ = ZoneInfo('America/Bogota')
 
 # Carpeta de subida debe coincidir con la de whatsapp_api
 MEDIA_ROOT = Config.MEDIA_ROOT
@@ -51,6 +54,26 @@ def _is_empty_flow_value(value):
     if isinstance(value, (list, tuple)):
         return all(_is_empty_flow_value(item) for item in value)
     return False
+
+
+def _to_bogota_iso(value):
+    """Return ``value`` converted to America/Bogota ISO string with offset."""
+    if not value:
+        return None
+
+    if isinstance(value, str):
+        try:
+            value = datetime.fromisoformat(value)
+        except ValueError:
+            return value
+    elif not isinstance(value, datetime):
+        return value
+
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=BOGOTA_TZ)
+    else:
+        value = value.astimezone(BOGOTA_TZ)
+    return value.isoformat()
 
 
 def _table_exists(cursor, table_name):
@@ -359,6 +382,7 @@ def get_chat(numero):
     formatted = []
     for row in mensajes:
         row = list(row)
+        row[3] = _to_bogota_iso(row[3])
         mensaje_txt = row[0] or ''
         tipo_msg = row[1] or ''
         segments = _extract_flow_segments(mensaje_txt) if tipo_msg.startswith('cliente') else []
@@ -654,7 +678,7 @@ def get_chat_list():
             (numero,)
         )
         fila = c.fetchone()
-        last_ts = fila[1].isoformat() if fila and fila[1] else None
+        last_ts = _to_bogota_iso(fila[1]) if fila and fila[1] else None
         ultimo = fila[0] if fila else ""
         requiere_asesor = "asesor" in ultimo.lower()
 
