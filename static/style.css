@@ -127,6 +127,23 @@
     #settingsMenu a:hover {
       background:var(--accent-neon); color:var(--text-light);
     }
+    #settingsMenu .settings-toggle {
+      display:flex;
+      align-items:center;
+      gap:8px;
+      padding:8px 12px;
+      font-size:14px;
+      color:var(--accent-neon);
+      cursor:pointer;
+      transition:background 0.3s, color 0.3s;
+    }
+    #settingsMenu .settings-toggle:hover {
+      background:var(--accent-neon);
+      color:var(--text-light);
+    }
+    #settingsMenu .settings-toggle input {
+      accent-color: var(--accent-neon);
+    }
     .sidebar h2 {
       color:var(--text-main); text-align:center;
       font-weight:normal; flex:0 0 auto;

@@ -20,6 +20,10 @@
         <a href="{{ url_for('tablero.tablero') }}">Tablero</a>
         <a id="respuestasLink" href="{{ url_for('chat.respuestas') }}">Respuestas</a>
         <a href="{{ url_for('auth.logout') }}">Cerrar sesión</a>
+        <label class="settings-toggle">
+          <input type="checkbox" id="notificationSoundToggle" checked>
+          <span>Sonido de notificaciones</span>
+        </label>
       </div>
       <input id="buscador" type="text" placeholder="Buscar número…">
       <ul id="chatList"></ul>
@@ -93,6 +97,67 @@
       const TYPING_SIGNAL_THROTTLE = 2500;
       let selectedBubble = null;
       let chatContextTarget = null;
+      const notificationSoundUrl = "{{ url_for('static', filename='notificacion.mp3') }}";
+      const notificationAudio = notificationSoundUrl ? new Audio(notificationSoundUrl) : null;
+      if (notificationAudio) {
+        notificationAudio.preload = 'auto';
+      }
+      let notificationAudioReady = false;
+      const notificationSoundToggle = document.getElementById('notificationSoundToggle');
+      const SOUND_PREF_KEY = 'chatNotificationSoundEnabled';
+      let notificationSoundEnabled = true;
+      try {
+        const storedPref = localStorage.getItem(SOUND_PREF_KEY);
+        if (storedPref === 'false') {
+          notificationSoundEnabled = false;
+        }
+      } catch (err) {
+        console.warn('No se pudo leer la preferencia de sonido de notificaciones', err);
+      }
+      if (notificationSoundToggle) {
+        notificationSoundToggle.checked = notificationSoundEnabled;
+        notificationSoundToggle.addEventListener('change', () => {
+          notificationSoundEnabled = notificationSoundToggle.checked;
+          try {
+            localStorage.setItem(SOUND_PREF_KEY, notificationSoundEnabled ? 'true' : 'false');
+          } catch (err) {
+            console.warn('No se pudo guardar la preferencia de sonido de notificaciones', err);
+          }
+          if (!notificationSoundEnabled && notificationAudio) {
+            try {
+              notificationAudio.pause();
+            } catch (pauseErr) {
+              console.warn('No se pudo pausar el sonido de notificaciones', pauseErr);
+            }
+            notificationAudio.currentTime = 0;
+          }
+        });
+      }
+      function unlockNotificationAudio() {
+        if (!notificationAudio || notificationAudioReady) return;
+        const originalVolume = notificationAudio.volume;
+        notificationAudio.volume = 0;
+        const playAttempt = notificationAudio.play();
+        if (playAttempt && typeof playAttempt.then === 'function') {
+          playAttempt.then(() => {
+            notificationAudio.pause();
+            notificationAudio.currentTime = 0;
+            notificationAudio.volume = originalVolume;
+            notificationAudioReady = true;
+            document.removeEventListener('click', unlockNotificationAudio);
+            document.removeEventListener('keydown', unlockNotificationAudio);
+          }).catch(() => {
+            notificationAudio.volume = originalVolume;
+          });
+        } else {
+          notificationAudio.volume = originalVolume;
+          notificationAudioReady = true;
+          document.removeEventListener('click', unlockNotificationAudio);
+          document.removeEventListener('keydown', unlockNotificationAudio);
+        }
+      }
+      document.addEventListener('click', unlockNotificationAudio);
+      document.addEventListener('keydown', unlockNotificationAudio);
       const chatListEl = document.getElementById('chatList');
       const chatBoxEl  = document.getElementById('chatBox');
       const botoneraEl = document.getElementById('botonera');
@@ -767,7 +832,20 @@
         }
 
         function playAlertSound() {
-          // El sonido de alerta se deshabilita para evitar el tono al ingresar a la interfaz.
+          if (!notificationAudio || !notificationSoundEnabled) return;
+          try {
+            notificationAudio.currentTime = 0;
+            const playPromise = notificationAudio.play();
+            if (playPromise && typeof playPromise.catch === 'function') {
+              playPromise.catch(err => {
+                if (err && err.name !== 'AbortError' && err.name !== 'NotAllowedError') {
+                  console.error('No se pudo reproducir el sonido de notificación', err);
+                }
+              });
+            }
+          } catch (err) {
+            console.error('Error al reproducir el sonido de notificación', err);
+          }
         }
 
       document.addEventListener('click', () => contextMenu.classList.remove('show'));
