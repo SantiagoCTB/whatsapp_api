@@ -30,12 +30,12 @@
       .chat-image {
         cursor: zoom-in;
         border-radius: 12px;
-        max-width: min(320px, 100%);
+        max-width: min(180px, 100%);
         display: block;
       }
 
       .reply .chat-image {
-        max-width: 120px;
+        max-width: 90px;
       }
       body {
       font-family: var(--font-base);
@@ -493,6 +493,7 @@
     }
 
     .image-modal img {
+      width: auto;
       max-width: min(90vw, 700px);
       max-height: 90vh;
       border-radius: 16px;
