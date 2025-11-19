@@ -54,6 +54,7 @@ def login():
 
             if user and _verify_password(user[2], password):
                 # user -> (id, username, password)
+                session.permanent = False  # Expira cuando se cierre el navegador
                 session['user'] = user[1]
 
                 # Roles centralizados
