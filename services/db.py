@@ -1,7 +1,6 @@
 import mysql.connector
 from mysql.connector import errorcode
 from mysql.connector.errors import ProgrammingError
-from werkzeug.security import generate_password_hash
 from config import Config
 
 
@@ -16,17 +15,51 @@ FLOW_RESPONSES_TABLE_DDL = """
     ) ENGINE=InnoDB;
 """
 
-def get_connection():
-    return mysql.connector.connect(
+def _create_database_if_missing():
+    """Create the configured database if it does not exist yet."""
+
+    if not Config.DB_NAME:
+        raise RuntimeError("DB_NAME no está configurado; no se puede crear la base.")
+
+    bootstrap_conn = mysql.connector.connect(
         host=Config.DB_HOST,
         port=Config.DB_PORT,
         user=Config.DB_USER,
         password=Config.DB_PASSWORD,
-        database=Config.DB_NAME
     )
+    try:
+        cursor = bootstrap_conn.cursor()
+        cursor.execute(
+            f"CREATE DATABASE IF NOT EXISTS `{Config.DB_NAME}` "
+            "DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+        )
+    finally:
+        bootstrap_conn.close()
+
+
+def get_connection(ensure_database=False):
+    try:
+        return mysql.connector.connect(
+            host=Config.DB_HOST,
+            port=Config.DB_PORT,
+            user=Config.DB_USER,
+            password=Config.DB_PASSWORD,
+            database=Config.DB_NAME
+        )
+    except ProgrammingError as exc:
+        if ensure_database and exc.errno == errorcode.ER_BAD_DB_ERROR:
+            _create_database_if_missing()
+            return mysql.connector.connect(
+                host=Config.DB_HOST,
+                port=Config.DB_PORT,
+                user=Config.DB_USER,
+                password=Config.DB_PASSWORD,
+                database=Config.DB_NAME
+            )
+        raise
 
 def init_db():
-    conn = get_connection()
+    conn = get_connection(ensure_database=True)
     c = conn.cursor()
 
     # mensajes
@@ -299,8 +332,8 @@ def init_db():
     if not c.fetchone():
         c.execute("ALTER TABLE chat_state ADD COLUMN estado VARCHAR(20);")
 
-    # ---- SEED admin (con PBKDF2 de Werkzeug) ----
-    admin_hash = generate_password_hash('admin123')
+    # ---- SEED admin (hash configurable) ----
+    admin_hash = Config.DEFAULT_ADMIN_PASSWORD_HASH
     c.execute("""
     INSERT INTO usuarios (username, password)
       SELECT %s, %s FROM DUAL

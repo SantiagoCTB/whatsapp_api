@@ -153,6 +153,16 @@ La aplicación almacena los datos en un servidor MySQL. Los antiguos archivos de
 
 Si se utilizan para pruebas locales, realiza copias de seguridad en un almacenamiento externo y evita versionarlos.
 
+### Usuario administrador por defecto
+
+Durante la inicialización de la base de datos (`init_db`) se crea automáticamente el usuario `admin` con el hash definido en la variable de entorno `DEFAULT_ADMIN_PASSWORD_HASH`. Si no estableces un valor propio, se utilizará el hash correspondiente a la contraseña `Admin1234` (`scrypt:32768:8:1$JAUhBgIzT6IIoM5Y$6c5c9870fb039e600a045345fbe67029001173247f3143ef19b94cddd919996a7a82742083aeeb6927591fa2a0d0eb6bb3c4e3501a1964d53f39157d31f81bd4`).
+
+Cuando necesites otro password inicial, genera su hash con `werkzeug.security.generate_password_hash`, asígnalo a `DEFAULT_ADMIN_PASSWORD_HASH` y reinicia el servicio para que `init_db` lo inserte si el usuario no existe todavía.
+
+### Inicialización automática del esquema
+
+Si defines la variable `INIT_DB_ON_START=1` antes de levantar Flask, la aplicación ejecutará `init_db()` durante el arranque. Ese proceso crea la base de datos (si aún no existe) y garantiza que todas las tablas, índices y datos semilla necesarios queden listos antes de aceptar peticiones. Esto evita los errores de “base o tabla inexistente” en despliegues nuevos.
+
 ## Almacenamiento de medios subidos por el usuario
 
 Los archivos generados por los usuarios se guardan en la ruta indicada por la variable de entorno `MEDIA_ROOT`. Esta ruta debe apuntar a un volumen externo o a un directorio persistente fuera del repositorio. Si no se define, la aplicación usará `static/uploads` dentro del proyecto.
