@@ -161,7 +161,7 @@ Cuando necesites otro password inicial, genera su hash con `werkzeug.security.ge
 
 ### Inicialización automática del esquema
 
-Si defines la variable `INIT_DB_ON_START=1` antes de levantar Flask, la aplicación ejecutará `init_db()` durante el arranque. Ese proceso crea la base de datos (si aún no existe) y garantiza que todas las tablas, índices y datos semilla necesarios queden listos antes de aceptar peticiones. Esto evita los errores de “base o tabla inexistente” en despliegues nuevos.
+La aplicación ejecuta `init_db()` por defecto durante el arranque para crear la base de datos (si no existe) y asegurarse de que todas las tablas, índices y datos semilla estén listos antes de aceptar peticiones. Si prefieres administrar las migraciones manualmente, establece `INIT_DB_ON_START=0` antes de iniciar Flask para desactivar este comportamiento.
 
 ## Almacenamiento de medios subidos por el usuario
 
