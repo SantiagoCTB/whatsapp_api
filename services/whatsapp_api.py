@@ -123,7 +123,18 @@ def _normalize_flow_options(raw_options: Dict[str, Any]) -> Dict[str, Any]:
 
     return options
 
-def enviar_mensaje(numero, mensaje, tipo='bot', tipo_respuesta='texto', opciones=None, reply_to_wa_id=None, step=None, regla_id=None):
+def enviar_mensaje(
+    numero,
+    mensaje,
+    tipo='bot',
+    tipo_respuesta='texto',
+    opciones=None,
+    reply_to_wa_id=None,
+    step=None,
+    regla_id=None,
+    *,
+    return_error=False,
+):
     url = MESSAGES_URL
     headers = {
         "Authorization": f"Bearer {TOKEN}",
@@ -131,9 +142,14 @@ def enviar_mensaje(numero, mensaje, tipo='bot', tipo_respuesta='texto', opciones
     }
     media_link = None
 
-    def _fail():
+    def _result(success, reason=None):
+        if return_error:
+            return success, reason
+        return success
+
+    def _fail(reason=None):
         stop_typing_feedback(numero)
-        return False
+        return _result(False, reason)
 
     if tipo_respuesta == 'texto':
         data = {
@@ -184,7 +200,15 @@ def enviar_mensaje(numero, mensaje, tipo='bot', tipo_respuesta='texto', opciones
                     "tipo_respuesta": tipo_respuesta,
                 }
             )
-            return enviar_mensaje(numero, fallback, tipo, 'texto', None, reply_to_wa_id)
+            return enviar_mensaje(
+                numero,
+                fallback,
+                tipo,
+                'texto',
+                None,
+                reply_to_wa_id,
+                return_error=return_error,
+            )
 
         sections_clean = []
         for sec in sections:
@@ -299,7 +323,7 @@ def enviar_mensaje(numero, mensaje, tipo='bot', tipo_respuesta='texto', opciones
                             "error": str(exc),
                         },
                     )
-                    return _fail()
+                    return _fail("Las opciones del flow no tienen un formato válido.")
         elif isinstance(opciones, dict):
             opts = dict(opciones)
         else:
@@ -310,7 +334,7 @@ def enviar_mensaje(numero, mensaje, tipo='bot', tipo_respuesta='texto', opciones
                     "tipo_respuesta": tipo_respuesta,
                 },
             )
-            return _fail()
+            return _fail("Las opciones del flow no tienen un formato válido.")
 
         opts = _normalize_flow_options(opts)
 
@@ -327,7 +351,7 @@ def enviar_mensaje(numero, mensaje, tipo='bot', tipo_respuesta='texto', opciones
                     "tipo_respuesta": tipo_respuesta,
                 },
             )
-            return _fail()
+            return _fail("Falta la acción (flow_cta) para el mensaje de flow.")
 
         if bool(flow_id) == bool(flow_name):
             logger.error(
@@ -337,7 +361,7 @@ def enviar_mensaje(numero, mensaje, tipo='bot', tipo_respuesta='texto', opciones
                     "tipo_respuesta": tipo_respuesta,
                 },
             )
-            return _fail()
+            return _fail("Debes indicar solamente flow_id o flow_name, no ambos.")
 
         parameters = {
             "flow_message_version": flow_message_version,
@@ -484,7 +508,27 @@ def enviar_mensaje(numero, mensaje, tipo='bot', tipo_respuesta='texto', opciones
             (reason or "sin motivo proporcionado"),
             extra=log_payload,
         )
-        return _fail()
+
+        friendly_reason = None
+        if isinstance(error_details, dict):
+            code = error_details.get("code")
+            message_text = error_details.get("message")
+            if code == 131030:
+                friendly_reason = (
+                    "El número de destino no está en la lista permitida "
+                    "de tu número de prueba en Meta."
+                )
+            elif code == 100:
+                friendly_reason = (
+                    "Meta rechazó la solicitud por parámetros inválidos. "
+                    "Revisa el número y el mensaje citado."
+                )
+            elif message_text:
+                friendly_reason = message_text
+        if not friendly_reason:
+            friendly_reason = "La API de WhatsApp rechazó el mensaje."
+
+        return _fail(friendly_reason)
     logger.info("Mensaje enviado a WhatsApp API", extra=log_payload)
     stop_typing_feedback(numero)
     try:
@@ -514,7 +558,7 @@ def enviar_mensaje(numero, mensaje, tipo='bot', tipo_respuesta='texto', opciones
         step=step,
         regla_id=regla_id,
     )
-    return True
+    return _result(True)
 
 
 def _post_to_messages(payload, log_context):
