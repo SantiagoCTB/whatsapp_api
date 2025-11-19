@@ -620,16 +620,17 @@ def send_message():
         return jsonify({'error': 'No autorizado'}), 403
 
     # Envía por la API y guarda internamente
-    ok = enviar_mensaje(
+    ok, error_message = enviar_mensaje(
         numero,
         texto,
         tipo='asesor',
         tipo_respuesta=tipo_respuesta,
         opciones=opciones,
         reply_to_wa_id=reply_to_wa_id,
+        return_error=True,
     )
     if not ok:
-        return jsonify({'error': 'URL no válida'}), 400
+        return jsonify({'error': error_message or 'No se pudo enviar el mensaje.'}), 400
     row = get_chat_state(numero)
     step = row[0] if row else ''
     update_chat_state(numero, step, 'asesor')

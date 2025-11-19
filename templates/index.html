@@ -848,6 +848,25 @@
           }
         }
 
+        async function extractSendError(response) {
+          const fallbackMessage = 'No se pudo enviar el mensaje';
+          if (!response) return fallbackMessage;
+          try {
+            const text = await response.text();
+            const trimmed = (text || '').trim();
+            if (!trimmed) return fallbackMessage;
+            try {
+              const data = JSON.parse(trimmed);
+              if (data && data.error) return data.error;
+            } catch (err) {
+              return trimmed.length > 300 ? `${trimmed.slice(0, 297)}...` : trimmed;
+            }
+          } catch (err) {
+            return fallbackMessage;
+          }
+          return fallbackMessage;
+        }
+
       document.addEventListener('click', () => contextMenu.classList.remove('show'));
 
       replyAction.onclick = () => {
@@ -1370,16 +1389,24 @@
                   }));
                 }
 
-                Promise.all(envios).then(responses => {
-                  if (responses.every(r => r.ok)) {
+                Promise.all(envios)
+                  .then(async responses => {
+                    for (const res of responses) {
+                      if (!res.ok) {
+                        const msg = await extractSendError(res);
+                        throw new Error(msg);
+                      }
+                    }
                     replyTo=null;
                     replyPreviewEl.style.display='none';
                     replyPreviewEl.innerHTML='';
-                    loadMessages(); fetchChatList();
-                  } else {
-                    alert('No se pudo enviar el mensaje');
-                  }
-                });
+                    loadMessages();
+                    fetchChatList();
+                  })
+                  .catch(err => {
+                    const msg = (err && err.message) ? err.message : 'No se pudo enviar el mensaje';
+                    alert(msg);
+                  });
               };
               botoneraEl.appendChild(btn);
             });
@@ -1407,9 +1434,10 @@
           method:'POST',
           headers:{'Content-Type':'application/json'},
           body:JSON.stringify({numero:currentChat,mensaje:txt,reply_to_wa_id:replyTarget})
-        }).then(res=>{
+        }).then(async res=>{
           if(!res.ok){
-            alert('No se pudo enviar el mensaje');
+            const msg = await extractSendError(res);
+            alert(msg);
             lastSentMessage = '';
             lastSentTimestamp = 0;
             stopSending();
@@ -1419,6 +1447,8 @@
           stopSending();
         }).catch(err=>{
           console.error('Error enviando mensaje', err);
+          const msg = (err && err.message) ? err.message : 'No se pudo enviar el mensaje';
+          alert(msg);
           lastSentMessage = '';
           lastSentTimestamp = 0;
           stopSending();
