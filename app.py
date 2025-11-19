@@ -70,8 +70,10 @@ def create_app():
     app.register_blueprint(tablero_bp)
     app.register_blueprint(export_bp)
 
-    # Inicializa BD solo si se pide explícitamente y dentro del app_context
-    if os.getenv("INIT_DB_ON_START", "0") == "1":
+    # Inicializa BD por defecto para evitar errores en entornos nuevos.
+    # Puede deshabilitarse con INIT_DB_ON_START=0 si se prefiere controlar
+    # la migración manualmente.
+    if os.getenv("INIT_DB_ON_START", "1") != "0":
         with app.app_context():
             init_db()
 
