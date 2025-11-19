@@ -72,6 +72,8 @@ def _load_chat_state_definitions():
     return sanitized
 
 class Config:
+    # Las sesiones deben expirar al cerrar el navegador (no persistentes).
+    SESSION_PERMANENT = False
     SECRET_KEY = os.getenv('SECRET_KEY')
     META_TOKEN = os.getenv('META_TOKEN')
     PHONE_NUMBER_ID = os.getenv('PHONE_NUMBER_ID')
