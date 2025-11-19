@@ -90,6 +90,10 @@ class Config:
     DB_USER     = os.getenv('DB_USER')
     DB_PASSWORD = os.getenv('DB_PASSWORD')
     DB_NAME     = os.getenv('DB_NAME')
+    DEFAULT_ADMIN_PASSWORD_HASH = os.getenv(
+        'DEFAULT_ADMIN_PASSWORD_HASH',
+        'scrypt:32768:8:1$JAUhBgIzT6IIoM5Y$6c5c9870fb039e600a045345fbe67029001173247f3143ef19b94cddd919996a7a82742083aeeb6927591fa2a0d0eb6bb3c4e3501a1964d53f39157d31f81bd4',
+    )
 
     BASEDIR    = os.path.dirname(os.path.abspath(__file__))
     _DEFAULT_MEDIA_ROOT = os.path.join(BASEDIR, "static", "uploads")
