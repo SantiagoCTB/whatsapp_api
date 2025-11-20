@@ -169,6 +169,8 @@ def _get_step_from_options(opciones_json, option_id):
             for b in data:
                 if b.get('reply', {}).get('id') == option_id:
                     nxt = b.get('step') or b.get('next_step')
+                    if nxt is None or str(nxt).strip() == '':
+                        return (option_id or '').strip().lower() or None
                     return (nxt or '').strip().lower() or None
         sections = data
     elif isinstance(data, dict):
@@ -179,8 +181,15 @@ def _get_step_from_options(opciones_json, option_id):
         for row in sec.get('rows', []):
             if row.get('id') == option_id:
                 nxt = row.get('step') or row.get('next_step')
+                if nxt is None or str(nxt).strip() == '':
+                    return (option_id or '').strip().lower() or None
                 return (nxt or '').strip().lower() or None
     return None
+
+
+def _canonicalize_step_name(value: str) -> str:
+    value = _normalize_step_name(value)
+    return ''.join(ch for ch in value if ch.isalnum())
 
 
 def handle_option_reply(numero, option_id):
@@ -255,7 +264,8 @@ def handle_option_reply(numero, option_id):
                 return row
         return matches[0]
 
-    rule_row = _select_rule(_fetch_rules(current_step))
+    current_step_rules = _fetch_rules(current_step)
+    rule_row = _select_rule(current_step_rules)
     if not rule_row:
         rule_row = _select_rule(_fetch_rules())
 
@@ -266,6 +276,12 @@ def handle_option_reply(numero, option_id):
         set_user_step(numero, effective_step)
         dispatch_rule(numero, rule, step=effective_step, selected_option_id=option_id)
         return True
+
+    for row in current_step_rules:
+        matched_step = _match_selected_step(row[3] or '', option_id, row[6] or '')
+        if matched_step:
+            advance_steps(numero, matched_step)
+            return True
 
     conn = get_connection(); c = conn.cursor()
     c.execute("SELECT opciones FROM reglas WHERE step=%s", (current_step,))
