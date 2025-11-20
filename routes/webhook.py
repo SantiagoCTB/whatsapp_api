@@ -192,63 +192,6 @@ def _canonicalize_step_name(value: str) -> str:
     return ''.join(ch for ch in value if ch.isalnum())
 
 
-def _resolve_next_step(next_step: str, selected_option_id: str, opciones: str):
-    """Devuelve el siguiente paso teniendo en cuenta una selección interactiva."""
-
-    if not selected_option_id:
-        return next_step
-
-    selected_norm = _normalize_step_name(selected_option_id)
-    if not selected_norm:
-        return next_step
-
-    candidate_steps = [
-        _normalize_step_name(step)
-        for step in (next_step or '').split(',')
-        if step and step.strip()
-    ]
-    canonical_map = {
-        _canonicalize_step_name(step): step for step in candidate_steps
-    }
-    selected_canonical = _canonicalize_step_name(selected_norm)
-    if selected_norm in candidate_steps:
-        return selected_norm
-    if selected_canonical in canonical_map:
-        return canonical_map[selected_canonical]
-
-    mapped_step = _get_step_from_options(opciones, selected_option_id)
-    if mapped_step:
-        return mapped_step
-
-    return next_step
-
-
-def _match_selected_step(next_step: str, selected_option_id: str, opciones: str):
-    """Retorna el paso asociado a la opción seleccionada si existe coincidencia."""
-
-    if not selected_option_id:
-        return None
-
-    selected_norm = _normalize_step_name(selected_option_id)
-    selected_canonical = _canonicalize_step_name(selected_option_id)
-
-    resolved = _resolve_next_step(next_step, selected_option_id, opciones)
-    if not resolved:
-        return None
-
-    resolved_steps = [
-        _normalize_step_name(step)
-        for step in (resolved or '').split(',')
-        if step and step.strip()
-    ] or [_normalize_step_name(resolved)]
-
-    for step in resolved_steps:
-        if step == selected_norm or _canonicalize_step_name(step) == selected_canonical:
-            return step
-
-    return None
-
-
 def handle_option_reply(numero, option_id):
     if not option_id:
         return False
@@ -349,6 +292,31 @@ def handle_option_reply(numero, option_id):
             advance_steps(numero, nxt)
             return True
     return False
+
+
+def _resolve_next_step(next_step: str, selected_option_id: str, opciones: str):
+    """Devuelve el siguiente paso teniendo en cuenta una selección interactiva."""
+
+    if not selected_option_id:
+        return next_step
+
+    selected_norm = _normalize_step_name(selected_option_id)
+    if not selected_norm:
+        return next_step
+
+    candidate_steps = [
+        _normalize_step_name(step)
+        for step in (next_step or '').split(',')
+        if step and step.strip()
+    ]
+    if selected_norm in candidate_steps:
+        return selected_norm
+
+    mapped_step = _get_step_from_options(opciones, selected_option_id)
+    if mapped_step:
+        return mapped_step
+
+    return next_step
 
 
 def dispatch_rule(numero, regla, step=None, visited=None, selected_option_id=None):
