@@ -264,7 +264,7 @@ def handle_option_reply(numero, option_id):
         rule = rule_row[1:]
         effective_step = rule_step or current_step
         set_user_step(numero, effective_step)
-        dispatch_rule(numero, rule, step=effective_step)
+        dispatch_rule(numero, rule, step=effective_step, selected_option_id=option_id)
         return True
 
     conn = get_connection(); c = conn.cursor()
@@ -278,11 +278,36 @@ def handle_option_reply(numero, option_id):
     return False
 
 
-def dispatch_rule(numero, regla, step=None, visited=None):
+def _resolve_next_step(next_step: str, selected_option_id: str, opciones: str):
+    """Devuelve el siguiente paso teniendo en cuenta una selección interactiva."""
+
+    if not selected_option_id:
+        return next_step
+
+    selected_norm = _normalize_step_name(selected_option_id)
+    if not selected_norm:
+        return next_step
+
+    candidate_steps = [
+        _normalize_step_name(step)
+        for step in (next_step or '').split(',')
+        if step and step.strip()
+    ]
+    if selected_norm in candidate_steps:
+        return selected_norm
+
+    mapped_step = _get_step_from_options(opciones, selected_option_id)
+    if mapped_step:
+        return mapped_step
+
+    return next_step
+
+
+def dispatch_rule(numero, regla, step=None, visited=None, selected_option_id=None):
     """Envía la respuesta definida en una regla y asigna roles si aplica."""
     if visited is None:
         visited = set()
-    regla_id, resp, next_step, tipo_resp, media_urls, opts, rol_kw, _ = regla
+    regla_id, resp, next_step_raw, tipo_resp, media_urls, opts, rol_kw, _ = regla
     current_step = step or get_current_step(numero)
     current_step_norm = _normalize_step_name(current_step)
     if current_step_norm:
@@ -326,6 +351,7 @@ def dispatch_rule(numero, regla, step=None, visited=None):
             )
             conn.commit()
         conn.close()
+    next_step = _resolve_next_step(next_step_raw, selected_option_id, opts)
     advance_steps(numero, next_step, visited=visited)
 
 
@@ -900,13 +926,14 @@ def webhook():
                     option_id = opt.get('id') or ''
                     text = (opt.get('title') or '').strip()
                     step = get_current_step(from_number)
+                    message_step = option_id or step
                     guardar_mensaje(
                         from_number,
                         text,
                         'cliente',
                         wa_id=wa_id,
                         reply_to_wa_id=reply_to_id,
-                        step=step,
+                        step=message_step,
                     )
                     update_chat_state(from_number, step, 'sin_respuesta')
                     start_typing_feedback(from_number, wa_id)
