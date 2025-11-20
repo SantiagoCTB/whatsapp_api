@@ -192,6 +192,37 @@ def _canonicalize_step_name(value: str) -> str:
     return ''.join(ch for ch in value if ch.isalnum())
 
 
+def _match_selected_step(next_step: str, option_id: str, opciones: str):
+    """Devuelve el paso asociado a una opción seleccionada.
+
+    Solo devuelve un valor cuando la opción coincide con alguno de los pasos
+    listados en ``next_step`` o con un mapeo explícito dentro de ``opciones``.
+    Si no hay coincidencia, retorna ``None`` para evitar avanzar erróneamente.
+    """
+
+    if not option_id or not next_step:
+        return None
+
+    selected_norm = _normalize_step_name(option_id)
+    if not selected_norm:
+        return None
+
+    candidate_steps = [
+        _normalize_step_name(step)
+        for step in (next_step or '').split(',')
+        if step and step.strip()
+    ]
+
+    if selected_norm in candidate_steps:
+        return selected_norm
+
+    mapped = _get_step_from_options(opciones, option_id)
+    if mapped:
+        return _normalize_step_name(mapped)
+
+    return None
+
+
 def handle_option_reply(numero, option_id):
     if not option_id:
         return False
