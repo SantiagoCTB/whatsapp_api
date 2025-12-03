@@ -679,6 +679,7 @@ def get_chat_list():
     if 'numeros' not in locals():
         numeros = [row[0] for row in c.fetchall()]
 
+    chats = []
     for numero in numeros:
         # Alias
         c.execute("SELECT nombre FROM alias WHERE numero = %s", (numero,))
