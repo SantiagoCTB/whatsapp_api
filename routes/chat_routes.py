@@ -333,18 +333,31 @@ def get_chat(numero):
 
     conn = get_connection()
     c    = conn.cursor()
-    rol  = session.get('rol')
-    role_id = None
-    if rol != 'admin':
-        c.execute("SELECT id FROM roles WHERE keyword=%s", (rol,))
-        row = c.fetchone()
-        role_id = row[0] if row else None
+    roles = session.get('roles') or []
+    if isinstance(roles, str):
+        roles = [roles]
+
+    is_admin = 'admin' in roles
+    role_ids = []
+
+    if not is_admin and roles:
+        placeholders = ','.join(['%s'] * len(roles))
+        c.execute(
+            f"SELECT id FROM roles WHERE keyword IN ({placeholders})",
+            tuple(roles),
+        )
+        role_ids = [row[0] for row in c.fetchall()]
 
     # Verificar que el usuario tenga acceso al número
-    if rol != 'admin':
+    if not is_admin:
+        if not role_ids:
+            conn.close()
+            return jsonify({'error': 'No autorizado'}), 403
+
+        placeholders = ','.join(['%s'] * len(role_ids))
         c.execute(
-            "SELECT 1 FROM chat_roles WHERE numero = %s AND role_id = %s",
-            (numero, role_id)
+            f"SELECT 1 FROM chat_roles WHERE numero = %s AND role_id IN ({placeholders})",
+            (numero, *role_ids),
         )
         if not c.fetchone():
             conn.close()
