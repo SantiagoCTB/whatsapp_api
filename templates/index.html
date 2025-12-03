@@ -374,7 +374,6 @@
 
       injectChatStateStyles(chatStateDefinitions);
       rebuildChatStateOptions();
-        const userRole   = "{{ rol }}";
         const lastChatTimestamps = {};
         const predefinedRoleIcons = { ventas: '💼', soporte: '🛠', marketing: '📣' };
 
@@ -1110,10 +1109,6 @@
             todosChats = data;
             chatListEl.innerHTML='';
             data.forEach(c => {
-              if (userRole !== 'admin') {
-                const roles = c.roles_kw || [];
-                if (!roles.includes(userRole)) return;
-              }
               const serverTime = c.last_timestamp ? new Date(c.last_timestamp).getTime() : null;
               const prevTime = lastChatTimestamps[c.numero];
               if (serverTime && prevTime && serverTime > prevTime && c.numero !== currentChat) {
