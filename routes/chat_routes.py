@@ -643,29 +643,44 @@ def get_chat_list():
 
     conn = get_connection()
     c    = conn.cursor()
-    rol  = session.get('rol')
-    role_id = None
-    if rol != 'admin':
-        c.execute("SELECT id FROM roles WHERE keyword=%s", (rol,))
-        row = c.fetchone()
-        role_id = row[0] if row else None
+
+    roles = session.get('roles') or []
+    if isinstance(roles, str):
+        roles = [roles]
+
+    is_admin = 'admin' in roles
+    role_ids = []
+
+    if not is_admin and roles:
+        placeholders = ','.join(['%s'] * len(roles))
+        c.execute(
+            f"SELECT id FROM roles WHERE keyword IN ({placeholders})",
+            tuple(roles),
+        )
+        role_ids = [row[0] for row in c.fetchall()]
 
     # Únicos números filtrados por rol
-    if rol == 'admin':
+    if is_admin:
         c.execute("SELECT DISTINCT numero FROM mensajes")
-    else:
+    elif role_ids:
+        placeholders = ','.join(['%s'] * len(role_ids))
         c.execute(
-            """
+            f"""
             SELECT DISTINCT m.numero
             FROM mensajes m
             INNER JOIN chat_roles cr ON m.numero = cr.numero
-            WHERE cr.role_id = %s
+            WHERE cr.role_id IN ({placeholders})
             """,
-            (role_id,)
+            tuple(role_ids),
         )
-    numeros = [row[0] for row in c.fetchall()]
+    else:
+        numeros = []
+
+    if 'numeros' not in locals():
+        numeros = [row[0] for row in c.fetchall()]
 
     chats = []
+
     for numero in numeros:
         # Alias
         c.execute("SELECT nombre FROM alias WHERE numero = %s", (numero,))
