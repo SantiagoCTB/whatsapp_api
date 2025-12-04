@@ -615,19 +615,36 @@ def send_message():
 
     conn = get_connection()
     c    = conn.cursor()
-    rol  = session.get('rol')
-    role_id = None
-    if rol != 'admin':
-        c.execute("SELECT id FROM roles WHERE keyword=%s", (rol,))
-        row = c.fetchone()
-        role_id = row[0] if row else None
-        c.execute(
-            "SELECT 1 FROM chat_roles WHERE numero = %s AND role_id = %s",
-            (numero, role_id)
-        )
-        autorizado = c.fetchone()
-    else:
+
+    roles = session.get('roles') or []
+    if isinstance(roles, str):
+        roles = [roles]
+
+    # Compatibilidad con código antiguo que aún lee ``session['rol']``
+    legacy_role = session.get('rol')
+    if legacy_role and legacy_role not in roles:
+        roles.append(legacy_role)
+
+    is_admin = 'admin' in roles
+    autorizado = False
+
+    if is_admin:
         autorizado = True
+    elif roles:
+        placeholders = ','.join(['%s'] * len(roles))
+        c.execute(
+            f"SELECT id FROM roles WHERE keyword IN ({placeholders})",
+            tuple(roles),
+        )
+        role_ids = [row[0] for row in c.fetchall() if row and row[0] is not None]
+
+        if role_ids:
+            placeholders = ','.join(['%s'] * len(role_ids))
+            c.execute(
+                f"SELECT 1 FROM chat_roles WHERE numero = %s AND role_id IN ({placeholders}) LIMIT 1",
+                (numero, *role_ids),
+            )
+            autorizado = c.fetchone()
     conn.close()
     if not autorizado:
         return jsonify({'error': 'No autorizado'}), 403
