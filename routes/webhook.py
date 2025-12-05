@@ -392,6 +392,12 @@ def dispatch_rule(numero, regla, step=None, visited=None, selected_option_id=Non
         c.execute("SELECT id FROM roles WHERE keyword=%s", (rol_kw,))
         role = c.fetchone()
         if role:
+            # Mantener únicamente el rol definido por la regla para evitar
+            # asignaciones accidentales múltiples por coincidencia de palabras.
+            c.execute(
+                "DELETE FROM chat_roles WHERE numero = %s AND role_id != %s",
+                (numero, role[0]),
+            )
             c.execute(
                 "INSERT IGNORE INTO chat_roles (numero, role_id) VALUES (%s, %s)",
                 (numero, role[0])
