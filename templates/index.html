@@ -462,6 +462,69 @@
           return false;
         }
 
+        function createFlowSummarySection(summaryItems) {
+          if (!Array.isArray(summaryItems) || !summaryItems.length) {
+            return null;
+          }
+
+          const container = document.createElement('div');
+          container.className = 'flow-summary-section';
+          const list = document.createElement('ul');
+          list.className = 'flow-summary';
+          container.appendChild(list);
+
+          const hasMore = summaryItems.length > FLOW_SUMMARY_MAX_ITEMS;
+          let expanded = false;
+
+          const renderItems = () => {
+            list.innerHTML = '';
+            const items = expanded ? summaryItems : summaryItems.slice(0, FLOW_SUMMARY_MAX_ITEMS);
+            items.forEach(item => {
+              if (!item) return;
+              const li = document.createElement('li');
+              li.className = 'flow-summary-item';
+              const key = document.createElement('span');
+              key.className = 'flow-summary-key';
+              key.textContent = item.label;
+              const value = document.createElement('span');
+              value.className = 'flow-summary-value';
+              value.textContent = item.value;
+              li.appendChild(key);
+              li.appendChild(value);
+              list.appendChild(li);
+            });
+          };
+
+          renderItems();
+
+          if (hasMore) {
+            const remaining = summaryItems.length - FLOW_SUMMARY_MAX_ITEMS;
+            const toggle = document.createElement('button');
+            toggle.type = 'button';
+            toggle.className = 'flow-summary-more';
+            toggle.setAttribute('aria-expanded', 'false');
+
+            const updateToggleLabel = () => {
+              toggle.textContent = expanded
+                ? 'Mostrar menos'
+                : `+ ${remaining} dato${remaining !== 1 ? 's' : ''} adicional${remaining !== 1 ? 'es' : ''}`;
+            };
+
+            updateToggleLabel();
+
+            toggle.addEventListener('click', () => {
+              expanded = !expanded;
+              renderItems();
+              toggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+              updateToggleLabel();
+            });
+
+            container.appendChild(toggle);
+          }
+
+          return container;
+        }
+
         function normalizeFlowNode(value) {
           if (Array.isArray(value)) {
             const normalized = [];
@@ -660,29 +723,10 @@
             if (parsed && typeof parsed === 'object') {
               const summaryItems = flattenFlowData(parsed);
               if (summaryItems.length) {
-                const list = document.createElement('ul');
-                list.className = 'flow-summary';
-                summaryItems.slice(0, FLOW_SUMMARY_MAX_ITEMS).forEach(item => {
-                  const li = document.createElement('li');
-                  li.className = 'flow-summary-item';
-                  const key = document.createElement('span');
-                  key.className = 'flow-summary-key';
-                  key.textContent = item.label;
-                  const value = document.createElement('span');
-                  value.className = 'flow-summary-value';
-                  value.textContent = item.value;
-                  li.appendChild(key);
-                  li.appendChild(value);
-                  list.appendChild(li);
-                });
-                card.appendChild(list);
-                appendedContent = true;
-                if (summaryItems.length > FLOW_SUMMARY_MAX_ITEMS) {
-                  const remaining = summaryItems.length - FLOW_SUMMARY_MAX_ITEMS;
-                  const more = document.createElement('div');
-                  more.className = 'flow-summary-more';
-                  more.textContent = `+ ${remaining} dato${remaining !== 1 ? 's' : ''} adicional${remaining !== 1 ? 'es' : ''}`;
-                  card.appendChild(more);
+                const summarySection = createFlowSummarySection(summaryItems);
+                if (summarySection) {
+                  card.appendChild(summarySection);
+                  appendedContent = true;
                 }
               } else {
                 const isEmptyObject = parsed && !Array.isArray(parsed) && Object.keys(parsed).length === 0;
@@ -782,31 +826,11 @@
                 ? segment.summary.filter(item => item && typeof item.label === 'string' && !item.label.toLowerCase().includes('flow_token'))
                 : [];
               if (summary.length) {
-                const list = document.createElement('ul');
-                list.className = 'flow-summary';
-                summary.slice(0, FLOW_SUMMARY_MAX_ITEMS).forEach(item => {
-                  if (!item) return;
-                  const li = document.createElement('li');
-                  li.className = 'flow-summary-item';
-                  const key = document.createElement('span');
-                  key.className = 'flow-summary-key';
-                  key.textContent = item.label;
-                  const value = document.createElement('span');
-                  value.className = 'flow-summary-value';
-                  value.textContent = item.value;
-                  li.appendChild(key);
-                  li.appendChild(value);
-                  list.appendChild(li);
-                });
-                card.appendChild(list);
-                if (summary.length > FLOW_SUMMARY_MAX_ITEMS) {
-                  const remaining = summary.length - FLOW_SUMMARY_MAX_ITEMS;
-                  const more = document.createElement('div');
-                  more.className = 'flow-summary-more';
-                  more.textContent = `+ ${remaining} dato${remaining !== 1 ? 's' : ''} adicional${remaining !== 1 ? 'es' : ''}`;
-                  card.appendChild(more);
+                const summarySection = createFlowSummarySection(summary);
+                if (summarySection) {
+                  card.appendChild(summarySection);
+                  hasContent = true;
                 }
-                hasContent = true;
               } else if (segment.display) {
                 const trimmed = segment.display.trim();
                 if (!trimmed || trimmed === '{}' || trimmed === '[]') {
