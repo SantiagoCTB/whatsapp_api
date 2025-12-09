@@ -23,8 +23,14 @@ _TRANSCRIPTION_ENABLED = True
 def _get_model() -> Model:
     global _MODEL
     if _MODEL is None:
-        # Cargar modelo por defecto en español
-        _MODEL = Model(lang="es")
+        # Cargar modelo en español. Si el usuario provee la ruta exacta al
+        # modelo vía VOSK_MODEL_PATH, respetamos ese valor para evitar
+        # problemas cuando el entorno no puede descargar modelos
+        # automáticamente (por ejemplo, contenedores sin internet).
+        if Config.VOSK_MODEL_PATH:
+            _MODEL = Model(model_path=Config.VOSK_MODEL_PATH)
+        else:
+            _MODEL = Model(lang="es")
     return _MODEL
 
 
@@ -90,6 +96,9 @@ def transcribir(audio_bytes: bytes) -> str:
         res = json.loads(rec.FinalResult())
         texto.append(res.get("text", ""))
         return " ".join(t for t in texto if t).strip()
+    except Exception:
+        logger.exception("Error transcribiendo audio")
+        return ""
     finally:
         wf.close()
         os.remove(wav_path)
@@ -110,8 +119,7 @@ def _record_transcription_time(elapsed: float) -> None:
     )
     if average > Config.TRANSCRIPTION_MAX_AVG_TIME_SEC:
         logger.warning(
-            "Average transcription time %.3f s exceeds threshold %.3f s; disabling transcription",
+            "Average transcription time %.3f s exceeds threshold %.3f s",
             average,
             Config.TRANSCRIPTION_MAX_AVG_TIME_SEC,
         )
-        _TRANSCRIPTION_ENABLED = False
