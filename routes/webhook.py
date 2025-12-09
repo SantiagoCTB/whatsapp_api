@@ -819,6 +819,7 @@ def webhook():
                         logging.info("Audio encolado para transcripción: %s", media_id)
                     else:
                         logging.warning("No se pudo encolar audio %s para transcripción", media_id)
+                    handle_text_message(from_number, "", save=False)
                     summary['processed'] += 1
                     continue
 
@@ -857,6 +858,7 @@ def webhook():
 
                     # 4) Registro interno
                     logging.info("Video recibido: %s", media_id)
+                    handle_text_message(from_number, "", save=False)
                     summary['processed'] += 1
                     continue
 
@@ -878,6 +880,7 @@ def webhook():
                     update_chat_state(from_number, step, 'sin_respuesta')
                     start_typing_feedback(from_number, wa_id)
                     logging.info("Imagen recibida: %s", media_id)
+                    handle_text_message(from_number, "", save=False)
                     summary['processed'] += 1
                     continue
 
