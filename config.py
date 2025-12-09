@@ -86,6 +86,7 @@ class Config:
     INITIAL_STEP = os.getenv('INITIAL_STEP', 'menu_principal')
     MAX_TRANSCRIPTION_DURATION_MS = int(os.getenv('MAX_TRANSCRIPTION_DURATION_MS', 60000))
     TRANSCRIPTION_MAX_AVG_TIME_SEC = float(os.getenv('TRANSCRIPTION_MAX_AVG_TIME_SEC', 10))
+    VOSK_MODEL_PATH = os.getenv('VOSK_MODEL_PATH')
 
     DB_HOST     = os.getenv('DB_HOST')
     DB_PORT     = int(os.getenv('DB_PORT', 3306))
@@ -98,10 +99,12 @@ class Config:
     )
 
     BASEDIR    = os.path.dirname(os.path.abspath(__file__))
+    # La app siempre guarda los medios en ``static/uploads`` para que sea
+    # sencillo montarlo como volumen persistente en Docker. No permitimos
+    # sobrescribir esta ruta vía variable de entorno para evitar que los
+    # archivos desaparezcan al recrear el contenedor.
     _DEFAULT_MEDIA_ROOT = os.path.join(BASEDIR, "static", "uploads")
-    MEDIA_ROOT = os.path.abspath(
-        os.getenv("MEDIA_ROOT", _DEFAULT_MEDIA_ROOT)
-    )
+    MEDIA_ROOT = os.path.abspath(_DEFAULT_MEDIA_ROOT)
     CHAT_STATE_DEFINITIONS = _load_chat_state_definitions()
     ENABLE_TYPING_INDICATOR = os.getenv('ENABLE_TYPING_INDICATOR', 'false').strip().lower() in {
         '1',

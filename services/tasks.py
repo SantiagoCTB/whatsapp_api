@@ -32,4 +32,8 @@ def process_audio(
             )
     except Exception as exc:  # noqa: BLE001
         logging.exception("Error procesando audio: %s", exc)
-        enviar_mensaje(from_number, "Hubo un error al transcribir tu audio", tipo='bot')
+        # Registramos el error pero no enviamos un mensaje adicional al usuario
+        # para evitar respuestas molestas cuando la transcripción falle por
+        # cuestiones de entorno (ffmpeg o modelo ausente). El audio queda
+        # guardado en la conversación y se puede reintentar manualmente si es
+        # necesario.

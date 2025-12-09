@@ -99,10 +99,22 @@ dotenv para manejar tokens y credenciales
 
 ThreadPoolExecutor para procesar transcripciones de audio en segundo plano (sin necesidad de Redis)
 ffmpeg (binario del sistema) para normalizar los audios antes de la transcripción (instalar manualmente)
+Vosk para transcribir audios en español (puedes apuntar al modelo descargado con `VOSK_MODEL_PATH`)
 
 ## Requisitos
 
 Para ejecutar la aplicación necesitas tener instalado **ffmpeg** en el sistema.
+
+Además, Vosk requiere un modelo de lenguaje en español. Puedes descargar uno ligero
+desde https://alphacephei.com/vosk/models (por ejemplo, `vosk-model-small-es-0.42`) y
+descomprimirlo en el host o volumen persistente. Luego exporta la ruta mediante:
+
+```bash
+export VOSK_MODEL_PATH=/ruta/al/vosk-model-small-es-0.42
+```
+
+Si no defines `VOSK_MODEL_PATH`, la librería intentará cargar el modelo por defecto en
+español, lo que puede fallar en entornos sin conexión a internet.
 
 ### Linux (Ubuntu/Debian)
 
@@ -165,8 +177,16 @@ La aplicación ejecuta `init_db()` por defecto durante el arranque para crear la
 
 ## Almacenamiento de medios subidos por el usuario
 
-Los archivos generados por los usuarios se guardan en la ruta indicada por la variable de entorno `MEDIA_ROOT`. Esta ruta debe apuntar a un volumen externo o a un directorio persistente fuera del repositorio. Si no se define, la aplicación usará `static/uploads` dentro del proyecto.
+Todos los archivos de entrada y salida (imágenes, audios, videos y documentos) se guardan siempre en `static/uploads` dentro del proyecto. La ruta se crea automáticamente al arrancar Flask y no puede sobrescribirse mediante variables de entorno para evitar que los ficheros desaparezcan al recrear el contenedor.
 
-La aplicación crea automáticamente el directorio configurado en `MEDIA_ROOT` durante el arranque. Para despliegues con Docker asigna dicho directorio a un volumen persistente. Por ejemplo, en `docker-compose.windows.yml` se incluye un volumen llamado `media_uploads` que se monta en `C:\app\static\uploads` para que los archivos sobrevivan a recreaciones del contenedor.
+Para que las cargas sobrevivan a los reinicios de Docker, monta `static/uploads` como volumen persistente. Un ejemplo mínimo para Linux sería:
 
-Estos archivos no deben versionarse en Git; durante los despliegues, mantén `MEDIA_ROOT` en un volumen persistente o en un almacenamiento externo para evitar su borrado accidental.
+```yaml
+services:
+  whatsapp_api:
+    build: .
+    volumes:
+      - ./static/uploads:/app/static/uploads
+```
+
+Los archivos no deben versionarse en Git; usa siempre un volumen o carpeta externa para evitar su borrado accidental.
