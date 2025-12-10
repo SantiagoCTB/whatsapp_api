@@ -18,7 +18,7 @@ from services.db import (
     get_chat_state,
     update_chat_state,
     delete_chat_state,
-    delete_chat as delete_chat_from_db,
+    hide_chat,
 )
 
 chat_bp = Blueprint('chat', __name__)
@@ -271,7 +271,10 @@ def index():
 
     # Lista de chats únicos filtrados por rol
     if rol == 'admin':
-        c.execute("SELECT DISTINCT numero FROM mensajes")
+        c.execute(
+            "SELECT DISTINCT numero FROM mensajes "
+            "WHERE numero NOT IN (SELECT numero FROM hidden_chats)"
+        )
     else:
         c.execute(
             """
@@ -279,6 +282,7 @@ def index():
             FROM mensajes m
             INNER JOIN chat_roles cr ON m.numero = cr.numero
             WHERE cr.role_id = %s
+              AND m.numero NOT IN (SELECT numero FROM hidden_chats)
             """,
             (role_id,)
         )
@@ -466,11 +470,15 @@ def respuestas():
               FROM mensajes m
               JOIN chat_roles cr ON m.numero = cr.numero
              WHERE cr.role_id = %s
+              AND m.numero NOT IN (SELECT numero FROM hidden_chats)
             """,
             (role_id,),
         )
     else:
-        c.execute("SELECT DISTINCT numero FROM mensajes")
+        c.execute(
+            "SELECT DISTINCT numero FROM mensajes "
+            "WHERE numero NOT IN (SELECT numero FROM hidden_chats)"
+        )
     numeros = [row[0] for row in c.fetchall()]
 
     if rol != 'admin' and not numeros and role_id is not None:
@@ -691,7 +699,10 @@ def get_chat_list():
 
     # Únicos números filtrados por rol
     if is_admin:
-        c.execute("SELECT DISTINCT numero FROM mensajes")
+        c.execute(
+            "SELECT DISTINCT numero FROM mensajes "
+            "WHERE numero NOT IN (SELECT numero FROM hidden_chats)"
+        )
     elif role_ids:
         placeholders = ','.join(['%s'] * len(role_ids))
         c.execute(
@@ -700,6 +711,7 @@ def get_chat_list():
             FROM mensajes m
             INNER JOIN chat_roles cr ON m.numero = cr.numero
             WHERE cr.role_id IN ({placeholders})
+              AND m.numero NOT IN (SELECT numero FROM hidden_chats)
             """,
             tuple(role_ids),
         )
@@ -824,7 +836,7 @@ def delete_chat():
     if not numero:
         return jsonify({"error": "Número requerido"}), 400
 
-    delete_chat_from_db(numero)
+    hide_chat(numero)
     clear_chat_runtime_state(numero)
 
     return jsonify({"status": "ok"}), 200

@@ -22,13 +22,13 @@ def client():
 def test_admin_can_delete_chat(client, monkeypatch):
     calls = {}
 
-    def fake_delete(numero):
-        calls['deleted'] = numero
+    def fake_hide(numero):
+        calls['hidden'] = numero
 
     def fake_clear(numero):
         calls['cleared'] = numero
 
-    monkeypatch.setattr(chat_routes, 'delete_chat_from_db', fake_delete)
+    monkeypatch.setattr(chat_routes, 'hide_chat', fake_hide)
     monkeypatch.setattr(chat_routes, 'clear_chat_runtime_state', fake_clear)
 
     with client.session_transaction() as sess:
@@ -39,11 +39,11 @@ def test_admin_can_delete_chat(client, monkeypatch):
 
     assert response.status_code == 200
     assert response.json == {'status': 'ok'}
-    assert calls == {'deleted': '5215550000', 'cleared': '5215550000'}
+    assert calls == {'hidden': '5215550000', 'cleared': '5215550000'}
 
 
 def test_delete_chat_requires_admin(client, monkeypatch):
-    monkeypatch.setattr(chat_routes, 'delete_chat_from_db', lambda numero: (_ for _ in ()).throw(RuntimeError('should not run')))
+    monkeypatch.setattr(chat_routes, 'hide_chat', lambda numero: (_ for _ in ()).throw(RuntimeError('should not run')))
 
     with client.session_transaction() as sess:
         sess['user'] = 'user'

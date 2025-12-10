@@ -307,6 +307,13 @@ def init_db():
     ) ENGINE=InnoDB;
     """)
 
+    # hidden_chats: números ocultos sólo para la vista web
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS hidden_chats (
+      numero VARCHAR(20) PRIMARY KEY
+    ) ENGINE=InnoDB;
+    """)
+
     # chat_roles: relaciona cada número de chat con uno o varios roles
     c.execute("""
     CREATE TABLE IF NOT EXISTS chat_roles (
@@ -394,6 +401,9 @@ def guardar_mensaje(
     (``link_url``, ``link_title``, ``link_body``, ``link_thumb``). También puede
     registrar el ``step`` del flujo y el ``regla_id`` que originó el mensaje.
     """
+    if tipo == 'cliente':
+        unhide_chat(numero)
+
     if tipo != 'referral':
         link_url = link_title = link_body = link_thumb = None
 
@@ -492,6 +502,35 @@ def update_chat_state(numero, step, estado=None):
     )
     conn.commit()
     conn.close()
+
+
+def hide_chat(numero):
+    """Marca un chat como oculto en la interfaz web sin borrar sus datos."""
+    conn = get_connection()
+    try:
+        c = conn.cursor()
+        c.execute(
+            """
+            INSERT INTO hidden_chats (numero)
+            VALUES (%s)
+            ON DUPLICATE KEY UPDATE numero = VALUES(numero)
+            """,
+            (numero,),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def unhide_chat(numero):
+    """Quita la marca de oculto para un chat."""
+    conn = get_connection()
+    try:
+        c = conn.cursor()
+        c.execute("DELETE FROM hidden_chats WHERE numero=%s", (numero,))
+        conn.commit()
+    finally:
+        conn.close()
 
 
 def delete_chat(numero):
