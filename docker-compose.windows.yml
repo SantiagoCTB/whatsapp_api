@@ -6,12 +6,10 @@
     env_file:
       - .env
     environment:
-      # Ruta interna del contenedor donde se guardan las imágenes
-      MEDIA_ROOT: /app/static/uploads
+      MEDIA_ROOT: C:\app\static\uploads
     ports:
       - "443:8000"
     volumes:
-      # Ruta en Windows  -> ruta dentro del contenedor
-      - "C:\\whatsapp_api\\media_uploads:/app/static/uploads"
+      - C:\whatsapp_api\static\uploads:C:\app\static\uploads
     restart: unless-stopped
     isolation: hyperv
