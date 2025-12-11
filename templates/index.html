@@ -227,6 +227,7 @@
       }
       const sendBtn = document.getElementById('sendBtn');
       const messageInput = document.getElementById('messageInput');
+      const inputArea = document.querySelector('.inputArea');
       const sidebar = document.querySelector('.sidebar');
       const menuToggle = document.getElementById('menuToggle');
       menuToggle.addEventListener('click', () => {
@@ -1587,6 +1588,31 @@
         inputEl.value=''; attachMenu.classList.remove('show');
         loadMessages(); fetchChatList();
       }
+
+      function extractImageFile(dataTransfer) {
+        if (!dataTransfer) return null;
+        if (dataTransfer.files && dataTransfer.files.length) {
+          const imgFile = Array.from(dataTransfer.files).find(f => f.type && f.type.startsWith('image/'));
+          if (imgFile) return imgFile;
+        }
+        if (dataTransfer.items && dataTransfer.items.length) {
+          const item = Array.from(dataTransfer.items).find(i => i.kind === 'file' && i.type && i.type.startsWith('image/'));
+          if (item) return item.getAsFile();
+        }
+        return null;
+      }
+
+      async function sendImageFileDirect(file) {
+        if (!file || !currentChat) return;
+        const form = new FormData();
+        form.append('image', file);
+        form.append('caption','');
+        form.append('numero', currentChat);
+        const res = await fetch('/send_image', { method:'POST', body: form });
+        if (!res.ok) return;
+        attachMenu.classList.remove('show');
+        loadMessages(); fetchChatList();
+      }
       async function sendRecordedAudio(file) {
         if (!currentChat) return;
         const form = new FormData();
@@ -1601,6 +1627,34 @@
       imgIn.onchange = () => sendFile(imgIn, 'send_image');
       audIn.onchange = () => sendFile(audIn, 'send_audio');
       vidIn.onchange = () => sendFile(vidIn, 'send_video');
+
+      messageInput.addEventListener('paste', async event => {
+        const imageFile = extractImageFile(event.clipboardData);
+        if (!imageFile) return;
+        event.preventDefault();
+        await sendImageFileDirect(imageFile);
+      });
+
+      if (inputArea) {
+        inputArea.addEventListener('dragover', event => {
+          event.preventDefault();
+          if (extractImageFile(event.dataTransfer)) {
+            inputArea.classList.add('drag-active');
+          }
+        });
+
+        inputArea.addEventListener('dragleave', () => {
+          inputArea.classList.remove('drag-active');
+        });
+
+        inputArea.addEventListener('drop', async event => {
+          event.preventDefault();
+          const imageFile = extractImageFile(event.dataTransfer);
+          inputArea.classList.remove('drag-active');
+          if (!imageFile) return;
+          await sendImageFileDirect(imageFile);
+        });
+      }
 
       // Filtrar chats
       document.getElementById('buscador').addEventListener('input', function(){
