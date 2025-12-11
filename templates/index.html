@@ -417,6 +417,7 @@
           return computeRoleAbbreviation(keyword) || keyword.charAt(0).toUpperCase();
         }
         let isSending = false;
+        let isBotoneraSending = false;
         let sendUnlockTimeout = null;
         let lastSentMessage = '';
         let lastSentTimestamp = 0;
@@ -1375,9 +1376,15 @@
               const btn = document.createElement('button');
               btn.textContent = b.nombre || i+1;
               btn.onclick = () => {
-                if (!currentChat) return;
+                if (!currentChat || isBotoneraSending) return;
+                isBotoneraSending = true;
+                btn.disabled = true;
                 const tipoRespuesta = b.tipo || 'texto';
                 const envios = [];
+                const replyTarget = replyTo;
+                replyTo = null;
+                replyPreviewEl.style.display='none';
+                replyPreviewEl.innerHTML='';
 
                 if (['image','video','audio','document'].includes(tipoRespuesta)) {
                   const urls = (b.media_urls && b.media_urls.length) ? b.media_urls : [null];
@@ -1390,7 +1397,7 @@
                         mensaje: index === 0 ? (b.mensaje || '') : '',
                         tipo_respuesta: tipoRespuesta,
                         opciones: url,
-                        reply_to_wa_id: replyTo
+                        reply_to_wa_id: replyTarget
                       })
                     }));
                   });
@@ -1403,7 +1410,7 @@
                       mensaje: b.mensaje || '',
                       tipo_respuesta: tipoRespuesta,
                       opciones: b.opciones,
-                      reply_to_wa_id: replyTo
+                      reply_to_wa_id: replyTarget
                     })
                   }));
                 }
@@ -1416,15 +1423,16 @@
                         throw new Error(msg);
                       }
                     }
-                    replyTo=null;
-                    replyPreviewEl.style.display='none';
-                    replyPreviewEl.innerHTML='';
                     loadMessages();
                     fetchChatList();
+                    isBotoneraSending = false;
+                    btn.disabled = false;
                   })
                   .catch(err => {
                     const msg = (err && err.message) ? err.message : 'No se pudo enviar el mensaje';
                     alert(msg);
+                    isBotoneraSending = false;
+                    btn.disabled = false;
                   });
               };
               botoneraEl.appendChild(btn);
