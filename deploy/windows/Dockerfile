@@ -1,4 +1,4 @@
-﻿# escape=`
+# escape=`
 FROM python:3.12-windowsservercore-ltsc2025
 
 SHELL ["cmd", "/S", "/C"]
@@ -11,16 +11,17 @@ RUN python -m pip install --upgrade pip `
  && pip install -r requirements.txt `
  && pip install uvicorn[standard] a2wsgi asgiref
 
-# Código + certificados
+# 2) Código + certificados
 COPY . .
 
-# Construye el fullchain (cert + cadena) de forma segura en Windows
+# 3) Construir el fullchain (cert + cadena) de forma segura en Windows
 RUN powershell -Command "Get-Content certs\\agestion-net.crt, certs\\cabundle.crt | Set-Content -Encoding ascii certs\\fullchain.crt"
 
-# TLS directo en 8000
+# 4) TLS directo en 8000
 ENV PORT=8000
 EXPOSE 8000
 
 # IMPORTANTE: usar rutas con "/" para Python en Windows
-# Si tu .key tiene contraseña, agrega: --ssl-keyfile-password "%SSL_KEY_PASSWORD%"
-CMD uvicorn asgi:asgi_app --host 0.0.0.0 --port %PORT%  --ssl-keyfile certs/agestion-net.key --ssl-certfile certs/fullchain.crt --ssl-keyfile-password "%SSL_KEY_PASSWORD%"
+# Usa el nombre correcto de tu app ASGI
+CMD uvicorn asgi:asgi_app --host 0.0.0.0 --port %PORT% --ssl-keyfile certs/agestion-net.key --ssl-certfile certs/fullchain.crt --ssl-keyfile-password "%SSL_KEY_PASSWORD%"
+

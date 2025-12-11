@@ -1,0 +1,16 @@
+﻿services:
+  web:
+    build:
+      context: ../..
+      dockerfile: deploy/windows/Dockerfile.win
+       env_file:
+      - ../../.env
+    environment:
+      MEDIA_ROOT: 'C:\app\static\uploads'
+    ports:
+      - "443:8000"
+    volumes:
+      # AJUSTA esta ruta a donde tengas clonado el repo en Windows
+      - 'C:\whatsapp_api\static\uploads:C:\app\static\uploads'
+    restart: unless-stopped
+    isolation: hyperv
