@@ -409,6 +409,10 @@
       padding:12px; background:var(--text-light);
       border-top:1px solid #ddd; position: sticky; bottom: 0;
     }
+    .inputArea.drag-active {
+      border: 2px dashed var(--accent);
+      background: linear-gradient(135deg, rgba(0, 255, 170, 0.08), rgba(0, 191, 255, 0.08));
+    }
     #attachBtn {
       width:40px; height:40px; border:none; border-radius:50%;
       background:var(--accent-neon); color:var(--text-light);
