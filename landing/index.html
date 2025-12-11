@@ -2,11 +2,269 @@
 <html lang="es">
 <head>
   <meta charset="utf-8">
-  <title>Whapco – Automatización con WhatsApp</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Whapco | WhatsApp multiagente y multicanal</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #0b1021;
+      --card: rgba(255, 255, 255, 0.04);
+      --text: #f7f8fb;
+      --muted: #cbd2e7;
+      --accent: #25d366;
+      --border: rgba(255, 255, 255, 0.08);
+      --shadow: 0 25px 80px rgba(0, 0, 0, 0.35);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      background: radial-gradient(circle at 20% 20%, rgba(37, 211, 102, 0.08), transparent 35%),
+                  radial-gradient(circle at 80% 10%, rgba(86, 107, 255, 0.12), transparent 32%),
+                  var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 24px clamp(16px, 4vw, 48px);
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    .logo-mark {
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, #25d366, #5df8c2);
+      display: grid;
+      place-items: center;
+      color: #0b1021;
+      font-weight: 800;
+      box-shadow: 0 10px 40px rgba(37, 211, 102, 0.35);
+    }
+
+    nav {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .btn {
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--text);
+      padding: 10px 18px;
+      border-radius: 10px;
+      font-weight: 600;
+      text-decoration: none;
+      transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .btn:hover { border-color: rgba(255,255,255,0.35); transform: translateY(-1px); }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #25d366, #20be5a);
+      color: #0b1021;
+      border: none;
+      box-shadow: 0 12px 40px rgba(37, 211, 102, 0.35);
+    }
+
+    main { padding: 0 clamp(16px, 4vw, 48px) 64px; }
+
+    .hero {
+      max-width: 1100px;
+      margin: 0 auto 64px;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 28px;
+      align-items: center;
+    }
+
+    .hero h1 {
+      font-size: clamp(32px, 4vw, 48px);
+      margin: 0 0 12px;
+      letter-spacing: -0.02em;
+    }
+
+    .hero p { margin: 0 0 20px; color: var(--muted); line-height: 1.6; }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: rgba(37, 211, 102, 0.12);
+      color: #d2f7e3;
+      font-weight: 600;
+      font-size: 0.95rem;
+    }
+
+    .card-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 18px;
+      max-width: 1100px;
+      margin: 0 auto 48px;
+    }
+
+    .card {
+      border: 1px solid var(--border);
+      background: var(--card);
+      padding: 18px;
+      border-radius: 16px;
+      box-shadow: var(--shadow);
+      min-height: 160px;
+    }
+
+    .card strong { display: block; margin-bottom: 8px; font-size: 1.05rem; }
+    .card p { margin: 0; color: var(--muted); line-height: 1.5; }
+
+    .steps {
+      max-width: 1100px;
+      margin: 0 auto;
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 20px;
+      background: rgba(255, 255, 255, 0.03);
+      box-shadow: var(--shadow);
+      display: grid;
+      gap: 12px;
+    }
+
+    .step {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 12px;
+      align-items: start;
+      padding: 14px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .step-number {
+      width: 36px;
+      height: 36px;
+      border-radius: 12px;
+      background: rgba(37, 211, 102, 0.15);
+      display: grid;
+      place-items: center;
+      font-weight: 700;
+      color: #d2f7e3;
+    }
+
+    footer {
+      max-width: 1100px;
+      margin: 48px auto 0;
+      padding: 24px clamp(16px, 4vw, 48px) 48px;
+      color: var(--muted);
+      text-align: center;
+      font-size: 0.95rem;
+    }
+  </style>
 </head>
 <body>
-  <h1>Whapco</h1>
-  <p>Próximamente: automatización de WhatsApp con el toque humano.</p>
-  <a href="https://app.whapco.site" style="display: inline-block; padding: 0.75rem 1.5rem; background: #25d366; color: #fff; text-decoration: none; border-radius: 0.5rem; font-weight: bold;">Ir a la app</a>
+  <header>
+    <div class="logo">
+      <div class="logo-mark">W</div>
+      <div>
+        <div>Whapco</div>
+        <small style="color: var(--muted); font-weight: 600;">Multiagente · Multicanal</small>
+      </div>
+    </div>
+    <nav>
+      <a class="btn" href="#features">Producto</a>
+      <a class="btn" href="#como-funciona">Cómo funciona</a>
+      <a class="btn btn-primary" href="/login">Iniciar sesión</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div>
+        <div class="pill">WhatsApp Business con toque humano</div>
+        <h1>Organiza tus conversaciones y atiende en equipo.</h1>
+        <p>
+          Centraliza WhatsApp, Instagram o Facebook en un único inbox, asigna chats por
+          equipo y agrega respuestas rápidas. Una base mínima para lanzar tu operación digital.
+        </p>
+        <div style="display:flex; gap:10px; flex-wrap: wrap;">
+          <a class="btn btn-primary" href="/login">Iniciar sesión</a>
+          <a class="btn" href="#features">Ver funcionalidades</a>
+        </div>
+      </div>
+      <div class="card" style="min-height:240px;">
+        <strong>Resumen rápido</strong>
+        <p>• Inbox multiagente<br>• Reglas y botones configurables<br>• Roles y usuarios
+           listos para tu equipo<br>• Panel de métricas para crecer</p>
+        <p style="margin-top:12px; color: var(--text); font-weight: 600;">Ingresa para continuar →</p>
+      </div>
+    </section>
+
+    <section id="features" class="card-grid">
+      <div class="card">
+        <strong>Inbox unificado</strong>
+        <p>Recibe y responde desde un solo lugar con estados, notas y asignaciones simples.</p>
+      </div>
+      <div class="card">
+        <strong>Automatiza lo básico</strong>
+        <p>Configura reglas de entrada, botones rápidos y respuestas guardadas para tu equipo.</p>
+      </div>
+      <div class="card">
+        <strong>Trabajo en equipo</strong>
+        <p>Define roles y permisos, crea usuarios y distribuye conversaciones sin perder contexto.</p>
+      </div>
+      <div class="card">
+        <strong>Métricas claras</strong>
+        <p>Consulta el tablero para ver cargas, tiempos y conversaciones finalizadas.</p>
+      </div>
+    </section>
+
+    <section id="como-funciona" class="steps">
+      <div class="step">
+        <div class="step-number">1</div>
+        <div>
+          <strong>Inicia sesión</strong>
+          <p>Accede con tu cuenta para conectar tus canales y empezar a recibir chats.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-number">2</div>
+        <div>
+          <strong>Configura tu equipo</strong>
+          <p>Crea roles, usuarios y reglas para que cada conversación llegue al agente correcto.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-number">3</div>
+        <div>
+          <strong>Responde y mide</strong>
+          <p>Gestiona chats en tiempo real, usa respuestas rápidas y revisa métricas en el tablero.</p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    Construido para equipos que necesitan salir al aire rápido. Inicia sesión para continuar.
+  </footer>
 </body>
 </html>
