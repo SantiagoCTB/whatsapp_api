@@ -3,7 +3,7 @@
     build:
       context: ../..
       dockerfile: deploy/windows/Dockerfile.win
-       env_file:
+    env_file:
       - ../../.env
     environment:
       MEDIA_ROOT: 'C:\app\static\uploads'

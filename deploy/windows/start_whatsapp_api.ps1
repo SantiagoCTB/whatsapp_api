@@ -37,7 +37,7 @@ Start-Sleep -Seconds 8
 Write-Output "Starting Docker Compose..."
 
 $docker = "C:\Program Files\Docker\Docker\resources\bin\docker.exe"
-$composeFile = "C:\whatsapp_api\docker-compose.windows.yml"
+$composeFile = "C:\whatsapp_api\deploy\windows\docker-compose.windows.yml"
 
 # Primero bajar contenedores huérfanos
 & $docker compose -f $composeFile down --remove-orphans
