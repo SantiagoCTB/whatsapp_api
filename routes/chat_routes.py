@@ -289,6 +289,7 @@ def index():
     numeros = [row[0] for row in c.fetchall()]
 
     chats = []
+    chat_state_exists = _table_exists(c, 'chat_state')
     for numero in numeros:
         # Último mensaje para determinar si requiere asesor
         c.execute(
@@ -760,9 +761,11 @@ def get_chat_list():
         inicial_rol = role_keywords[0][0].upper() if role_keywords else None
 
         # Estado actual del chat
-        c.execute("SELECT estado FROM chat_state WHERE numero = %s", (numero,))
-        fila = c.fetchone()
-        estado = fila[0] if fila else None
+        estado = None
+        if chat_state_exists:
+            c.execute("SELECT estado FROM chat_state WHERE numero = %s", (numero,))
+            fila = c.fetchone()
+            estado = fila[0] if fila else None
 
         chats.append({
             "numero": numero,
