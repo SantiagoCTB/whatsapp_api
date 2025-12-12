@@ -196,8 +196,12 @@
       const chatStateSection = chatContextMenu.querySelector('[data-section="state"]');
       const chatRolesSection = chatContextMenu.querySelector('[data-section="roles"]');
       let chatStateOptions = [];
-      const chatStateDefinitions = {{ chat_state_definitions | tojson }};
-      const availableRoles = {{ roles | tojson }};
+      const rawChatStateDefinitions = {{ chat_state_definitions | tojson }};
+      const chatStateDefinitions = Array.isArray(rawChatStateDefinitions)
+        ? rawChatStateDefinitions
+        : [];
+      const rawRoles = {{ roles | tojson }};
+      const availableRoles = Array.isArray(rawRoles) ? rawRoles : [];
       const chatStateDefinitionMap = new Map();
       chatStateDefinitions.forEach(def => {
         if (def && def.key) {
