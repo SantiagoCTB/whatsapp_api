@@ -41,6 +41,14 @@
         <div id="attachAudio" class="attach-item" title="Grabar audio">🎤</div>
         <div id="attachVideo" class="attach-item" title="Enviar video">🎥</div>
       </div>
+      <div id="imageAttachmentPreview" class="pending-attachment" style="display:none;">
+        <img id="imageAttachmentThumb" alt="Imagen adjunta" />
+        <div class="attachment-meta">
+          <div id="imageAttachmentName"></div>
+          <small>Se enviará con tu mensaje</small>
+        </div>
+        <button type="button" class="remove-attachment" id="removeImageAttachment" aria-label="Quitar imagen">×</button>
+      </div>
       <input id="messageInput" type="text" placeholder="Escribe un mensaje…">
       <button id="sendBtn">Enviar</button>
       <input id="imageInput" type="file" accept="image/*" style="display:none;">
@@ -227,6 +235,15 @@
       }
       const sendBtn = document.getElementById('sendBtn');
       const messageInput = document.getElementById('messageInput');
+      const inputArea = document.querySelector('.inputArea');
+      const chatWindowEl = document.querySelector('.chatWindow');
+      const attachmentPreviewEl = document.getElementById('imageAttachmentPreview');
+      const attachmentThumbEl = document.getElementById('imageAttachmentThumb');
+      const attachmentNameEl = document.getElementById('imageAttachmentName');
+      const removeAttachmentBtn = document.getElementById('removeImageAttachment');
+      let pendingImageFile = null;
+      let pendingImageUrl = null;
+      let dragHoverDepth = 0;
       const sidebar = document.querySelector('.sidebar');
       const menuToggle = document.getElementById('menuToggle');
       menuToggle.addEventListener('click', () => {
@@ -438,6 +455,36 @@
           }
           isSending = false;
           sendBtn.disabled = false;
+        }
+
+        function clearPendingImage() {
+          if (pendingImageUrl) {
+            URL.revokeObjectURL(pendingImageUrl);
+            pendingImageUrl = null;
+          }
+          pendingImageFile = null;
+          if (attachmentPreviewEl) attachmentPreviewEl.style.display = 'none';
+        }
+
+        function queueImageAttachment(file) {
+          if (!file || !attachmentPreviewEl) return;
+          if (pendingImageUrl) {
+            URL.revokeObjectURL(pendingImageUrl);
+            pendingImageUrl = null;
+          }
+          pendingImageFile = file;
+          pendingImageUrl = URL.createObjectURL(file);
+          if (attachmentThumbEl) attachmentThumbEl.src = pendingImageUrl;
+          if (attachmentNameEl) attachmentNameEl.textContent = file.name || 'Imagen';
+          attachmentPreviewEl.style.display = 'flex';
+          messageInput.focus();
+        }
+
+        if (removeAttachmentBtn) {
+          removeAttachmentBtn.addEventListener('click', () => {
+            clearPendingImage();
+            messageInput.focus();
+          });
         }
 
         const FLOW_SUMMARY_MAX_ITEMS = 10;
@@ -1203,6 +1250,8 @@
         lastCount = 0; // reset count so the initial load doesn't trigger alerts
         lastIncomingWaId = null;
         lastTypingSent = 0;
+        clearPendingImage();
+        messageInput.value = '';
         updateTypingIndicator(false);
         // marcar activo
         document.querySelectorAll('#chatList li').forEach(li => li.classList.remove('active'));
@@ -1441,10 +1490,45 @@
       }
 
       // Enviar texto
-      sendBtn.onclick = () => {
-        if (isSending) return;
+      sendBtn.onclick = async () => {
+        if (isSending || !currentChat) return;
         const txt = messageInput.value.trim();
-        if (!txt||!currentChat) return;
+
+        if (pendingImageFile) {
+          const replyTarget = replyTo;
+          replyTo = null;
+          replyPreviewEl.style.display='none';
+          replyPreviewEl.innerHTML='';
+          startSending();
+          try {
+            const form = new FormData();
+            form.append('image', pendingImageFile);
+            form.append('caption', txt);
+            form.append('numero', currentChat);
+            if (replyTarget) form.append('reply_to_wa_id', replyTarget);
+            const res = await fetch('/send_image', { method:'POST', body: form });
+            if (!res.ok) {
+              const msg = await extractSendError(res);
+              alert(msg);
+              stopSending();
+              return;
+            }
+            clearPendingImage();
+            messageInput.value='';
+            messageInput.focus();
+            loadMessages(); fetchChatList();
+            stopSending();
+            return;
+          } catch(err) {
+            console.error('Error enviando imagen', err);
+            const msg = (err && err.message) ? err.message : 'No se pudo enviar la imagen';
+            alert(msg);
+            stopSending();
+            return;
+          }
+        }
+
+        if (!txt) return;
         const now = Date.now();
         if (txt === lastSentMessage && now - lastSentTimestamp < 1500) return;
         lastSentMessage = txt;
@@ -1587,6 +1671,20 @@
         inputEl.value=''; attachMenu.classList.remove('show');
         loadMessages(); fetchChatList();
       }
+
+      function extractImageFile(dataTransfer) {
+        if (!dataTransfer) return null;
+        if (dataTransfer.files && dataTransfer.files.length) {
+          const imgFile = Array.from(dataTransfer.files).find(f => f.type && f.type.startsWith('image/'));
+          if (imgFile) return imgFile;
+        }
+        if (dataTransfer.items && dataTransfer.items.length) {
+          const item = Array.from(dataTransfer.items).find(i => i.kind === 'file' && i.type && i.type.startsWith('image/'));
+          if (item) return item.getAsFile();
+        }
+        return null;
+      }
+
       async function sendRecordedAudio(file) {
         if (!currentChat) return;
         const form = new FormData();
@@ -1601,6 +1699,60 @@
       imgIn.onchange = () => sendFile(imgIn, 'send_image');
       audIn.onchange = () => sendFile(audIn, 'send_audio');
       vidIn.onchange = () => sendFile(vidIn, 'send_video');
+
+      function resetDragOverlay() {
+        dragHoverDepth = 0;
+        if (chatWindowEl) {
+          chatWindowEl.classList.remove('drag-active');
+        }
+      }
+
+      messageInput.addEventListener('paste', event => {
+        const imageFile = extractImageFile(event.clipboardData);
+        if (!imageFile) return;
+        event.preventDefault();
+        queueImageAttachment(imageFile);
+      });
+
+      if (chatWindowEl) {
+        chatWindowEl.addEventListener('dragenter', event => {
+          const imageFile = extractImageFile(event.dataTransfer);
+          if (!imageFile) return;
+          event.preventDefault();
+          dragHoverDepth += 1;
+          chatWindowEl.classList.add('drag-active');
+        });
+
+        chatWindowEl.addEventListener('dragover', event => {
+          const imageFile = extractImageFile(event.dataTransfer);
+          if (!imageFile) return;
+          event.preventDefault();
+          chatWindowEl.classList.add('drag-active');
+        });
+
+        chatWindowEl.addEventListener('dragleave', () => {
+          dragHoverDepth = Math.max(0, dragHoverDepth - 1);
+          if (dragHoverDepth === 0) {
+            chatWindowEl.classList.remove('drag-active');
+          }
+        });
+
+        chatWindowEl.addEventListener('drop', event => {
+          const imageFile = extractImageFile(event.dataTransfer);
+          event.preventDefault();
+          resetDragOverlay();
+          if (!imageFile) return;
+          queueImageAttachment(imageFile);
+        });
+      }
+
+      document.addEventListener('drop', event => {
+        if (chatWindowEl && chatWindowEl.classList.contains('drag-active')) {
+          event.preventDefault();
+          resetDragOverlay();
+        }
+      });
+      document.addEventListener('dragend', resetDragOverlay);
 
       // Filtrar chats
       document.getElementById('buscador').addEventListener('input', function(){
