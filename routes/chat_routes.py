@@ -703,6 +703,7 @@ def get_chat_list():
             "SELECT DISTINCT numero FROM mensajes "
             "WHERE numero NOT IN (SELECT numero FROM hidden_chats)"
         )
+        numeros = [row[0] for row in c.fetchall()]
     elif role_ids:
         placeholders = ','.join(['%s'] * len(role_ids))
         c.execute(
@@ -715,10 +716,12 @@ def get_chat_list():
             """,
             tuple(role_ids),
         )
+        numeros = [row[0] for row in c.fetchall()]
     else:
-        numeros = []
-
-    if 'numeros' not in locals():
+        c.execute(
+            "SELECT DISTINCT numero FROM mensajes "
+            "WHERE numero NOT IN (SELECT numero FROM hidden_chats)"
+        )
         numeros = [row[0] for row in c.fetchall()]
 
     chats = []
