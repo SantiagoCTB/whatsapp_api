@@ -167,10 +167,13 @@ Si se utilizan para pruebas locales, realiza copias de seguridad en un almacenam
 
 ### Copias de seguridad automáticas
 
-La aplicación genera un volcado de la base de datos una vez por día usando `mysqldump`. El directorio de destino se puede definir
-en `.env` mediante `DB_BACKUP_DIR` y, por defecto, apunta a `C:\\whatsapp_api\\backup_bd`. En entornos Linux o con
+La aplicación genera un volcado de la base de datos a las 00:00 todos los días usando `mysqldump`. El directorio de destino se
+puede definir en `.env` mediante `DB_BACKUP_DIR` y, por defecto, apunta a `C:\\whatsapp_api\\backup_bd`. En entornos Linux o con
 almacenamientos externos, establece esta variable con la ruta absoluta deseada y asegúrate de que el usuario de la aplicación
 tenga permisos de escritura. También es necesario que el binario `mysqldump` esté disponible en el sistema.
+
+Si necesitas ejecutar una copia de seguridad manualmente, envía una petición `POST` a `/backup` y se generará un archivo con el
+nombre `<YYYYMMDD_HHMMSS>_<DB_NAME>.sql` dentro de la carpeta configurada.
 
 ### Usuario administrador por defecto
 

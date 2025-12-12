@@ -18,6 +18,16 @@ def _get_backup_directory() -> str:
     return backup_dir
 
 
+def _seconds_until_next_midnight() -> float:
+    """Return the number of seconds remaining until the next midnight."""
+
+    now = datetime.datetime.now()
+    tomorrow_midnight = (now + datetime.timedelta(days=1)).replace(
+        hour=0, minute=0, second=0, microsecond=0
+    )
+    return (tomorrow_midnight - now).total_seconds()
+
+
 def backup_database() -> str:
     """Create a SQL dump of the configured database and return the file path."""
     if not Config.DB_NAME:
@@ -25,7 +35,7 @@ def backup_database() -> str:
 
     backup_dir = _get_backup_directory()
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    backup_filename = f"{Config.DB_NAME}_{timestamp}.sql"
+    backup_filename = f"{timestamp}_{Config.DB_NAME}.sql"
     backup_path = os.path.join(backup_dir, backup_filename)
 
     command = [
@@ -55,6 +65,11 @@ def backup_database() -> str:
 
 def _backup_loop(stop_event: threading.Event):
     logger = logging.getLogger(__name__)
+
+    wait_seconds = _seconds_until_next_midnight()
+    logger.info("El respaldo diario se ejecutará en %.0f segundos (a la medianoche).", wait_seconds)
+    if stop_event.wait(wait_seconds):
+        return
 
     while not stop_event.is_set():
         try:
