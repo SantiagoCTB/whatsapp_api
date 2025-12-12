@@ -1,11 +1,16 @@
 #!/bin/bash
 set -e
 
-# Ir a la carpeta del proyecto (donde está el .env principal)
 cd /opt/whapco
+
+# Exportar todas las variables del .env al entorno
+set -a
+source .env
+set +a
 
 # Traer últimos cambios de Git
 git pull origin main
 
-# Levantar/actualizar servicios usando el docker-compose de deploy/linux
+# Levantar con el compose de linux
 docker compose -f deploy/linux/docker-compose.yml up -d --build
+
