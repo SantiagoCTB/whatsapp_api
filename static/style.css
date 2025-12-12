@@ -222,6 +222,29 @@
       min-height: 0;
       height: 100%;
       overflow: hidden;
+      position: relative;
+    }
+    .chatWindow:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 4px;
+    }
+    .chatWindow.drag-active {
+      box-shadow: 0 0 0 3px var(--accent);
+    }
+    .chatWindow.drag-active::after {
+      content: "Suelta la imagen para preparar el envío";
+      position: absolute;
+      inset: 12px;
+      border: 2px dashed var(--accent);
+      border-radius: 16px;
+      display: grid;
+      place-items: center;
+      background: rgba(0, 168, 132, 0.06);
+      color: var(--accent-hover);
+      font-weight: 600;
+      text-align: center;
+      pointer-events: none;
+      z-index: 5;
     }
     #botonera {
       display:flex; gap:8px; padding:12px;
@@ -478,6 +501,81 @@
     }
     #sendBtn:hover {
       transform:scale(1.05); background:var(--accent-hover);
+    }
+    .image-draft {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 10px;
+      align-items: center;
+      background: var(--bg-chat);
+      border: 1px dashed var(--accent);
+      border-radius: 14px;
+      padding: 10px;
+      margin-right: 12px;
+      max-width: 360px;
+    }
+    .image-draft-preview {
+      width: 64px;
+      height: 64px;
+      overflow: hidden;
+      border-radius: 10px;
+      border: 1px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #fff;
+    }
+    .image-draft-preview img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .image-draft-body {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .image-draft-name {
+      font-size: 12px;
+      color: #444;
+      word-break: break-all;
+    }
+    .image-draft-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .image-draft-actions .primary,
+    .image-draft-actions .ghost {
+      padding: 6px 10px;
+      border-radius: 8px;
+      border: 1px solid transparent;
+      cursor: pointer;
+      font-size: 13px;
+    }
+    .image-draft-actions .primary {
+      background: var(--accent-neon);
+      color: var(--text-light);
+      border-color: var(--accent-neon);
+    }
+    .image-draft-actions .primary:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+    .image-draft-actions .ghost {
+      background: transparent;
+      color: var(--accent-hover);
+      border-color: var(--border-color);
+    }
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      border: 0;
     }
     button:after {
       content:''; position:absolute; width:100px; height:100px;
