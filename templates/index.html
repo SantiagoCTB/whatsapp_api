@@ -1533,6 +1533,7 @@
       let mediaRecorder = null;
       let audioChunks = [];
       document.getElementById('attachImage').onclick = () => imgIn.click();
+      let recordedMimeType = '';
       document.getElementById('attachAudio').onclick = async () => {
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
           audIn.click();
@@ -1540,12 +1541,24 @@
         }
         try {
           const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-          mediaRecorder = new MediaRecorder(stream);
+          const supportedTypes = [
+            'audio/ogg;codecs=opus',
+            'audio/webm;codecs=opus',
+            'audio/webm'
+          ];
+          recordedMimeType = supportedTypes.find(t => {
+            return typeof MediaRecorder.isTypeSupported === 'function' && MediaRecorder.isTypeSupported(t);
+          }) || '';
+          const recorderOpts = recordedMimeType ? { mimeType: recordedMimeType } : undefined;
+
+          mediaRecorder = new MediaRecorder(stream, recorderOpts);
           audioChunks = [];
           mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
           mediaRecorder.onstop = async () => {
-            const blob = new Blob(audioChunks, { type: 'audio/webm' });
-            const file = new File([blob], 'recording.webm', { type: 'audio/webm' });
+            const blobType = recordedMimeType || 'audio/webm';
+            const extension = blobType.includes('ogg') ? 'ogg' : 'webm';
+            const blob = new Blob(audioChunks, { type: blobType });
+            const file = new File([blob], `recording.${extension}`, { type: blobType });
             await sendRecordedAudio(file);
             mediaRecorder.stream.getTracks().forEach(t=>t.stop());
           };
