@@ -270,7 +270,9 @@ def index():
     role_id = row[0] if row else None
 
     # Lista de chats únicos filtrados por rol
-    if rol == 'admin':
+    role_table_exists = _table_exists(c, 'chat_roles')
+
+    if rol == 'admin' or not role_table_exists:
         c.execute(
             "SELECT DISTINCT numero FROM mensajes "
             "WHERE numero NOT IN (SELECT numero FROM hidden_chats)"
@@ -284,7 +286,7 @@ def index():
             WHERE cr.role_id = %s
               AND m.numero NOT IN (SELECT numero FROM hidden_chats)
             """,
-            (role_id,)
+            (role_id,),
         )
     numeros = [row[0] for row in c.fetchall()]
 
@@ -689,8 +691,9 @@ def get_chat_list():
 
     is_admin = 'admin' in roles
     role_ids = []
+    role_table_exists = _table_exists(c, 'chat_roles')
 
-    if not is_admin and roles:
+    if not is_admin and roles and role_table_exists:
         placeholders = ','.join(['%s'] * len(roles))
         c.execute(
             f"SELECT id FROM roles WHERE keyword IN ({placeholders})",
@@ -699,7 +702,7 @@ def get_chat_list():
         role_ids = [row[0] for row in c.fetchall()]
 
     # Únicos números filtrados por rol
-    if is_admin:
+    if is_admin or not role_table_exists:
         c.execute(
             "SELECT DISTINCT numero FROM mensajes "
             "WHERE numero NOT IN (SELECT numero FROM hidden_chats)"
@@ -744,21 +747,25 @@ def get_chat_list():
         requiere_asesor = "asesor" in ultimo.lower()
 
         # Roles asociados al número y nombre/keyword
-        c.execute(
-            """
-            SELECT GROUP_CONCAT(cr.role_id) AS ids,
-                   GROUP_CONCAT(COALESCE(r.keyword, r.name) ORDER BY r.id) AS nombres
-            FROM chat_roles cr
-            LEFT JOIN roles r ON cr.role_id = r.id
-            WHERE cr.numero = %s
-            """,
-            (numero,),
-        )
-        fila_roles = c.fetchone()
-        roles = fila_roles[0] if fila_roles else None
-        nombres_roles = fila_roles[1] if fila_roles else None
-        role_keywords = [n.strip() for n in nombres_roles.split(',')] if nombres_roles else []
-        inicial_rol = role_keywords[0][0].upper() if role_keywords else None
+        roles = None
+        role_keywords = []
+        inicial_rol = None
+        if role_table_exists:
+            c.execute(
+                """
+                SELECT GROUP_CONCAT(cr.role_id) AS ids,
+                       GROUP_CONCAT(COALESCE(r.keyword, r.name) ORDER BY r.id) AS nombres
+                FROM chat_roles cr
+                LEFT JOIN roles r ON cr.role_id = r.id
+                WHERE cr.numero = %s
+                """,
+                (numero,),
+            )
+            fila_roles = c.fetchone()
+            roles = fila_roles[0] if fila_roles else None
+            nombres_roles = fila_roles[1] if fila_roles else None
+            role_keywords = [n.strip() for n in nombres_roles.split(',')] if nombres_roles else []
+            inicial_rol = role_keywords[0][0].upper() if role_keywords else None
 
         # Estado actual del chat
         estado = None
