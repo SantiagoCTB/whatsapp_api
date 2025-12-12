@@ -236,16 +236,6 @@
       const sendBtn = document.getElementById('sendBtn');
       const messageInput = document.getElementById('messageInput');
       const inputArea = document.querySelector('.inputArea');
-      const chatWindowEl = document.querySelector('.chatWindow');
-      const chatContainerEl = document.querySelector('.container');
-      const attachmentPreviewEl = document.getElementById('imageAttachmentPreview');
-      const attachmentThumbEl = document.getElementById('imageAttachmentThumb');
-      const attachmentNameEl = document.getElementById('imageAttachmentName');
-      const removeAttachmentBtn = document.getElementById('removeImageAttachment');
-      let pendingImageFile = null;
-      let pendingImageUrl = null;
-      let lastQueuedImageSignature = null;
-      let dragHoverDepth = 0;
       const sidebar = document.querySelector('.sidebar');
       const menuToggle = document.getElementById('menuToggle');
       menuToggle.addEventListener('click', () => {
@@ -465,22 +455,16 @@
             pendingImageUrl = null;
           }
           pendingImageFile = null;
-          lastQueuedImageSignature = null;
           if (attachmentPreviewEl) attachmentPreviewEl.style.display = 'none';
         }
 
         function queueImageAttachment(file) {
           if (!file || !attachmentPreviewEl) return;
-          const signature = `${file.name || 'image'}-${file.type || ''}-${file.size || 0}-${file.lastModified || 0}`;
-          if (signature && signature === lastQueuedImageSignature) {
-            return;
-          }
           if (pendingImageUrl) {
             URL.revokeObjectURL(pendingImageUrl);
             pendingImageUrl = null;
           }
           pendingImageFile = file;
-          lastQueuedImageSignature = signature;
           pendingImageUrl = URL.createObjectURL(file);
           if (attachmentThumbEl) attachmentThumbEl.src = pendingImageUrl;
           if (attachmentNameEl) attachmentNameEl.textContent = file.name || 'Imagen';
@@ -1624,6 +1608,7 @@
       let mediaRecorder = null;
       let audioChunks = [];
       document.getElementById('attachImage').onclick = () => imgIn.click();
+      let recordedMimeType = '';
       document.getElementById('attachAudio').onclick = async () => {
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
           audIn.click();
@@ -1631,12 +1616,24 @@
         }
         try {
           const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-          mediaRecorder = new MediaRecorder(stream);
+          const supportedTypes = [
+            'audio/ogg;codecs=opus',
+            'audio/webm;codecs=opus',
+            'audio/webm'
+          ];
+          recordedMimeType = supportedTypes.find(t => {
+            return typeof MediaRecorder.isTypeSupported === 'function' && MediaRecorder.isTypeSupported(t);
+          }) || '';
+          const recorderOpts = recordedMimeType ? { mimeType: recordedMimeType } : undefined;
+
+          mediaRecorder = new MediaRecorder(stream, recorderOpts);
           audioChunks = [];
           mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
           mediaRecorder.onstop = async () => {
-            const blob = new Blob(audioChunks, { type: 'audio/webm' });
-            const file = new File([blob], 'recording.webm', { type: 'audio/webm' });
+            const blobType = recordedMimeType || 'audio/webm';
+            const extension = blobType.includes('ogg') ? 'ogg' : 'webm';
+            const blob = new Blob(audioChunks, { type: blobType });
+            const file = new File([blob], `recording.${extension}`, { type: blobType });
             await sendRecordedAudio(file);
             mediaRecorder.stream.getTracks().forEach(t=>t.stop());
           };
@@ -1693,6 +1690,17 @@
         return null;
       }
 
+      async function sendImageFileDirect(file) {
+        if (!file || !currentChat) return;
+        const form = new FormData();
+        form.append('image', file);
+        form.append('caption','');
+        form.append('numero', currentChat);
+        const res = await fetch('/send_image', { method:'POST', body: form });
+        if (!res.ok) return;
+        attachMenu.classList.remove('show');
+        loadMessages(); fetchChatList();
+      }
       async function sendRecordedAudio(file) {
         if (!currentChat) return;
         const form = new FormData();
@@ -1708,64 +1716,33 @@
       audIn.onchange = () => sendFile(audIn, 'send_audio');
       vidIn.onchange = () => sendFile(vidIn, 'send_video');
 
-      function resetDragOverlay() {
-        dragHoverDepth = 0;
-        if (chatWindowEl) {
-          chatWindowEl.classList.remove('drag-active');
-        }
-      }
-
-      if (messageInput) {
-        messageInput.addEventListener('paste', event => {
-          const imageFile = extractImageFile(event.clipboardData);
-          if (!imageFile) return;
-          event.preventDefault();
-          queueImageAttachment(imageFile);
-        });
-      }
-
-      if (chatWindowEl && chatContainerEl) {
-        const dragTargets = [chatWindowEl, chatContainerEl];
-        dragTargets.forEach(target => {
-          target.addEventListener('dragenter', event => {
-            const imageFile = extractImageFile(event.dataTransfer);
-            if (!imageFile) return;
-            event.preventDefault();
-            dragHoverDepth += 1;
-            chatWindowEl.classList.add('drag-active');
-          });
-
-          target.addEventListener('dragover', event => {
-            const imageFile = extractImageFile(event.dataTransfer);
-            if (!imageFile) return;
-            event.preventDefault();
-            chatWindowEl.classList.add('drag-active');
-          });
-
-          target.addEventListener('dragleave', () => {
-            dragHoverDepth = Math.max(0, dragHoverDepth - 1);
-            if (dragHoverDepth === 0) {
-              chatWindowEl.classList.remove('drag-active');
-            }
-          });
-
-          target.addEventListener('drop', event => {
-            const imageFile = extractImageFile(event.dataTransfer);
-            event.preventDefault();
-            resetDragOverlay();
-            if (!imageFile) return;
-            queueImageAttachment(imageFile);
-          });
-        });
-      }
-
-      document.addEventListener('drop', event => {
-        if (chatWindowEl && chatWindowEl.classList.contains('drag-active')) {
-          event.preventDefault();
-          resetDragOverlay();
-        }
+      messageInput.addEventListener('paste', async event => {
+        const imageFile = extractImageFile(event.clipboardData);
+        if (!imageFile) return;
+        event.preventDefault();
+        await sendImageFileDirect(imageFile);
       });
-      document.addEventListener('dragend', resetDragOverlay);
+
+      if (inputArea) {
+        inputArea.addEventListener('dragover', event => {
+          event.preventDefault();
+          if (extractImageFile(event.dataTransfer)) {
+            inputArea.classList.add('drag-active');
+          }
+        });
+
+        inputArea.addEventListener('dragleave', () => {
+          inputArea.classList.remove('drag-active');
+        });
+
+        inputArea.addEventListener('drop', async event => {
+          event.preventDefault();
+          const imageFile = extractImageFile(event.dataTransfer);
+          inputArea.classList.remove('drag-active');
+          if (!imageFile) return;
+          await sendImageFileDirect(imageFile);
+        });
+      }
 
       // Filtrar chats
       document.getElementById('buscador').addEventListener('input', function(){
