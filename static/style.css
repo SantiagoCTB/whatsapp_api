@@ -222,6 +222,7 @@
       min-height: 0;
       height: 100%;
       overflow: hidden;
+      position: relative;
     }
     #botonera {
       display:flex; gap:8px; padding:12px;
@@ -405,9 +406,66 @@
 
     /* Input area */
     .inputArea {
-      display:flex; align-items:center;
+      display:flex; align-items:center; gap: 10px;
       padding:12px; background:var(--text-light);
       border-top:1px solid #ddd; position: sticky; bottom: 0;
+      flex-wrap: wrap;
+    }
+    .inputArea.drag-active {
+      border: 2px dashed var(--accent);
+      background: linear-gradient(135deg, rgba(0, 255, 170, 0.08), rgba(0, 191, 255, 0.08));
+    }
+    .pending-attachment {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 10px;
+      background: rgba(0, 0, 0, 0.04);
+      border-radius: 8px;
+      border: 1px dashed var(--accent);
+    }
+    .pending-attachment img {
+      width: 42px;
+      height: 42px;
+      object-fit: cover;
+      border-radius: 6px;
+      border: 1px solid rgba(0,0,0,0.08);
+    }
+    .pending-attachment .remove-attachment {
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: #d32f2f;
+      font-size: 18px;
+      line-height: 1;
+    }
+    .pending-attachment .attachment-meta {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      font-size: 14px;
+    }
+    .pending-attachment small {
+      color: #4a4a4a;
+      font-size: 12px;
+    }
+    .chatWindow.drag-active::after {
+      content: "Suelta la imagen para adjuntarla";
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0, 0, 0, 0.25);
+      color: #fff;
+      font-weight: 600;
+      border: 2px dashed var(--accent);
+      border-radius: 12px;
+      pointer-events: none;
+      text-align: center;
+      padding: 20px;
+      box-sizing: border-box;
+      z-index: 20;
     }
     #attachBtn {
       width:40px; height:40px; border:none; border-radius:50%;
