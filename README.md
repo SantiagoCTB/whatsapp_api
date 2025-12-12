@@ -165,6 +165,16 @@ La aplicación almacena los datos en un servidor MySQL. Los antiguos archivos de
 
 Si se utilizan para pruebas locales, realiza copias de seguridad en un almacenamiento externo y evita versionarlos.
 
+### Copias de seguridad automáticas
+
+La aplicación genera un volcado de la base de datos a las 00:00 todos los días usando `mysqldump`. El directorio de destino se
+puede definir en `.env` mediante `DB_BACKUP_DIR` y, por defecto, apunta a `C:\\whatsapp_api\\backup_bd`. En entornos Linux o con
+almacenamientos externos, establece esta variable con la ruta absoluta deseada y asegúrate de que el usuario de la aplicación
+tenga permisos de escritura. También es necesario que el binario `mysqldump` esté disponible en el sistema.
+
+Si necesitas ejecutar una copia de seguridad manualmente, envía una petición `POST` a `/backup` y se generará un archivo con el
+nombre `<YYYYMMDD_HHMMSS>_<DB_NAME>.sql` dentro de la carpeta configurada.
+
 ### Usuario administrador por defecto
 
 Durante la inicialización de la base de datos (`init_db`) se crea automáticamente el usuario `admin` con el hash definido en la variable de entorno `DEFAULT_ADMIN_PASSWORD_HASH`. Si no estableces un valor propio, se utilizará el hash correspondiente a la contraseña `Admin1234` (`scrypt:32768:8:1$JAUhBgIzT6IIoM5Y$6c5c9870fb039e600a045345fbe67029001173247f3143ef19b94cddd919996a7a82742083aeeb6927591fa2a0d0eb6bb3c4e3501a1964d53f39157d31f81bd4`).

@@ -18,6 +18,8 @@ from routes.users_routes import users_bp
 from routes.webhook import webhook_bp
 from routes.tablero_routes import tablero_bp
 from routes.export_routes import export_bp
+from routes.backup_routes import backup_bp
+from services.backup import start_daily_backup_scheduler
 
 def _ensure_media_root():
     """Create the directory where user uploads are stored."""
@@ -69,6 +71,7 @@ def create_app():
     app.register_blueprint(webhook_bp)
     app.register_blueprint(tablero_bp)
     app.register_blueprint(export_bp)
+    app.register_blueprint(backup_bp)
 
     # Inicializa BD por defecto para evitar errores en entornos nuevos.
     # Puede deshabilitarse con INIT_DB_ON_START=0 si se prefiere controlar
@@ -76,6 +79,8 @@ def create_app():
     if os.getenv("INIT_DB_ON_START", "1") != "0":
         with app.app_context():
             init_db()
+
+    start_daily_backup_scheduler()
 
     return app
 
