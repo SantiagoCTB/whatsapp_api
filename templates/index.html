@@ -64,6 +64,7 @@
         <button id="startRecord" title="Grabar">⏺️</button>
         <button id="stopRecord" title="Detener" disabled>⏹️</button>
       </div>
+      <div id="audioStatus" class="audio-status" aria-live="polite" hidden></div>
     </div>
   </div>
 </div>
@@ -478,11 +479,15 @@
         }
         let isSending = false;
         let isSendingImage = false;
+        let isSendingAudio = false;
+        let isRecordingAudio = false;
         let imageDraft = null;
         let isBotoneraSending = false;
         let sendUnlockTimeout = null;
         let lastSentMessage = '';
         let lastSentTimestamp = 0;
+        const audioStatusEl = document.getElementById('audioStatus');
+        let audioStatusTimeout = null;
 
         function startSending() {
           if (sendUnlockTimeout) clearTimeout(sendUnlockTimeout);
@@ -504,10 +509,28 @@
 
         function updateSendButtons() {
           if (sendBtn) {
-            sendBtn.disabled = isSending || isSendingImage;
+            sendBtn.disabled = isSending || isSendingImage || isSendingAudio || isRecordingAudio;
           }
           if (sendImageDraftBtn) {
             sendImageDraftBtn.disabled = isSendingImage || !imageDraft;
+          }
+        }
+
+        function setAudioStatus(message, state = 'info', autoClearMs = 0) {
+          if (!audioStatusEl) return;
+          if (audioStatusTimeout) {
+            clearTimeout(audioStatusTimeout);
+            audioStatusTimeout = null;
+          }
+          audioStatusEl.textContent = message || '';
+          audioStatusEl.dataset.state = state || 'info';
+          audioStatusEl.hidden = !message;
+          if (message && autoClearMs) {
+            audioStatusTimeout = setTimeout(() => {
+              audioStatusEl.textContent = '';
+              audioStatusEl.hidden = true;
+              audioStatusTimeout = null;
+            }, autoClearMs);
           }
         }
 
@@ -1592,7 +1615,7 @@
             sendImageDraft();
             return;
           }
-          if (!isSending && !isSendingImage) sendBtn.click();
+          if (!isSending && !isSendingImage && !isSendingAudio && !isRecordingAudio) sendBtn.click();
         }
       });
 
@@ -1618,6 +1641,7 @@
       let recordedMimeType = '';
       document.getElementById('attachAudio').onclick = async () => {
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          setAudioStatus('Selecciona un archivo de audio para enviarlo.', 'info', 3000);
           audIn.click();
           return;
         }
@@ -1637,18 +1661,28 @@
           audioChunks = [];
           mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
           mediaRecorder.onstop = async () => {
+            isRecordingAudio = false;
+            updateSendButtons();
+            const totalSize = audioChunks.reduce((acc, chunk) => acc + (chunk ? chunk.size : 0), 0);
+            if (!totalSize) {
+              setAudioStatus('No se capturó audio. Intenta de nuevo.', 'error', 4000);
+              mediaRecorder.stream.getTracks().forEach(t=>t.stop());
+              return;
+            }
             const blobType = recordedMimeType || 'audio/webm';
             const extension = blobType.includes('ogg') ? 'ogg' : 'webm';
             const blob = new Blob(audioChunks, { type: blobType });
             const file = new File([blob], `recording.${extension}`, { type: blobType });
-            await sendRecordedAudio(file);
+            await sendAudioFile(file);
             mediaRecorder.stream.getTracks().forEach(t=>t.stop());
           };
           recordControls.style.display = 'block';
           attachMenu.classList.remove('show');
           startRecBtn.disabled = false;
           stopRecBtn.disabled = true;
+          setAudioStatus('Micrófono listo. Presiona grabar para empezar.', 'info', 2500);
         } catch(err) {
+          setAudioStatus('No se pudo acceder al micrófono. Sube un archivo.', 'error', 4000);
           audIn.click();
         }
       };
@@ -1659,6 +1693,9 @@
           mediaRecorder.start();
           startRecBtn.disabled = true;
           stopRecBtn.disabled = false;
+          isRecordingAudio = true;
+          setAudioStatus('Grabando…', 'recording');
+          updateSendButtons();
         }
       };
       stopRecBtn.onclick = () => {
@@ -1667,6 +1704,9 @@
           recordControls.style.display = 'none';
           startRecBtn.disabled = false;
           stopRecBtn.disabled = true;
+          isRecordingAudio = false;
+          setAudioStatus('Procesando grabación…', 'uploading');
+          updateSendButtons();
         }
       };
 
@@ -1674,14 +1714,68 @@
         if (!currentChat) return;
         const file = inputEl.files[0];
         if (!file) return;
+        if (endpoint === 'send_audio') {
+          await sendAudioFile(file);
+          inputEl.value='';
+          return;
+        }
         const form = new FormData();
         form.append(endpoint.split('_')[1], file);
         form.append('caption','');
         form.append('numero', currentChat);
-        const res = await fetch(`/${endpoint}`, { method:'POST', body:form });
-        if (!res.ok) return;
-        inputEl.value=''; attachMenu.classList.remove('show');
-        loadMessages(); fetchChatList();
+        try {
+          const res = await fetch(`/${endpoint}`, { method:'POST', body:form });
+          if (!res.ok) {
+            const msg = await extractSendError(res);
+            throw new Error(msg);
+          }
+          attachMenu.classList.remove('show');
+          loadMessages(); fetchChatList();
+        } catch (err) {
+          const msg = (err && err.message) ? err.message : 'No se pudo enviar el archivo';
+          alert(msg);
+        } finally {
+          inputEl.value='';
+        }
+      }
+
+      async function sendAudioFile(file) {
+        if (!currentChat || !file) return;
+        isSendingAudio = true;
+        updateSendButtons();
+        setAudioStatus('Subiendo audio…', 'uploading');
+        const form = new FormData();
+        form.append('audio', file);
+        form.append('caption', messageInput ? messageInput.value.trim() : '');
+        form.append('numero', currentChat);
+        try {
+          const res = await fetch('/send_audio', { method:'POST', body: form });
+          if (!res.ok) {
+            const msg = await extractSendError(res);
+            throw new Error(msg);
+          }
+          let confirmation = 'Audio en cola para enviar';
+          try {
+            const data = await res.json();
+            if (data && data.url) {
+              confirmation = 'Audio en cola y listo para reproducir';
+            }
+          } catch (parseErr) {
+            // ignore parse errors and keep fallback confirmation
+          }
+          setAudioStatus(confirmation, 'success', 3500);
+          attachMenu.classList.remove('show');
+          loadMessages(); fetchChatList();
+        } catch (err) {
+          const msg = (err && err.message) ? err.message : 'No se pudo enviar el audio';
+          setAudioStatus(msg, 'error', 5000);
+          alert(msg);
+        } finally {
+          isSendingAudio = false;
+          updateSendButtons();
+          if (audIn) audIn.value = '';
+          if (messageInput) messageInput.focus();
+        }
       }
 
       function clearImageDraft() {
