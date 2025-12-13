@@ -1,5 +1,6 @@
 # app.py
 from flask import Flask
+from werkzeug.middleware.proxy_fix import ProxyFix
 from dotenv import load_dotenv
 import os
 import logging
@@ -48,6 +49,10 @@ def create_app():
     )
     # Si usas clase de config:
     app.config.from_object(Config)
+    app.config.setdefault("PREFERRED_URL_SCHEME", "https")
+
+    # Honra los encabezados de Nginx cuando estamos detrás de un proxy TLS.
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1, x_port=1)
 
     if not app.debug:
         log_format = '%(asctime)s [%(levelname)s] %(name)s: %(message)s'
