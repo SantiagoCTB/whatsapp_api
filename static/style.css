@@ -488,6 +488,26 @@
       background:#aaa;
       cursor:default;
     }
+    .audio-status {
+      margin-top:6px;
+      font-size:12px;
+      color:var(--text-light);
+      display:flex;
+      align-items:center;
+      gap:6px;
+    }
+    .audio-status[data-state="recording"] {
+      color:var(--accent-neon);
+    }
+    .audio-status[data-state="uploading"] {
+      color:var(--accent);
+    }
+    .audio-status[data-state="success"] {
+      color:#1f9d55;
+    }
+    .audio-status[data-state="error"] {
+      color:#e53e3e;
+    }
     #messageInput {
       flex:1; padding:10px 14px; border:1px solid #ccc;
       border-radius:20px; font-size:14px; outline:none;
