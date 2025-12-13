@@ -8,8 +8,13 @@ services:
     environment:
       PORT: 8000
       MEDIA_ROOT: /app/static/uploads
+      # NO ponemos aquí DB_* para evitar WARN;
+      # el contenedor ya los recibe desde env_file
+
     volumes:
       - ../../static/uploads:/app/static/uploads
+    depends_on:
+      - mysql
     networks:
       - whapco_net
     restart: unless-stopped
@@ -29,6 +34,28 @@ services:
       - whapco_net
     restart: unless-stopped
 
+  mysql:
+    image: mysql:8.0
+    container_name: whapco_mysql
+    restart: unless-stopped
+    env_file:
+      - ../../.env
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${DB_NAME}
+      MYSQL_USER: ${DB_USER}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+      TZ: America/Bogota
+    volumes:
+      - mysql_data:/var/lib/mysql
+    ports:
+      - "3306:3306"
+    networks:
+      - whapco_net
+
 networks:
   whapco_net:
     driver: bridge
+
+volumes:
+  mysql_data:

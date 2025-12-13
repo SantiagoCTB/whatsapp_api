@@ -41,12 +41,20 @@
         <div id="attachAudio" class="attach-item" title="Grabar audio">🎤</div>
         <div id="attachVideo" class="attach-item" title="Enviar video">🎥</div>
       </div>
-      <div class="message-input-wrapper">
-        <div id="imageDraft" class="image-draft-inline" hidden>
+      <input id="messageInput" type="text" placeholder="Escribe un mensaje…">
+      <div id="imageDraft" class="image-draft" hidden>
+        <div class="image-draft-preview" aria-hidden="true">
           <img id="imageDraftPreview" alt="Vista previa de la imagen a enviar" />
-          <button type="button" id="cancelImageDraft" aria-label="Quitar imagen" title="Quitar imagen">×</button>
         </div>
-        <input id="messageInput" type="text" placeholder="Escribe un mensaje o caption…">
+        <div class="image-draft-body">
+          <p id="imageDraftName" class="image-draft-name"></p>
+          <label for="imageCaption" class="sr-only">Caption</label>
+          <input id="imageCaption" type="text" placeholder="Añade un caption opcional" autocomplete="off">
+          <div class="image-draft-actions">
+            <button type="button" id="cancelImageDraft" class="ghost">Cancelar</button>
+            <button type="button" id="sendImageDraftBtn" class="primary">Enviar imagen</button>
+          </div>
+        </div>
       </div>
       <button id="sendBtn">Enviar</button>
       <input id="imageInput" type="file" accept="image/*" style="display:none;">
@@ -56,6 +64,7 @@
         <button id="startRecord" title="Grabar">⏺️</button>
         <button id="stopRecord" title="Detener" disabled>⏹️</button>
       </div>
+      <div id="audioStatus" class="audio-status" aria-live="polite" hidden></div>
     </div>
   </div>
 </div>
@@ -232,12 +241,53 @@
         }
         return bogotaFormatter.format(date);
       }
+
+      function normalizeMediaUrl(u) {
+        if (!u) return u;
+        try {
+          const raw = `${u}`.trim();
+          if (!raw) return u;
+          const lower = raw.toLowerCase();
+          const uploadsMarker = '/static/uploads/';
+          if (lower.includes('app.whapco.site') && lower.includes(uploadsMarker)) {
+            const idx = lower.indexOf(uploadsMarker);
+            if (idx !== -1) {
+              return raw.slice(idx);
+            }
+          }
+          if (lower.startsWith('http://')) {
+            const httpsVersion = 'https://' + raw.slice('http://'.length);
+            const httpsLower = httpsVersion.toLowerCase();
+            if (httpsLower.includes('app.whapco.site') && httpsLower.includes(uploadsMarker)) {
+              const idx = httpsLower.indexOf(uploadsMarker);
+              if (idx !== -1) {
+                return httpsVersion.slice(idx);
+              }
+            }
+            return httpsVersion;
+          }
+          if (lower.startsWith(`https://app.whapco.site${uploadsMarker}`)) {
+            const idx = lower.indexOf(uploadsMarker);
+            return raw.slice(idx);
+          }
+          if (lower.startsWith(uploadsMarker)) return raw;
+          if (!raw.startsWith('http://') && !raw.startsWith('https://') && !raw.startsWith('/')) {
+            return `${uploadsMarker}${raw.replace(/^\/+/, '')}`;
+          }
+          return raw;
+        } catch (err) {
+          return u;
+        }
+      }
       const sendBtn = document.getElementById('sendBtn');
       const messageInput = document.getElementById('messageInput');
       const inputArea = document.querySelector('.inputArea');
       const imageDraftEl = document.getElementById('imageDraft');
       const imageDraftPreview = document.getElementById('imageDraftPreview');
+      const imageDraftName = document.getElementById('imageDraftName');
+      const imageCaptionInput = document.getElementById('imageCaption');
       const cancelImageDraftBtn = document.getElementById('cancelImageDraft');
+      const sendImageDraftBtn = document.getElementById('sendImageDraftBtn');
       const sidebar = document.querySelector('.sidebar');
       const menuToggle = document.getElementById('menuToggle');
       menuToggle.addEventListener('click', () => {
@@ -429,11 +479,15 @@
         }
         let isSending = false;
         let isSendingImage = false;
+        let isSendingAudio = false;
+        let isRecordingAudio = false;
         let imageDraft = null;
         let isBotoneraSending = false;
         let sendUnlockTimeout = null;
         let lastSentMessage = '';
         let lastSentTimestamp = 0;
+        const audioStatusEl = document.getElementById('audioStatus');
+        let audioStatusTimeout = null;
 
         function startSending() {
           if (sendUnlockTimeout) clearTimeout(sendUnlockTimeout);
@@ -455,7 +509,28 @@
 
         function updateSendButtons() {
           if (sendBtn) {
-            sendBtn.disabled = isSending || isSendingImage;
+            sendBtn.disabled = isSending || isSendingImage || isSendingAudio || isRecordingAudio;
+          }
+          if (sendImageDraftBtn) {
+            sendImageDraftBtn.disabled = isSendingImage || !imageDraft;
+          }
+        }
+
+        function setAudioStatus(message, state = 'info', autoClearMs = 0) {
+          if (!audioStatusEl) return;
+          if (audioStatusTimeout) {
+            clearTimeout(audioStatusTimeout);
+            audioStatusTimeout = null;
+          }
+          audioStatusEl.textContent = message || '';
+          audioStatusEl.dataset.state = state || 'info';
+          audioStatusEl.hidden = !message;
+          if (message && autoClearMs) {
+            audioStatusTimeout = setTimeout(() => {
+              audioStatusEl.textContent = '';
+              audioStatusEl.hidden = true;
+              audioStatusTimeout = null;
+            }, autoClearMs);
           }
         }
 
@@ -917,7 +992,7 @@
         replyTo = selectedBubble.dataset.waId;
         replyPreviewEl.innerHTML = '';
         const tipo = selectedBubble.dataset.tipo || '';
-        const url  = selectedBubble.dataset.url;
+        const url  = normalizeMediaUrl(selectedBubble.dataset.url);
         const text = selectedBubble.dataset.text;
         if (url && tipo.endsWith('_image')) {
           const img = document.createElement('img');
@@ -1268,6 +1343,10 @@
               const [txt, tipo, url, ts, linkUrl, linkTitle, linkBody, linkThumb,
                      waId, replyWaId, replyId, replyText, replyTipo, replyUrl,
                      flowName, flowJson, flowSegments] = msgs[i];
+              const mediaUrl = normalizeMediaUrl(url);
+              const safeReplyUrl = normalizeMediaUrl(replyUrl);
+              const safeLinkThumb = normalizeMediaUrl(linkThumb);
+              const safeLinkUrl = normalizeMediaUrl(linkUrl);
               const div = document.createElement('div');
               // map tipo a bubble class
               let bubble = 'cliente';
@@ -1278,18 +1357,18 @@
               if (replyWaId) {
                 const replyDiv = document.createElement('div');
                 replyDiv.className = 'reply';
-                if (replyTipo && replyTipo.endsWith('_image') && replyUrl) {
+                if (replyTipo && replyTipo.endsWith('_image') && safeReplyUrl) {
                   const img = document.createElement('img');
-                  img.src = replyUrl;
+                  img.src = safeReplyUrl;
                   img.alt = replyText || 'Imagen del mensaje citado';
                   img.classList.add('chat-image');
                   replyDiv.appendChild(img);
-                } else if (replyTipo && replyTipo.includes('audio') && replyUrl) {
+                } else if (replyTipo && replyTipo.includes('audio') && safeReplyUrl) {
                   const a = document.createElement('audio');
-                  a.controls = true; a.src = replyUrl; replyDiv.appendChild(a);
-                } else if (replyTipo && replyTipo.includes('video') && replyUrl) {
+                  a.controls = true; a.src = safeReplyUrl; replyDiv.appendChild(a);
+                } else if (replyTipo && replyTipo.includes('video') && safeReplyUrl) {
                   const v = document.createElement('video');
-                  v.controls = true; v.src = replyUrl; v.style.maxWidth = '100px';
+                  v.controls = true; v.src = safeReplyUrl; v.style.maxWidth = '100px';
                   replyDiv.appendChild(v);
                 }
                 if (replyText) {
@@ -1301,29 +1380,29 @@
               }
 
               // insertar media o texto
-              if (tipo === 'referral' && linkUrl) {
+              if (tipo === 'referral' && safeLinkUrl) {
                 const a = document.createElement('a');
-                a.href = linkUrl; a.target = '_blank'; a.style.textDecoration = 'none';
+                a.href = safeLinkUrl; a.target = '_blank'; a.style.textDecoration = 'none';
                 const card = document.createElement('div');
                 card.style.display = 'flex';
                 const img = document.createElement('img');
-                img.src = linkThumb; img.style.width = '100px'; img.style.marginRight = '8px';
+                img.src = safeLinkThumb; img.style.width = '100px'; img.style.marginRight = '8px';
                 const textBox = document.createElement('div');
                 textBox.innerHTML = `<strong>${linkTitle}</strong><br>${linkBody}`;
                 card.appendChild(img); card.appendChild(textBox); a.appendChild(card);
                 div.appendChild(a);
-              } else if (tipo.endsWith('_image') && url) {
+              } else if (tipo.endsWith('_image') && mediaUrl) {
                 const img = document.createElement('img');
-                img.src = url;
+                img.src = mediaUrl;
                 img.alt = txt || 'Imagen del mensaje';
                 img.classList.add('chat-image');
                 div.appendChild(img);
-              } else if (tipo.includes('audio') && url) {
+              } else if (tipo.includes('audio') && mediaUrl) {
                 const a = document.createElement('audio');
-                a.controls=true; a.src=url; div.appendChild(a);
-              } else if (tipo.includes('video') && url) {
+                a.controls=true; a.src=mediaUrl; div.appendChild(a);
+              } else if (tipo.includes('video') && mediaUrl) {
                 const v = document.createElement('video');
-                v.controls=true; v.src=url; v.style.maxWidth='200px';
+                v.controls=true; v.src=mediaUrl; v.style.maxWidth='200px';
                 div.appendChild(v);
               }
 
@@ -1356,7 +1435,7 @@
               if (waId) {
                 div.dataset.waId = waId;
                 if (txt) div.dataset.text = txt;
-                if (url) div.dataset.url = url;
+                if (mediaUrl) div.dataset.url = mediaUrl;
                 div.dataset.tipo = tipo;
                 if (tipo && tipo.startsWith('cliente')) {
                   newestIncoming = waId;
@@ -1536,7 +1615,7 @@
             sendImageDraft();
             return;
           }
-          if (!isSending && !isSendingImage) sendBtn.click();
+          if (!isSending && !isSendingImage && !isSendingAudio && !isRecordingAudio) sendBtn.click();
         }
       });
 
@@ -1562,6 +1641,7 @@
       let recordedMimeType = '';
       document.getElementById('attachAudio').onclick = async () => {
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          setAudioStatus('Selecciona un archivo de audio para enviarlo.', 'info', 3000);
           audIn.click();
           return;
         }
@@ -1581,18 +1661,28 @@
           audioChunks = [];
           mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
           mediaRecorder.onstop = async () => {
+            isRecordingAudio = false;
+            updateSendButtons();
+            const totalSize = audioChunks.reduce((acc, chunk) => acc + (chunk ? chunk.size : 0), 0);
+            if (!totalSize) {
+              setAudioStatus('No se capturó audio. Intenta de nuevo.', 'error', 4000);
+              mediaRecorder.stream.getTracks().forEach(t=>t.stop());
+              return;
+            }
             const blobType = recordedMimeType || 'audio/webm';
             const extension = blobType.includes('ogg') ? 'ogg' : 'webm';
             const blob = new Blob(audioChunks, { type: blobType });
             const file = new File([blob], `recording.${extension}`, { type: blobType });
-            await sendRecordedAudio(file);
+            await sendAudioFile(file);
             mediaRecorder.stream.getTracks().forEach(t=>t.stop());
           };
           recordControls.style.display = 'block';
           attachMenu.classList.remove('show');
           startRecBtn.disabled = false;
           stopRecBtn.disabled = true;
+          setAudioStatus('Micrófono listo. Presiona grabar para empezar.', 'info', 2500);
         } catch(err) {
+          setAudioStatus('No se pudo acceder al micrófono. Sube un archivo.', 'error', 4000);
           audIn.click();
         }
       };
@@ -1603,6 +1693,9 @@
           mediaRecorder.start();
           startRecBtn.disabled = true;
           stopRecBtn.disabled = false;
+          isRecordingAudio = true;
+          setAudioStatus('Grabando…', 'recording');
+          updateSendButtons();
         }
       };
       stopRecBtn.onclick = () => {
@@ -1611,6 +1704,9 @@
           recordControls.style.display = 'none';
           startRecBtn.disabled = false;
           stopRecBtn.disabled = true;
+          isRecordingAudio = false;
+          setAudioStatus('Procesando grabación…', 'uploading');
+          updateSendButtons();
         }
       };
 
@@ -1618,14 +1714,80 @@
         if (!currentChat) return;
         const file = inputEl.files[0];
         if (!file) return;
+        if (endpoint === 'send_audio') {
+          await sendAudioFile(file);
+          inputEl.value='';
+          return;
+        }
         const form = new FormData();
         form.append(endpoint.split('_')[1], file);
         form.append('caption','');
         form.append('numero', currentChat);
-        const res = await fetch(`/${endpoint}`, { method:'POST', body:form });
-        if (!res.ok) return;
-        inputEl.value=''; attachMenu.classList.remove('show');
-        loadMessages(); fetchChatList();
+        try {
+          const res = await fetch(`/${endpoint}`, { method:'POST', body:form });
+          if (!res.ok) {
+            const msg = await extractSendError(res);
+            throw new Error(msg);
+          }
+          attachMenu.classList.remove('show');
+          loadMessages(); fetchChatList();
+        } catch (err) {
+          const msg = (err && err.message) ? err.message : 'No se pudo enviar el archivo';
+          alert(msg);
+        } finally {
+          inputEl.value='';
+        }
+      }
+
+      async function sendAudioFile(file) {
+        if (!currentChat || !file) return;
+        isSendingAudio = true;
+        updateSendButtons();
+        setAudioStatus('Subiendo audio…', 'uploading');
+        const form = new FormData();
+        form.append('audio', file);
+        form.append('caption', messageInput ? messageInput.value.trim() : '');
+        form.append('numero', currentChat);
+        try {
+          const res = await fetch('/send_audio', { method:'POST', body: form });
+          if (!res.ok) {
+            const msg = await extractSendError(res);
+            throw new Error(msg);
+          }
+          let confirmation = 'Audio en cola para enviar';
+          try {
+            const data = await res.json();
+            if (data && data.url) {
+              confirmation = 'Audio en cola y listo para reproducir';
+            }
+          } catch (parseErr) {
+            // ignore parse errors and keep fallback confirmation
+          }
+          setAudioStatus(confirmation, 'success', 3500);
+          attachMenu.classList.remove('show');
+          loadMessages(); fetchChatList();
+        } catch (err) {
+          const msg = (err && err.message) ? err.message : 'No se pudo enviar el audio';
+          setAudioStatus(msg, 'error', 5000);
+          alert(msg);
+        } finally {
+          isSendingAudio = false;
+          updateSendButtons();
+          if (audIn) audIn.value = '';
+          if (messageInput) messageInput.focus();
+        }
+      }
+
+      function clearImageDraft() {
+        if (imageDraft && imageDraft.previewUrl) {
+          URL.revokeObjectURL(imageDraft.previewUrl);
+        }
+        imageDraft = null;
+        if (imageCaptionInput) imageCaptionInput.value = '';
+        if (imageDraftPreview) imageDraftPreview.removeAttribute('src');
+        if (imageDraftName) imageDraftName.textContent = '';
+        if (imageDraftEl) imageDraftEl.hidden = true;
+        updateSendButtons();
       }
 
       function clearImageDraft() {
@@ -1666,12 +1828,15 @@
         if (imageDraftPreview) {
           imageDraftPreview.src = imageDraft.previewUrl;
         }
+        if (imageDraftName) {
+          imageDraftName.textContent = file.name || 'Imagen seleccionada';
+        }
         if (imageDraftEl) {
           imageDraftEl.hidden = false;
         }
-        if (messageInput) {
-          messageInput.placeholder = 'Añade un caption y envía';
-          messageInput.focus();
+        if (imageCaptionInput) {
+          imageCaptionInput.value = '';
+          imageCaptionInput.focus();
         }
         attachMenu.classList.remove('show');
         updateSendButtons();
@@ -1684,7 +1849,7 @@
         updateSendButtons();
         const form = new FormData();
         form.append('image', imageDraft.file);
-        form.append('caption', messageInput ? messageInput.value.trim() : '');
+        form.append('caption', imageCaptionInput ? imageCaptionInput.value.trim() : '');
         form.append('numero', currentChat);
         try {
           const res = await fetch('/send_image', { method:'POST', body: form });
@@ -1692,7 +1857,6 @@
             const msg = await extractSendError(res);
             throw new Error(msg);
           }
-          if (messageInput) messageInput.value = '';
           clearImageDraft();
           loadMessages();
           fetchChatList();
@@ -1747,6 +1911,12 @@
           clearImageDraft();
           messageInput.focus();
         });
+      }
+      if (sendImageDraftBtn) {
+        sendImageDraftBtn.addEventListener('click', sendImageDraft);
+      }
+      if (imageCaptionInput) {
+        imageCaptionInput.addEventListener('input', () => updateSendButtons());
       }
 
       messageInput.addEventListener('paste', handlePasteForImage);

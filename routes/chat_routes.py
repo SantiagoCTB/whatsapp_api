@@ -1,3 +1,4 @@
+import mimetypes
 import os
 import uuid
 import json
@@ -204,6 +205,52 @@ def _parse_flow_segments(raw_message):
     return segments
 
 
+def sanitize_media_url(url):
+    """Normaliza URLs de medios para evitar mixed content."""
+
+    if url in (None, ""):
+        return url
+
+    uploads_marker = "/static/uploads/"
+    try:
+        normalized = str(url).strip()
+    except Exception:
+        return url
+
+    if not normalized:
+        return url
+
+    lower = normalized.lower()
+
+    def _relative_from_uploads(current):
+        idx = current.lower().find(uploads_marker)
+        if idx != -1:
+            filename = current[idx + len(uploads_marker):]
+            return f"{uploads_marker}{filename.lstrip('/') }"
+        return current
+
+    if lower.startswith("http://"):
+        normalized = "https://" + normalized[len("http://"):]
+        lower = normalized.lower()
+
+    if "app.whapco.site" in lower and uploads_marker in lower:
+        return _relative_from_uploads(normalized)
+
+    if uploads_marker in lower:
+        return _relative_from_uploads(normalized)
+
+    if lower.startswith(f"https://app.whapco.site{uploads_marker}"):
+        return _relative_from_uploads(normalized)
+
+    if lower.startswith(uploads_marker):
+        return normalized
+
+    if not normalized.startswith(("http://", "https://", "/")):
+        return f"{uploads_marker}{normalized.lstrip('/') }"
+
+    return normalized
+
+
 def _extract_flow_segments(raw_message):
     """Return parsed segments enriched with summaries for UI rendering."""
     if not raw_message:
@@ -399,7 +446,11 @@ def get_chat(numero):
     formatted = []
     for row in mensajes:
         row = list(row)
+        row[2] = sanitize_media_url(row[2])  # media_url
         row[3] = _to_bogota_iso(row[3])
+        row[4] = sanitize_media_url(row[4])  # link_url
+        row[7] = sanitize_media_url(row[7])  # link_thumb
+        row[13] = sanitize_media_url(row[13])  # reply_media_url
         mensaje_txt = row[0] or ''
         tipo_msg = row[1] or ''
         segments = _extract_flow_segments(mensaje_txt) if tipo_msg.startswith('cliente') else []
@@ -1049,11 +1100,44 @@ def send_audio():
     if not numero or not audio:
         return jsonify({'error':'Falta número o audio'}), 400
 
-    # Guarda archivo en disco
-    filename = secure_filename(audio.filename)
-    unique   = f"{uuid.uuid4().hex}_{filename}"
+    original_filename = audio.filename or ''
+    mime_type = (audio.mimetype or '').lower()
+    if not mime_type.startswith('audio/'):
+        guessed_mime, _ = mimetypes.guess_type(original_filename)
+        if guessed_mime:
+            mime_type = guessed_mime.lower()
+
+    ext = os.path.splitext(original_filename)[1].lower()
+    if not ext and mime_type:
+        guessed_ext = mimetypes.guess_extension(mime_type)
+        if guessed_ext:
+            ext = '.ogg' if guessed_ext == '.oga' else guessed_ext
+        elif mime_type in {'audio/webm', 'audio/webm;codecs=opus'}:
+            ext = '.webm'
+        elif mime_type.startswith('audio/ogg'):
+            ext = '.ogg'
+
+    if not mime_type.startswith('audio/'):
+        return jsonify({'error': 'El archivo subido no parece ser un audio válido'}), 400
+
+    if not ext:
+        return jsonify({'error': 'No se pudo determinar el formato del audio. Asegúrate de que el archivo tenga una extensión o tipo válido.'}), 400
+
+    safe_stem = secure_filename(os.path.splitext(original_filename)[0]) or 'grabacion'
+    filename = f"{safe_stem}{ext}"
+    unique = f"{uuid.uuid4().hex}_{filename}"
     path = os.path.join(MEDIA_ROOT, unique)
-    audio.save(path)
+
+    try:
+        audio.save(path)
+    except Exception:
+        return jsonify({'error': 'No se pudo guardar el audio. Intenta nuevamente.'}), 500
+
+    if os.path.getsize(path) == 0:
+        os.remove(path)
+        return jsonify({'error': 'El archivo de audio está vacío. Intenta grabar o subirlo de nuevo.'}), 400
+
+    audio_url = url_for('static', filename=f'uploads/{unique}', _external=True)
 
     # Envía el audio por la API
     tipo_envio = 'bot_audio' if origen == 'bot' else 'asesor'
@@ -1062,14 +1146,14 @@ def send_audio():
         caption,
         tipo=tipo_envio,
         tipo_respuesta='audio',
-        opciones=path
+        opciones=audio_url
     )
     if origen != 'bot':
         row = get_chat_state(numero)
         step = row[0] if row else ''
         update_chat_state(numero, step, 'asesor')
 
-    return jsonify({'status':'sent_audio'}), 200
+    return jsonify({'status':'sent_audio', 'url': audio_url}), 200
 
 @chat_bp.route('/send_video', methods=['POST'])
 def send_video():
