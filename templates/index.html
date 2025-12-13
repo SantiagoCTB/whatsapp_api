@@ -240,6 +240,44 @@
         }
         return bogotaFormatter.format(date);
       }
+
+      function normalizeMediaUrl(u) {
+        if (!u) return u;
+        try {
+          const raw = `${u}`.trim();
+          if (!raw) return u;
+          const lower = raw.toLowerCase();
+          const uploadsMarker = '/static/uploads/';
+          if (lower.includes('app.whapco.site') && lower.includes(uploadsMarker)) {
+            const idx = lower.indexOf(uploadsMarker);
+            if (idx !== -1) {
+              return raw.slice(idx);
+            }
+          }
+          if (lower.startsWith('http://')) {
+            const httpsVersion = 'https://' + raw.slice('http://'.length);
+            const httpsLower = httpsVersion.toLowerCase();
+            if (httpsLower.includes('app.whapco.site') && httpsLower.includes(uploadsMarker)) {
+              const idx = httpsLower.indexOf(uploadsMarker);
+              if (idx !== -1) {
+                return httpsVersion.slice(idx);
+              }
+            }
+            return httpsVersion;
+          }
+          if (lower.startsWith(`https://app.whapco.site${uploadsMarker}`)) {
+            const idx = lower.indexOf(uploadsMarker);
+            return raw.slice(idx);
+          }
+          if (lower.startsWith(uploadsMarker)) return raw;
+          if (!raw.startsWith('http://') && !raw.startsWith('https://') && !raw.startsWith('/')) {
+            return `${uploadsMarker}${raw.replace(/^\/+/, '')}`;
+          }
+          return raw;
+        } catch (err) {
+          return u;
+        }
+      }
       const sendBtn = document.getElementById('sendBtn');
       const messageInput = document.getElementById('messageInput');
       const inputArea = document.querySelector('.inputArea');
@@ -931,7 +969,7 @@
         replyTo = selectedBubble.dataset.waId;
         replyPreviewEl.innerHTML = '';
         const tipo = selectedBubble.dataset.tipo || '';
-        const url  = selectedBubble.dataset.url;
+        const url  = normalizeMediaUrl(selectedBubble.dataset.url);
         const text = selectedBubble.dataset.text;
         if (url && tipo.endsWith('_image')) {
           const img = document.createElement('img');
@@ -1282,6 +1320,10 @@
               const [txt, tipo, url, ts, linkUrl, linkTitle, linkBody, linkThumb,
                      waId, replyWaId, replyId, replyText, replyTipo, replyUrl,
                      flowName, flowJson, flowSegments] = msgs[i];
+              const mediaUrl = normalizeMediaUrl(url);
+              const safeReplyUrl = normalizeMediaUrl(replyUrl);
+              const safeLinkThumb = normalizeMediaUrl(linkThumb);
+              const safeLinkUrl = normalizeMediaUrl(linkUrl);
               const div = document.createElement('div');
               // map tipo a bubble class
               let bubble = 'cliente';
@@ -1292,18 +1334,18 @@
               if (replyWaId) {
                 const replyDiv = document.createElement('div');
                 replyDiv.className = 'reply';
-                if (replyTipo && replyTipo.endsWith('_image') && replyUrl) {
+                if (replyTipo && replyTipo.endsWith('_image') && safeReplyUrl) {
                   const img = document.createElement('img');
-                  img.src = replyUrl;
+                  img.src = safeReplyUrl;
                   img.alt = replyText || 'Imagen del mensaje citado';
                   img.classList.add('chat-image');
                   replyDiv.appendChild(img);
-                } else if (replyTipo && replyTipo.includes('audio') && replyUrl) {
+                } else if (replyTipo && replyTipo.includes('audio') && safeReplyUrl) {
                   const a = document.createElement('audio');
-                  a.controls = true; a.src = replyUrl; replyDiv.appendChild(a);
-                } else if (replyTipo && replyTipo.includes('video') && replyUrl) {
+                  a.controls = true; a.src = safeReplyUrl; replyDiv.appendChild(a);
+                } else if (replyTipo && replyTipo.includes('video') && safeReplyUrl) {
                   const v = document.createElement('video');
-                  v.controls = true; v.src = replyUrl; v.style.maxWidth = '100px';
+                  v.controls = true; v.src = safeReplyUrl; v.style.maxWidth = '100px';
                   replyDiv.appendChild(v);
                 }
                 if (replyText) {
@@ -1315,29 +1357,29 @@
               }
 
               // insertar media o texto
-              if (tipo === 'referral' && linkUrl) {
+              if (tipo === 'referral' && safeLinkUrl) {
                 const a = document.createElement('a');
-                a.href = linkUrl; a.target = '_blank'; a.style.textDecoration = 'none';
+                a.href = safeLinkUrl; a.target = '_blank'; a.style.textDecoration = 'none';
                 const card = document.createElement('div');
                 card.style.display = 'flex';
                 const img = document.createElement('img');
-                img.src = linkThumb; img.style.width = '100px'; img.style.marginRight = '8px';
+                img.src = safeLinkThumb; img.style.width = '100px'; img.style.marginRight = '8px';
                 const textBox = document.createElement('div');
                 textBox.innerHTML = `<strong>${linkTitle}</strong><br>${linkBody}`;
                 card.appendChild(img); card.appendChild(textBox); a.appendChild(card);
                 div.appendChild(a);
-              } else if (tipo.endsWith('_image') && url) {
+              } else if (tipo.endsWith('_image') && mediaUrl) {
                 const img = document.createElement('img');
-                img.src = url;
+                img.src = mediaUrl;
                 img.alt = txt || 'Imagen del mensaje';
                 img.classList.add('chat-image');
                 div.appendChild(img);
-              } else if (tipo.includes('audio') && url) {
+              } else if (tipo.includes('audio') && mediaUrl) {
                 const a = document.createElement('audio');
-                a.controls=true; a.src=url; div.appendChild(a);
-              } else if (tipo.includes('video') && url) {
+                a.controls=true; a.src=mediaUrl; div.appendChild(a);
+              } else if (tipo.includes('video') && mediaUrl) {
                 const v = document.createElement('video');
-                v.controls=true; v.src=url; v.style.maxWidth='200px';
+                v.controls=true; v.src=mediaUrl; v.style.maxWidth='200px';
                 div.appendChild(v);
               }
 
@@ -1370,7 +1412,7 @@
               if (waId) {
                 div.dataset.waId = waId;
                 if (txt) div.dataset.text = txt;
-                if (url) div.dataset.url = url;
+                if (mediaUrl) div.dataset.url = mediaUrl;
                 div.dataset.tipo = tipo;
                 if (tipo && tipo.startsWith('cliente')) {
                   newestIncoming = waId;

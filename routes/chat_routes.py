@@ -204,6 +204,52 @@ def _parse_flow_segments(raw_message):
     return segments
 
 
+def sanitize_media_url(url):
+    """Normaliza URLs de medios para evitar mixed content."""
+
+    if url in (None, ""):
+        return url
+
+    uploads_marker = "/static/uploads/"
+    try:
+        normalized = str(url).strip()
+    except Exception:
+        return url
+
+    if not normalized:
+        return url
+
+    lower = normalized.lower()
+
+    def _relative_from_uploads(current):
+        idx = current.lower().find(uploads_marker)
+        if idx != -1:
+            filename = current[idx + len(uploads_marker):]
+            return f"{uploads_marker}{filename.lstrip('/') }"
+        return current
+
+    if lower.startswith("http://"):
+        normalized = "https://" + normalized[len("http://"):]
+        lower = normalized.lower()
+
+    if "app.whapco.site" in lower and uploads_marker in lower:
+        return _relative_from_uploads(normalized)
+
+    if uploads_marker in lower:
+        return _relative_from_uploads(normalized)
+
+    if lower.startswith(f"https://app.whapco.site{uploads_marker}"):
+        return _relative_from_uploads(normalized)
+
+    if lower.startswith(uploads_marker):
+        return normalized
+
+    if not normalized.startswith(("http://", "https://", "/")):
+        return f"{uploads_marker}{normalized.lstrip('/') }"
+
+    return normalized
+
+
 def _extract_flow_segments(raw_message):
     """Return parsed segments enriched with summaries for UI rendering."""
     if not raw_message:
@@ -399,7 +445,11 @@ def get_chat(numero):
     formatted = []
     for row in mensajes:
         row = list(row)
+        row[2] = sanitize_media_url(row[2])  # media_url
         row[3] = _to_bogota_iso(row[3])
+        row[4] = sanitize_media_url(row[4])  # link_url
+        row[7] = sanitize_media_url(row[7])  # link_thumb
+        row[13] = sanitize_media_url(row[13])  # reply_media_url
         mensaje_txt = row[0] or ''
         tipo_msg = row[1] or ''
         segments = _extract_flow_segments(mensaje_txt) if tipo_msg.startswith('cliente') else []
