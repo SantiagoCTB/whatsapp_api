@@ -1790,6 +1790,19 @@
         updateSendButtons();
       }
 
+      function clearImageDraft() {
+        if (imageDraft && imageDraft.previewUrl) {
+          URL.revokeObjectURL(imageDraft.previewUrl);
+        }
+        imageDraft = null;
+        if (imageDraftPreview) imageDraftPreview.removeAttribute('src');
+        if (imageDraftEl) imageDraftEl.hidden = true;
+        if (messageInput) {
+          messageInput.placeholder = 'Escribe un mensaje…';
+        }
+        updateSendButtons();
+      }
+
       function extractImageFile(dataTransfer) {
         if (!dataTransfer) return null;
         if (dataTransfer.files && dataTransfer.files.length) {

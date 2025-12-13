@@ -509,9 +509,12 @@
       color:#e53e3e;
     }
     #messageInput {
-      flex:1; padding:10px 14px; border:1px solid #ccc;
-      border-radius:20px; font-size:14px; outline:none;
-      margin-right:12px;
+      flex:1; padding:8px 10px; border:none;
+      border-radius:14px; font-size:14px; outline:none;
+      background: transparent;
+    }
+    #messageInput:focus {
+      outline: none;
     }
     #sendBtn {
       padding:10px 20px; border:none; border-radius:20px;
