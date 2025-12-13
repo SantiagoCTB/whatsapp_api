@@ -30,7 +30,7 @@
     </div>
 
     <!-- Chat Window -->
-    <div class="chatWindow">
+    <div class="chatWindow" role="region" aria-label="Zona del chat. Arrastra imágenes para prepararlas antes de enviar." tabindex="0">
       <div id="botonera"></div>
       <div id="chatBox"></div>
       <div id="replyPreview" class="reply-preview"></div>
@@ -41,7 +41,13 @@
         <div id="attachAudio" class="attach-item" title="Grabar audio">🎤</div>
         <div id="attachVideo" class="attach-item" title="Enviar video">🎥</div>
       </div>
-      <input id="messageInput" type="text" placeholder="Escribe un mensaje…">
+      <div class="message-input-wrapper">
+        <div id="imageDraft" class="image-draft-inline" hidden>
+          <img id="imageDraftPreview" alt="Vista previa de la imagen a enviar" />
+          <button type="button" id="cancelImageDraft" aria-label="Quitar imagen" title="Quitar imagen">×</button>
+        </div>
+        <input id="messageInput" type="text" placeholder="Escribe un mensaje o caption…">
+      </div>
       <button id="sendBtn">Enviar</button>
       <input id="imageInput" type="file" accept="image/*" style="display:none;">
       <input id="audioInput" type="file" accept="audio/*" style="display:none;">
@@ -160,6 +166,7 @@
       document.addEventListener('keydown', unlockNotificationAudio);
       const chatListEl = document.getElementById('chatList');
       const chatBoxEl  = document.getElementById('chatBox');
+      const chatWindowEl = document.querySelector('.chatWindow');
       const botoneraEl = document.getElementById('botonera');
       const replyPreviewEl = document.getElementById('replyPreview');
       const typingIndicatorEl = document.createElement('div');
@@ -228,6 +235,9 @@
       const sendBtn = document.getElementById('sendBtn');
       const messageInput = document.getElementById('messageInput');
       const inputArea = document.querySelector('.inputArea');
+      const imageDraftEl = document.getElementById('imageDraft');
+      const imageDraftPreview = document.getElementById('imageDraftPreview');
+      const cancelImageDraftBtn = document.getElementById('cancelImageDraft');
       const sidebar = document.querySelector('.sidebar');
       const menuToggle = document.getElementById('menuToggle');
       menuToggle.addEventListener('click', () => {
@@ -418,6 +428,8 @@
           return computeRoleAbbreviation(keyword) || keyword.charAt(0).toUpperCase();
         }
         let isSending = false;
+        let isSendingImage = false;
+        let imageDraft = null;
         let isBotoneraSending = false;
         let sendUnlockTimeout = null;
         let lastSentMessage = '';
@@ -426,7 +438,7 @@
         function startSending() {
           if (sendUnlockTimeout) clearTimeout(sendUnlockTimeout);
           isSending = true;
-          sendBtn.disabled = true;
+          updateSendButtons();
           sendUnlockTimeout = setTimeout(() => {
             stopSending();
           }, 8000);
@@ -438,7 +450,13 @@
             sendUnlockTimeout = null;
           }
           isSending = false;
-          sendBtn.disabled = false;
+          updateSendButtons();
+        }
+
+        function updateSendButtons() {
+          if (sendBtn) {
+            sendBtn.disabled = isSending || isSendingImage;
+          }
         }
 
         const FLOW_SUMMARY_MAX_ITEMS = 10;
@@ -1443,7 +1461,11 @@
 
       // Enviar texto
       sendBtn.onclick = () => {
-        if (isSending) return;
+        if (imageDraft) {
+          sendImageDraft();
+          return;
+        }
+        if (isSending || isSendingImage) return;
         const txt = messageInput.value.trim();
         if (!txt||!currentChat) return;
         const now = Date.now();
@@ -1510,7 +1532,11 @@
       messageInput.addEventListener('keydown', function(e) {
         if (e.key === 'Enter' && !e.shiftKey) {
           e.preventDefault();
-          if (!isSending) sendBtn.click();
+          if (imageDraft) {
+            sendImageDraft();
+            return;
+          }
+          if (!isSending && !isSendingImage) sendBtn.click();
         }
       });
 
@@ -1602,6 +1628,19 @@
         loadMessages(); fetchChatList();
       }
 
+      function clearImageDraft() {
+        if (imageDraft && imageDraft.previewUrl) {
+          URL.revokeObjectURL(imageDraft.previewUrl);
+        }
+        imageDraft = null;
+        if (imageDraftPreview) imageDraftPreview.removeAttribute('src');
+        if (imageDraftEl) imageDraftEl.hidden = true;
+        if (messageInput) {
+          messageInput.placeholder = 'Escribe un mensaje…';
+        }
+        updateSendButtons();
+      }
+
       function extractImageFile(dataTransfer) {
         if (!dataTransfer) return null;
         if (dataTransfer.files && dataTransfer.files.length) {
@@ -1615,16 +1654,73 @@
         return null;
       }
 
-      async function sendImageFileDirect(file) {
-        if (!file || !currentChat) return;
-        const form = new FormData();
-        form.append('image', file);
-        form.append('caption','');
-        form.append('numero', currentChat);
-        const res = await fetch('/send_image', { method:'POST', body: form });
-        if (!res.ok) return;
+      function prepareImageDraft(file) {
+        if (!file || !file.type || !file.type.startsWith('image/')) return;
+        if (imageDraft && imageDraft.previewUrl) {
+          URL.revokeObjectURL(imageDraft.previewUrl);
+        }
+        imageDraft = {
+          file,
+          previewUrl: URL.createObjectURL(file)
+        };
+        if (imageDraftPreview) {
+          imageDraftPreview.src = imageDraft.previewUrl;
+        }
+        if (imageDraftEl) {
+          imageDraftEl.hidden = false;
+        }
+        if (messageInput) {
+          messageInput.placeholder = 'Añade un caption y envía';
+          messageInput.focus();
+        }
         attachMenu.classList.remove('show');
-        loadMessages(); fetchChatList();
+        updateSendButtons();
+      }
+
+      async function sendImageDraft() {
+        if (!imageDraft || !currentChat || isSendingImage) return;
+        attachMenu.classList.remove('show');
+        isSendingImage = true;
+        updateSendButtons();
+        const form = new FormData();
+        form.append('image', imageDraft.file);
+        form.append('caption', messageInput ? messageInput.value.trim() : '');
+        form.append('numero', currentChat);
+        try {
+          const res = await fetch('/send_image', { method:'POST', body: form });
+          if (!res.ok) {
+            const msg = await extractSendError(res);
+            throw new Error(msg);
+          }
+          if (messageInput) messageInput.value = '';
+          clearImageDraft();
+          loadMessages();
+          fetchChatList();
+        } catch (err) {
+          const msg = (err && err.message) ? err.message : 'No se pudo enviar la imagen';
+          alert(msg);
+        } finally {
+          isSendingImage = false;
+          updateSendButtons();
+          if (messageInput) messageInput.focus();
+        }
+      }
+
+      function handlePasteForImage(event) {
+        const imageFile = extractImageFile(event.clipboardData);
+        if (!imageFile) return;
+        event.preventDefault();
+        prepareImageDraft(imageFile);
+      }
+
+      function activateDragVisual() {
+        if (chatWindowEl) chatWindowEl.classList.add('drag-active');
+        if (inputArea) inputArea.classList.add('drag-active');
+      }
+
+      function clearDragVisual() {
+        if (chatWindowEl) chatWindowEl.classList.remove('drag-active');
+        if (inputArea) inputArea.classList.remove('drag-active');
       }
       async function sendRecordedAudio(file) {
         if (!currentChat) return;
@@ -1637,37 +1733,48 @@
         attachMenu.classList.remove('show');
         loadMessages(); fetchChatList();
       }
-      imgIn.onchange = () => sendFile(imgIn, 'send_image');
+      imgIn.onchange = () => {
+        const selected = imgIn.files[0];
+        if (selected) {
+          prepareImageDraft(selected);
+          imgIn.value = '';
+        }
+      };
       audIn.onchange = () => sendFile(audIn, 'send_audio');
       vidIn.onchange = () => sendFile(vidIn, 'send_video');
+      if (cancelImageDraftBtn) {
+        cancelImageDraftBtn.addEventListener('click', () => {
+          clearImageDraft();
+          messageInput.focus();
+        });
+      }
 
-      messageInput.addEventListener('paste', async event => {
-        const imageFile = extractImageFile(event.clipboardData);
-        if (!imageFile) return;
-        event.preventDefault();
-        await sendImageFileDirect(imageFile);
-      });
-
-      if (inputArea) {
-        inputArea.addEventListener('dragover', event => {
-          event.preventDefault();
+      messageInput.addEventListener('paste', handlePasteForImage);
+      if (chatWindowEl) {
+        chatWindowEl.addEventListener('paste', handlePasteForImage);
+        chatWindowEl.addEventListener('dragover', event => {
           if (extractImageFile(event.dataTransfer)) {
-            inputArea.classList.add('drag-active');
+            event.preventDefault();
+            activateDragVisual();
           }
         });
 
-        inputArea.addEventListener('dragleave', () => {
-          inputArea.classList.remove('drag-active');
+        chatWindowEl.addEventListener('dragleave', event => {
+          if (!chatWindowEl.contains(event.relatedTarget)) {
+            clearDragVisual();
+          }
         });
 
-        inputArea.addEventListener('drop', async event => {
-          event.preventDefault();
+        chatWindowEl.addEventListener('drop', event => {
           const imageFile = extractImageFile(event.dataTransfer);
-          inputArea.classList.remove('drag-active');
+          clearDragVisual();
           if (!imageFile) return;
-          await sendImageFileDirect(imageFile);
+          event.preventDefault();
+          prepareImageDraft(imageFile);
         });
       }
+
+      updateSendButtons();
 
       // Filtrar chats
       document.getElementById('buscador').addEventListener('input', function(){

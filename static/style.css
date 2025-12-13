@@ -222,6 +222,29 @@
       min-height: 0;
       height: 100%;
       overflow: hidden;
+      position: relative;
+    }
+    .chatWindow:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 4px;
+    }
+    .chatWindow.drag-active {
+      box-shadow: 0 0 0 3px var(--accent);
+    }
+    .chatWindow.drag-active::after {
+      content: "Suelta la imagen para preparar el envío";
+      position: absolute;
+      inset: 12px;
+      border: 2px dashed var(--accent);
+      border-radius: 16px;
+      display: grid;
+      place-items: center;
+      background: rgba(0, 168, 132, 0.06);
+      color: var(--accent-hover);
+      font-weight: 600;
+      text-align: center;
+      pointer-events: none;
+      z-index: 5;
     }
     #botonera {
       display:flex; gap:8px; padding:12px;
@@ -465,10 +488,24 @@
       background:#aaa;
       cursor:default;
     }
+    .message-input-wrapper {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex: 1;
+      background: #f7f7f7;
+      border: 1px solid #ccc;
+      border-radius: 20px;
+      padding: 6px 10px 6px 8px;
+      margin-right: 12px;
+    }
     #messageInput {
-      flex:1; padding:10px 14px; border:1px solid #ccc;
-      border-radius:20px; font-size:14px; outline:none;
-      margin-right:12px;
+      flex:1; padding:8px 10px; border:none;
+      border-radius:14px; font-size:14px; outline:none;
+      background: transparent;
+    }
+    #messageInput:focus {
+      outline: none;
     }
     #sendBtn {
       padding:10px 20px; border:none; border-radius:20px;
@@ -478,6 +515,45 @@
     }
     #sendBtn:hover {
       transform:scale(1.05); background:var(--accent-hover);
+    }
+    .image-draft-inline {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 4px 8px 4px 4px;
+      border-radius: 14px;
+      border: 1px dashed var(--accent);
+      background: #fff;
+    }
+    .image-draft-inline img {
+      width: 40px;
+      height: 40px;
+      object-fit: cover;
+      border-radius: 10px;
+      border: 1px solid var(--border-color);
+    }
+    .image-draft-inline button {
+      border: none;
+      background: transparent;
+      color: var(--accent-hover);
+      cursor: pointer;
+      font-size: 18px;
+      line-height: 1;
+      padding: 2px 4px;
+      border-radius: 8px;
+    }
+    .image-draft-inline button:hover {
+      background: rgba(0, 168, 132, 0.1);
+    }
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      border: 0;
     }
     button:after {
       content:''; position:absolute; width:100px; height:100px;
