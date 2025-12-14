@@ -63,6 +63,31 @@ def _botones_opciones_column(c, conn):
 
     return "b.opciones" if has_opciones else "NULL AS opciones"
 
+
+def _botones_categoria_column(c, conn):
+    """Asegura que la columna ``categoria`` exista en ``botones``.
+
+    Devuelve la expresión SQL a utilizar en el SELECT para soportar
+    instalaciones antiguas donde aún no existe la columna.
+    """
+
+    has_categoria = True
+    try:
+        c.execute("SHOW COLUMNS FROM botones LIKE 'categoria';")
+        has_categoria = c.fetchone() is not None
+        if not has_categoria:
+            try:
+                c.execute("ALTER TABLE botones ADD COLUMN categoria VARCHAR(100) NULL;")
+                conn.commit()
+                has_categoria = True
+            except MySQLError:
+                conn.rollback()
+                has_categoria = False
+    except MySQLError:
+        has_categoria = False
+
+    return "b.categoria" if has_categoria else "NULL AS categoria"
+
 def _reglas_view(template_name):
     """Renderiza las vistas de reglas.
     El comodín '*' en `input_text` avanza al siguiente paso sin validar
@@ -436,6 +461,8 @@ def botones():
     conn = get_connection()
     c = conn.cursor()
     try:
+        opciones_expr = _botones_opciones_column(c, conn)
+        categoria_expr = _botones_categoria_column(c, conn)
         if request.method == 'POST':
             # Importar botones desde Excel
             if 'archivo' in request.files and request.files['archivo']:
@@ -450,6 +477,7 @@ def botones():
                     tipo = fila[2] if len(fila) > 2 else None
                     media_url = fila[3] if len(fila) > 3 else None
                     opciones = fila[4] if len(fila) > 4 else None
+                    categoria = fila[5] if len(fila) > 5 else None
                     if isinstance(opciones, (dict, list)):
                         opciones = json.dumps(opciones, ensure_ascii=False)
                     elif opciones is not None:
@@ -465,8 +493,8 @@ def botones():
                                 medias.append((url, mime))
                     if mensaje:
                         c.execute(
-                            "INSERT INTO botones (nombre, mensaje, tipo, opciones) VALUES (%s, %s, %s, %s)",
-                            (nombre, mensaje, tipo, opciones)
+                            "INSERT INTO botones (nombre, mensaje, tipo, opciones, categoria) VALUES (%s, %s, %s, %s, %s)",
+                            (nombre, mensaje, tipo, opciones, categoria)
                         )
                         boton_id = c.lastrowid
                         for url, mime in medias:
@@ -517,8 +545,8 @@ def botones():
 
                     opciones_value = opciones_raw if opciones_raw else None
                     c.execute(
-                        "INSERT INTO botones (nombre, mensaje, tipo, opciones) VALUES (%s, %s, %s, %s)",
-                        (nombre, respuesta, tipo, opciones_value)
+                        "INSERT INTO botones (nombre, mensaje, tipo, opciones, categoria) VALUES (%s, %s, %s, %s, %s)",
+                        (nombre, respuesta, tipo, opciones_value, request.form.get('categoria'))
                     )
                     boton_id = c.lastrowid
                     for url, mime in medias:
@@ -550,8 +578,8 @@ def botones():
                         medias.append((url, mime))
                 if nuevo_mensaje:
                     c.execute(
-                        "INSERT INTO botones (nombre, mensaje, tipo, opciones) VALUES (%s, %s, %s, %s)",
-                        (nombre, nuevo_mensaje, tipo, None)
+                        "INSERT INTO botones (nombre, mensaje, tipo, opciones, categoria) VALUES (%s, %s, %s, %s, %s)",
+                        (nombre, nuevo_mensaje, tipo, None, request.form.get('categoria'))
                     )
                     boton_id = c.lastrowid
                     for url, mime in medias:
@@ -561,10 +589,9 @@ def botones():
                         )
                     conn.commit()
 
-        opciones_expr = _botones_opciones_column(c, conn)
         c.execute(
             f"""
-            SELECT b.id, b.mensaje, b.tipo, b.nombre, {opciones_expr},
+            SELECT b.id, b.mensaje, b.tipo, b.nombre, {opciones_expr}, {categoria_expr},
                    GROUP_CONCAT(m.media_url SEPARATOR '||') AS media_urls,
                    GROUP_CONCAT(m.media_tipo SEPARATOR '||') AS media_tipos
               FROM botones b
@@ -575,8 +602,8 @@ def botones():
         )
         botones = []
         for row in c.fetchall():
-            media_urls = row[5].split('||') if row[5] else []
-            media_tipos = row[6].split('||') if row[6] else []
+            media_urls = row[6].split('||') if row[6] else []
+            media_tipos = row[7].split('||') if row[7] else []
             if media_urls:
                 items = []
                 for idx, url in enumerate(media_urls):
@@ -592,6 +619,7 @@ def botones():
                 'tipo': row[2] or 'texto',
                 'nombre': row[3],
                 'opciones': row[4] or '',
+                'categoria': row[5],
                 'media_urls': media_urls,
                 'media_tipos': media_tipos,
                 'media_urls_display': media_urls_display,
@@ -642,9 +670,10 @@ def get_botones():
     c = conn.cursor()
     try:
         opciones_expr = _botones_opciones_column(c, conn)
+        categoria_expr = _botones_categoria_column(c, conn)
         c.execute(
             f"""
-            SELECT b.id, b.mensaje, b.tipo, b.nombre, {opciones_expr},
+            SELECT b.id, b.mensaje, b.tipo, b.nombre, {opciones_expr}, {categoria_expr},
                    GROUP_CONCAT(m.media_url SEPARATOR '||') AS media_urls,
                    GROUP_CONCAT(m.media_tipo SEPARATOR '||') AS media_tipos
               FROM botones b
@@ -661,8 +690,9 @@ def get_botones():
                 'tipo': r[2] or 'texto',
                 'nombre': r[3],
                 'opciones': r[4] or '',
-                'media_urls': r[5].split('||') if r[5] else [],
-                'media_tipos': r[6].split('||') if r[6] else []
+                'categoria': r[5],
+                'media_urls': r[6].split('||') if r[6] else [],
+                'media_tipos': r[7].split('||') if r[7] else []
             }
             for r in rows
         ])

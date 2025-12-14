@@ -1460,14 +1460,15 @@
           .then(r=>r.json())
           .then(btns => {
             botoneraEl.innerHTML='';
-            btns.forEach((b,i) => {
+
+            const crearBoton = (boton, label) => {
               const btn = document.createElement('button');
-              btn.textContent = b.nombre || i+1;
+              btn.textContent = boton.nombre || label;
               btn.onclick = () => {
                 if (!currentChat || isBotoneraSending) return;
                 isBotoneraSending = true;
                 btn.disabled = true;
-                const tipoRespuesta = b.tipo || 'texto';
+                const tipoRespuesta = boton.tipo || 'texto';
                 const envios = [];
                 const replyTarget = replyTo;
                 replyTo = null;
@@ -1475,14 +1476,14 @@
                 replyPreviewEl.innerHTML='';
 
                 if (['image','video','audio','document'].includes(tipoRespuesta)) {
-                  const urls = (b.media_urls && b.media_urls.length) ? b.media_urls : [null];
+                  const urls = (boton.media_urls && boton.media_urls.length) ? boton.media_urls : [null];
                   urls.forEach((url, index) => {
                     envios.push(fetch('/send_message', {
                       method:'POST',
                       headers:{'Content-Type':'application/json'},
                       body:JSON.stringify({
                         numero: currentChat,
-                        mensaje: index === 0 ? (b.mensaje || '') : '',
+                        mensaje: index === 0 ? (boton.mensaje || '') : '',
                         tipo_respuesta: tipoRespuesta,
                         opciones: url,
                         reply_to_wa_id: replyTarget
@@ -1495,9 +1496,9 @@
                     headers:{'Content-Type':'application/json'},
                     body:JSON.stringify({
                       numero: currentChat,
-                      mensaje: b.mensaje || '',
+                      mensaje: boton.mensaje || '',
                       tipo_respuesta: tipoRespuesta,
-                      opciones: b.opciones,
+                      opciones: boton.opciones,
                       reply_to_wa_id: replyTarget
                     })
                   }));
@@ -1523,7 +1524,36 @@
                     btn.disabled = false;
                   });
               };
-              botoneraEl.appendChild(btn);
+              return btn;
+            };
+
+            const grupos = btns.reduce((acc, boton) => {
+              const clave = boton.categoria || 'General';
+              if (!acc[clave]) acc[clave] = [];
+              acc[clave].push(boton);
+              return acc;
+            }, {});
+
+            let contador = 1;
+            Object.entries(grupos).forEach(([categoria, botonesLista]) => {
+              const details = document.createElement('details');
+              details.className = 'botonera-group';
+              details.open = true;
+              const summary = document.createElement('summary');
+              summary.textContent = categoria;
+              details.appendChild(summary);
+
+              const contenedor = document.createElement('div');
+              contenedor.className = 'botonera-buttons';
+
+              botonesLista.forEach(boton => {
+                const btn = crearBoton(boton, contador);
+                contador += 1;
+                contenedor.appendChild(btn);
+              });
+
+              details.appendChild(contenedor);
+              botoneraEl.appendChild(details);
             });
           });
       }
