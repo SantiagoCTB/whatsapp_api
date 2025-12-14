@@ -15,6 +15,7 @@ from routes.auth_routes import auth_bp
 from routes.chat_routes import chat_bp
 from routes.configuracion import config_bp
 from routes.roles_routes import roles_bp
+from routes.tenant_admin_routes import tenant_admin_bp
 from routes.users_routes import users_bp
 from routes.webhook import webhook_bp
 from routes.tablero_routes import tablero_bp
@@ -71,6 +72,7 @@ def create_app():
     app.register_blueprint(config_bp)
     app.register_blueprint(roles_bp)
     app.register_blueprint(users_bp)
+    app.register_blueprint(tenant_admin_bp)
     app.register_blueprint(webhook_bp)
     app.register_blueprint(tablero_bp)
     app.register_blueprint(export_bp)

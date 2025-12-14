@@ -449,6 +449,12 @@ def init_db(db_settings: DatabaseSettings | None = None):
     INSERT INTO roles (name, keyword)
       SELECT %s, %s FROM DUAL
       WHERE NOT EXISTS (SELECT 1 FROM roles WHERE keyword=%s)
+    """, ('Super Administrador', 'superadmin', 'superadmin'))
+
+    c.execute("""
+    INSERT INTO roles (name, keyword)
+      SELECT %s, %s FROM DUAL
+      WHERE NOT EXISTS (SELECT 1 FROM roles WHERE keyword=%s)
     """, ('Tiquetes', 'tiquetes', 'tiquetes'))
 
     c.execute("""
@@ -463,6 +469,13 @@ def init_db(db_settings: DatabaseSettings | None = None):
       FROM usuarios u, roles r
      WHERE u.username=%s AND r.keyword=%s
     """, ('admin', 'admin'))
+
+    c.execute("""
+    INSERT IGNORE INTO user_roles (user_id, role_id)
+    SELECT u.id, r.id
+      FROM usuarios u, roles r
+     WHERE u.username=%s AND r.keyword=%s
+    """, ('admin', 'superadmin'))
 
     conn.commit()
     conn.close()
@@ -750,9 +763,9 @@ def set_alias(numero, nombre):
     conn.close()
 
 
-def get_roles_by_user(user_id):
+def get_roles_by_user(user_id, db_settings: DatabaseSettings | None = None):
     """Retorna una lista de keywords de roles asignados a un usuario."""
-    conn = get_connection()
+    conn = get_connection(db_settings=db_settings)
     c    = conn.cursor()
     c.execute("""
       SELECT r.keyword
@@ -765,9 +778,15 @@ def get_roles_by_user(user_id):
     return roles
 
 
-def assign_role_to_user(user_id, role_keyword, role_name=None):
+def assign_role_to_user(
+    user_id,
+    role_keyword,
+    role_name=None,
+    *,
+    db_settings: DatabaseSettings | None = None,
+):
     """Asigna un rol (por keyword) a un usuario. Si el rol no existe se crea."""
-    conn = get_connection()
+    conn = get_connection(db_settings=db_settings)
     c    = conn.cursor()
     # Obtener rol existente o crearlo
     c.execute("SELECT id FROM roles WHERE keyword=%s", (role_keyword,))

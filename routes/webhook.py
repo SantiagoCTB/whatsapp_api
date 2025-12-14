@@ -3,9 +3,11 @@ import logging
 import threading
 import json
 import unicodedata
-from flask import Blueprint, Response, jsonify, request, url_for
 from datetime import datetime
+from flask import Blueprint, Response, jsonify, request, url_for
+
 from config import Config
+from services import tenants
 from services.db import (
     get_connection,
     guardar_mensaje,
@@ -28,9 +30,6 @@ from services.global_commands import handle_global_command
 webhook_bp = Blueprint('webhook', __name__)
 logger = logging.getLogger(__name__)
 
-VERIFY_TOKEN    = Config.VERIFY_TOKEN
-SESSION_TIMEOUT = Config.SESSION_TIMEOUT
-SESSION_TIMEOUT_MESSAGE = Config.SESSION_TIMEOUT_MESSAGE
 DEFAULT_FALLBACK_TEXT = "No entendí tu respuesta, intenta de nuevo."
 
 # Mapa numero -> lista de textos recibidos para procesar tras un delay
@@ -39,6 +38,34 @@ pending_timers     = {}
 cache_lock         = threading.Lock()
 
 MAX_AUTO_STEPS = 25
+
+
+def _media_root():
+    root = tenants.get_runtime_setting("MEDIA_ROOT", default=Config.MEDIA_ROOT)
+    os.makedirs(root, exist_ok=True)
+    return root
+
+
+def _get_verify_token():
+    return tenants.get_runtime_setting("VERIFY_TOKEN", default=Config.VERIFY_TOKEN)
+
+
+def _get_session_timeout():
+    return tenants.get_runtime_setting(
+        "SESSION_TIMEOUT", default=Config.SESSION_TIMEOUT, cast=int
+    )
+
+
+def _get_session_timeout_message():
+    return tenants.get_runtime_setting(
+        "SESSION_TIMEOUT_MESSAGE", default=Config.SESSION_TIMEOUT_MESSAGE
+    )
+
+
+# Valores por defecto expuestos para compatibilidad con pruebas/llamadas externas.
+SESSION_TIMEOUT = Config.SESSION_TIMEOUT
+SESSION_TIMEOUT_MESSAGE = Config.SESSION_TIMEOUT_MESSAGE
+VERIFY_TOKEN = Config.VERIFY_TOKEN
 
 
 def clear_chat_runtime_state(numero: str):
@@ -70,7 +97,7 @@ def clear_chat_runtime_state(numero: str):
 def notify_session_closed(numero: str, *, origin: str = "timeout") -> bool:
     """Envía al usuario el mensaje configurado al cerrar la sesión del chat."""
 
-    message = (SESSION_TIMEOUT_MESSAGE or "").strip()
+    message = (_get_session_timeout_message() or "").strip()
     if not numero or not message:
         return False
 
@@ -154,8 +181,6 @@ def set_user_step(numero, step, estado='espera_usuario'):
 def get_current_step(numero):
     row = get_chat_state(numero)
     return (row[0] or '').strip().lower() if row else ''
-
-os.makedirs(Config.MEDIA_ROOT, exist_ok=True)
 
 
 def _get_step_from_options(opciones_json, option_id):
@@ -632,7 +657,8 @@ def handle_text_message(numero: str, texto: str, save: bool = True):
     step_db = row[0] if row else None
     last_time = row[1] if row else None
     bootstrapped = False
-    if last_time and (now - last_time).total_seconds() > SESSION_TIMEOUT:
+    timeout_seconds = _get_session_timeout()
+    if last_time and timeout_seconds and (now - last_time).total_seconds() > timeout_seconds:
         delete_chat_state(numero)
         clear_chat_runtime_state(numero)
         step_db = None
@@ -716,7 +742,7 @@ def webhook():
         token     = request.args.get('hub.verify_token')
         challenge = request.args.get('hub.challenge', '')
 
-        if token == VERIFY_TOKEN:
+        if token == _get_verify_token():
             logger.info("Returning verification challenge with status=200")
             return Response(challenge, status=200, mimetype='text/plain')
 
@@ -785,7 +811,7 @@ def webhook():
 
                     audio_bytes = download_audio(media_id)
                     filename = f"{media_id}.{ext}"
-                    path = os.path.join(Config.MEDIA_ROOT, filename)
+                    path = os.path.join(_media_root(), filename)
                     with open(path, 'wb') as f:
                         f.write(audio_bytes)
 
@@ -832,7 +858,7 @@ def webhook():
                     # 1) Descarga bytes y guardar en static/uploads
                     media_bytes = download_audio(media_id)
                     filename    = f"{media_id}.{ext}"
-                    path        = os.path.join(Config.MEDIA_ROOT, filename)
+                    path        = os.path.join(_media_root(), filename)
                     with open(path, 'wb') as f:
                         f.write(media_bytes)
 

@@ -17,6 +17,9 @@
         <a href="{{ url_for('roles.roles') }}">Roles</a>
         <a href="{{ url_for('usuarios.manage_users') }}">Usuarios</a>
         {% endif %}
+        {% if session.get('roles') and 'superadmin' in session['roles'] %}
+        <a href="{{ url_for('tenant_admin.dashboard') }}">Empresas</a>
+        {% endif %}
         <a href="{{ url_for('tablero.tablero') }}">Tablero</a>
         <a id="respuestasLink" href="{{ url_for('chat.respuestas') }}">Respuestas</a>
         <a href="{{ url_for('auth.logout') }}">Cerrar sesión</a>

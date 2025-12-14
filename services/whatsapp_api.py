@@ -10,16 +10,14 @@ import requests
 from flask import url_for
 
 from config import Config
+from services import tenants
 from services.db import guardar_mensaje
 
 
 logger = logging.getLogger(__name__)
 
-TOKEN    = Config.META_TOKEN
-PHONE_ID = Config.PHONE_NUMBER_ID
 API_VERSION = os.getenv("WHATSAPP_API_VERSION", "v19.0")
 GRAPH_BASE_URL = f"https://graph.facebook.com/{API_VERSION}"
-MESSAGES_URL = f"{GRAPH_BASE_URL}/{PHONE_ID}/messages"
 
 _typing_lock = threading.Lock()
 _typing_sessions = {}
@@ -28,7 +26,18 @@ _TYPING_INITIAL_DELAY = 2.0
 _TYPING_INTERVAL = 6.0
 _TYPING_ENABLED = bool(getattr(Config, "ENABLE_TYPING_INDICATOR", False))
 
-os.makedirs(Config.MEDIA_ROOT, exist_ok=True)
+
+def _get_runtime_env():
+    env = tenants.get_current_tenant_env()
+    token = env.get("META_TOKEN") or Config.META_TOKEN
+    phone_id = env.get("PHONE_NUMBER_ID") or Config.PHONE_NUMBER_ID
+    media_root = env.get("MEDIA_ROOT") or Config.MEDIA_ROOT
+    os.makedirs(media_root, exist_ok=True)
+    return {
+        "token": token,
+        "phone_id": phone_id,
+        "media_root": media_root,
+    }
 
 
 def _extract_error_details(response: requests.Response) -> Dict[str, Any]:
@@ -135,9 +144,10 @@ def enviar_mensaje(
     *,
     return_error=False,
 ):
-    url = MESSAGES_URL
+    runtime = _get_runtime_env()
+    url = f"{GRAPH_BASE_URL}/{runtime['phone_id']}/messages"
     headers = {
-        "Authorization": f"Bearer {TOKEN}",
+        "Authorization": f"Bearer {runtime['token']}",
         "Content-Type": "application/json"
     }
     media_link = None
@@ -726,19 +736,22 @@ def is_typing_feedback_active(numero):
         return numero in _typing_ui_state
 
 def get_media_url(media_id):
+    runtime = _get_runtime_env()
     resp1 = requests.get(
         f"{GRAPH_BASE_URL}/{media_id}",
-        params={"access_token": TOKEN}
+        params={"access_token": runtime["token"]}
     )
     resp1.raise_for_status()
     media_url = resp1.json().get("url")
 
-    resp2 = requests.get(media_url, headers={"Authorization": f"Bearer {TOKEN}"})
+    resp2 = requests.get(
+        media_url, headers={"Authorization": f"Bearer {runtime['token']}"}
+    )
     resp2.raise_for_status()
 
     ext = resp2.headers.get("Content-Type", "").split("/")[-1] or "bin"
     filename = f"{media_id}.{ext}"
-    path     = os.path.join(Config.MEDIA_ROOT, filename)
+    path     = os.path.join(runtime["media_root"], filename)
     with open(path, "wb") as f:
         f.write(resp2.content)
 
@@ -749,8 +762,9 @@ def subir_media(ruta_archivo):
     if not mime_type:
         raise ValueError(f"No se pudo inferir el MIME type de {ruta_archivo}")
 
-    url = f"{GRAPH_BASE_URL}/{PHONE_ID}/media"
-    headers = {"Authorization": f"Bearer {TOKEN}"}
+    runtime = _get_runtime_env()
+    url = f"{GRAPH_BASE_URL}/{runtime['phone_id']}/media"
+    headers = {"Authorization": f"Bearer {runtime['token']}"}
     data = {
         "messaging_product": "whatsapp",
         "type": mime_type
@@ -763,10 +777,15 @@ def subir_media(ruta_archivo):
 
 def download_audio(media_id):
     # sirve tanto para audio como para video
+    runtime = _get_runtime_env()
     url_media = f"{GRAPH_BASE_URL}/{media_id}"
-    r1        = requests.get(url_media, params={"access_token": TOKEN})
+    r1        = requests.get(url_media, params={"access_token": runtime['token']})
     r1.raise_for_status()
     media_url = r1.json()["url"]
-    r2        = requests.get(media_url, headers={"Authorization": f"Bearer {TOKEN}"}, stream=True)
+    r2        = requests.get(
+        media_url,
+        headers={"Authorization": f"Bearer {runtime['token']}"},
+        stream=True,
+    )
     r2.raise_for_status()
     return r2.content
