@@ -42,31 +42,49 @@ def login():
         username = (request.form.get('username') or "").strip()
         password = (request.form.get('password') or "")
 
-        conn = get_connection()
-        try:
-            c = conn.cursor()
-            # Trae solo por username; la verificación del hash se hace en app
-            c.execute(
+        def _fetch_user(connection):
+            cursor = connection.cursor()
+            cursor.execute(
                 'SELECT id, username, password FROM usuarios WHERE username = %s',
                 (username,)
             )
-            user = c.fetchone()
+            return cursor.fetchone()
 
-            if user and _verify_password(user[2], password):
-                # user -> (id, username, password)
-                session.permanent = False  # Expira cuando se cierre el navegador
-                session['user'] = user[1]
-
-                # Roles centralizados
-                roles = get_roles_by_user(user[0]) or []
-                session['roles'] = roles
-                session['rol'] = roles[0] if roles else None  # compatibilidad
-
-                return redirect(url_for('chat.index'))
-            else:
-                error = 'Usuario o contraseña incorrectos'
+        # Primer intento: base de datos del tenant actual (si aplica)
+        conn = get_connection()
+        try:
+            user = _fetch_user(conn)
         finally:
             conn.close()
+
+        # Fallback: base principal para el superadmin (permite entrar aunque el
+        # tenant no lo tenga registrado todavía)
+        is_superadmin_login = username.lower() == "superadmin"
+        if not user and is_superadmin_login:
+            conn_master = get_connection(allow_tenant_context=False)
+            try:
+                user = _fetch_user(conn_master)
+                user_source_allows_tenant_context = False
+            finally:
+                conn_master.close()
+        else:
+            user_source_allows_tenant_context = True
+
+        if user and _verify_password(user[2], password):
+            # user -> (id, username, password)
+            session.permanent = False  # Expira cuando se cierre el navegador
+            session['user'] = user[1]
+
+            # Roles centralizados
+            roles = get_roles_by_user(
+                user[0], allow_tenant_context=user_source_allows_tenant_context
+            ) or []
+            session['roles'] = roles
+            session['rol'] = roles[0] if roles else None  # compatibilidad
+
+            return redirect(url_for('chat.index'))
+        else:
+            error = 'Usuario o contraseña incorrectos'
 
     return render_template(
         'login.html',
