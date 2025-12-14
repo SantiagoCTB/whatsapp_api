@@ -56,6 +56,16 @@ def create_or_update_tenant():
     # checkbox no viene en la petición (p.ej. clientes que no envían el campo).
     ensure_schema = request.form.get("ensure_schema", "1") == "1"
 
+    try:
+        db_port = int(db_port_raw) if db_port_raw else 3306
+    except ValueError:
+        return redirect(
+            url_for(
+                "tenant_admin.dashboard",
+                error="El puerto de la base de datos no es válido.",
+            )
+        )
+
     if not tenant_key or not db_name or not db_host or not db_user or not db_password:
         return redirect(
             url_for(
