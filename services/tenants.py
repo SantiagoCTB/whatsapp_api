@@ -389,7 +389,7 @@ def ensure_default_tenant_schema():
         ensure_tenant_schema(tenant)
 
 
-def register_tenant(tenant: TenantInfo, *, ensure_schema: bool = False):
+def register_tenant(tenant: TenantInfo, *, ensure_schema: bool = True):
     conn = db.get_master_connection(ensure_database=True)
     try:
         c = conn.cursor()
