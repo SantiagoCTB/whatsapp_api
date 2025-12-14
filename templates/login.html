@@ -55,6 +55,17 @@
         <div class="relative">
           <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
             <svg class="w-5 h-5 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          </span>
+          <input id="tenant" name="tenant" required placeholder="Empresa (tenant_key)"
+            value="{{ request.args.get('tenant') or session.get('tenant','') }}"
+            class="w-full pl-10 pr-3 py-2 rounded-lg bg-white/60 focus:bg-white/80 placeholder-gray-600 text-gray-800 focus:outline-none focus:ring-2 focus:ring-primary" />
+        </div>
+
+        <div class="relative">
+          <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+            <svg class="w-5 h-5 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.121 17.804A11.955 11.955 0 0112 15c2.5 0 4.847.767 6.879 2.076M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
             </svg>
           </span>
@@ -97,6 +108,17 @@
 
     <div id="changeSection" class="hidden">
       <form method="POST" action="{{ url_for('auth.password_change') }}" id="changePasswordForm" class="space-y-6">
+        <div class="relative">
+          <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+            <svg class="w-5 h-5 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          </span>
+          <input id="changeTenant" name="tenant" required placeholder="Empresa (tenant_key)"
+            value="{{ request.args.get('tenant') or session.get('tenant','') }}"
+            class="w-full pl-10 pr-3 py-2 rounded-lg bg-white/60 focus:bg-white/80 placeholder-gray-600 text-gray-800 focus:outline-none focus:ring-2 focus:ring-secondary" />
+        </div>
+
         <div class="relative">
           <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
             <svg class="w-5 h-5 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
