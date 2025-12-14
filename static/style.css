@@ -691,6 +691,58 @@
       border-color: #badbcc;
     }
 
+    .page-tabs {
+      display: flex;
+      gap: 8px;
+      margin: 12px 0 20px;
+      flex-wrap: wrap;
+    }
+
+    .tab-link {
+      background: #f4f6ff;
+      color: #1a2653;
+      padding: 8px 14px;
+      border-radius: 8px;
+      text-decoration: none;
+      border: 1px solid #dbe2ff;
+      transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+    }
+
+    .tab-link:hover {
+      background: #e8edff;
+      border-color: #c8d4ff;
+    }
+
+    .tab-link.active {
+      background: var(--accent-neon);
+      color: #fff;
+      border-color: var(--accent-neon);
+    }
+
+    .card {
+      border: 1px solid #edf1f7;
+      box-shadow: 0 10px 35px rgba(0, 0, 0, 0.05);
+    }
+
+    .form-row {
+      margin-bottom: 16px;
+    }
+
+    .muted {
+      color: #5f6b7a;
+      margin: 0 0 6px;
+    }
+
+    .file-meta {
+      list-style: none;
+      padding-left: 0;
+      margin: 0;
+    }
+
+    .file-meta li {
+      margin-bottom: 4px;
+    }
+
     /* Reusable primary button with hover transition and ripple effect */
     .btn-primary {
       background: var(--accent-neon);

@@ -1,0 +1,60 @@
+{% extends 'base.html' %}
+{% block title %}Configuración IA{% endblock %}
+{% block body_class %}page{% endblock %}
+{% block content %}
+<div class="top-right">
+    <a href="{{ url_for('chat.index') }}">
+        <button class="back-btn btn-primary">Volver al inicio</button>
+    </a>
+</div>
+
+<h2>Configuración de IA</h2>
+<div class="page-tabs">
+    <a class="tab-link" href="{{ url_for('configuracion.reglas') }}">Reglas</a>
+    <a class="tab-link active" href="{{ url_for('configuracion.configuracion_ia') }}">Configuración IA</a>
+</div>
+
+<p>Administra el token del modelo <strong>o4-mini</strong> y sube el catálogo en PDF que el asistente utilizará para responder.</p>
+
+{% if status_message %}
+<div class="alert success">{{ status_message }}</div>
+{% endif %}
+{% if error_message %}
+<div class="alert error">{{ error_message }}</div>
+{% endif %}
+
+<form class="card" method="POST" enctype="multipart/form-data">
+    <div class="form-row">
+        <label for="ia_model">Modelo</label>
+        <input type="text" id="ia_model" name="ia_model" value="{{ ia_config.model_name if ia_config else 'o4-mini' }}" readonly>
+    </div>
+    <div class="form-row">
+        <label for="ia_token">Token del modelo</label>
+        <input type="text" id="ia_token" name="ia_token" value="{{ ia_config.model_token or '' if ia_config else '' }}" required>
+    </div>
+    <div class="form-row">
+        <label for="catalogo_pdf">Catálogo PDF</label>
+        <input type="file" id="catalogo_pdf" name="catalogo_pdf" accept="application/pdf">
+        <small>Solo archivos PDF, máximo 15 MB.</small>
+    </div>
+
+    {% if ia_config and ia_config.pdf_filename %}
+    <div class="form-row">
+        <p class="muted">Archivo actual:</p>
+        <ul class="file-meta">
+            <li><strong>Nombre original:</strong> {{ ia_config.pdf_original_name or 'Desconocido' }}</li>
+            <li><strong>Peso:</strong> {{ ia_config.pdf_size or '0' }} bytes</li>
+            <li><strong>MIME:</strong> {{ ia_config.pdf_mime or 'application/pdf' }}</li>
+            {% if ia_config.pdf_uploaded_at %}
+            <li><strong>Subido:</strong> {{ ia_config.pdf_uploaded_at }}</li>
+            {% endif %}
+            {% if pdf_url %}
+            <li><a href="{{ pdf_url }}" target="_blank" rel="noopener">Ver PDF</a></li>
+            {% endif %}
+        </ul>
+    </div>
+    {% endif %}
+
+    <button type="submit" class="btn-primary">Guardar configuración</button>
+</form>
+{% endblock %}
