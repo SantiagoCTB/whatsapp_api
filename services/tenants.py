@@ -439,6 +439,27 @@ def register_tenant(tenant: TenantInfo, *, ensure_schema: bool = True):
     return created
 
 
+def delete_tenant(tenant_key: str):
+    tenant = get_tenant(tenant_key)
+    if not tenant:
+        raise TenantNotFoundError(f"No se encontró la empresa '{tenant_key}'.")
+
+    if Config.DEFAULT_TENANT and tenant_key == Config.DEFAULT_TENANT:
+        raise ValueError("No se puede eliminar el tenant por defecto configurado.")
+
+    conn = db.get_master_connection(ensure_database=True)
+    try:
+        c = conn.cursor()
+        c.execute("DELETE FROM tenants WHERE tenant_key=%s", (tenant_key,))
+        conn.commit()
+    finally:
+        conn.close()
+
+    _tenant_cache.pop(tenant_key, None)
+    if get_current_tenant() and get_current_tenant().tenant_key == tenant_key:
+        clear_current_tenant()
+
+
 def create_or_update_tenant_user(
     tenant: TenantInfo, username: str, password: str, role_keywords: list[str]
 ):
@@ -516,4 +537,5 @@ __all__ = [
     "create_or_update_tenant_user",
     "get_runtime_setting",
     "TENANT_ENV_KEYS",
+    "delete_tenant",
 ]

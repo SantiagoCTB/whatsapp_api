@@ -32,7 +32,12 @@
             <td>{{ tenant.name }}</td>
             <td>{{ tenant.db_name }}</td>
             <td>{{ tenant.db_host }}:{{ tenant.db_port }}</td>
-            <td><a class="btn" href="{{ url_for('tenant_admin.dashboard', tenant=tenant.tenant_key) }}">Gestionar</a></td>
+            <td class="actions">
+              <a class="btn" href="{{ url_for('tenant_admin.dashboard', tenant=tenant.tenant_key) }}">Gestionar</a>
+              <form method="post" action="{{ url_for('tenant_admin.delete_tenant', tenant_key=tenant.tenant_key) }}" onsubmit="return confirm('¿Eliminar el tenant {{ tenant.tenant_key }}?');">
+                <button type="submit" class="btn danger">Eliminar</button>
+              </form>
+            </td>
           </tr>
           {% else %}
           <tr><td colspan="5">No hay empresas registradas todavía.</td></tr>

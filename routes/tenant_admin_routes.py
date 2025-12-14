@@ -165,3 +165,28 @@ def update_tenant_env(tenant_key: str):
             msg="Variables de entorno actualizadas.",
         )
     )
+
+
+@tenant_admin_bp.route("/<tenant_key>/delete", methods=["POST"])
+def delete_tenant(tenant_key: str):
+    if Config.DEFAULT_TENANT and tenant_key == Config.DEFAULT_TENANT:
+        return redirect(
+            url_for(
+                "tenant_admin.dashboard",
+                error="No se puede eliminar el tenant por defecto configurado.",
+            )
+        )
+
+    try:
+        tenants.delete_tenant(tenant_key)
+    except tenants.TenantNotFoundError as exc:
+        return redirect(url_for("tenant_admin.dashboard", error=str(exc)))
+    except ValueError as exc:
+        return redirect(url_for("tenant_admin.dashboard", error=str(exc)))
+
+    return redirect(
+        url_for(
+            "tenant_admin.dashboard",
+            msg="Empresa eliminada correctamente.",
+        )
+    )
