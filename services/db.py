@@ -738,6 +738,50 @@ def obtener_mensajes_por_numero(numero):
     return rows  # lista de tuplas (mensaje, tipo, timestamp)
 
 
+def obtener_historial_chat(numero, limit: int = 30, step: str | None = None):
+    """Obtiene los mensajes más recientes de un chat para alimentar la IA."""
+
+    conn = get_connection()
+    c = conn.cursor()
+    query = "SELECT mensaje, tipo FROM mensajes WHERE numero = %s"
+    params: list = [numero]
+    if step:
+        query += " AND step = %s"
+        params.append(step)
+    query += " ORDER BY timestamp DESC LIMIT %s"
+    params.append(limit)
+    c.execute(query, tuple(params))
+    rows = c.fetchall()
+    conn.close()
+    rows.reverse()
+    return [
+        {"mensaje": mensaje, "tipo": tipo}
+        for mensaje, tipo in rows
+        if mensaje is not None
+    ]
+
+
+def obtener_ultimo_mensaje_cliente(numero):
+    """Devuelve el último mensaje textual enviado por el cliente."""
+
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute(
+        """
+        SELECT mensaje
+          FROM mensajes
+         WHERE numero = %s
+           AND (tipo = 'cliente' OR tipo LIKE 'cliente_%')
+         ORDER BY timestamp DESC
+         LIMIT 1
+        """,
+        (numero,),
+    )
+    row = c.fetchone()
+    conn.close()
+    return (row[0] or "").strip() if row else ""
+
+
 def get_conversation(numero):
     """Obtiene la conversación de un número uniendo ``mensajes`` con ``reglas``.
 

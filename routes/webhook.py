@@ -13,6 +13,8 @@ from services.db import (
     guardar_mensaje,
     guardar_flow_response,
     get_chat_state,
+    obtener_historial_chat,
+    obtener_ultimo_mensaje_cliente,
     update_chat_state,
     delete_chat_state,
 )
@@ -26,6 +28,7 @@ from services.whatsapp_api import (
 from services.job_queue import enqueue_transcription
 from services.normalize_text import normalize_text
 from services.global_commands import handle_global_command
+from services.ia_client import generate_response
 
 webhook_bp = Blueprint('webhook', __name__)
 logger = logging.getLogger(__name__)
@@ -135,6 +138,16 @@ def _normalize_step_name(step):
     return (step or '').strip().lower()
 
 
+def _is_ia_step(step: str | None) -> bool:
+    return _normalize_step_name(step) == 'ia'
+
+
+def _ia_history_limit() -> int:
+    return tenants.get_runtime_setting(
+        "IA_HISTORY_LIMIT", default=Config.IA_HISTORY_LIMIT, cast=int
+    )
+
+
 def _mask_identifier(value, visible=4):
     if not value:
         return value
@@ -181,6 +194,26 @@ def set_user_step(numero, step, estado='espera_usuario'):
 def get_current_step(numero):
     row = get_chat_state(numero)
     return (row[0] or '').strip().lower() if row else ''
+
+
+def _reply_with_ai(numero: str, user_text: str | None, *, system_prompt: str | None = None) -> bool:
+    """Envía el mensaje al modelo de IA y responde al usuario."""
+
+    prompt = (user_text or "").strip() or obtener_ultimo_mensaje_cliente(numero)
+    if not prompt:
+        logger.info("Sin texto para enviar a la IA", extra={"numero": numero})
+        return False
+
+    set_user_step(numero, "ia")
+    update_chat_state(numero, "ia", "ia_activa")
+    history = obtener_historial_chat(numero, limit=_ia_history_limit(), step="ia")
+    response = generate_response(history, prompt, system_message=system_prompt)
+    if not response:
+        logger.warning("La IA no devolvió respuesta", extra={"numero": numero})
+        return False
+
+    enviar_mensaje(numero, response, tipo="bot", step="ia")
+    return True
 
 
 def _get_step_from_options(opciones_json, option_id):
@@ -379,11 +412,26 @@ def dispatch_rule(numero, regla, step=None, visited=None, selected_option_id=Non
     """Envía la respuesta definida en una regla y asigna roles si aplica."""
     if visited is None:
         visited = set()
-    regla_id, resp, next_step_raw, tipo_resp, media_urls, opts, rol_kw, _ = regla
+    (
+        regla_id,
+        resp,
+        next_step_raw,
+        tipo_resp,
+        media_urls,
+        opts,
+        rol_kw,
+        input_text,
+    ) = regla
     current_step = step or get_current_step(numero)
     current_step_norm = _normalize_step_name(current_step)
     if current_step_norm:
         visited.add(current_step_norm)
+
+    rule_input_norm = normalize_text(input_text or "") if input_text else ""
+    if _is_ia_step(current_step) or rule_input_norm == "ia":
+        _reply_with_ai(numero, obtener_ultimo_mensaje_cliente(numero), system_prompt=resp)
+        return
+
     media_list = media_urls.split('||') if media_urls else []
     if tipo_resp in ['image', 'video', 'audio', 'document'] and media_list:
         enviar_mensaje(
@@ -679,6 +727,10 @@ def handle_text_message(numero: str, texto: str, save: bool = True):
             return
 
     if handle_global_command(numero, texto):
+        return
+
+    if _is_ia_step(get_current_step(numero)):
+        _reply_with_ai(numero, texto)
         return
 
     process_step_chain(
