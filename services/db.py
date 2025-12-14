@@ -2,7 +2,7 @@ import contextvars
 from dataclasses import dataclass
 import mysql.connector
 from mysql.connector import errorcode
-from mysql.connector.errors import ProgrammingError
+from mysql.connector.errors import Error
 from config import Config
 
 
@@ -72,23 +72,46 @@ _BASE_DB_SETTINGS = _default_db_settings()
 def _create_database_if_missing(db_settings: DatabaseSettings):
     """Create the configured database if it does not exist yet."""
 
-    bootstrap_conn = mysql.connector.connect(
-        host=db_settings.host,
-        port=db_settings.port,
-        # Preferimos las credenciales del propio tenant para crear su base.
-        # Si se configuró un root/password global (p.ej. en Docker), se usa
-        # como fallback para mantener compatibilidad hacia atrás.
-        user=(db_settings.user or Config.DB_USER),
-        password=(db_settings.password or Config.DB_ROOT_PASSWORD),
-    )
-    try:
-        cursor = bootstrap_conn.cursor()
-        cursor.execute(
-            f"CREATE DATABASE IF NOT EXISTS `{db_settings.name}` "
-            "DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+    credential_options: list[tuple[str, str | None]] = []
+
+    if db_settings.user:
+        credential_options.append((db_settings.user, db_settings.password))
+
+    if Config.DB_USER and Config.DB_PASSWORD:
+        credential_options.append((Config.DB_USER, Config.DB_PASSWORD))
+
+    if Config.DB_ROOT_PASSWORD:
+        credential_options.append(("root", Config.DB_ROOT_PASSWORD))
+
+    if not credential_options:
+        raise RuntimeError(
+            "No hay credenciales disponibles para crear la base de datos del tenant."
         )
-    finally:
-        bootstrap_conn.close()
+
+    last_error: Error | None = None
+    for user, password in credential_options:
+        try:
+            bootstrap_conn = mysql.connector.connect(
+                host=db_settings.host,
+                port=db_settings.port,
+                user=user,
+                password=password,
+            )
+            try:
+                cursor = bootstrap_conn.cursor()
+                cursor.execute(
+                    f"CREATE DATABASE IF NOT EXISTS `{db_settings.name}` "
+                    "DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+                )
+                return
+            finally:
+                bootstrap_conn.close()
+        except Error as exc:  # pragma: no cover - depends on DB privileges
+            last_error = exc
+            continue
+
+    if last_error:
+        raise last_error
 
 
 def _resolve_db_settings(
@@ -120,7 +143,7 @@ def get_connection(
             password=target_settings.password,
             database=target_settings.name,
         )
-    except ProgrammingError as exc:
+    except Error as exc:
         if ensure_database and exc.errno == errorcode.ER_BAD_DB_ERROR:
             _create_database_if_missing(target_settings)
             return mysql.connector.connect(
