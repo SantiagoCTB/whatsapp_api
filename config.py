@@ -92,6 +92,7 @@ class Config:
     DB_PORT     = int(os.getenv('DB_PORT', 3306))
     DB_USER     = os.getenv('DB_USER')
     DB_PASSWORD = os.getenv('DB_PASSWORD')
+    DB_ROOT_PASSWORD = os.getenv('DB_ROOT_PASSWORD')
     DB_NAME     = os.getenv('DB_NAME')
     TENANT_HEADER = os.getenv('TENANT_HEADER', 'X-Tenant-ID')
     DEFAULT_TENANT = os.getenv('DEFAULT_TENANT')

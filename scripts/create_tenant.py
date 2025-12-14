@@ -27,22 +27,6 @@ def parse_args():
         help=f"Host de la base de datos (default: {Config.DB_HOST})",
     )
     parser.add_argument(
-        "--db-port",
-        type=int,
-        default=Config.DB_PORT,
-        help=f"Puerto de la base de datos (default: {Config.DB_PORT})",
-    )
-    parser.add_argument(
-        "--db-user",
-        default=Config.DB_USER,
-        help="Usuario con permisos de creación/lectura/escritura para la base de la empresa",
-    )
-    parser.add_argument(
-        "--db-password",
-        default=Config.DB_PASSWORD,
-        help="Password del usuario anterior",
-    )
-    parser.add_argument(
         "--metadata",
         default="{}",
         help="JSON opcional con metadatos (branding, región, plan, etc.)",
@@ -68,9 +52,9 @@ def main():
         name=args.name or args.tenant_key,
         db_name=args.db_name,
         db_host=args.db_host,
-        db_port=args.db_port,
-        db_user=args.db_user,
-        db_password=args.db_password,
+        db_port=Config.DB_PORT,
+        db_user=Config.DB_USER,
+        db_password=Config.DB_PASSWORD,
         metadata=metadata,
     )
 

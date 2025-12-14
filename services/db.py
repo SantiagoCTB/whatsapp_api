@@ -75,8 +75,8 @@ def _create_database_if_missing(db_settings: DatabaseSettings):
     bootstrap_conn = mysql.connector.connect(
         host=db_settings.host,
         port=db_settings.port,
-        user=db_settings.user,
-        password=db_settings.password,
+        user=Config.DB_USER or db_settings.user,
+        password=Config.DB_ROOT_PASSWORD or db_settings.password,
     )
     try:
         cursor = bootstrap_conn.cursor()

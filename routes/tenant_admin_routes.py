@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from flask import Blueprint, abort, redirect, render_template, request, session, url_for
 
+from config import Config
 from services import tenants
 
 
@@ -47,9 +48,9 @@ def create_or_update_tenant():
     name = (request.form.get("name") or tenant_key).strip()
     db_name = (request.form.get("db_name") or "").strip()
     db_host = (request.form.get("db_host") or "").strip()
-    db_port_raw = request.form.get("db_port") or ""
-    db_user = (request.form.get("db_user") or "").strip()
-    db_password = request.form.get("db_password") or ""
+    db_port = Config.DB_PORT
+    db_user = Config.DB_USER
+    db_password = Config.DB_PASSWORD
     metadata_raw = request.form.get("metadata") or ""
     # Siempre intentamos crear/actualizar el esquema aislado, incluso si el
     # checkbox no viene en la petición (p.ej. clientes que no envían el campo).
