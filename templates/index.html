@@ -35,6 +35,13 @@
     <!-- Chat Window -->
     <div class="chatWindow" role="region" aria-label="Zona del chat. Arrastra imágenes para prepararlas antes de enviar." tabindex="0">
       <div id="botonera"></div>
+      <div id="assistanceAlert" class="assistance-alert" role="status" aria-live="polite" hidden>
+        <div class="assistance-alert__text">
+          <strong>Modo asesor activo.</strong>
+          La IA está pausada hasta reanudar el bot.
+        </div>
+        <button type="button" id="resumeBotBtn" class="assistance-alert__action">Reanudar bot</button>
+      </div>
       <div id="chatBox"></div>
       <div id="replyPreview" class="reply-preview"></div>
       <div class="inputArea">
@@ -196,9 +203,12 @@
       const chatRoleOptionsContainer = document.getElementById('chatRoleOptions');
       const chatStateSection = chatContextMenu.querySelector('[data-section="state"]');
       const chatRolesSection = chatContextMenu.querySelector('[data-section="roles"]');
+      const assistanceAlert = document.getElementById('assistanceAlert');
+      const resumeBotBtn = document.getElementById('resumeBotBtn');
       let chatStateOptions = [];
       const chatStateDefinitions = {{ chat_state_definitions | tojson }};
       const availableRoles = {{ roles | tojson }};
+      let currentChatState = null;
       const chatStateDefinitionMap = new Map();
       chatStateDefinitions.forEach(def => {
         if (def && def.key) {
@@ -234,6 +244,30 @@
         }
         return bogotaFormatter.format(date);
       }
+
+      function updateAssistanceAlert(estado) {
+        currentChatState = estado || null;
+        const isAgent = estado === 'asesor';
+        if (isAgent) {
+          assistanceAlert.hidden = false;
+          assistanceAlert.setAttribute('aria-hidden', 'false');
+        } else {
+          assistanceAlert.hidden = true;
+          assistanceAlert.setAttribute('aria-hidden', 'true');
+        }
+      }
+
+      resumeBotBtn.addEventListener('click', () => {
+        if (!currentChat) return;
+        resumeBotBtn.disabled = true;
+        updateChatState(currentChat, 'bot')
+          .then(() => {
+            updateAssistanceAlert('bot');
+            fetchChatList();
+          })
+          .catch(err => console.error(err))
+          .finally(() => { resumeBotBtn.disabled = false; });
+      });
 
       function normalizeMediaUrl(u) {
         if (!u) return u;
@@ -1219,6 +1253,10 @@
             const getTimestamp = ts => ts ? new Date(ts).getTime() : 0;
             data.sort((a, b) => getTimestamp(b.last_timestamp) - getTimestamp(a.last_timestamp));
             todosChats = data;
+            const activeChat = data.find(c => c.numero === currentChat);
+            if (activeChat) {
+              updateAssistanceAlert(activeChat.estado);
+            }
             chatListEl.innerHTML='';
             data.forEach(c => {
               const serverTime = c.last_timestamp ? new Date(c.last_timestamp).getTime() : null;
@@ -1287,6 +1325,8 @@
       // Seleccionar chat
       function selectChat(numero, liEl) {
         currentChat = numero;
+        const chatData = todosChats.find(c => c.numero === numero) || {};
+        updateAssistanceAlert(chatData.estado);
         lastCount = 0; // reset count so the initial load doesn't trigger alerts
         lastIncomingWaId = null;
         lastTypingSent = 0;
@@ -1326,6 +1366,7 @@
         fetch(`/get_chat/${currentChat}`)
           .then(r=>r.json())
           .then(data => {
+            updateAssistanceAlert(data.estado);
             const msgs = data.mensajes, total = msgs.length;
             const atBottom = chatBoxEl.scrollTop + chatBoxEl.clientHeight >= chatBoxEl.scrollHeight - 5;
             if (lastCount===0 || total<lastCount) {

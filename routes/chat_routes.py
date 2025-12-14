@@ -448,6 +448,9 @@ def get_chat(numero):
           ORDER BY m.timestamp ASC
         """, (numero,))
     mensajes = c.fetchall()
+    c.execute("SELECT estado FROM chat_state WHERE numero = %s", (numero,))
+    row_estado = c.fetchone()
+    estado = row_estado[0] if row_estado else None
     conn.close()
 
     formatted = []
@@ -466,7 +469,7 @@ def get_chat(numero):
 
     typing_active = is_typing_feedback_active(numero)
 
-    return jsonify({'mensajes': formatted, 'is_typing': typing_active})
+    return jsonify({'mensajes': formatted, 'is_typing': typing_active, 'estado': estado})
 
 
 @chat_bp.route('/typing_signal', methods=['POST'])
@@ -921,20 +924,12 @@ def set_chat_state():
     if estado is not None and estado not in CHAT_STATE_KEYS:
         return jsonify({"error": "Estado no permitido"}), 400
 
-    conn = get_connection()
-    c = conn.cursor()
-    try:
-        if estado is None:
-            c.execute("DELETE FROM chat_state WHERE numero = %s", (numero,))
-        else:
-            c.execute(
-                "INSERT INTO chat_state (numero, estado) VALUES (%s, %s) "
-                "ON DUPLICATE KEY UPDATE estado = VALUES(estado)",
-                (numero, estado),
-            )
-        conn.commit()
-    finally:
-        conn.close()
+    if estado is None:
+        delete_chat_state(numero)
+    else:
+        state_row = get_chat_state(numero)
+        step = state_row[0] if state_row else ''
+        update_chat_state(numero, step, estado)
 
     return jsonify({"status": "ok", "estado": estado}), 200
 
