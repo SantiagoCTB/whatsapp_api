@@ -257,7 +257,8 @@ def init_db():
       mensaje   TEXT NOT NULL,
       tipo      VARCHAR(50),
       media_url TEXT,
-      nombre    VARCHAR(100)
+      nombre    VARCHAR(100),
+      categoria VARCHAR(100)
     ) ENGINE=InnoDB;
     """)
     # Migración defensiva para columnas nuevas
@@ -273,6 +274,9 @@ def init_db():
     c.execute("SHOW COLUMNS FROM botones LIKE 'opciones';")
     if not c.fetchone():
         c.execute("ALTER TABLE botones ADD COLUMN opciones TEXT NULL;")
+    c.execute("SHOW COLUMNS FROM botones LIKE 'categoria';")
+    if not c.fetchone():
+        c.execute("ALTER TABLE botones ADD COLUMN categoria VARCHAR(100) NULL;")
 
     # boton_medias: soporta múltiples archivos por botón
     c.execute("""

@@ -32,6 +32,9 @@
     <label for="nombre_regla">Nombre del botón (opcional):</label>
     <input type="text" name="nombre" id="nombre_regla" placeholder="Nombre para el botón">
 
+    <label for="categoria_regla">Categoría (opcional):</label>
+    <input type="text" name="categoria" id="categoria_regla" placeholder="Área o grupo">
+
     <button type="submit" class="btn-primary">Agregar botón desde regla</button>
 </form>
 
@@ -39,6 +42,9 @@
 <form method="POST" enctype="multipart/form-data">
     <label for="nombre">Nombre del botón:</label>
     <input type="text" name="nombre" id="nombre">
+
+    <label for="categoria">Categoría (opcional):</label>
+    <input type="text" name="categoria" id="categoria" placeholder="Área o grupo">
 
     <label for="mensaje">Nuevo mensaje:</label>
     <textarea name="mensaje" rows="3" required></textarea>
@@ -69,11 +75,12 @@
 
 <h3>Botones actuales</h3>
 <table class="fixed-table">
-    <tr><th>ID</th><th>Nombre</th><th>Tipo</th><th>Mensaje</th><th>Adjuntos / Opciones</th><th>Acción</th></tr>
+    <tr><th>ID</th><th>Nombre</th><th>Categoría</th><th>Tipo</th><th>Mensaje</th><th>Adjuntos / Opciones</th><th>Acción</th></tr>
     {% for b in botones %}
     <tr>
         <td>{{ b.id }}</td>
         <td>{{ b.nombre|default('') }}</td>
+        <td>{{ b.categoria|default('') }}</td>
         <td>{{ b.tipo }}</td>
         <td style="white-space: pre-line;">{{ b.mensaje }}</td>
         <td style="word-break: break-all;">

@@ -247,12 +247,31 @@
       z-index: 5;
     }
     #botonera {
-      display:flex; gap:8px; padding:12px;
+      display:flex; flex-wrap:wrap; gap:12px; padding:12px;
       background: var(--bg-chat);
       overflow-x: auto;
-      border: 1px solid var(--border-color); /* ✅ Borde completo */
-      border-radius: 12px; /* Opcional: redondeado si quieres */
-      margin: 8px;         /* Opcional: separación visual */
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      margin: 8px;
+    }
+    #botonera .botonera-group {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      padding: 8px 10px;
+      min-width: 200px;
+    }
+    #botonera .botonera-group summary {
+      font-weight: 700;
+      color: var(--text-color);
+      cursor: pointer;
+      margin-bottom: 6px;
+    }
+    #botonera .botonera-buttons {
+      display:flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding-top: 4px;
     }
     #botonera button {
       flex:0 0 auto; padding: 8px 16px; min-width: fit-content;
@@ -262,7 +281,7 @@
       transition:transform 0.2s, background 0.3s, color 0.3s;
     }
     #botonera button:hover {
-      transform:scale(1.1); background:var(--accent-hover);
+      transform:scale(1.05); background:var(--accent-hover);
     }
 
     #chatBox {
