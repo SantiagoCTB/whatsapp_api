@@ -1,5 +1,5 @@
 # app.py
-from flask import Flask
+from flask import Flask, abort, g, request
 from werkzeug.middleware.proxy_fix import ProxyFix
 from dotenv import load_dotenv
 import os
@@ -10,7 +10,7 @@ load_dotenv()
 
 from config import Config
 
-from services.db import init_db
+from services import tenants
 from routes.auth_routes import auth_bp
 from routes.chat_routes import chat_bp
 from routes.configuracion import config_bp
@@ -75,12 +75,44 @@ def create_app():
     app.register_blueprint(tablero_bp)
     app.register_blueprint(export_bp)
 
-    # Inicializa BD por defecto para evitar errores en entornos nuevos.
-    # Puede deshabilitarse con INIT_DB_ON_START=0 si se prefiere controlar
-    # la migración manualmente.
-    if os.getenv("INIT_DB_ON_START", "1") != "0":
-        with app.app_context():
-            init_db()
+    @app.before_request
+    def bind_tenant():
+        tenant_key = (
+            request.headers.get(Config.TENANT_HEADER)
+            or request.args.get("tenant")
+            or Config.DEFAULT_TENANT
+        )
+
+        if not tenant_key:
+            # Modo legacy (single-tenant): no se exige encabezado ni tenant
+            # por defecto. Se usa la base configurada en DB_*.
+            g.tenant = None
+            tenants.clear_current_tenant()
+            return
+
+        try:
+            tenant = tenants.resolve_tenant_from_request(request)
+        except tenants.TenantResolutionError as exc:
+            abort(400, description=str(exc))
+        except tenants.TenantNotFoundError as exc:
+            abort(404, description=str(exc))
+
+        g.tenant = tenant
+        tenants.set_current_tenant(tenant)
+
+    @app.teardown_request
+    def clear_tenant_context(exc):
+        tenants.clear_current_tenant()
+
+    with app.app_context():
+        tenants.bootstrap_tenant_registry()
+        default_tenant = tenants.ensure_default_tenant_registered()
+
+        # Inicializa BD por defecto para evitar errores en entornos nuevos.
+        # Puede deshabilitarse con INIT_DB_ON_START=0 si se prefiere controlar
+        # la migración manualmente.
+        if os.getenv("INIT_DB_ON_START", "1") != "0" and default_tenant:
+            tenants.ensure_tenant_schema(default_tenant)
 
     return app
 
