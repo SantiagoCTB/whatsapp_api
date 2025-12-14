@@ -535,6 +535,9 @@
       border-radius: 12px;
       box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
     }
+    .image-preview-chip[hidden] {
+      display: none !important;
+    }
     .image-preview-chip img {
       width: 36px;
       height: 36px;
