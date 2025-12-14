@@ -75,8 +75,11 @@ def _create_database_if_missing(db_settings: DatabaseSettings):
     bootstrap_conn = mysql.connector.connect(
         host=db_settings.host,
         port=db_settings.port,
-        user=Config.DB_USER or db_settings.user,
-        password=Config.DB_ROOT_PASSWORD or db_settings.password,
+        # Preferimos las credenciales del propio tenant para crear su base.
+        # Si se configuró un root/password global (p.ej. en Docker), se usa
+        # como fallback para mantener compatibilidad hacia atrás.
+        user=(db_settings.user or Config.DB_USER),
+        password=(db_settings.password or Config.DB_ROOT_PASSWORD),
     )
     try:
         cursor = bootstrap_conn.cursor()
