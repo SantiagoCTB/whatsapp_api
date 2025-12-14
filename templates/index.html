@@ -41,21 +41,11 @@
         <div id="attachAudio" class="attach-item" title="Grabar audio">🎤</div>
         <div id="attachVideo" class="attach-item" title="Enviar video">🎥</div>
       </div>
-      <input id="messageInput" type="text" placeholder="Escribe un mensaje…">
-      <div id="imageDraft" class="image-draft" hidden>
-        <div class="image-draft-preview" aria-hidden="true">
-          <img id="imageDraftPreview" alt="Vista previa de la imagen a enviar" />
-        </div>
-        <div class="image-draft-body">
-          <p id="imageDraftName" class="image-draft-name"></p>
-          <label for="imageCaption" class="sr-only">Caption</label>
-          <input id="imageCaption" type="text" placeholder="Añade un caption opcional" autocomplete="off">
-          <div class="image-draft-actions">
-            <button type="button" id="cancelImageDraft" class="ghost">Cancelar</button>
-            <button type="button" id="sendImageDraftBtn" class="primary">Enviar imagen</button>
-          </div>
-        </div>
+      <div id="imagePreviewChip" class="image-preview-chip" hidden>
+        <img id="imagePreviewThumb" alt="Imagen lista para enviar" />
+        <button type="button" id="clearImageDraft" aria-label="Quitar imagen">×</button>
       </div>
+      <input id="messageInput" type="text" placeholder="Escribe un mensaje…">
       <button id="sendBtn">Enviar</button>
       <input id="imageInput" type="file" accept="image/*" style="display:none;">
       <input id="audioInput" type="file" accept="audio/*" style="display:none;">
@@ -282,12 +272,9 @@
       const sendBtn = document.getElementById('sendBtn');
       const messageInput = document.getElementById('messageInput');
       const inputArea = document.querySelector('.inputArea');
-      const imageDraftEl = document.getElementById('imageDraft');
-      const imageDraftPreview = document.getElementById('imageDraftPreview');
-      const imageDraftName = document.getElementById('imageDraftName');
-      const imageCaptionInput = document.getElementById('imageCaption');
-      const cancelImageDraftBtn = document.getElementById('cancelImageDraft');
-      const sendImageDraftBtn = document.getElementById('sendImageDraftBtn');
+      const imagePreviewChip = document.getElementById('imagePreviewChip');
+      const imagePreviewThumb = document.getElementById('imagePreviewThumb');
+      const clearImageDraftBtn = document.getElementById('clearImageDraft');
       const sidebar = document.querySelector('.sidebar');
       const menuToggle = document.getElementById('menuToggle');
       menuToggle.addEventListener('click', () => {
@@ -510,9 +497,6 @@
         function updateSendButtons() {
           if (sendBtn) {
             sendBtn.disabled = isSending || isSendingImage || isSendingAudio || isRecordingAudio;
-          }
-          if (sendImageDraftBtn) {
-            sendImageDraftBtn.disabled = isSendingImage || !imageDraft;
           }
         }
 
@@ -1783,20 +1767,8 @@
           URL.revokeObjectURL(imageDraft.previewUrl);
         }
         imageDraft = null;
-        if (imageCaptionInput) imageCaptionInput.value = '';
-        if (imageDraftPreview) imageDraftPreview.removeAttribute('src');
-        if (imageDraftName) imageDraftName.textContent = '';
-        if (imageDraftEl) imageDraftEl.hidden = true;
-        updateSendButtons();
-      }
-
-      function clearImageDraft() {
-        if (imageDraft && imageDraft.previewUrl) {
-          URL.revokeObjectURL(imageDraft.previewUrl);
-        }
-        imageDraft = null;
-        if (imageDraftPreview) imageDraftPreview.removeAttribute('src');
-        if (imageDraftEl) imageDraftEl.hidden = true;
+        if (imagePreviewThumb) imagePreviewThumb.removeAttribute('src');
+        if (imagePreviewChip) imagePreviewChip.hidden = true;
         if (messageInput) {
           messageInput.placeholder = 'Escribe un mensaje…';
         }
@@ -1825,18 +1797,15 @@
           file,
           previewUrl: URL.createObjectURL(file)
         };
-        if (imageDraftPreview) {
-          imageDraftPreview.src = imageDraft.previewUrl;
+        if (imagePreviewThumb) {
+          imagePreviewThumb.src = imageDraft.previewUrl;
         }
-        if (imageDraftName) {
-          imageDraftName.textContent = file.name || 'Imagen seleccionada';
+        if (imagePreviewChip) {
+          imagePreviewChip.hidden = false;
         }
-        if (imageDraftEl) {
-          imageDraftEl.hidden = false;
-        }
-        if (imageCaptionInput) {
-          imageCaptionInput.value = '';
-          imageCaptionInput.focus();
+        if (messageInput) {
+          messageInput.placeholder = 'Agrega un mensaje para enviar la imagen…';
+          messageInput.focus();
         }
         attachMenu.classList.remove('show');
         updateSendButtons();
@@ -1849,7 +1818,7 @@
         updateSendButtons();
         const form = new FormData();
         form.append('image', imageDraft.file);
-        form.append('caption', imageCaptionInput ? imageCaptionInput.value.trim() : '');
+        form.append('caption', messageInput ? messageInput.value.trim() : '');
         form.append('numero', currentChat);
         try {
           const res = await fetch('/send_image', { method:'POST', body: form });
@@ -1858,6 +1827,9 @@
             throw new Error(msg);
           }
           clearImageDraft();
+          if (messageInput) {
+            messageInput.value = '';
+          }
           loadMessages();
           fetchChatList();
         } catch (err) {
@@ -1906,17 +1878,11 @@
       };
       audIn.onchange = () => sendFile(audIn, 'send_audio');
       vidIn.onchange = () => sendFile(vidIn, 'send_video');
-      if (cancelImageDraftBtn) {
-        cancelImageDraftBtn.addEventListener('click', () => {
+      if (clearImageDraftBtn) {
+        clearImageDraftBtn.addEventListener('click', () => {
           clearImageDraft();
-          messageInput.focus();
+          if (messageInput) messageInput.focus();
         });
-      }
-      if (sendImageDraftBtn) {
-        sendImageDraftBtn.addEventListener('click', sendImageDraft);
-      }
-      if (imageCaptionInput) {
-        imageCaptionInput.addEventListener('input', () => updateSendButtons());
       }
 
       messageInput.addEventListener('paste', handlePasteForImage);
