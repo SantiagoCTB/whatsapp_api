@@ -48,16 +48,17 @@ def create_or_update_tenant():
     name = (request.form.get("name") or tenant_key).strip()
     db_name = (request.form.get("db_name") or "").strip()
     db_host = (request.form.get("db_host") or "").strip()
+    db_port_raw = request.form.get("db_port")
     db_port = Config.DB_PORT
-    db_user = Config.DB_USER
-    db_password = Config.DB_PASSWORD
+    db_user = (request.form.get("db_user") or Config.DB_USER or "").strip()
+    db_password = (request.form.get("db_password") or Config.DB_PASSWORD or "").strip()
     metadata_raw = request.form.get("metadata") or ""
     # Siempre intentamos crear/actualizar el esquema aislado, incluso si el
     # checkbox no viene en la petición (p.ej. clientes que no envían el campo).
     ensure_schema = request.form.get("ensure_schema", "1") == "1"
 
     try:
-        db_port = int(db_port_raw) if db_port_raw else 3306
+        db_port = int(db_port_raw) if db_port_raw else Config.DB_PORT or 3306
     except ValueError:
         return redirect(
             url_for(
@@ -71,6 +72,15 @@ def create_or_update_tenant():
             url_for(
                 "tenant_admin.dashboard",
                 error="Faltan campos obligatorios para registrar la empresa.",
+            )
+        )
+
+    env_db_name = (Config.DB_NAME or "").strip()
+    if env_db_name and db_name.lower() == env_db_name.lower():
+        return redirect(
+            url_for(
+                "tenant_admin.dashboard",
+                error="La base de datos del tenant debe ser distinta a la configurada en el servicio (DB_NAME).",
             )
         )
 
