@@ -51,7 +51,9 @@ def create_or_update_tenant():
     db_user = (request.form.get("db_user") or "").strip()
     db_password = request.form.get("db_password") or ""
     metadata_raw = request.form.get("metadata") or ""
-    ensure_schema = request.form.get("ensure_schema") == "1"
+    # Siempre intentamos crear/actualizar el esquema aislado, incluso si el
+    # checkbox no viene en la petición (p.ej. clientes que no envían el campo).
+    ensure_schema = request.form.get("ensure_schema", "1") == "1"
 
     try:
         db_port = int(db_port_raw) if db_port_raw else 3306
