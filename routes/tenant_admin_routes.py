@@ -76,6 +76,15 @@ def create_or_update_tenant():
             )
         )
 
+    env_db_name = (Config.DB_NAME or "").strip()
+    if env_db_name and db_name.lower() == env_db_name.lower():
+        return redirect(
+            url_for(
+                "tenant_admin.dashboard",
+                error="La base de datos del tenant debe ser distinta a la configurada en el servicio (DB_NAME).",
+            )
+        )
+
     try:
         metadata = json.loads(metadata_raw) if metadata_raw else {}
     except json.JSONDecodeError:
