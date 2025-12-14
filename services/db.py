@@ -75,8 +75,8 @@ def _create_database_if_missing(db_settings: DatabaseSettings):
     bootstrap_conn = mysql.connector.connect(
         host=db_settings.host,
         port=db_settings.port,
-        user=db_settings.user,
-        password=db_settings.password,
+        user=Config.DB_USER or db_settings.user,
+        password=Config.DB_ROOT_PASSWORD or db_settings.password,
     )
     try:
         cursor = bootstrap_conn.cursor()
@@ -138,10 +138,141 @@ def get_master_connection(ensure_database: bool = False):
     )
 
 
+def _ensure_auth_schema_and_seed(cursor, admin_hash: str):
+    # usuarios
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS usuarios (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      username VARCHAR(50) UNIQUE NOT NULL,
+      password VARCHAR(128) NOT NULL
+    ) ENGINE=InnoDB;
+    """)
+
+    # Ampliar password para soportar hashes de Werkzeug
+    cursor.execute("SHOW COLUMNS FROM usuarios LIKE 'password';")
+    col = cursor.fetchone()
+    # col -> (Field, Type, Null, Key, Default, Extra)
+    if col and isinstance(col[1], str) and 'varchar(128)' in col[1].lower():
+        cursor.execute("ALTER TABLE usuarios MODIFY password VARCHAR(255) NOT NULL;")
+
+    # roles
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS roles (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      name VARCHAR(50) NOT NULL,
+      keyword VARCHAR(20) UNIQUE NOT NULL
+    ) ENGINE=InnoDB;
+    """)
+
+    # user_roles (pivote con FKs)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS user_roles (
+      user_id INT NOT NULL,
+      role_id INT NOT NULL,
+      PRIMARY KEY (user_id, role_id),
+      FOREIGN KEY (user_id) REFERENCES usuarios(id) ON DELETE CASCADE,
+      FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB;
+    """)
+
+    # Migración: si existe usuarios.rol => poblar roles/user_roles y DROP columna
+    cursor.execute("SHOW COLUMNS FROM usuarios LIKE 'rol';")
+    if cursor.fetchone():
+        cursor.execute("SELECT DISTINCT rol FROM usuarios;")
+        for (rol,) in cursor.fetchall():
+            if not rol:
+                continue
+            cursor.execute("""
+                INSERT INTO roles (name, keyword)
+                SELECT %s, %s FROM DUAL
+                WHERE NOT EXISTS (SELECT 1 FROM roles WHERE keyword=%s)
+            """, (rol.capitalize(), rol, rol))
+
+        cursor.execute("SELECT id, rol FROM usuarios;")
+        for user_id, rol in cursor.fetchall():
+            if not rol:
+                continue
+            cursor.execute("SELECT id FROM roles WHERE keyword=%s", (rol,))
+            row = cursor.fetchone()
+            if row:
+                role_id = row[0]
+                cursor.execute(
+                    "INSERT IGNORE INTO user_roles (user_id, role_id) VALUES (%s, %s)",
+                    (user_id, role_id)
+                )
+
+        cursor.execute("ALTER TABLE usuarios DROP COLUMN rol;")
+
+    cursor.execute("""
+    INSERT INTO usuarios (username, password)
+      SELECT %s, %s FROM DUAL
+      WHERE NOT EXISTS (SELECT 1 FROM usuarios WHERE username=%s)
+    """, ('admin', admin_hash, 'admin'))
+
+    cursor.execute("""
+    INSERT INTO usuarios (username, password)
+      SELECT %s, %s FROM DUAL
+      WHERE NOT EXISTS (SELECT 1 FROM usuarios WHERE username=%s)
+    """, ('superadmin', admin_hash, 'superadmin'))
+
+    cursor.execute("""
+    INSERT INTO roles (name, keyword)
+      SELECT %s, %s FROM DUAL
+      WHERE NOT EXISTS (SELECT 1 FROM roles WHERE keyword=%s)
+    """, ('Administrador', 'admin', 'admin'))
+
+    cursor.execute("""
+    INSERT INTO roles (name, keyword)
+      SELECT %s, %s FROM DUAL
+      WHERE NOT EXISTS (SELECT 1 FROM roles WHERE keyword=%s)
+    """, ('Super Administrador', 'superadmin', 'superadmin'))
+
+    cursor.execute("""
+    INSERT INTO roles (name, keyword)
+      SELECT %s, %s FROM DUAL
+      WHERE NOT EXISTS (SELECT 1 FROM roles WHERE keyword=%s)
+    """, ('Tiquetes', 'tiquetes', 'tiquetes'))
+
+    cursor.execute("""
+    INSERT INTO roles (name, keyword)
+      SELECT %s, %s FROM DUAL
+      WHERE NOT EXISTS (SELECT 1 FROM roles WHERE keyword=%s)
+    """, ('Cotizar', 'cotizar', 'cotizar'))
+
+    cursor.execute("""
+    INSERT IGNORE INTO user_roles (user_id, role_id)
+    SELECT u.id, r.id
+      FROM usuarios u, roles r
+     WHERE u.username=%s AND r.keyword=%s
+    """, ('admin', 'admin'))
+
+    cursor.execute("""
+    INSERT IGNORE INTO user_roles (user_id, role_id)
+    SELECT u.id, r.id
+      FROM usuarios u, roles r
+     WHERE u.username=%s AND r.keyword=%s
+    """, ('admin', 'superadmin'))
+
+    cursor.execute("""
+    INSERT IGNORE INTO user_roles (user_id, role_id)
+    SELECT u.id, r.id
+      FROM usuarios u, roles r
+     WHERE u.username=%s AND r.keyword=%s
+    """, ('superadmin', 'admin'))
+
+    cursor.execute("""
+    INSERT IGNORE INTO user_roles (user_id, role_id)
+    SELECT u.id, r.id
+      FROM usuarios u, roles r
+     WHERE u.username=%s AND r.keyword=%s
+    """, ('superadmin', 'superadmin'))
+
+
 def init_master_db():
     conn = get_master_connection(ensure_database=True)
     c = conn.cursor()
     c.execute(TENANTS_TABLE_DDL)
+    _ensure_auth_schema_and_seed(c, Config.DEFAULT_ADMIN_PASSWORD_HASH)
     conn.commit()
     conn.close()
 
@@ -217,69 +348,7 @@ def init_db(db_settings: DatabaseSettings | None = None):
     # respuestas de flujos (Flow)
     c.execute(FLOW_RESPONSES_TABLE_DDL)
 
-    # usuarios
-    c.execute("""
-    CREATE TABLE IF NOT EXISTS usuarios (
-      id INT AUTO_INCREMENT PRIMARY KEY,
-      username VARCHAR(50) UNIQUE NOT NULL,
-      password VARCHAR(128) NOT NULL
-    ) ENGINE=InnoDB;
-    """)
-
-    # Ampliar password para soportar hashes de Werkzeug
-    c.execute("SHOW COLUMNS FROM usuarios LIKE 'password';")
-    col = c.fetchone()
-    # col -> (Field, Type, Null, Key, Default, Extra)
-    if col and isinstance(col[1], str) and 'varchar(128)' in col[1].lower():
-        c.execute("ALTER TABLE usuarios MODIFY password VARCHAR(255) NOT NULL;")
-
-    # roles
-    c.execute("""
-    CREATE TABLE IF NOT EXISTS roles (
-      id INT AUTO_INCREMENT PRIMARY KEY,
-      name VARCHAR(50) NOT NULL,
-      keyword VARCHAR(20) UNIQUE NOT NULL
-    ) ENGINE=InnoDB;
-    """)
-
-    # user_roles (pivote con FKs)
-    c.execute("""
-    CREATE TABLE IF NOT EXISTS user_roles (
-      user_id INT NOT NULL,
-      role_id INT NOT NULL,
-      PRIMARY KEY (user_id, role_id),
-      FOREIGN KEY (user_id) REFERENCES usuarios(id) ON DELETE CASCADE,
-      FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE CASCADE
-    ) ENGINE=InnoDB;
-    """)
-
-    # Migración: si existe usuarios.rol => poblar roles/user_roles y DROP columna
-    c.execute("SHOW COLUMNS FROM usuarios LIKE 'rol';")
-    if c.fetchone():
-        c.execute("SELECT DISTINCT rol FROM usuarios;")
-        for (rol,) in c.fetchall():
-            if not rol:
-                continue
-            c.execute("""
-                INSERT INTO roles (name, keyword)
-                SELECT %s, %s FROM DUAL
-                WHERE NOT EXISTS (SELECT 1 FROM roles WHERE keyword=%s)
-            """, (rol.capitalize(), rol, rol))
-
-        c.execute("SELECT id, rol FROM usuarios;")
-        for user_id, rol in c.fetchall():
-            if not rol:
-                continue
-            c.execute("SELECT id FROM roles WHERE keyword=%s", (rol,))
-            row = c.fetchone()
-            if row:
-                role_id = row[0]
-                c.execute(
-                    "INSERT IGNORE INTO user_roles (user_id, role_id) VALUES (%s, %s)",
-                    (user_id, role_id)
-                )
-
-        c.execute("ALTER TABLE usuarios DROP COLUMN rol;")
+    _ensure_auth_schema_and_seed(c, Config.DEFAULT_ADMIN_PASSWORD_HASH)
 
     # reglas (incluye rol_keyword alineado a roles.keyword)
     c.execute("""
@@ -430,72 +499,6 @@ def init_db(db_settings: DatabaseSettings | None = None):
     c.execute("SHOW COLUMNS FROM chat_state LIKE 'estado';")
     if not c.fetchone():
         c.execute("ALTER TABLE chat_state ADD COLUMN estado VARCHAR(20);")
-
-    # ---- SEED admin (hash configurable) ----
-    admin_hash = Config.DEFAULT_ADMIN_PASSWORD_HASH
-    c.execute("""
-    INSERT INTO usuarios (username, password)
-      SELECT %s, %s FROM DUAL
-      WHERE NOT EXISTS (SELECT 1 FROM usuarios WHERE username=%s)
-    """, ('admin', admin_hash, 'admin'))
-
-    c.execute("""
-    INSERT INTO usuarios (username, password)
-      SELECT %s, %s FROM DUAL
-      WHERE NOT EXISTS (SELECT 1 FROM usuarios WHERE username=%s)
-    """, ('superadmin', admin_hash, 'superadmin'))
-
-    c.execute("""
-    INSERT INTO roles (name, keyword)
-      SELECT %s, %s FROM DUAL
-      WHERE NOT EXISTS (SELECT 1 FROM roles WHERE keyword=%s)
-    """, ('Administrador', 'admin', 'admin'))
-
-    c.execute("""
-    INSERT INTO roles (name, keyword)
-      SELECT %s, %s FROM DUAL
-      WHERE NOT EXISTS (SELECT 1 FROM roles WHERE keyword=%s)
-    """, ('Super Administrador', 'superadmin', 'superadmin'))
-
-    c.execute("""
-    INSERT INTO roles (name, keyword)
-      SELECT %s, %s FROM DUAL
-      WHERE NOT EXISTS (SELECT 1 FROM roles WHERE keyword=%s)
-    """, ('Tiquetes', 'tiquetes', 'tiquetes'))
-
-    c.execute("""
-    INSERT INTO roles (name, keyword)
-      SELECT %s, %s FROM DUAL
-      WHERE NOT EXISTS (SELECT 1 FROM roles WHERE keyword=%s)
-    """, ('Cotizar', 'cotizar', 'cotizar'))
-
-    c.execute("""
-    INSERT IGNORE INTO user_roles (user_id, role_id)
-    SELECT u.id, r.id
-      FROM usuarios u, roles r
-     WHERE u.username=%s AND r.keyword=%s
-    """, ('admin', 'admin'))
-
-    c.execute("""
-    INSERT IGNORE INTO user_roles (user_id, role_id)
-    SELECT u.id, r.id
-      FROM usuarios u, roles r
-     WHERE u.username=%s AND r.keyword=%s
-    """, ('admin', 'superadmin'))
-
-    c.execute("""
-    INSERT IGNORE INTO user_roles (user_id, role_id)
-    SELECT u.id, r.id
-      FROM usuarios u, roles r
-     WHERE u.username=%s AND r.keyword=%s
-    """, ('superadmin', 'admin'))
-
-    c.execute("""
-    INSERT IGNORE INTO user_roles (user_id, role_id)
-    SELECT u.id, r.id
-      FROM usuarios u, roles r
-     WHERE u.username=%s AND r.keyword=%s
-    """, ('superadmin', 'superadmin'))
 
     conn.commit()
     conn.close()
@@ -783,9 +786,16 @@ def set_alias(numero, nombre):
     conn.close()
 
 
-def get_roles_by_user(user_id, db_settings: DatabaseSettings | None = None):
+def get_roles_by_user(
+    user_id,
+    db_settings: DatabaseSettings | None = None,
+    *,
+    allow_tenant_context: bool = True,
+):
     """Retorna una lista de keywords de roles asignados a un usuario."""
-    conn = get_connection(db_settings=db_settings)
+    conn = get_connection(
+        db_settings=db_settings, allow_tenant_context=allow_tenant_context
+    )
     c    = conn.cursor()
     c.execute("""
       SELECT r.keyword
