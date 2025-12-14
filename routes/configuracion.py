@@ -4,6 +4,7 @@ from services.db import get_connection
 from openpyxl import load_workbook
 from werkzeug.utils import secure_filename
 from config import Config
+from services import tenants
 import os
 import uuid
 import re
@@ -11,12 +12,16 @@ import requests
 import json
 
 config_bp = Blueprint('configuracion', __name__)
-MEDIA_ROOT = Config.MEDIA_ROOT
-os.makedirs(Config.MEDIA_ROOT, exist_ok=True)
 
 # El comodín '*' en `input_text` permite avanzar al siguiente paso sin validar
 # la respuesta del usuario. Si es la única regla de un paso se ejecuta
 # automáticamente; si coexiste con otras, actúa como respuesta por defecto.
+
+
+def _media_root():
+    root = tenants.get_runtime_setting("MEDIA_ROOT", default=Config.MEDIA_ROOT)
+    os.makedirs(root, exist_ok=True)
+    return root
 
 def _require_admin():
     # Debe haber usuario logueado y el rol 'admin' en la lista de roles
@@ -205,7 +210,7 @@ def _reglas_view(template_name):
                     if media_file and media_file.filename:
                         filename = secure_filename(media_file.filename)
                         unique = f"{uuid.uuid4().hex}_{filename}"
-                        path = os.path.join(MEDIA_ROOT, unique)
+                        path = os.path.join(_media_root(), unique)
                         media_file.save(path)
                         url = url_for('static', filename=f'uploads/{unique}', _external=True)
                         medias.append((url, media_file.mimetype.split(';', 1)[0]))
@@ -566,7 +571,7 @@ def botones():
                     if media_file and media_file.filename:
                         filename = secure_filename(media_file.filename)
                         unique = f"{uuid.uuid4().hex}_{filename}"
-                        path = os.path.join(MEDIA_ROOT, unique)
+                        path = os.path.join(_media_root(), unique)
                         media_file.save(path)
                         url = url_for('static', filename=f'uploads/{unique}', _external=True)
                         medias.append((url, media_file.mimetype.split(';', 1)[0]))

@@ -1,0 +1,159 @@
+{% extends 'base.html' %}
+{% block title %}Panel Super Admin{% endblock %}
+{% block body_class %}admin-tenants{% endblock %}
+{% block content %}
+<div class="admin-page">
+  <h1>Gestión de empresas (solo super admin)</h1>
+
+  {% if error %}
+  <div class="alert alert-error">{{ error }}</div>
+  {% endif %}
+  {% if message %}
+  <div class="alert alert-success">{{ message }}</div>
+  {% endif %}
+
+  <div class="admin-grid">
+    <section class="card">
+      <h2>Empresas registradas</h2>
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Tenant</th>
+            <th>Nombre</th>
+            <th>Base de datos</th>
+            <th>Host</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for tenant in tenants %}
+          <tr>
+            <td>{{ tenant.tenant_key }}</td>
+            <td>{{ tenant.name }}</td>
+            <td>{{ tenant.db_name }}</td>
+            <td>{{ tenant.db_host }}:{{ tenant.db_port }}</td>
+            <td><a class="btn" href="{{ url_for('tenant_admin.dashboard', tenant=tenant.tenant_key) }}">Gestionar</a></td>
+          </tr>
+          {% else %}
+          <tr><td colspan="5">No hay empresas registradas todavía.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2>Registrar/actualizar empresa</h2>
+      <form method="post" action="{{ url_for('tenant_admin.create_or_update_tenant') }}" class="form-grid">
+        <label>Clave (tenant_key)
+          <input name="tenant_key" required placeholder="mi_empresa" />
+        </label>
+        <label>Nombre público
+          <input name="name" placeholder="Nombre de la empresa" />
+        </label>
+        <label>DB Host
+          <input name="db_host" required placeholder="localhost" />
+        </label>
+        <label>DB Puerto
+          <input name="db_port" type="number" min="1" max="65535" value="3306" />
+        </label>
+        <label>DB Nombre
+          <input name="db_name" required placeholder="whatsapp_tenant" />
+        </label>
+        <label>DB Usuario
+          <input name="db_user" required placeholder="root" />
+        </label>
+        <label>DB Password
+          <input name="db_password" required type="password" />
+        </label>
+        <label>Metadata (JSON opcional)
+          <textarea name="metadata" rows="3" placeholder='{"branding": "Acme"}'></textarea>
+        </label>
+        <label class="checkbox-inline">
+          <input type="checkbox" name="ensure_schema" value="1" checked /> Crear/actualizar esquema aislado
+        </label>
+        <button type="submit" class="btn primary">Guardar empresa</button>
+      </form>
+    </section>
+  </div>
+
+  {% if selected_tenant %}
+  <section class="card">
+    <h2>Administrar {{ selected_tenant.name }} ({{ selected_tenant.tenant_key }})</h2>
+    <div class="meta-grid">
+      <div><strong>DB:</strong> {{ selected_tenant.db_name }} en {{ selected_tenant.db_host }}:{{ selected_tenant.db_port }}</div>
+      <div><strong>Usuario BD:</strong> {{ selected_tenant.db_user }}</div>
+      <div><strong>Metadata:</strong> {{ selected_tenant.metadata or '{}' }}</div>
+    </div>
+
+    <div class="admin-grid">
+      <div>
+        <h3>Usuarios y roles</h3>
+        <table class="table">
+          <thead><tr><th>Usuario</th><th>Roles</th></tr></thead>
+          <tbody>
+            {% for u in tenant_users %}
+            <tr>
+              <td>{{ u.username }}</td>
+              <td>{{ u.roles or '—' }}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="2">Aún no hay usuarios en este tenant.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div>
+        <h3>Crear/actualizar usuario</h3>
+        <form method="post" action="{{ url_for('tenant_admin.create_tenant_user', tenant_key=selected_tenant.tenant_key) }}" class="form-grid">
+          <label>Usuario
+            <input name="username" required placeholder="admin" />
+          </label>
+          <label>Contraseña
+            <input name="password" type="password" required />
+          </label>
+          <fieldset class="roles">
+            <legend>Roles</legend>
+            {% for role in tenant_roles %}
+            <label class="checkbox-inline">
+              <input type="checkbox" name="roles" value="{{ role.keyword }}" /> {{ role.name }} ({{ role.keyword }})
+            </label>
+            {% else %}
+            <p>No hay roles definidos aún en este tenant.</p>
+            {% endfor %}
+          </fieldset>
+          <button type="submit" class="btn primary">Guardar usuario</button>
+        </form>
+      </div>
+      <div>
+        <h3>Variables de entorno por empresa</h3>
+        <form method="post" action="{{ url_for('tenant_admin.update_tenant_env', tenant_key=selected_tenant.tenant_key) }}" class="form-grid">
+          <label>META_TOKEN
+            <input name="META_TOKEN" value="{{ tenant_env.get('META_TOKEN','') }}" placeholder="token de Meta" />
+          </label>
+          <label>PHONE_NUMBER_ID
+            <input name="PHONE_NUMBER_ID" value="{{ tenant_env.get('PHONE_NUMBER_ID','') }}" placeholder="630532376819353" />
+          </label>
+          <label>SECRET_KEY
+            <input name="SECRET_KEY" value="{{ tenant_env.get('SECRET_KEY','') }}" placeholder="my_secret_token" />
+          </label>
+          <label>VERIFY_TOKEN
+            <input name="VERIFY_TOKEN" value="{{ tenant_env.get('VERIFY_TOKEN','') }}" placeholder="token de verificación" />
+          </label>
+          <label>MEDIA_ROOT
+            <input name="MEDIA_ROOT" value="{{ tenant_env.get('MEDIA_ROOT','') }}" placeholder="/app/static/uploads" />
+          </label>
+          <label>SESSION_TIMEOUT_MESSAGE
+            <textarea name="SESSION_TIMEOUT_MESSAGE" rows="2" placeholder="Mensaje al cerrar sesión por inactividad">{{ tenant_env.get('SESSION_TIMEOUT_MESSAGE','') }}</textarea>
+          </label>
+          <label>SESSION_TIMEOUT (segundos)
+            <input type="number" min="60" name="SESSION_TIMEOUT" value="{{ tenant_env.get('SESSION_TIMEOUT','') }}" />
+          </label>
+          <p class="help">Deja un campo vacío para usar el valor global por defecto.</p>
+          <button type="submit" class="btn primary">Guardar variables</button>
+        </form>
+      </div>
+    </div>
+  </section>
+  {% endif %}
+</div>
+{% endblock %}

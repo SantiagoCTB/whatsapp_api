@@ -1,0 +1,508 @@
+"""Tenant management helpers for multi-tenant isolation."""
+
+from __future__ import annotations
+
+import contextvars
+import json
+from dataclasses import dataclass
+from typing import Dict, List, Mapping
+from flask import Request
+from werkzeug.security import generate_password_hash
+
+from config import Config
+from services import db
+
+
+@dataclass
+class TenantInfo:
+    tenant_key: str
+    name: str
+    db_name: str
+    db_host: str
+    db_port: int
+    db_user: str
+    db_password: str
+    metadata: dict
+
+    def as_db_settings(self) -> db.DatabaseSettings:
+        return db.DatabaseSettings(
+            host=self.db_host,
+            port=self.db_port,
+            user=self.db_user,
+            password=self.db_password,
+            name=self.db_name,
+        )
+
+
+_tenant_cache: Dict[str, TenantInfo] = {}
+_CURRENT_TENANT = contextvars.ContextVar("current_tenant", default=None)
+_CURRENT_TENANT_ENV = contextvars.ContextVar("current_tenant_env", default=None)
+
+TENANT_ENV_KEYS = {
+    "META_TOKEN",
+    "PHONE_NUMBER_ID",
+    "SECRET_KEY",
+    "VERIFY_TOKEN",
+    "MEDIA_ROOT",
+    "SESSION_TIMEOUT",
+    "SESSION_TIMEOUT_MESSAGE",
+}
+
+
+class TenantNotFoundError(Exception):
+    """Raised when a tenant cannot be resolved."""
+
+
+class TenantResolutionError(Exception):
+    """Raised when tenant resolution fails due to bad input."""
+
+
+def _deserialize_metadata(raw):
+    if raw is None:
+        return {}
+    if isinstance(raw, dict):
+        return raw
+    if isinstance(raw, str):
+        try:
+            return json.loads(raw)
+        except json.JSONDecodeError:
+            return {}
+    return {}
+
+
+def _default_tenant_env() -> dict:
+    return {
+        "META_TOKEN": Config.META_TOKEN,
+        "PHONE_NUMBER_ID": Config.PHONE_NUMBER_ID,
+        "SECRET_KEY": Config.SECRET_KEY,
+        "VERIFY_TOKEN": Config.VERIFY_TOKEN,
+        "MEDIA_ROOT": Config.MEDIA_ROOT,
+        "SESSION_TIMEOUT": Config.SESSION_TIMEOUT,
+        "SESSION_TIMEOUT_MESSAGE": Config.SESSION_TIMEOUT_MESSAGE,
+    }
+
+
+def _coerce_env_value(key: str, value):
+    if value in (None, ""):
+        return None
+
+    if key == "SESSION_TIMEOUT":
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return None
+
+    return value
+
+
+def _merge_env(defaults: Mapping, overrides: Mapping | None):
+    merged = dict(defaults)
+    if not overrides:
+        return merged
+
+    for key, value in overrides.items():
+        if key not in TENANT_ENV_KEYS:
+            continue
+        coerced = _coerce_env_value(key, value)
+        if coerced is None:
+            continue
+        merged[key] = coerced
+    return merged
+
+
+def _row_to_tenant(row) -> TenantInfo | None:
+    if not row:
+        return None
+    return TenantInfo(
+        tenant_key=row.get("tenant_key"),
+        name=row.get("name") or row.get("tenant_key"),
+        db_name=row.get("db_name"),
+        db_host=row.get("db_host"),
+        db_port=row.get("db_port") or Config.DB_PORT,
+        db_user=row.get("db_user"),
+        db_password=row.get("db_password"),
+        metadata=_deserialize_metadata(row.get("metadata")),
+    )
+
+
+def get_tenant_env(tenant: TenantInfo | None = None) -> dict:
+    base_env = _default_tenant_env()
+    if not tenant:
+        return base_env
+
+    metadata = tenant.metadata or {}
+    env_overrides = {}
+    if isinstance(metadata, dict):
+        raw_env = metadata.get("env") if "env" in metadata else metadata
+        if isinstance(raw_env, dict):
+            env_overrides = raw_env
+
+    return _merge_env(base_env, env_overrides)
+
+
+def set_current_tenant_env(env: dict | None):
+    _CURRENT_TENANT_ENV.set(env)
+
+
+def get_current_tenant_env() -> dict:
+    env = _CURRENT_TENANT_ENV.get()
+    if env is not None:
+        return env
+    return get_tenant_env(get_current_tenant())
+
+
+def get_tenant(tenant_key: str, *, force_reload: bool = False) -> TenantInfo | None:
+    if not tenant_key:
+        return None
+    if tenant_key in _tenant_cache and not force_reload:
+        return _tenant_cache[tenant_key]
+
+    conn = db.get_master_connection()
+    try:
+        c = conn.cursor(dictionary=True)
+        c.execute(
+            """
+            SELECT tenant_key, name, db_name, db_host, db_port, db_user, db_password, metadata
+              FROM tenants
+             WHERE tenant_key=%s
+            """,
+            (tenant_key,),
+        )
+        tenant = _row_to_tenant(c.fetchone())
+        if tenant:
+            _tenant_cache[tenant_key] = tenant
+        return tenant
+    finally:
+        conn.close()
+
+
+def list_tenants(*, force_reload: bool = False) -> List[TenantInfo]:
+    if not force_reload and _tenant_cache:
+        return list(_tenant_cache.values())
+
+    conn = db.get_master_connection()
+    tenants_list: List[TenantInfo] = []
+    try:
+        c = conn.cursor(dictionary=True)
+        c.execute(
+            """
+            SELECT tenant_key, name, db_name, db_host, db_port, db_user, db_password, metadata
+              FROM tenants
+             ORDER BY created_at DESC, tenant_key
+            """
+        )
+        for row in c.fetchall() or []:
+            tenant = _row_to_tenant(row)
+            if tenant:
+                tenants_list.append(tenant)
+                _tenant_cache[tenant.tenant_key] = tenant
+    finally:
+        conn.close()
+
+    return tenants_list
+
+
+def update_tenant_metadata(tenant_key: str, metadata: Mapping | None) -> TenantInfo:
+    tenant = get_tenant(tenant_key)
+    if not tenant:
+        raise TenantNotFoundError(f"No se encontró la empresa '{tenant_key}'.")
+
+    merged = {}
+    if isinstance(tenant.metadata, dict):
+        merged.update(tenant.metadata)
+    if metadata:
+        merged.update(metadata)
+
+    conn = db.get_master_connection(ensure_database=True)
+    try:
+        c = conn.cursor()
+        c.execute(
+            "UPDATE tenants SET metadata=%s WHERE tenant_key=%s",
+            (json.dumps(merged or {}), tenant_key),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    _tenant_cache.pop(tenant_key, None)
+    return get_tenant(tenant_key, force_reload=True)
+
+
+def update_tenant_env(tenant_key: str, env_updates: Mapping | None) -> TenantInfo:
+    tenant = get_tenant(tenant_key)
+    if not tenant:
+        raise TenantNotFoundError(f"No se encontró la empresa '{tenant_key}'.")
+
+    metadata = dict(tenant.metadata or {})
+    env_section = metadata.get("env") if isinstance(metadata.get("env"), dict) else {}
+    env_section = dict(env_section)
+
+    for key in TENANT_ENV_KEYS:
+        raw_value = (env_updates or {}).get(key) if env_updates else None
+        coerced = _coerce_env_value(key, raw_value)
+        if coerced is None:
+            env_section.pop(key, None)
+        else:
+            env_section[key] = coerced
+
+    metadata["env"] = env_section
+    return update_tenant_metadata(tenant_key, metadata)
+
+
+def set_current_tenant(tenant: TenantInfo | None):
+    _CURRENT_TENANT.set(tenant)
+    if tenant:
+        db.set_tenant_db_settings(tenant.as_db_settings())
+        set_current_tenant_env(get_tenant_env(tenant))
+    else:
+        db.clear_tenant_db_settings()
+        set_current_tenant_env(None)
+
+
+def clear_current_tenant():
+    set_current_tenant(None)
+
+
+def get_current_tenant() -> TenantInfo | None:
+    return _CURRENT_TENANT.get()
+
+
+def get_runtime_setting(key: str, default=None, *, cast=None):
+    env = get_current_tenant_env()
+    value = env.get(key, default)
+    if cast and value is not None:
+        try:
+            value = cast(value)
+        except (TypeError, ValueError):
+            value = default
+    return value
+
+
+def ensure_default_tenant_registered() -> TenantInfo | None:
+    default_key = (Config.DEFAULT_TENANT or "").strip()
+    if not default_key:
+        return None
+
+    existing = get_tenant(default_key)
+    if existing:
+        return existing
+
+    conn = db.get_master_connection(ensure_database=True)
+    try:
+        c = conn.cursor()
+        c.execute(
+            """
+            INSERT INTO tenants (
+                tenant_key, name, db_name, db_host, db_port, db_user, db_password, metadata
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            ON DUPLICATE KEY UPDATE
+                name=VALUES(name),
+                db_name=VALUES(db_name),
+                db_host=VALUES(db_host),
+                db_port=VALUES(db_port),
+                db_user=VALUES(db_user),
+                db_password=VALUES(db_password),
+                metadata=VALUES(metadata)
+            """,
+            (
+                default_key,
+                Config.DEFAULT_TENANT_NAME or default_key,
+                Config.DB_NAME,
+                Config.DB_HOST,
+                Config.DB_PORT,
+                Config.DB_USER,
+                Config.DB_PASSWORD,
+                json.dumps({"source": "default"}),
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    _tenant_cache.pop(default_key, None)
+    return get_tenant(default_key)
+
+
+def ensure_tenant_schema(tenant: TenantInfo):
+    db.init_db(db_settings=tenant.as_db_settings())
+
+
+def get_tenant_roles(tenant: TenantInfo) -> list[dict]:
+    ensure_tenant_schema(tenant)
+    conn = db.get_connection(db_settings=tenant.as_db_settings(), ensure_database=True)
+    try:
+        c = conn.cursor(dictionary=True)
+        c.execute("SELECT id, name, keyword FROM roles ORDER BY name")
+        return c.fetchall() or []
+    finally:
+        conn.close()
+
+
+def list_tenant_users(tenant: TenantInfo) -> list[dict]:
+    ensure_tenant_schema(tenant)
+    conn = db.get_connection(db_settings=tenant.as_db_settings(), ensure_database=True)
+    try:
+        c = conn.cursor(dictionary=True)
+        c.execute(
+            """
+            SELECT u.id,
+                   u.username,
+                   GROUP_CONCAT(r.keyword ORDER BY r.keyword SEPARATOR ',') AS roles
+              FROM usuarios u
+              LEFT JOIN user_roles ur ON ur.user_id = u.id
+              LEFT JOIN roles r ON r.id = ur.role_id
+             GROUP BY u.id, u.username
+             ORDER BY u.username
+            """
+        )
+        return c.fetchall() or []
+    finally:
+        conn.close()
+
+
+def bootstrap_tenant_registry():
+    db.init_master_db()
+
+
+def resolve_tenant_from_request(request: Request) -> TenantInfo:
+    tenant_key = (
+        request.headers.get(Config.TENANT_HEADER)
+        or request.args.get("tenant")
+        or Config.DEFAULT_TENANT
+    )
+
+    if not tenant_key:
+        raise TenantResolutionError(
+            "No se proporcionó la empresa objetivo y no existe un tenant por defecto."
+        )
+
+    tenant = get_tenant(tenant_key)
+    if tenant is None:
+        raise TenantNotFoundError(f"No se encontró la empresa '{tenant_key}'.")
+
+    return tenant
+
+
+def ensure_default_tenant_schema():
+    tenant = get_tenant(Config.DEFAULT_TENANT) if Config.DEFAULT_TENANT else None
+    if tenant:
+        ensure_tenant_schema(tenant)
+
+
+def register_tenant(tenant: TenantInfo, *, ensure_schema: bool = False):
+    conn = db.get_master_connection(ensure_database=True)
+    try:
+        c = conn.cursor()
+        c.execute(
+            """
+            INSERT INTO tenants (
+                tenant_key, name, db_name, db_host, db_port, db_user, db_password, metadata
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            ON DUPLICATE KEY UPDATE
+                name=VALUES(name),
+                db_name=VALUES(db_name),
+                db_host=VALUES(db_host),
+                db_port=VALUES(db_port),
+                db_user=VALUES(db_user),
+                db_password=VALUES(db_password),
+                metadata=VALUES(metadata)
+            """,
+            (
+                tenant.tenant_key,
+                tenant.name,
+                tenant.db_name,
+                tenant.db_host,
+                tenant.db_port,
+                tenant.db_user,
+                tenant.db_password,
+                json.dumps(tenant.metadata or {}),
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    _tenant_cache.pop(tenant.tenant_key, None)
+    created = get_tenant(tenant.tenant_key, force_reload=True)
+    if ensure_schema and created:
+        ensure_tenant_schema(created)
+    return created
+
+
+def create_or_update_tenant_user(
+    tenant: TenantInfo, username: str, password: str, role_keywords: list[str]
+):
+    if not username or not password:
+        raise ValueError("El usuario y la contraseña son obligatorios.")
+
+    ensure_tenant_schema(tenant)
+    conn = db.get_connection(db_settings=tenant.as_db_settings(), ensure_database=True)
+    try:
+        c = conn.cursor()
+        c.execute("SELECT id FROM usuarios WHERE username=%s", (username,))
+        row = c.fetchone()
+        hashed = generate_password_hash(password)
+        if row:
+            user_id = row[0]
+            c.execute("UPDATE usuarios SET password=%s WHERE id=%s", (hashed, user_id))
+        else:
+            c.execute(
+                "INSERT INTO usuarios (username, password) VALUES (%s, %s)",
+                (username, hashed),
+            )
+            user_id = c.lastrowid
+        conn.commit()
+
+        current_roles = set(
+            db.get_roles_by_user(user_id, db_settings=tenant.as_db_settings()) or []
+        )
+        requested_roles = set(role_keywords or [])
+
+        # Remover roles que ya no se desean
+        for keyword in current_roles - requested_roles:
+            c.execute(
+                "DELETE ur FROM user_roles ur JOIN roles r ON ur.role_id=r.id "
+                "WHERE ur.user_id=%s AND r.keyword=%s",
+                (user_id, keyword),
+            )
+
+        # Asignar roles solicitados
+        for keyword in requested_roles:
+            db.assign_role_to_user(
+                user_id,
+                keyword,
+                db_settings=tenant.as_db_settings(),
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+    return user_id
+
+
+__all__ = [
+    "TenantInfo",
+    "TenantNotFoundError",
+    "TenantResolutionError",
+    "bootstrap_tenant_registry",
+    "clear_current_tenant",
+    "ensure_default_tenant_registered",
+    "ensure_default_tenant_schema",
+    "get_current_tenant_env",
+    "ensure_tenant_schema",
+    "get_tenant_roles",
+    "get_tenant_env",
+    "get_current_tenant",
+    "get_tenant",
+    "list_tenant_users",
+    "list_tenants",
+    "register_tenant",
+    "resolve_tenant_from_request",
+    "set_current_tenant",
+    "set_current_tenant_env",
+    "update_tenant_env",
+    "update_tenant_metadata",
+    "create_or_update_tenant_user",
+    "get_runtime_setting",
+    "TENANT_ENV_KEYS",
+]

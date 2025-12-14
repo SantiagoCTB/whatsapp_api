@@ -8,6 +8,7 @@ from flask import Blueprint, render_template, request, redirect, session, url_fo
 from werkzeug.utils import secure_filename
 from mysql.connector.errors import ProgrammingError
 from config import Config
+from services import tenants
 from services.whatsapp_api import (
     enviar_mensaje,
     trigger_typing_indicator,
@@ -26,15 +27,21 @@ chat_bp = Blueprint('chat', __name__)
 
 BOGOTA_TZ = ZoneInfo('America/Bogota')
 
-# Carpeta de subida debe coincidir con la de whatsapp_api
-MEDIA_ROOT = Config.MEDIA_ROOT
-os.makedirs(Config.MEDIA_ROOT, exist_ok=True)
-
 CHAT_STATE_DEFINITIONS = Config.CHAT_STATE_DEFINITIONS
 CHAT_STATE_KEYS = {item["key"] for item in CHAT_STATE_DEFINITIONS if item.get("key")}
 
 
 EXCLUDED_FLOW_FIELDS = {"flow_token"}
+
+
+def _media_root():
+    root = tenants.get_runtime_setting("MEDIA_ROOT", default=Config.MEDIA_ROOT)
+    os.makedirs(root, exist_ok=True)
+    return root
+
+
+def _media_path(filename: str):
+    return os.path.join(_media_root(), filename)
 
 
 def _is_excluded_flow_key(key):
@@ -1005,7 +1012,7 @@ def send_image():
     # Guarda archivo en disco
     filename = secure_filename(img.filename)
     unique   = f"{uuid.uuid4().hex}_{filename}"
-    path = os.path.join(MEDIA_ROOT, unique)
+    path = _media_path(unique)
     img.save(path)
 
     # URL pública
@@ -1055,7 +1062,7 @@ def send_document():
 
     filename = secure_filename(document.filename)
     unique   = f"{uuid.uuid4().hex}_{filename}"
-    path     = os.path.join(MEDIA_ROOT, unique)
+    path     = _media_path(unique)
     document.save(path)
 
     doc_url = url_for('static', filename=f'uploads/{unique}', _external=True)
@@ -1126,7 +1133,7 @@ def send_audio():
     safe_stem = secure_filename(os.path.splitext(original_filename)[0]) or 'grabacion'
     filename = f"{safe_stem}{ext}"
     unique = f"{uuid.uuid4().hex}_{filename}"
-    path = os.path.join(MEDIA_ROOT, unique)
+    path = _media_path(unique)
 
     try:
         audio.save(path)
@@ -1183,7 +1190,7 @@ def send_video():
 
     filename = secure_filename(video.filename)
     unique   = f"{uuid.uuid4().hex}_{filename}"
-    path     = os.path.join(MEDIA_ROOT, unique)
+    path     = _media_path(unique)
     video.save(path)
 
     tipo_envio = 'bot_video' if origen == 'bot' else 'asesor'
