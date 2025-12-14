@@ -9,6 +9,10 @@
 </div>
 
 <h2>Reglas</h2>
+<div class="page-tabs">
+    <a class="tab-link active" href="{{ url_for('configuracion.reglas') }}">Reglas</a>
+    <a class="tab-link" href="{{ url_for('configuracion.configuracion_ia') }}">Configuración IA</a>
+</div>
 <p>Para reglas de medición usa "*" en <em>Texto del usuario</em> y define la fórmula en <em>Cálculo</em> con variables como <code>medida</code>, <code>p1</code> o <code>p2</code>. El comodín "*" permite avanzar al siguiente paso sin validar el texto recibido: si es la única regla del paso se ejecutará automáticamente; si hay más reglas, actuará como opción por defecto. Opcionalmente indica un <em>Handler</em> para delegar el cálculo a código externo.</p>
 
 <form id="reglaForm" method="POST" enctype="multipart/form-data">

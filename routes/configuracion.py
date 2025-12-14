@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from flask import Blueprint, render_template, request, redirect, session, url_for, jsonify
 from mysql.connector import Error as MySQLError
 from services.db import get_connection
@@ -40,6 +42,50 @@ def _url_ok(url):
         return ok, mime
     except requests.RequestException:
         return False, None
+
+
+def _ensure_ia_config_table(cursor):
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS ia_config (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            model_name VARCHAR(100) NOT NULL DEFAULT 'o4-mini',
+            model_token TEXT NULL,
+            pdf_filename VARCHAR(255) NULL,
+            pdf_original_name VARCHAR(255) NULL,
+            pdf_mime VARCHAR(100) NULL,
+            pdf_size BIGINT NULL,
+            pdf_uploaded_at DATETIME NULL,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB;
+        """
+    )
+
+
+def _get_ia_config(cursor):
+    cursor.execute(
+        """
+        SELECT id, model_name, model_token, pdf_filename, pdf_original_name,
+               pdf_mime, pdf_size, pdf_uploaded_at
+          FROM ia_config
+      ORDER BY id DESC
+         LIMIT 1
+        """
+    )
+    row = cursor.fetchone()
+    if not row:
+        return None
+    keys = [
+        "id",
+        "model_name",
+        "model_token",
+        "pdf_filename",
+        "pdf_original_name",
+        "pdf_mime",
+        "pdf_size",
+        "pdf_uploaded_at",
+    ]
+    return {key: value for key, value in zip(keys, row)}
 
 
 def _botones_opciones_column(c, conn):
@@ -433,6 +479,127 @@ def _reglas_view(template_name):
                     d['flow_options'] = parsed_opts
             reglas.append(d)
         return render_template(template_name, reglas=reglas)
+    finally:
+        conn.close()
+
+
+@config_bp.route('/configuracion/ia', methods=['GET', 'POST'])
+def configuracion_ia():
+    if not _require_admin():
+        return redirect(url_for("auth.login"))
+
+    conn = get_connection()
+    c = conn.cursor()
+    status_message = None
+    error_message = None
+    try:
+        _ensure_ia_config_table(c)
+        conn.commit()
+
+        ia_config = _get_ia_config(c)
+        pdf_url = None
+        if ia_config and ia_config.get('pdf_filename'):
+            pdf_url = url_for('static', filename=f"uploads/ia/{ia_config['pdf_filename']}")
+
+        if request.method == 'POST':
+            ia_model = (request.form.get('ia_model') or 'o4-mini').strip() or 'o4-mini'
+            ia_token = (request.form.get('ia_token') or '').strip()
+            pdf_file = request.files.get('catalogo_pdf')
+            pdf_dir = os.path.join(_media_root(), 'ia')
+            os.makedirs(pdf_dir, exist_ok=True)
+
+            new_pdf = None
+            old_pdf_path = None
+
+            if not ia_token:
+                error_message = 'El token del modelo es obligatorio.'
+
+            if pdf_file and pdf_file.filename and not error_message:
+                filename = secure_filename(pdf_file.filename)
+                mime = (pdf_file.mimetype or '').lower()
+                if not filename.lower().endswith('.pdf'):
+                    error_message = 'Solo se permiten archivos PDF.'
+                elif mime and 'pdf' not in mime:
+                    error_message = 'El archivo subido no parece ser un PDF válido.'
+                elif pdf_file.content_length and pdf_file.content_length > 15 * 1024 * 1024:
+                    error_message = 'El PDF supera el tamaño máximo de 15 MB.'
+                else:
+                    stored_name = f"{uuid.uuid4().hex}_{filename}"
+                    path = os.path.join(pdf_dir, stored_name)
+                    pdf_file.save(path)
+                    pdf_size = os.path.getsize(path)
+                    new_pdf = {
+                        'stored_name': stored_name,
+                        'original_name': filename,
+                        'mime': pdf_file.mimetype or 'application/pdf',
+                        'size': pdf_size,
+                    }
+                    if ia_config and ia_config.get('pdf_filename'):
+                        old_pdf_path = os.path.join(pdf_dir, ia_config['pdf_filename'])
+
+            if not error_message:
+                if ia_config:
+                    c.execute(
+                        """
+                        UPDATE ia_config
+                           SET model_name = %s,
+                               model_token = %s,
+                               pdf_filename = %s,
+                               pdf_original_name = %s,
+                               pdf_mime = %s,
+                               pdf_size = %s,
+                               pdf_uploaded_at = %s
+                         WHERE id = %s
+                        """,
+                        (
+                            ia_model,
+                            ia_token,
+                            new_pdf['stored_name'] if new_pdf else ia_config.get('pdf_filename'),
+                            new_pdf['original_name'] if new_pdf else ia_config.get('pdf_original_name'),
+                            new_pdf['mime'] if new_pdf else ia_config.get('pdf_mime'),
+                            new_pdf['size'] if new_pdf else ia_config.get('pdf_size'),
+                            datetime.utcnow() if new_pdf else ia_config.get('pdf_uploaded_at'),
+                            ia_config['id'],
+                        ),
+                    )
+                else:
+                    c.execute(
+                        """
+                        INSERT INTO ia_config
+                            (model_name, model_token, pdf_filename, pdf_original_name, pdf_mime, pdf_size, pdf_uploaded_at)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s)
+                        """,
+                        (
+                            ia_model,
+                            ia_token,
+                            new_pdf['stored_name'] if new_pdf else None,
+                            new_pdf['original_name'] if new_pdf else None,
+                            new_pdf['mime'] if new_pdf else None,
+                            new_pdf['size'] if new_pdf else None,
+                            datetime.utcnow() if new_pdf else None,
+                        ),
+                    )
+
+                conn.commit()
+                ia_config = _get_ia_config(c)
+                pdf_url = None
+                if ia_config and ia_config.get('pdf_filename'):
+                    pdf_url = url_for('static', filename=f"uploads/ia/{ia_config['pdf_filename']}")
+                status_message = 'Configuración de IA actualizada correctamente.'
+
+                if new_pdf and old_pdf_path and os.path.exists(old_pdf_path):
+                    try:
+                        os.remove(old_pdf_path)
+                    except OSError:
+                        pass
+
+        return render_template(
+            'configuracion_ia.html',
+            ia_config=ia_config,
+            pdf_url=pdf_url,
+            status_message=status_message,
+            error_message=error_message,
+        )
     finally:
         conn.close()
 
