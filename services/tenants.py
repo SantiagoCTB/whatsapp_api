@@ -327,6 +327,16 @@ def ensure_tenant_schema(tenant: TenantInfo):
     db.init_db(db_settings=tenant.as_db_settings())
 
 
+def ensure_registered_tenants_schema(*, skip: set[str] | None = None):
+    """Crea bases y tablas para todos los tenants registrados en DB_NAME."""
+
+    skip_keys = {key for key in (skip or set()) if key}
+    for tenant in list_tenants(force_reload=True):
+        if tenant.tenant_key in skip_keys:
+            continue
+        ensure_tenant_schema(tenant)
+
+
 def get_tenant_roles(tenant: TenantInfo) -> list[dict]:
     ensure_tenant_schema(tenant)
     conn = db.get_connection(db_settings=tenant.as_db_settings(), ensure_database=True)
@@ -488,6 +498,7 @@ __all__ = [
     "clear_current_tenant",
     "ensure_default_tenant_registered",
     "ensure_default_tenant_schema",
+    "ensure_registered_tenants_schema",
     "get_current_tenant_env",
     "ensure_tenant_schema",
     "get_tenant_roles",

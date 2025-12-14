@@ -169,6 +169,13 @@ Si se utilizan para pruebas locales, realiza copias de seguridad en un almacenam
 
 La aplicación funciona como una sola instancia multi-tenant. El esquema principal definido por `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD` y `DB_NAME` se usa como registro central de empresas (tabla `tenants`). Cada fila describe la base de datos exclusiva de una empresa (host, usuario y nombre de base dedicados), garantizando que los datos de cada tenant estén completamente aislados a nivel de esquema.
 
+#### Base de control vs. bases de cada empresa
+
+* El `.env` solo define la **base de control** del sistema (la indicada en `DB_NAME`). Esta base se usa para autenticar al usuario, identificar a qué empresa pertenece y obtener la configuración necesaria para operar.
+* Cada empresa tiene una **base de datos propia**, creada de forma dinámica desde la interfaz web cuando se registra el tenant. El nombre de esa base no está en el `.env`, queda asociado de manera permanente al tenant y no se reutiliza para otras empresas.
+* Desde el momento en que se crea el tenant, todos sus usuarios, clientes, chats, mensajes y reglas se guardan únicamente en su base dedicada. No hay mezcla de datos entre empresas.
+* La base configurada en `.env` actúa solo como punto de entrada y ruteo: guarda el catálogo de tenants y permite dirigir cada petición a la base que corresponda.
+
 * Cada petición HTTP debe indicar a qué empresa pertenece usando el encabezado definido en `TENANT_HEADER` (por defecto `X-Tenant-ID`) o el parámetro de query `tenant`. Si no se indica y existe `DEFAULT_TENANT`, se usará dicho valor.
 * Durante el arranque se asegura la existencia de la tabla `tenants` en el registro central y se registra la empresa por defecto (`DEFAULT_TENANT` y `DEFAULT_TENANT_NAME`) apuntando a la base configurada por las variables `DB_*`.
 * La inicialización automática (`INIT_DB_ON_START=1`) crea el esquema completo solo en la base de datos de la empresa por defecto. Para nuevos tenants debes registrar su fila en `tenants` y ejecutar el inicializador (`services.tenants.ensure_tenant_schema`) apuntando a su configuración para poblar las tablas aisladas.

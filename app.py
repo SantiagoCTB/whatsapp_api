@@ -115,8 +115,12 @@ def create_app():
         # Inicializa BD por defecto para evitar errores en entornos nuevos.
         # Puede deshabilitarse con INIT_DB_ON_START=0 si se prefiere controlar
         # la migración manualmente.
-        if os.getenv("INIT_DB_ON_START", "1") != "0" and default_tenant:
-            tenants.ensure_tenant_schema(default_tenant)
+        if os.getenv("INIT_DB_ON_START", "1") != "0":
+            if default_tenant:
+                tenants.ensure_tenant_schema(default_tenant)
+            tenants.ensure_registered_tenants_schema(
+                skip={default_tenant.tenant_key} if default_tenant else None
+            )
 
     return app
 
