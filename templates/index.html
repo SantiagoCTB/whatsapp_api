@@ -1709,24 +1709,8 @@
           inputEl.value='';
           return;
         }
-        const form = new FormData();
-        form.append(endpoint.split('_')[1], file);
-        form.append('caption','');
-        form.append('numero', currentChat);
-        try {
-          const res = await fetch(`/${endpoint}`, { method:'POST', body:form });
-          if (!res.ok) {
-            const msg = await extractSendError(res);
-            throw new Error(msg);
-          }
-          attachMenu.classList.remove('show');
-          loadMessages(); fetchChatList();
-        } catch (err) {
-          const msg = (err && err.message) ? err.message : 'No se pudo enviar el archivo';
-          alert(msg);
-        } finally {
-          inputEl.value='';
-        }
+        await sendMediaUpload(file, endpoint);
+        inputEl.value='';
       }
 
       async function sendAudioFile(file) {
@@ -1781,15 +1765,36 @@
         updateSendButtons();
       }
 
-      function extractImageFile(dataTransfer) {
+      function extractFileByType(dataTransfer, typePrefix) {
         if (!dataTransfer) return null;
         if (dataTransfer.files && dataTransfer.files.length) {
-          const imgFile = Array.from(dataTransfer.files).find(f => f.type && f.type.startsWith('image/'));
-          if (imgFile) return imgFile;
+          const file = Array.from(dataTransfer.files).find(f => f.type && f.type.startsWith(typePrefix));
+          if (file) return file;
         }
         if (dataTransfer.items && dataTransfer.items.length) {
-          const item = Array.from(dataTransfer.items).find(i => i.kind === 'file' && i.type && i.type.startsWith('image/'));
+          const item = Array.from(dataTransfer.items).find(i => i.kind === 'file' && i.type && i.type.startsWith(typePrefix));
           if (item) return item.getAsFile();
+        }
+        return null;
+      }
+
+      function extractImageFile(dataTransfer) {
+        return extractFileByType(dataTransfer, 'image/');
+      }
+
+      function extractVideoFile(dataTransfer) {
+        return extractFileByType(dataTransfer, 'video/');
+      }
+
+      function resolveDraggedMedia(dataTransfer, { acceptImages = true, acceptVideos = false } = {}) {
+        if (!dataTransfer) return null;
+        if (acceptImages) {
+          const imageFile = extractImageFile(dataTransfer);
+          if (imageFile) return { type: 'image', file: imageFile };
+        }
+        if (acceptVideos) {
+          const videoFile = extractVideoFile(dataTransfer);
+          if (videoFile) return { type: 'video', file: videoFile };
         }
         return null;
       }
@@ -1855,6 +1860,26 @@
         prepareImageDraft(imageFile);
       }
 
+      async function sendMediaUpload(file, endpoint) {
+        if (!currentChat || !file) return;
+        const form = new FormData();
+        form.append(endpoint.split('_')[1], file);
+        form.append('caption', messageInput ? messageInput.value.trim() : '');
+        form.append('numero', currentChat);
+        try {
+          const res = await fetch(`/${endpoint}`, { method:'POST', body: form });
+          if (!res.ok) {
+            const msg = await extractSendError(res);
+            throw new Error(msg);
+          }
+          attachMenu.classList.remove('show');
+          loadMessages(); fetchChatList();
+        } catch (err) {
+          const msg = (err && err.message) ? err.message : 'No se pudo enviar el archivo';
+          alert(msg);
+        }
+      }
+
       function activateDragVisual() {
         if (chatWindowEl) chatWindowEl.classList.add('drag-active');
         if (inputArea) inputArea.classList.add('drag-active');
@@ -1892,28 +1917,55 @@
       }
 
       messageInput.addEventListener('paste', handlePasteForImage);
+
+      function handleDragOver(event, options, container) {
+        if (!event || !event.dataTransfer) return;
+        const media = resolveDraggedMedia(event.dataTransfer, options);
+        if (media) {
+          event.preventDefault();
+          event.stopPropagation();
+          activateDragVisual();
+        } else if (container && !container.contains(event.relatedTarget)) {
+          clearDragVisual();
+        }
+      }
+
+      function handleDragLeave(event, container) {
+        if (container && !container.contains(event.relatedTarget)) {
+          clearDragVisual();
+        }
+      }
+
+      async function handleDrop(event, options) {
+        const media = resolveDraggedMedia(event.dataTransfer, options);
+        clearDragVisual();
+        if (!media) return;
+        event.preventDefault();
+        event.stopPropagation();
+        if (media.type === 'image') {
+          prepareImageDraft(media.file);
+        } else if (media.type === 'video') {
+          await sendMediaUpload(media.file, 'send_video');
+        }
+      }
+
       if (chatWindowEl) {
         chatWindowEl.addEventListener('paste', handlePasteForImage);
-        chatWindowEl.addEventListener('dragover', event => {
-          if (extractImageFile(event.dataTransfer)) {
-            event.preventDefault();
-            activateDragVisual();
-          }
-        });
+        chatWindowEl.addEventListener('dragover', event => handleDragOver(event, { acceptImages: true, acceptVideos: true }, chatWindowEl));
+        chatWindowEl.addEventListener('dragleave', event => handleDragLeave(event, chatWindowEl));
+        chatWindowEl.addEventListener('drop', event => handleDrop(event, { acceptImages: true, acceptVideos: true }));
+      }
 
-        chatWindowEl.addEventListener('dragleave', event => {
-          if (!chatWindowEl.contains(event.relatedTarget)) {
-            clearDragVisual();
-          }
-        });
+      if (inputArea) {
+        inputArea.addEventListener('dragover', event => handleDragOver(event, { acceptImages: true }, inputArea));
+        inputArea.addEventListener('dragleave', event => handleDragLeave(event, inputArea));
+        inputArea.addEventListener('drop', event => handleDrop(event, { acceptImages: true }));
+      }
 
-        chatWindowEl.addEventListener('drop', event => {
-          const imageFile = extractImageFile(event.dataTransfer);
-          clearDragVisual();
-          if (!imageFile) return;
-          event.preventDefault();
-          prepareImageDraft(imageFile);
-        });
+      if (messageInput) {
+        messageInput.addEventListener('dragover', event => handleDragOver(event, { acceptImages: true }, inputArea || messageInput));
+        messageInput.addEventListener('dragleave', event => handleDragLeave(event, inputArea || messageInput));
+        messageInput.addEventListener('drop', event => handleDrop(event, { acceptImages: true }));
       }
 
       updateSendButtons();
