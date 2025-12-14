@@ -783,9 +783,16 @@ def set_alias(numero, nombre):
     conn.close()
 
 
-def get_roles_by_user(user_id, db_settings: DatabaseSettings | None = None):
+def get_roles_by_user(
+    user_id,
+    db_settings: DatabaseSettings | None = None,
+    *,
+    allow_tenant_context: bool = True,
+):
     """Retorna una lista de keywords de roles asignados a un usuario."""
-    conn = get_connection(db_settings=db_settings)
+    conn = get_connection(
+        db_settings=db_settings, allow_tenant_context=allow_tenant_context
+    )
     c    = conn.cursor()
     c.execute("""
       SELECT r.keyword
