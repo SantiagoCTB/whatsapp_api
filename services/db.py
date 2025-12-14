@@ -1,3 +1,5 @@
+import contextvars
+from dataclasses import dataclass
 import mysql.connector
 from mysql.connector import errorcode
 from mysql.connector.errors import ProgrammingError
@@ -15,51 +17,137 @@ FLOW_RESPONSES_TABLE_DDL = """
     ) ENGINE=InnoDB;
 """
 
-def _create_database_if_missing():
-    """Create the configured database if it does not exist yet."""
+TENANTS_TABLE_DDL = """
+    CREATE TABLE IF NOT EXISTS tenants (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      tenant_key VARCHAR(64) NOT NULL UNIQUE,
+      name VARCHAR(191) NOT NULL,
+      db_name VARCHAR(191) NOT NULL,
+      db_host VARCHAR(191) NOT NULL,
+      db_port INT NOT NULL DEFAULT 3306,
+      db_user VARCHAR(191) NOT NULL,
+      db_password TEXT NOT NULL,
+      metadata JSON NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB;
+"""
 
+
+@dataclass(frozen=True)
+class DatabaseSettings:
+    host: str
+    port: int
+    user: str
+    password: str
+    name: str
+
+
+_TENANT_DB_SETTINGS = contextvars.ContextVar("tenant_db_settings", default=None)
+
+
+def set_tenant_db_settings(db_settings: DatabaseSettings | None):
+    _TENANT_DB_SETTINGS.set(db_settings)
+
+
+def clear_tenant_db_settings():
+    _TENANT_DB_SETTINGS.set(None)
+
+
+def _default_db_settings() -> DatabaseSettings:
     if not Config.DB_NAME:
         raise RuntimeError("DB_NAME no está configurado; no se puede crear la base.")
 
-    bootstrap_conn = mysql.connector.connect(
+    return DatabaseSettings(
         host=Config.DB_HOST,
         port=Config.DB_PORT,
         user=Config.DB_USER,
         password=Config.DB_PASSWORD,
+        name=Config.DB_NAME,
+    )
+
+
+_BASE_DB_SETTINGS = _default_db_settings()
+
+
+def _create_database_if_missing(db_settings: DatabaseSettings):
+    """Create the configured database if it does not exist yet."""
+
+    bootstrap_conn = mysql.connector.connect(
+        host=db_settings.host,
+        port=db_settings.port,
+        user=db_settings.user,
+        password=db_settings.password,
     )
     try:
         cursor = bootstrap_conn.cursor()
         cursor.execute(
-            f"CREATE DATABASE IF NOT EXISTS `{Config.DB_NAME}` "
+            f"CREATE DATABASE IF NOT EXISTS `{db_settings.name}` "
             "DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
         )
     finally:
         bootstrap_conn.close()
 
 
-def get_connection(ensure_database=False):
+def _resolve_db_settings(
+    db_settings: DatabaseSettings | None, allow_tenant_context: bool = True
+) -> DatabaseSettings:
+    if db_settings:
+        return db_settings
+
+    if allow_tenant_context:
+        ctx_settings = _TENANT_DB_SETTINGS.get()
+        if ctx_settings:
+            return ctx_settings
+
+    return _BASE_DB_SETTINGS
+
+
+def get_connection(
+    ensure_database: bool = False,
+    db_settings: DatabaseSettings | None = None,
+    *,
+    allow_tenant_context: bool = True,
+):
+    target_settings = _resolve_db_settings(db_settings, allow_tenant_context)
     try:
         return mysql.connector.connect(
-            host=Config.DB_HOST,
-            port=Config.DB_PORT,
-            user=Config.DB_USER,
-            password=Config.DB_PASSWORD,
-            database=Config.DB_NAME
+            host=target_settings.host,
+            port=target_settings.port,
+            user=target_settings.user,
+            password=target_settings.password,
+            database=target_settings.name,
         )
     except ProgrammingError as exc:
         if ensure_database and exc.errno == errorcode.ER_BAD_DB_ERROR:
-            _create_database_if_missing()
+            _create_database_if_missing(target_settings)
             return mysql.connector.connect(
-                host=Config.DB_HOST,
-                port=Config.DB_PORT,
-                user=Config.DB_USER,
-                password=Config.DB_PASSWORD,
-                database=Config.DB_NAME
+                host=target_settings.host,
+                port=target_settings.port,
+                user=target_settings.user,
+                password=target_settings.password,
+                database=target_settings.name,
             )
         raise
 
-def init_db():
-    conn = get_connection(ensure_database=True)
+
+def get_master_connection(ensure_database: bool = False):
+    return get_connection(
+        ensure_database=ensure_database,
+        db_settings=_BASE_DB_SETTINGS,
+        allow_tenant_context=False,
+    )
+
+
+def init_master_db():
+    conn = get_master_connection(ensure_database=True)
+    c = conn.cursor()
+    c.execute(TENANTS_TABLE_DDL)
+    conn.commit()
+    conn.close()
+
+
+def init_db(db_settings: DatabaseSettings | None = None):
+    conn = get_connection(ensure_database=True, db_settings=db_settings)
     c = conn.cursor()
 
     # mensajes
@@ -352,10 +440,22 @@ def init_db():
     """, ('admin', admin_hash, 'admin'))
 
     c.execute("""
+    INSERT INTO usuarios (username, password)
+      SELECT %s, %s FROM DUAL
+      WHERE NOT EXISTS (SELECT 1 FROM usuarios WHERE username=%s)
+    """, ('superadmin', admin_hash, 'superadmin'))
+
+    c.execute("""
     INSERT INTO roles (name, keyword)
       SELECT %s, %s FROM DUAL
       WHERE NOT EXISTS (SELECT 1 FROM roles WHERE keyword=%s)
     """, ('Administrador', 'admin', 'admin'))
+
+    c.execute("""
+    INSERT INTO roles (name, keyword)
+      SELECT %s, %s FROM DUAL
+      WHERE NOT EXISTS (SELECT 1 FROM roles WHERE keyword=%s)
+    """, ('Super Administrador', 'superadmin', 'superadmin'))
 
     c.execute("""
     INSERT INTO roles (name, keyword)
@@ -375,6 +475,27 @@ def init_db():
       FROM usuarios u, roles r
      WHERE u.username=%s AND r.keyword=%s
     """, ('admin', 'admin'))
+
+    c.execute("""
+    INSERT IGNORE INTO user_roles (user_id, role_id)
+    SELECT u.id, r.id
+      FROM usuarios u, roles r
+     WHERE u.username=%s AND r.keyword=%s
+    """, ('admin', 'superadmin'))
+
+    c.execute("""
+    INSERT IGNORE INTO user_roles (user_id, role_id)
+    SELECT u.id, r.id
+      FROM usuarios u, roles r
+     WHERE u.username=%s AND r.keyword=%s
+    """, ('superadmin', 'admin'))
+
+    c.execute("""
+    INSERT IGNORE INTO user_roles (user_id, role_id)
+    SELECT u.id, r.id
+      FROM usuarios u, roles r
+     WHERE u.username=%s AND r.keyword=%s
+    """, ('superadmin', 'superadmin'))
 
     conn.commit()
     conn.close()
@@ -662,9 +783,9 @@ def set_alias(numero, nombre):
     conn.close()
 
 
-def get_roles_by_user(user_id):
+def get_roles_by_user(user_id, db_settings: DatabaseSettings | None = None):
     """Retorna una lista de keywords de roles asignados a un usuario."""
-    conn = get_connection()
+    conn = get_connection(db_settings=db_settings)
     c    = conn.cursor()
     c.execute("""
       SELECT r.keyword
@@ -677,9 +798,15 @@ def get_roles_by_user(user_id):
     return roles
 
 
-def assign_role_to_user(user_id, role_keyword, role_name=None):
+def assign_role_to_user(
+    user_id,
+    role_keyword,
+    role_name=None,
+    *,
+    db_settings: DatabaseSettings | None = None,
+):
     """Asigna un rol (por keyword) a un usuario. Si el rol no existe se crea."""
-    conn = get_connection()
+    conn = get_connection(db_settings=db_settings)
     c    = conn.cursor()
     # Obtener rol existente o crearlo
     c.execute("SELECT id FROM roles WHERE keyword=%s", (role_keyword,))
