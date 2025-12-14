@@ -232,7 +232,7 @@
       box-shadow: 0 0 0 3px var(--accent);
     }
     .chatWindow.drag-active::after {
-      content: "Suelta la imagen para preparar el envío";
+      content: "Suelta la imagen o el video para preparar el envío";
       position: absolute;
       inset: 12px;
       border: 2px dashed var(--accent);
