@@ -81,9 +81,16 @@ def create_app():
     def bind_tenant():
         header_key = request.headers.get(Config.TENANT_HEADER)
         query_key = request.args.get("tenant")
+        form_key = request.form.get("tenant") if request.method == "POST" else None
         session_key = session.get("tenant")
 
-        tenant_key = header_key or query_key or session_key or Config.DEFAULT_TENANT
+        tenant_key = (
+            header_key
+            or query_key
+            or form_key
+            or session_key
+            or Config.DEFAULT_TENANT
+        )
 
         if not tenant_key:
             # Modo legacy (single-tenant): no se exige encabezado ni tenant
