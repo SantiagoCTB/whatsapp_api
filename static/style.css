@@ -525,9 +525,6 @@
     #sendBtn:hover {
       transform:scale(1.05); background:var(--accent-hover);
     }
-    .image-preview-chip[hidden] {
-      display: none !important;
-    }
     .image-preview-chip {
       display: inline-flex;
       align-items: center;
