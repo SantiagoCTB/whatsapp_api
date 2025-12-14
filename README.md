@@ -165,6 +165,15 @@ La aplicación almacena los datos en un servidor MySQL. Los antiguos archivos de
 
 Si se utilizan para pruebas locales, realiza copias de seguridad en un almacenamiento externo y evita versionarlos.
 
+### Arquitectura multiempresa
+
+La aplicación funciona como una sola instancia multi-tenant. El esquema principal definido por `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD` y `DB_NAME` se usa como registro central de empresas (tabla `tenants`). Cada fila describe la base de datos exclusiva de una empresa (host, usuario y nombre de base dedicados), garantizando que los datos de cada tenant estén completamente aislados a nivel de esquema.
+
+* Cada petición HTTP debe indicar a qué empresa pertenece usando el encabezado definido en `TENANT_HEADER` (por defecto `X-Tenant-ID`) o el parámetro de query `tenant`. Si no se indica y existe `DEFAULT_TENANT`, se usará dicho valor.
+* Durante el arranque se asegura la existencia de la tabla `tenants` en el registro central y se registra la empresa por defecto (`DEFAULT_TENANT` y `DEFAULT_TENANT_NAME`) apuntando a la base configurada por las variables `DB_*`.
+* La inicialización automática (`INIT_DB_ON_START=1`) crea el esquema completo solo en la base de datos de la empresa por defecto. Para nuevos tenants debes registrar su fila en `tenants` y ejecutar el inicializador (`services.tenants.ensure_tenant_schema`) apuntando a su configuración para poblar las tablas aisladas.
+* Compatibilidad hacia atrás: si no defines `DEFAULT_TENANT` y no envías encabezado de tenant, la app sigue funcionando en modo single-tenant exactamente con la base configurada en `DB_*`; no se migran datos a otro lugar ni se pierde la información existente. La tabla `tenants` se crea en tu base actual, pero ningún request la utilizará hasta que definas un tenant.
+
 ### Usuario administrador por defecto
 
 Durante la inicialización de la base de datos (`init_db`) se crea automáticamente el usuario `admin` con el hash definido en la variable de entorno `DEFAULT_ADMIN_PASSWORD_HASH`. Si no estableces un valor propio, se utilizará el hash correspondiente a la contraseña `Admin1234` (`scrypt:32768:8:1$JAUhBgIzT6IIoM5Y$6c5c9870fb039e600a045345fbe67029001173247f3143ef19b94cddd919996a7a82742083aeeb6927591fa2a0d0eb6bb3c4e3501a1964d53f39157d31f81bd4`).
