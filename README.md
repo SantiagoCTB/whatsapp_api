@@ -174,9 +174,37 @@ La aplicación funciona como una sola instancia multi-tenant. El esquema princip
 * La inicialización automática (`INIT_DB_ON_START=1`) crea el esquema completo solo en la base de datos de la empresa por defecto. Para nuevos tenants debes registrar su fila en `tenants` y ejecutar el inicializador (`services.tenants.ensure_tenant_schema`) apuntando a su configuración para poblar las tablas aisladas.
 * Compatibilidad hacia atrás: si no defines `DEFAULT_TENANT` y no envías encabezado de tenant, la app sigue funcionando en modo single-tenant exactamente con la base configurada en `DB_*`; no se migran datos a otro lugar ni se pierde la información existente. La tabla `tenants` se crea en tu base actual, pero ningún request la utilizará hasta que definas un tenant.
 
+#### Cómo crear nuevas empresas (tenants)
+
+El registro de empresas se hace siempre en la base de datos central definida por `DB_*`, en la tabla `tenants`. Cada fila apunta a una base exclusiva para esa empresa. Puedes crear tenants de dos formas:
+
+1) **CLI de administración (recomendado)**
+
+```bash
+python scripts/create_tenant.py <tenant_key> <db_name> \
+  --name "Nombre Comercial" \
+  --db-host 127.0.0.1 --db-port 3306 \
+  --db-user root --db-password secret \
+  --metadata '{"branding": "acme", "plan": "pro"}' \
+  --init-schema
+```
+
+* `<tenant_key>` es el identificador que enviarán los clientes en el header `X-Tenant-ID`.
+* `--init-schema` crea inmediatamente todas las tablas en la base aislada del tenant usando el mismo schema que la empresa por defecto. Omite el flag si prefieres manejar la migración manualmente.
+
+2) **Panel de administración principal (solo super admin)**
+
+La aplicación incluye un panel protegido en `/admin/tenants` visible únicamente para usuarios con el rol `superadmin` (el usuario `admin` lo recibe por defecto). Desde allí puedes:
+
+* Listar todas las empresas registradas en la tabla `tenants` del registro central.
+* Crear o actualizar una empresa indicando `tenant_key`, host, usuario y contraseña de su base de datos. Marca la casilla de “Crear/actualizar esquema aislado” si quieres que se generen todas las tablas en la base nueva.
+* Gestionar usuarios de cada empresa: crea o actualiza un usuario y marca los roles que debe tener en su base aislada. El formulario sincroniza automáticamente los roles asignados.
+
+Con cualquiera de los métodos, una vez creada la empresa debes enviar el `tenant_key` en cada petición HTTP del panel y en cada webhook de WhatsApp para aislar los datos automáticamente.
+
 ### Usuario administrador por defecto
 
-Durante la inicialización de la base de datos (`init_db`) se crea automáticamente el usuario `admin` con el hash definido en la variable de entorno `DEFAULT_ADMIN_PASSWORD_HASH`. Si no estableces un valor propio, se utilizará el hash correspondiente a la contraseña `Admin1234` (`scrypt:32768:8:1$JAUhBgIzT6IIoM5Y$6c5c9870fb039e600a045345fbe67029001173247f3143ef19b94cddd919996a7a82742083aeeb6927591fa2a0d0eb6bb3c4e3501a1964d53f39157d31f81bd4`).
+Durante la inicialización de la base de datos (`init_db`) se crean automáticamente los usuarios `admin` y `superadmin` con el hash definido en la variable de entorno `DEFAULT_ADMIN_PASSWORD_HASH`. Si no estableces un valor propio, se utilizará el hash correspondiente a la contraseña `Admin1234` (`scrypt:32768:8:1$JAUhBgIzT6IIoM5Y$6c5c9870fb039e600a045345fbe67029001173247f3143ef19b94cddd919996a7a82742083aeeb6927591fa2a0d0eb6bb3c4e3501a1964d53f39157d31f81bd4`). Ambos reciben el rol `superadmin` (y `admin` en el caso del usuario `admin`) para que puedas acceder al panel central con cualquiera de los dos.
 
 Cuando necesites otro password inicial, genera su hash con `werkzeug.security.generate_password_hash`, asígnalo a `DEFAULT_ADMIN_PASSWORD_HASH` y reinicia el servicio para que `init_db` lo inserte si el usuario no existe todavía.
 

@@ -90,6 +90,7 @@ def create_app():
             # por defecto. Se usa la base configurada en DB_*.
             g.tenant = None
             tenants.clear_current_tenant()
+            tenants.set_current_tenant_env(tenants.get_tenant_env(None))
             return
 
         try:
@@ -101,6 +102,7 @@ def create_app():
 
         g.tenant = tenant
         tenants.set_current_tenant(tenant)
+        tenants.set_current_tenant_env(tenants.get_tenant_env(tenant))
 
     @app.teardown_request
     def clear_tenant_context(exc):

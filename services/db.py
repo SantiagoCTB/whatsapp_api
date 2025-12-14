@@ -440,6 +440,12 @@ def init_db(db_settings: DatabaseSettings | None = None):
     """, ('admin', admin_hash, 'admin'))
 
     c.execute("""
+    INSERT INTO usuarios (username, password)
+      SELECT %s, %s FROM DUAL
+      WHERE NOT EXISTS (SELECT 1 FROM usuarios WHERE username=%s)
+    """, ('superadmin', admin_hash, 'superadmin'))
+
+    c.execute("""
     INSERT INTO roles (name, keyword)
       SELECT %s, %s FROM DUAL
       WHERE NOT EXISTS (SELECT 1 FROM roles WHERE keyword=%s)
@@ -476,6 +482,20 @@ def init_db(db_settings: DatabaseSettings | None = None):
       FROM usuarios u, roles r
      WHERE u.username=%s AND r.keyword=%s
     """, ('admin', 'superadmin'))
+
+    c.execute("""
+    INSERT IGNORE INTO user_roles (user_id, role_id)
+    SELECT u.id, r.id
+      FROM usuarios u, roles r
+     WHERE u.username=%s AND r.keyword=%s
+    """, ('superadmin', 'admin'))
+
+    c.execute("""
+    INSERT IGNORE INTO user_roles (user_id, role_id)
+    SELECT u.id, r.id
+      FROM usuarios u, roles r
+     WHERE u.username=%s AND r.keyword=%s
+    """, ('superadmin', 'superadmin'))
 
     conn.commit()
     conn.close()
