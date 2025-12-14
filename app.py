@@ -1,5 +1,5 @@
 # app.py
-from flask import Flask, abort, g, request
+from flask import Flask, abort, g, request, session
 from werkzeug.middleware.proxy_fix import ProxyFix
 from dotenv import load_dotenv
 import os
@@ -79,11 +79,11 @@ def create_app():
 
     @app.before_request
     def bind_tenant():
-        tenant_key = (
-            request.headers.get(Config.TENANT_HEADER)
-            or request.args.get("tenant")
-            or Config.DEFAULT_TENANT
-        )
+        header_key = request.headers.get(Config.TENANT_HEADER)
+        query_key = request.args.get("tenant")
+        session_key = session.get("tenant")
+
+        tenant_key = header_key or query_key or session_key or Config.DEFAULT_TENANT
 
         if not tenant_key:
             # Modo legacy (single-tenant): no se exige encabezado ni tenant
@@ -91,16 +91,25 @@ def create_app():
             g.tenant = None
             tenants.clear_current_tenant()
             tenants.set_current_tenant_env(tenants.get_tenant_env(None))
+            session.pop("tenant", None)
             return
 
         try:
-            tenant = tenants.resolve_tenant_from_request(request)
+            if header_key or query_key:
+                tenant = tenants.resolve_tenant_from_request(request)
+            else:
+                tenant = tenants.get_tenant(tenant_key)
+                if tenant is None:
+                    raise tenants.TenantNotFoundError(
+                        f"No se encontró la empresa '{tenant_key}'."
+                    )
         except tenants.TenantResolutionError as exc:
             abort(400, description=str(exc))
         except tenants.TenantNotFoundError as exc:
             abort(404, description=str(exc))
 
         g.tenant = tenant
+        session["tenant"] = tenant.tenant_key
         tenants.set_current_tenant(tenant)
         tenants.set_current_tenant_env(tenants.get_tenant_env(tenant))
 
