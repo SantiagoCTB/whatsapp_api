@@ -45,37 +45,58 @@ def _parse_args() -> argparse.Namespace:
 def _ensure_tools_available() -> str:
     """Return the path to ``mysqldump`` or raise an informative error.
 
-    On Windows hosts we frequently have MySQL Server installed but its binaries
-    are not added to ``PATH``. To avoid spurious failures during deployments,
-    we look in a few common locations and also allow overriding the executable
-    path with the ``MYSQLDUMP_PATH`` environment variable.
+    The lookup order is:
+    1. A user-provided override via ``MYSQLDUMP_PATH`` (accepts file or folder).
+    2. ``PATH`` discovery (works for Linux packages like ``mysql-client``).
+    3. Common Windows/MariaDB install locations.
+    4. Common Linux tarball locations (``/usr/local/mysql``).
     """
+
+    def _expand_candidate(path: str) -> Path:
+        candidate = Path(path)
+        if candidate.is_dir():
+            # Allow pointing to the MySQL/MariaDB "bin" folder directly.
+            exe_name = "mysqldump.exe" if os.name == "nt" else "mysqldump"
+            candidate = candidate / exe_name
+        return candidate
 
     candidates = []
 
     # Highest priority: explicit override
     override = os.getenv("MYSQLDUMP_PATH")
     if override:
-        candidates.append(override)
+        candidates.append(_expand_candidate(override))
 
     # PATH lookup
     found = shutil.which("mysqldump")
     if found:
-        candidates.append(found)
+        candidates.append(Path(found))
 
-    # Typical Windows installation folders (different versions)
-    for base in filter(None, [os.getenv("ProgramFiles"), os.getenv("ProgramFiles(x86)")]):
-        mysql_root = Path(base) / "MySQL"
-        for exe in glob.glob(str(mysql_root / "MySQL Server*" / "bin" / "mysqldump.exe")):
-            candidates.append(exe)
+    # User-provided install roots (allows matching mysqld location when PATH is clean)
+    for env_key in ("MYSQL_HOME", "MYSQL_BASE", "MYSQL_ROOT"):
+        custom_root = os.getenv(env_key)
+        if custom_root:
+            candidates.append(_expand_candidate(str(Path(custom_root) / "bin")))
+
+    # Typical Windows installation folders (different versions and vendors)
+    windows_roots = [os.getenv("ProgramFiles"), os.getenv("ProgramFiles(x86)"), os.getenv("ProgramW6432")]
+    for base in filter(None, windows_roots):
+        for vendor in ("MySQL", "MariaDB"):
+            root = Path(base) / vendor
+            for exe in glob.glob(str(root / "*Server*" / "bin" / "mysqldump.exe")):
+                candidates.append(Path(exe))
+
+    # Common Linux tarball location
+    candidates.append(Path("/usr/local/mysql/bin/mysqldump"))
 
     for path in candidates:
-        if Path(path).is_file():
-            return path
+        if path.is_file():
+            return str(path)
 
     raise RuntimeError(
-        "No se encontró 'mysqldump'. Instala el cliente de MySQL o define la "
-        "variable MYSQLDUMP_PATH apuntando al ejecutable."
+        "No se encontró 'mysqldump'. Instala el cliente de MySQL (p. ej. "
+        "'sudo apt install mysql-client' en Linux) o define la variable "
+        "MYSQLDUMP_PATH apuntando al ejecutable o a la carpeta 'bin'."
     )
 
 
