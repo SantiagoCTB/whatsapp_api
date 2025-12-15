@@ -14,7 +14,7 @@
     <a class="tab-link active" href="{{ url_for('configuracion.configuracion_ia') }}">Configuración IA</a>
 </div>
 
-<p>Administra el token del modelo <strong>o4-mini</strong> y sube el catálogo en PDF que el asistente utilizará para responder. Cada página del PDF se indexará con OCR y se guardará como imagen para poder adjuntarla en las respuestas.</p>
+<p>Administra el token del modelo <strong>o4-mini</strong> y sube el catálogo en PDF o indica una URL desde donde descargarlo. Cada página del PDF se indexará con OCR y se guardará como imagen para poder adjuntarla en las respuestas.</p>
 
 {% if status_message %}
 <div class="alert success">{{ status_message }}</div>
@@ -44,6 +44,11 @@
         <input type="file" id="catalogo_pdf" name="catalogo_pdf" accept="application/pdf">
         <small>Solo archivos PDF, máximo 15 MB.</small>
     </div>
+    <div class="form-row">
+        <label for="catalogo_url">o URL del catálogo</label>
+        <input type="url" id="catalogo_url" name="catalogo_url" placeholder="https://.../catalogo.pdf" value="{{ ia_config.pdf_source_url or '' if ia_config else '' }}">
+        <small>Se descargará y se indexará igual que un archivo subido.</small>
+    </div>
 
     {% if ia_config and ia_config.pdf_filename %}
     <div class="form-row">
@@ -57,6 +62,9 @@
             {% endif %}
             {% if pdf_url %}
             <li><a href="{{ pdf_url }}" target="_blank" rel="noopener">Ver PDF</a></li>
+            {% endif %}
+            {% if ia_config.pdf_source_url %}
+            <li><strong>Origen:</strong> <a href="{{ ia_config.pdf_source_url }}" target="_blank" rel="noopener">{{ ia_config.pdf_source_url }}</a></li>
             {% endif %}
         </ul>
     </div>

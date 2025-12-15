@@ -121,7 +121,11 @@ class Config:
     IA_MODEL = os.getenv('IA_MODEL', 'o4-mini')
     IA_SYSTEM_MESSAGE = os.getenv(
         'IA_SYSTEM_MESSAGE',
-        'Eres un asistente virtual y debes responder de forma breve y clara.',
+        (
+            'Eres un asistente virtual orientado a ventas. Usa el catálogo ' \
+            'proporcionado para sugerir productos concretos, responder dudas y ' \
+            'cerrar la compra con llamadas a la acción cortas y claras.'
+        ),
     )
     IA_HISTORY_LIMIT = int(os.getenv('IA_HISTORY_LIMIT', 30))
     INITIAL_STEP = os.getenv('INITIAL_STEP', 'menu_principal')
