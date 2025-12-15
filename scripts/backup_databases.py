@@ -114,6 +114,14 @@ def _resolve_backup_root(args: argparse.Namespace) -> Path:
 def _load_dependencies(env_file: str | None):
     # Cargar variables antes de importar la configuración para que tome el valor correcto.
     load_dotenv(env_file)
+
+    # Asegurar que el proyecto esté en ``sys.path`` incluso si el script se ejecuta desde
+    # otra carpeta (por ejemplo, en Windows usando ``python scripts/backup_databases.py``).
+    # ``config.py`` y ``services`` viven en la raíz del repo.
+    project_path = str(PROJECT_ROOT)
+    if project_path not in sys.path:
+        sys.path.insert(0, project_path)
+
     global Config, db, tenants
     from config import Config  # type: ignore
     from services import db, tenants  # type: ignore
