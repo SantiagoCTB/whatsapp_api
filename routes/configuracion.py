@@ -564,7 +564,6 @@ def configuracion_ia():
             new_pdf = None
             old_pdf_path = None
             ingest_error = None
-            max_pdf_size = 15 * 1024 * 1024
 
             if not ia_token:
                 error_message = 'El token del modelo es obligatorio.'
@@ -579,8 +578,6 @@ def configuracion_ia():
                     error_message = 'Solo se permiten archivos PDF.'
                 elif mime and 'pdf' not in mime:
                     error_message = 'El archivo subido no parece ser un PDF válido.'
-                elif pdf_file.content_length and pdf_file.content_length > max_pdf_size:
-                    error_message = 'El PDF supera el tamaño máximo de 15 MB.'
                 else:
                     stored_name = f"{uuid.uuid4().hex}_{filename}"
                     path = os.path.join(pdf_dir, stored_name)
@@ -620,19 +617,14 @@ def configuracion_ia():
                     stored_name = f"{uuid.uuid4().hex}_{filename}"
                     path = os.path.join(pdf_dir, stored_name)
                     try:
-                        with requests.get(catalog_url, stream=True, timeout=20) as resp:
+                        with requests.get(catalog_url, stream=True, timeout=120) as resp:
                             if resp.status_code != 200:
                                 error_message = 'No se pudo descargar el catálogo desde la URL proporcionada.'
                             else:
-                                total = 0
                                 with open(path, 'wb') as fh:
                                     for chunk in resp.iter_content(chunk_size=8192):
                                         if not chunk:
                                             continue
-                                        total += len(chunk)
-                                        if total > max_pdf_size:
-                                            error_message = 'El PDF supera el tamaño máximo de 15 MB.'
-                                            break
                                         fh.write(chunk)
 
                                 if not error_message:
