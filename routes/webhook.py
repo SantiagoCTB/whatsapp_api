@@ -244,6 +244,15 @@ def _reply_with_ai(numero: str, user_text: str | None, *, system_prompt: str | N
         logger.warning("La IA no devolvió respuesta", extra={"numero": numero})
         return False
 
+    snippet_preview = None
+    if best_page:
+        snippet_preview = (best_page.text_content or "").strip()
+        if snippet_preview and len(snippet_preview) > 500:
+            snippet_preview = f"{snippet_preview[:480]}..."
+
+    if snippet_preview:
+        response = f"{response}\n\nReferencia del catálogo (página {best_page.page_number}): {snippet_preview}"
+
     enviar_mensaje(numero, response, tipo="bot", step="ia")
     if best_page and best_page.image_filename:
         image_path = os.path.join(_media_root(), 'ia_pages', best_page.image_filename)
@@ -254,6 +263,8 @@ def _reply_with_ai(numero: str, user_text: str | None, *, system_prompt: str | N
                 _external=True,
             )
             caption = f"Referencia del catálogo - página {best_page.page_number}"
+            if snippet_preview:
+                caption = f"{caption}:\n{snippet_preview}"
             enviar_mensaje(
                 numero,
                 caption,
