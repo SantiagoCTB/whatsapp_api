@@ -572,13 +572,15 @@ def enviar_mensaje(
 
 
 def _post_to_messages(payload, log_context):
+    runtime = _get_runtime_env()
+    messages_url = f"{GRAPH_BASE_URL}/{runtime['phone_id']}/messages"
     headers = {
-        "Authorization": f"Bearer {TOKEN}",
+        "Authorization": f"Bearer {runtime['token']}",
         "Content-Type": "application/json",
     }
 
     try:
-        response = requests.post(MESSAGES_URL, headers=headers, json=payload, timeout=10)
+        response = requests.post(messages_url, headers=headers, json=payload, timeout=10)
     except requests.RequestException as exc:
         log_extra = {"error": str(exc)}
         log_extra.update(log_context)

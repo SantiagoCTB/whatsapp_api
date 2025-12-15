@@ -23,7 +23,8 @@ from routes.export_routes import export_bp
 
 def _ensure_media_root():
     """Create the directory where user uploads are stored."""
-    media_root = Config.MEDIA_ROOT
+    env = tenants.get_tenant_env(None)
+    media_root = env.get("MEDIA_ROOT") or Config.MEDIA_ROOT
     try:
         os.makedirs(media_root, exist_ok=True)
         logging.getLogger(__name__).info("MEDIA_ROOT inicializado en %s", media_root)
