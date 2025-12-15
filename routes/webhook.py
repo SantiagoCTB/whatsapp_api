@@ -29,6 +29,7 @@ from services.job_queue import enqueue_transcription
 from services.normalize_text import normalize_text
 from services.global_commands import handle_global_command
 from services.ia_client import generate_response
+from services.catalog import find_relevant_pages
 
 webhook_bp = Blueprint('webhook', __name__)
 logger = logging.getLogger(__name__)
@@ -206,6 +207,21 @@ def _is_agent_mode(row) -> bool:
     return _extract_chat_status(row) == 'asesor'
 
 
+def _catalog_context_for_prompt(prompt: str):
+    pages = find_relevant_pages(prompt, limit=3)
+    if not pages:
+        return "", None
+
+    context_lines = []
+    for page in pages:
+        snippet = (page.text_content or "").strip()
+        if len(snippet) > 800:
+            snippet = f"{snippet[:780]}..."
+        context_lines.append(f"Página {page.page_number}: {snippet}")
+
+    return "\n\n".join(context_lines), pages[0]
+
+
 def _reply_with_ai(numero: str, user_text: str | None, *, system_prompt: str | None = None) -> bool:
     """Envía el mensaje al modelo de IA y responde al usuario."""
 
@@ -217,12 +233,32 @@ def _reply_with_ai(numero: str, user_text: str | None, *, system_prompt: str | N
     set_user_step(numero, "ia")
     update_chat_state(numero, "ia", "ia_activa")
     history = obtener_historial_chat(numero, limit=_ia_history_limit(), step="ia")
-    response = generate_response(history, prompt, system_message=system_prompt)
+    catalog_context, best_page = _catalog_context_for_prompt(prompt)
+    prompt_for_model = prompt
+    if catalog_context:
+        prompt_for_model = f"{prompt}\n\nContexto del catálogo:\n{catalog_context}"
+
+    response = generate_response(history, prompt_for_model, system_message=system_prompt)
     if not response:
         logger.warning("La IA no devolvió respuesta", extra={"numero": numero})
         return False
 
     enviar_mensaje(numero, response, tipo="bot", step="ia")
+    if best_page and best_page.image_filename:
+        image_path = os.path.join(_media_root(), 'ia_pages', best_page.image_filename)
+        if os.path.exists(image_path):
+            image_url = url_for(
+                'static', filename=f"uploads/ia_pages/{best_page.image_filename}", _external=True
+            )
+            caption = f"Referencia del catálogo - página {best_page.page_number}"
+            enviar_mensaje(
+                numero,
+                caption,
+                tipo="bot",
+                tipo_respuesta="image",
+                opciones=image_url,
+                step="ia",
+            )
     return True
 
 

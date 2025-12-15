@@ -14,7 +14,7 @@
     <a class="tab-link active" href="{{ url_for('configuracion.configuracion_ia') }}">Configuración IA</a>
 </div>
 
-<p>Administra el token del modelo <strong>o4-mini</strong> y sube el catálogo en PDF que el asistente utilizará para responder.</p>
+<p>Administra el token del modelo <strong>o4-mini</strong> y sube el catálogo en PDF que el asistente utilizará para responder. Cada página del PDF se indexará con OCR y se guardará como imagen para poder adjuntarla en las respuestas.</p>
 
 {% if status_message %}
 <div class="alert success">{{ status_message }}</div>
