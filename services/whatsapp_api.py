@@ -266,7 +266,15 @@ def enviar_mensaje(
         }
 
     elif tipo_respuesta == 'audio':
-        if opciones and os.path.isfile(opciones):
+        media_url_db = None
+        if isinstance(opciones, dict):
+            media_url_db = opciones.get("link")
+            audio_obj = {}
+            if opciones.get("id"):
+                audio_obj["id"] = opciones["id"]
+            if not audio_obj and opciones.get("link"):
+                audio_obj["link"] = opciones["link"]
+        elif opciones and os.path.isfile(opciones):
             filename   = os.path.basename(opciones)
             public_url = url_for(
                 'static',
@@ -274,8 +282,10 @@ def enviar_mensaje(
                 _external=True,
             )
             audio_obj  = {"link": public_url}
+            media_url_db = public_url
         else:
             audio_obj = {"link": opciones}
+            media_url_db = opciones
 
         media_link = audio_obj.get("link")
         data = {
@@ -557,7 +567,10 @@ def enviar_mensaje(
     if tipo_respuesta == 'video':
         media_url_db = video_obj.get("link")
     elif tipo_respuesta == 'audio':
-        media_url_db = audio_obj.get("link")
+        if isinstance(opciones, dict):
+            media_url_db = opciones.get("link") or opciones.get("id")
+        else:
+            media_url_db = audio_obj.get("link")
     else:
         media_url_db = opciones
 
