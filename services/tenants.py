@@ -346,7 +346,9 @@ def get_media_root(*, tenant_key: str | None = None) -> str:
 
     key = tenant_key or get_active_tenant_key()
     if key:
-        base_root = os.path.join(base_root, key)
+        normalized = os.path.normpath(base_root)
+        if os.path.basename(normalized) != key:
+            base_root = os.path.join(base_root, key)
 
     os.makedirs(base_root, exist_ok=True)
     return base_root
