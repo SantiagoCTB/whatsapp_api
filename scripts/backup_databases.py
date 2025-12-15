@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import argparse
+import glob
 import os
 import shutil
 import subprocess
@@ -41,9 +42,62 @@ def _parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def _ensure_tools_available():
-    if not shutil.which("mysqldump"):
-        raise RuntimeError("No se encontró 'mysqldump' en el PATH; instala el cliente de MySQL para continuar.")
+def _ensure_tools_available() -> str:
+    """Return the path to ``mysqldump`` or raise an informative error.
+
+    The lookup order is:
+    1. A user-provided override via ``MYSQLDUMP_PATH`` (accepts file or folder).
+    2. ``PATH`` discovery (works for Linux packages like ``mysql-client``).
+    3. Common Windows/MariaDB install locations.
+    4. Common Linux tarball locations (``/usr/local/mysql``).
+    """
+
+    def _expand_candidate(path: str) -> Path:
+        candidate = Path(path)
+        if candidate.is_dir():
+            # Allow pointing to the MySQL/MariaDB "bin" folder directly.
+            exe_name = "mysqldump.exe" if os.name == "nt" else "mysqldump"
+            candidate = candidate / exe_name
+        return candidate
+
+    candidates = []
+
+    # Highest priority: explicit override
+    override = os.getenv("MYSQLDUMP_PATH")
+    if override:
+        candidates.append(_expand_candidate(override))
+
+    # PATH lookup
+    found = shutil.which("mysqldump")
+    if found:
+        candidates.append(Path(found))
+
+    # User-provided install roots (allows matching mysqld location when PATH is clean)
+    for env_key in ("MYSQL_HOME", "MYSQL_BASE", "MYSQL_ROOT"):
+        custom_root = os.getenv(env_key)
+        if custom_root:
+            candidates.append(_expand_candidate(str(Path(custom_root) / "bin")))
+
+    # Typical Windows installation folders (different versions and vendors)
+    windows_roots = [os.getenv("ProgramFiles"), os.getenv("ProgramFiles(x86)"), os.getenv("ProgramW6432")]
+    for base in filter(None, windows_roots):
+        for vendor in ("MySQL", "MariaDB"):
+            root = Path(base) / vendor
+            for exe in glob.glob(str(root / "*Server*" / "bin" / "mysqldump.exe")):
+                candidates.append(Path(exe))
+
+    # Common Linux tarball location
+    candidates.append(Path("/usr/local/mysql/bin/mysqldump"))
+
+    for path in candidates:
+        if path.is_file():
+            return str(path)
+
+    raise RuntimeError(
+        "No se encontró 'mysqldump'. Instala el cliente de MySQL (p. ej. "
+        "'sudo apt install mysql-client' en Linux) o define la variable "
+        "MYSQLDUMP_PATH apuntando al ejecutable o a la carpeta 'bin'."
+    )
 
 
 def _resolve_backup_root(args: argparse.Namespace) -> Path:
@@ -101,7 +155,7 @@ def _collect_database_sources(Config, tenants) -> Iterable[DatabaseSource]:
     return seen.values()
 
 
-def _dump_database(label: str, settings, backup_root: Path) -> Path:
+def _dump_database(label: str, settings, backup_root: Path, mysqldump_exe: str) -> Path:
     if not all([settings.host, settings.user, settings.name]):
         raise RuntimeError(f"Credenciales incompletas para la base '{label}'.")
 
@@ -116,7 +170,7 @@ def _dump_database(label: str, settings, backup_root: Path) -> Path:
         env["MYSQL_PWD"] = str(settings.password)
 
     cmd = [
-        "mysqldump",
+        mysqldump_exe,
         f"-h{settings.host}",
         f"-P{settings.port}",
         f"-u{settings.user}",
@@ -141,7 +195,7 @@ def _dump_database(label: str, settings, backup_root: Path) -> Path:
 
 def main():
     args = _parse_args()
-    _ensure_tools_available()
+    mysqldump_exe = _ensure_tools_available()
 
     Config, db, tenants = _load_dependencies(args.env_file)
 
@@ -154,7 +208,7 @@ def main():
     sources = _collect_database_sources(Config, tenants)
     for label, settings in sources:
         print(f"{tag}Respaldando base '{settings.name}' (origen: {label})...")
-        path = _dump_database(label, settings, backup_root)
+        path = _dump_database(label, settings, backup_root, mysqldump_exe)
         print(f"{tag}✔ Respaldo creado en {path}")
 
 
