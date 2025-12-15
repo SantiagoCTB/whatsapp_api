@@ -274,9 +274,6 @@ def enviar_mensaje(
         else:
             audio_obj = {"link": opciones}
 
-        if mensaje:
-            audio_obj["caption"] = mensaje
-
         media_link = audio_obj.get("link")
         data = {
             "messaging_product": "whatsapp",
