@@ -749,7 +749,9 @@ def handle_text_message(numero: str, texto: str, save: bool = True):
         reutilizar esta función en flujos donde el texto ya fue
         almacenado para evitar duplicados en el historial.
     """
-    now = datetime.now()
+    # Se usa UTC para evitar desfaces de zona horaria entre la app y la base
+    # de datos que puedan disparar expiraciones falsas.
+    now = datetime.utcnow()
     row = get_chat_state(numero)
     step_db = row[0] if row else None
     last_time = row[1] if row else None
