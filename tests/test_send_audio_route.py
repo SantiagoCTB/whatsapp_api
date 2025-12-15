@@ -30,6 +30,20 @@ def _patch_chat_dependencies(monkeypatch, media_root):
     monkeypatch.setattr(chat_routes, "update_chat_state", lambda *_, **__: None)
 
 
+def test_media_root_falls_back_to_static_when_outside_static(monkeypatch, tmp_path):
+    outside_static = tmp_path / "external_uploads"
+    monkeypatch.setattr(
+        chat_routes.tenants,
+        "get_runtime_setting",
+        lambda *_, **__: str(outside_static),
+    )
+
+    resolved_root = Path(chat_routes._media_root())
+
+    assert resolved_root.resolve() == Path(chat_routes.Config.MEDIA_ROOT).resolve()
+    assert resolved_root.exists()
+
+
 def test_send_audio_generates_public_url_and_keeps_caption(tmp_path, client, monkeypatch):
     captured = {}
 
@@ -37,7 +51,7 @@ def test_send_audio_generates_public_url_and_keeps_caption(tmp_path, client, mon
     monkeypatch.setattr(
         chat_routes,
         "enviar_mensaje",
-        lambda numero, caption, tipo, tipo_respuesta, opciones: captured.update(
+        lambda numero, caption, tipo, tipo_respuesta, opciones, **kwargs: captured.update(
             {
                 "numero": numero,
                 "caption": caption,
@@ -45,7 +59,8 @@ def test_send_audio_generates_public_url_and_keeps_caption(tmp_path, client, mon
                 "tipo_respuesta": tipo_respuesta,
                 "opciones": opciones,
             }
-        ),
+        )
+        or (True, None),
     )
 
     with client.session_transaction() as sess:
