@@ -994,7 +994,12 @@
           img.classList.add('chat-image');
           replyPreviewEl.appendChild(img);
         } else if (url && tipo.includes('audio')) {
-          const a = document.createElement('audio'); a.controls=true; a.src=url; replyPreviewEl.appendChild(a);
+          const a = document.createElement('audio');
+          a.controls=true;
+          a.preload='metadata';
+          a.type='audio/ogg';
+          a.src=url;
+          replyPreviewEl.appendChild(a);
         } else if (url && tipo.includes('video')) {
           const v = document.createElement('video'); v.controls=true; v.src=url; replyPreviewEl.appendChild(v);
         }
@@ -1359,7 +1364,7 @@
                   replyDiv.appendChild(img);
                 } else if (replyTipo && replyTipo.includes('audio') && safeReplyUrl) {
                   const a = document.createElement('audio');
-                  a.controls = true; a.src = safeReplyUrl; replyDiv.appendChild(a);
+                  a.controls = true; a.preload = 'metadata'; a.type = 'audio/ogg'; a.src = safeReplyUrl; replyDiv.appendChild(a);
                 } else if (replyTipo && replyTipo.includes('video') && safeReplyUrl) {
                   const v = document.createElement('video');
                   v.controls = true; v.src = safeReplyUrl; v.style.maxWidth = '100px';
@@ -1393,7 +1398,7 @@
                 div.appendChild(img);
               } else if (tipo.includes('audio') && mediaUrl) {
                 const a = document.createElement('audio');
-                a.controls=true; a.src=mediaUrl; div.appendChild(a);
+                a.controls=true; a.preload='metadata'; a.type='audio/ogg'; a.src=mediaUrl; div.appendChild(a);
               } else if (tipo.includes('video') && mediaUrl) {
                 const v = document.createElement('video');
                 v.controls=true; v.src=mediaUrl; v.style.maxWidth='200px';
