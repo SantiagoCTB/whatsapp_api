@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import logging
 import importlib.util
+import logging
 from typing import Iterable, Mapping
 
 from config import Config
-from services import tenants
+from services import tenants, db
 
 if importlib.util.find_spec("openai"):
     from openai import OpenAI  # type: ignore
@@ -27,15 +28,61 @@ else:  # pragma: no cover - fallback para entornos sin SDK
 logger = logging.getLogger(__name__)
 
 
-def _get_api_key() -> str:
-    token = tenants.get_runtime_setting("IA_API_TOKEN", default=Config.IA_API_TOKEN)
+def _get_api_key(settings: dict | None = None) -> str:
+    settings = settings or _get_runtime_ia_settings()
+    token = settings.get("token") or ""
     if not token:
         raise RuntimeError("IA_API_TOKEN no está configurado")
     return token
 
 
-def _get_model() -> str:
-    return tenants.get_runtime_setting("IA_MODEL", default=Config.IA_MODEL)
+def _get_model(settings: dict | None = None) -> str:
+    settings = settings or _get_runtime_ia_settings()
+    return settings.get("model") or "o4-mini"
+
+
+def _get_runtime_ia_settings() -> dict:
+    config = _load_db_ia_config()
+    if not config or not config.get("enabled", True):
+        return {"token": None, "model": None}
+
+    return {
+        "token": (config.get("token") or "").strip() or None,
+        "model": (config.get("model") or "").strip() or "o4-mini",
+    }
+
+
+def _load_db_ia_config() -> dict | None:
+    conn = None
+    try:
+        conn = db.get_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SHOW TABLES LIKE 'ia_config'")
+        if not cursor.fetchone():
+            return None
+
+        cursor.execute("SHOW COLUMNS FROM ia_config LIKE 'enabled';")
+        has_enabled = cursor.fetchone() is not None
+        select_cols = "model_name, model_token" + (", enabled" if has_enabled else "")
+        cursor.execute(f"SELECT {select_cols} FROM ia_config ORDER BY id DESC LIMIT 1")
+        row = cursor.fetchone()
+        if not row:
+            return None
+
+        return {
+            "model": row.get("model_name"),
+            "token": row.get("model_token"),
+            "enabled": bool(row.get("enabled", True)) if has_enabled else True,
+        }
+    except Exception as exc:  # pragma: no cover - depende del entorno/DB
+        logger.exception("No se pudo leer la configuración de IA", exc_info=exc)
+        return None
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
 
 
 def build_messages(
@@ -76,13 +123,14 @@ def generate_response(
 ) -> str:
     """Genera una respuesta usando el modelo configurado."""
 
+    settings = _get_runtime_ia_settings()
     try:
-        api_key = _get_api_key()
+        api_key = _get_api_key(settings)
     except RuntimeError as exc:  # pragma: no cover - depende del entorno
         logger.warning(str(exc))
         return ""
 
-    model = _get_model() or "o4-mini"
+    model = _get_model(settings)
     client = OpenAI(api_key=api_key)
     messages = build_messages(history, user_message, system_message=system_message)
     if not messages:
