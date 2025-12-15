@@ -26,6 +26,7 @@ def client():
 def _patch_chat_dependencies(monkeypatch, media_root):
     monkeypatch.setattr(chat_routes, "MEDIA_ROOT", str(media_root))
     media_root.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setattr(chat_routes.tenants, "get_media_root", lambda *_, **__: str(media_root))
     monkeypatch.setattr(chat_routes, "get_chat_state", lambda numero: None)
     monkeypatch.setattr(chat_routes, "update_chat_state", lambda *_, **__: None)
 
@@ -44,28 +45,39 @@ def test_media_root_falls_back_to_static_when_outside_static(monkeypatch, tmp_pa
     assert resolved_root.exists()
 
 
+def test_serve_media_returns_correct_content_type(tmp_path, client, monkeypatch):
+    _patch_chat_dependencies(monkeypatch, tmp_path)
+    filename = "sample.ogg"
+    media_path = tmp_path / filename
+    media_path.write_bytes(b"ogg-bytes")
+
+    response = client.get(f"/media/{filename}")
+
+    assert response.status_code == 200
+    assert response.mimetype == "audio/ogg"
+
+
 def test_send_audio_generates_public_url_and_keeps_caption(tmp_path, client, monkeypatch):
     captured = {}
 
     _patch_chat_dependencies(monkeypatch, tmp_path)
-    converted_path = tmp_path / "converted.mp3"
+    converted_path = tmp_path / "converted.ogg"
     converted_path.write_bytes(b"converted")
     monkeypatch.setattr(
         chat_routes,
-        "_convert_webm_to_mp3",
+        "_convert_webm_to_ogg",
         lambda src: (str(converted_path), None),
     )
     def fake_send(numero, caption, tipo, tipo_respuesta, opciones=None, **kwargs):
-        if opciones is not None:
-            captured.update(
-                {
-                    "numero": numero,
-                    "caption": caption,
-                    "tipo": tipo,
-                    "tipo_respuesta": tipo_respuesta,
-                    "opciones": opciones,
-                }
-            )
+        captured.setdefault("calls", []).append(
+            {
+                "numero": numero,
+                "caption": caption,
+                "tipo": tipo,
+                "tipo_respuesta": tipo_respuesta,
+                "opciones": opciones,
+            }
+        )
         return True, None
 
     monkeypatch.setattr(chat_routes, "enviar_mensaje", fake_send)
@@ -90,9 +102,19 @@ def test_send_audio_generates_public_url_and_keeps_caption(tmp_path, client, mon
     payload = response.get_json()
     assert payload["status"] == "sent_audio"
     assert payload["url"].startswith("http")
-    assert payload["url"].endswith(".mp3")
-    assert captured["caption"] == "nota de voz"
-    assert captured["opciones"] == payload["url"]
+    assert payload["url"].endswith(".ogg")
+    assert "/media/" in payload["url"]
+
+    assert len(captured["calls"]) == 2
+
+    media_call = captured["calls"][0]
+    assert media_call["caption"] == ""
+    assert media_call["opciones"] == payload["url"]
+    assert media_call["tipo_respuesta"] == "audio"
+
+    text_call = captured["calls"][1]
+    assert text_call["tipo_respuesta"] == "texto"
+    assert text_call["caption"] == "nota de voz"
 
 
 def test_send_audio_rejects_unknown_format(tmp_path, client, monkeypatch):
@@ -139,13 +161,13 @@ def test_send_audio_rejects_empty_recording(tmp_path, client, monkeypatch):
     assert "vacío" in payload["error"].lower()
 
 
-def test_send_audio_falls_back_to_document_when_conversion_fails(tmp_path, client, monkeypatch):
+def test_send_audio_renames_to_ogg_when_conversion_fails(tmp_path, client, monkeypatch):
     _patch_chat_dependencies(monkeypatch, tmp_path)
-    monkeypatch.setattr(chat_routes, "_convert_webm_to_mp3", lambda *_: (None, "fail"))
+    monkeypatch.setattr(chat_routes, "_convert_webm_to_ogg", lambda *_: (None, "fail"))
     captured = {}
 
     def fake_send(numero, caption, tipo, tipo_respuesta, opciones=None, **kwargs):
-        captured.update(
+        captured.setdefault("calls", []).append(
             {
                 "numero": numero,
                 "caption": caption,
@@ -175,7 +197,15 @@ def test_send_audio_falls_back_to_document_when_conversion_fails(tmp_path, clien
     assert response.status_code == 200
     payload = response.get_json()
     assert payload["status"] == "sent_audio"
-    assert payload.get("sent_as_document") is True
+    assert payload["url"].endswith(".ogg")
     assert "warning" in payload
-    assert payload["url"].endswith(".webm")
-    assert captured["tipo_respuesta"] == "document"
+
+    assert len(captured["calls"]) == 2
+
+    media_call = captured["calls"][0]
+    assert media_call["tipo_respuesta"] == "audio"
+    assert media_call["caption"] == ""
+
+    text_call = captured["calls"][1]
+    assert text_call["tipo_respuesta"] == "texto"
+    assert text_call["caption"] == "nota"
