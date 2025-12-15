@@ -642,6 +642,7 @@ def init_db(db_settings: DatabaseSettings | None = None):
           pdf_filename VARCHAR(255) NOT NULL,
           page_number INT NOT NULL,
           text_content LONGTEXT,
+          keywords TEXT,
           image_filename VARCHAR(255),
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           INDEX idx_pdf_page (pdf_filename, page_number),
@@ -657,6 +658,11 @@ def init_db(db_settings: DatabaseSettings | None = None):
         c.execute(
             "ALTER TABLE ia_catalog_pages ADD INDEX idx_tenant_pdf (tenant_key, pdf_filename, page_number);"
         )
+
+    # Migración defensiva: agregar keywords si no existe
+    c.execute("SHOW COLUMNS FROM ia_catalog_pages LIKE 'keywords';")
+    if not c.fetchone():
+        c.execute("ALTER TABLE ia_catalog_pages ADD COLUMN keywords TEXT NULL AFTER text_content;")
 
     conn.commit()
     conn.close()
@@ -968,6 +974,9 @@ def replace_catalog_pages(
                     page.text_content
                     if hasattr(page, "text_content")
                     else page.get("text_content"),
+                    ",".join(page.keywords)
+                    if hasattr(page, "keywords") and page.keywords is not None
+                    else page.get("keywords"),
                     page.image_filename
                     if hasattr(page, "image_filename")
                     else page.get("image_filename"),
@@ -977,8 +986,8 @@ def replace_catalog_pages(
                 c.executemany(
                     """
                     INSERT INTO ia_catalog_pages
-                        (tenant_key, pdf_filename, page_number, text_content, image_filename)
-                    VALUES (%s, %s, %s, %s, %s)
+                        (tenant_key, pdf_filename, page_number, text_content, keywords, image_filename)
+                    VALUES (%s, %s, %s, %s, %s, %s)
                     """,
                     buffer,
                 )
@@ -988,8 +997,8 @@ def replace_catalog_pages(
             c.executemany(
                 """
                 INSERT INTO ia_catalog_pages
-                    (tenant_key, pdf_filename, page_number, text_content, image_filename)
-                VALUES (%s, %s, %s, %s, %s)
+                    (tenant_key, pdf_filename, page_number, text_content, keywords, image_filename)
+                VALUES (%s, %s, %s, %s, %s, %s)
                 """,
                 buffer,
             )
@@ -1030,7 +1039,7 @@ def search_catalog_pages(
             if target_tenant:
                 c.execute(
                     """
-                    SELECT pdf_filename, page_number, text_content, image_filename
+                    SELECT pdf_filename, page_number, text_content, keywords, image_filename
                       FROM ia_catalog_pages
                      WHERE tenant_key=%s
                     """,
@@ -1039,7 +1048,7 @@ def search_catalog_pages(
             else:
                 c.execute(
                     """
-                    SELECT pdf_filename, page_number, text_content, image_filename
+                    SELECT pdf_filename, page_number, text_content, keywords, image_filename
                       FROM ia_catalog_pages
                      WHERE tenant_key IS NULL
                     """,
@@ -1051,15 +1060,19 @@ def search_catalog_pages(
     for idx, candidate in enumerate(tenant_candidates):
         rows = _fetch_rows(candidate)
         scored = []
-        for pdf_filename, page_number, text_content, image_filename in rows:
+        for pdf_filename, page_number, text_content, keywords, image_filename in rows:
             text_lower = (text_content or "").lower()
+            kw_tokens = (keywords or "").lower().split(",") if keywords else []
             score = sum(1 for token in tokens if token in text_lower)
+            if not score and kw_tokens:
+                score = sum(1 for token in tokens if token in kw_tokens)
             if score:
                 scored.append(
                     {
                         "pdf_filename": pdf_filename,
                         "page_number": page_number,
                         "text_content": text_content,
+                        "keywords": keywords,
                         "image_filename": image_filename,
                         "score": score,
                         "tenant_key": candidate,

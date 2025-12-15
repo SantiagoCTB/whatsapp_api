@@ -10,6 +10,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import List
 
+try:  # pragma: no cover - dependencia opcional
+    import pytesseract
+    from PIL import Image
+except Exception:  # pragma: no cover - se usa sólo si está disponible
+    pytesseract = None  # type: ignore
+    Image = None  # type: ignore
+
 if importlib.util.find_spec("fitz"):
     try:
         import fitz  # type: ignore  # PyMuPDF
@@ -36,6 +43,7 @@ class CatalogPage:
     page_number: int
     text_content: str
     image_filename: str
+    keywords: list[str] | None = None
     pdf_filename: str | None = None
 
 
@@ -53,6 +61,58 @@ def _sanitize_text(text: str) -> str:
     text = (text or "").strip()
     text = re.sub(r"\s+", " ", text)
     return text
+
+
+def _extract_keywords(text: str, *, max_keywords: int = 20) -> list[str]:
+    """Genera una lista de palabras clave simples a partir del texto plano."""
+
+    stopwords = {
+        "para",
+        "con",
+        "los",
+        "las",
+        "del",
+        "por",
+        "una",
+        "uno",
+        "que",
+        "sin",
+        "sus",
+        "este",
+        "esta",
+        "estos",
+        "estas",
+        "muy",
+    }
+    tokens = [
+        t
+        for t in re.split(r"\W+", (text or "").lower())
+        if len(t) > 3 and t not in stopwords
+    ]
+    freq: dict[str, int] = {}
+    for token in tokens:
+        freq[token] = freq.get(token, 0) + 1
+    sorted_tokens = sorted(freq.items(), key=lambda item: (-item[1], item[0]))
+    return [token for token, _ in sorted_tokens[:max_keywords]]
+
+
+def _perform_ocr(pix: "fitz.Pixmap") -> str:
+    """Ejecuta OCR sobre la imagen de la página si pytesseract está disponible."""
+
+    if not pytesseract or not Image:
+        logger.warning(
+            "OCR no disponible: instala tesseract-ocr y pytesseract en el despliegue de Linux"
+        )
+        return ""
+
+    try:
+        mode = "RGB" if pix.n < 4 else "RGBA"
+        img = Image.frombytes(mode, (pix.width, pix.height), pix.samples)
+        text = pytesseract.image_to_string(img, lang="spa+eng")
+        return _sanitize_text(text)
+    except Exception as exc:  # pragma: no cover - depende del runtime
+        logger.warning("Fallo al ejecutar OCR de catálogo", exc_info=exc)
+        return ""
 
 
 def _page_zoom_matrix(page: "fitz.Page", max_dim: int = 2000) -> "fitz.Matrix":
@@ -109,11 +169,17 @@ def ingest_catalog_pdf(pdf_path: str, stored_pdf_name: str) -> list[CatalogPage]
             image_path = os.path.join(pages_dir, image_name)
             pix.save(image_path)
 
+            if not text:
+                text = _perform_ocr(pix)
+
+            keywords = _extract_keywords(text)
+
             page_counter["total"] += 1
             yield CatalogPage(
                 page_number=number,
                 text_content=text,
                 image_filename=image_name,
+                keywords=keywords,
                 pdf_filename=stored_pdf_name,
             )
 
@@ -156,6 +222,7 @@ def find_relevant_pages(query: str, limit: int = 3) -> List[CatalogPage]:
             page_number=row["page_number"],
             text_content=row.get("text_content") or "",
             image_filename=row.get("image_filename") or "",
+            keywords=row.get("keywords") if isinstance(row, dict) else None,
             pdf_filename=row.get("pdf_filename"),
         )
         for row in results
