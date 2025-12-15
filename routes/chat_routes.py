@@ -49,7 +49,16 @@ def _media_root():
     root = tenants.get_runtime_setting("MEDIA_ROOT", default=Config.MEDIA_ROOT)
     if not root:
         root = Config.MEDIA_ROOT
+
     root = os.path.abspath(root)
+    static_root = os.path.abspath(os.path.join(Config.BASEDIR, "static"))
+
+    # Si el directorio configurado está fuera de ``static`` no se podrá servir
+    # vía ``url_for('static', ...)``. Forzamos el directorio estándar para que
+    # la URL pública y el archivo físico siempre apunten al mismo lugar.
+    if os.path.commonpath([root, static_root]) != static_root:
+        root = Config.MEDIA_ROOT
+
     os.makedirs(root, exist_ok=True)
     return root
 
