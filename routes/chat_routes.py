@@ -318,6 +318,25 @@ def _extract_flow_segments(raw_message):
     return prepared
 
 
+def _is_ai_enabled(cursor) -> bool:
+    try:
+        if not _table_exists(cursor, 'ia_config'):
+            return True
+
+        cursor.execute("SHOW COLUMNS FROM ia_config LIKE 'enabled';")
+        has_enabled = cursor.fetchone() is not None
+        if not has_enabled:
+            return True
+
+        cursor.execute(
+            "SELECT enabled FROM ia_config ORDER BY id DESC LIMIT 1"
+        )
+        row = cursor.fetchone()
+        return bool(row[0]) if row else True
+    except Exception:
+        return True
+
+
 @chat_bp.route('/')
 def index():
     # Autenticación
@@ -330,6 +349,7 @@ def index():
     c.execute("SELECT id FROM roles WHERE keyword=%s", (rol,))
     row = c.fetchone()
     role_id = row[0] if row else None
+    ai_enabled = _is_ai_enabled(c)
 
     # Lista de chats únicos filtrados por rol
     if rol == 'admin':
@@ -390,6 +410,7 @@ def index():
         role_id=role_id,
         roles=roles_db,
         chat_state_definitions=CHAT_STATE_DEFINITIONS,
+        ai_enabled=ai_enabled,
     )
 
 @chat_bp.route('/get_chat/<numero>')

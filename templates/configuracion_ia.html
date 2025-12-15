@@ -32,6 +32,13 @@
         <label for="ia_token">Token del modelo</label>
         <input type="text" id="ia_token" name="ia_token" value="{{ ia_config.model_token or '' if ia_config else '' }}" required>
     </div>
+    <div class="form-row checkbox-row">
+        <label for="ia_enabled" class="checkbox-label">
+            <input type="checkbox" id="ia_enabled" name="ia_enabled" value="1" {% if ia_config is none or ia_config.enabled %}checked{% endif %}>
+            Activar respuestas con IA
+        </label>
+        <small>Si desactivas la IA, no se mostrará el aviso en el chat hasta volver a habilitarla.</small>
+    </div>
     <div class="form-row">
         <label for="catalogo_pdf">Catálogo PDF</label>
         <input type="file" id="catalogo_pdf" name="catalogo_pdf" accept="application/pdf">
