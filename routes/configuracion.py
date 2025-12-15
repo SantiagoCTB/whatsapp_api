@@ -5,6 +5,7 @@ import os
 import re
 import uuid
 from datetime import datetime
+from urllib.parse import urlparse
 
 import requests
 from flask import Blueprint, render_template, request, redirect, session, url_for, jsonify
@@ -67,6 +68,7 @@ def _ensure_ia_config_table(cursor):
             pdf_mime VARCHAR(100) NULL,
             pdf_size BIGINT NULL,
             pdf_uploaded_at DATETIME NULL,
+            pdf_source_url TEXT NULL,
             created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
         ) ENGINE=InnoDB;
         """
@@ -79,13 +81,20 @@ def _ensure_ia_config_table(cursor):
             "ALTER TABLE ia_config ADD COLUMN enabled TINYINT(1) NOT NULL DEFAULT 1 AFTER model_token;"
         )
 
+    cursor.execute("SHOW COLUMNS FROM ia_config LIKE 'pdf_source_url';")
+    has_source_url = cursor.fetchone() is not None
+    if not has_source_url:
+        cursor.execute(
+            "ALTER TABLE ia_config ADD COLUMN pdf_source_url TEXT NULL AFTER pdf_uploaded_at;"
+        )
+
 
 def _get_ia_config(cursor):
     try:
         cursor.execute(
             """
             SELECT id, model_name, model_token, enabled, pdf_filename, pdf_original_name,
-                   pdf_mime, pdf_size, pdf_uploaded_at
+                   pdf_mime, pdf_size, pdf_uploaded_at, pdf_source_url
               FROM ia_config
           ORDER BY id DESC
              LIMIT 1
@@ -96,7 +105,7 @@ def _get_ia_config(cursor):
         cursor.execute(
             """
             SELECT id, model_name, model_token, pdf_filename, pdf_original_name,
-                   pdf_mime, pdf_size, pdf_uploaded_at
+                   pdf_mime, pdf_size, pdf_uploaded_at, pdf_source_url
               FROM ia_config
           ORDER BY id DESC
              LIMIT 1
@@ -109,8 +118,10 @@ def _get_ia_config(cursor):
 
     row = rows[0]
 
-    if len(row) != 9:
-        row = (*row[:3], 1, *row[3:])
+    if len(row) == 8:
+        row = (*row[:3], 1, *row[3:], None)
+    elif len(row) == 9:
+        row = (*row, None)
 
     keys = [
         "id",
@@ -122,6 +133,7 @@ def _get_ia_config(cursor):
         "pdf_mime",
         "pdf_size",
         "pdf_uploaded_at",
+        "pdf_source_url",
     ]
 
     return {key: value for key, value in zip(keys, row)}
@@ -544,6 +556,7 @@ def configuracion_ia():
             ia_model = (request.form.get('ia_model') or 'o4-mini').strip() or 'o4-mini'
             ia_token = (request.form.get('ia_token') or '').strip()
             ia_enabled = 1 if request.form.get('ia_enabled') in {'on', '1', 'true', 't'} else 0
+            catalog_url = (request.form.get('catalogo_url') or '').strip()
             pdf_file = request.files.get('catalogo_pdf')
             pdf_dir = os.path.join(_media_root(), 'ia')
             os.makedirs(pdf_dir, exist_ok=True)
@@ -551,9 +564,13 @@ def configuracion_ia():
             new_pdf = None
             old_pdf_path = None
             ingest_error = None
+            max_pdf_size = 15 * 1024 * 1024
 
             if not ia_token:
                 error_message = 'El token del modelo es obligatorio.'
+
+            if pdf_file and pdf_file.filename and catalog_url:
+                error_message = 'Sube un PDF o indica una URL, pero no ambas opciones.'
 
             if pdf_file and pdf_file.filename and not error_message:
                 filename = secure_filename(pdf_file.filename)
@@ -562,7 +579,7 @@ def configuracion_ia():
                     error_message = 'Solo se permiten archivos PDF.'
                 elif mime and 'pdf' not in mime:
                     error_message = 'El archivo subido no parece ser un PDF válido.'
-                elif pdf_file.content_length and pdf_file.content_length > 15 * 1024 * 1024:
+                elif pdf_file.content_length and pdf_file.content_length > max_pdf_size:
                     error_message = 'El PDF supera el tamaño máximo de 15 MB.'
                 else:
                     stored_name = f"{uuid.uuid4().hex}_{filename}"
@@ -574,6 +591,7 @@ def configuracion_ia():
                         'original_name': filename,
                         'mime': pdf_file.mimetype or 'application/pdf',
                         'size': pdf_size,
+                        'source_url': None,
                     }
                     if ia_config and ia_config.get('pdf_filename'):
                         old_pdf_path = os.path.join(pdf_dir, ia_config['pdf_filename'])
@@ -588,6 +606,64 @@ def configuracion_ia():
                         except OSError:
                             pass
                         new_pdf = None
+
+            elif catalog_url and not error_message:
+                ok, mime = _url_ok(catalog_url)
+                if not ok:
+                    error_message = 'La URL del catálogo no está disponible o respondió con error.'
+                elif mime and 'pdf' not in mime.lower():
+                    error_message = 'La URL no apunta a un PDF válido.'
+                else:
+                    parsed = urlparse(catalog_url)
+                    base_name = os.path.basename(parsed.path) or 'catalogo.pdf'
+                    filename = secure_filename(base_name) or 'catalogo.pdf'
+                    stored_name = f"{uuid.uuid4().hex}_{filename}"
+                    path = os.path.join(pdf_dir, stored_name)
+                    try:
+                        with requests.get(catalog_url, stream=True, timeout=20) as resp:
+                            if resp.status_code != 200:
+                                error_message = 'No se pudo descargar el catálogo desde la URL proporcionada.'
+                            else:
+                                total = 0
+                                with open(path, 'wb') as fh:
+                                    for chunk in resp.iter_content(chunk_size=8192):
+                                        if not chunk:
+                                            continue
+                                        total += len(chunk)
+                                        if total > max_pdf_size:
+                                            error_message = 'El PDF supera el tamaño máximo de 15 MB.'
+                                            break
+                                        fh.write(chunk)
+
+                                if not error_message:
+                                    pdf_size = os.path.getsize(path)
+                                    new_pdf = {
+                                        'stored_name': stored_name,
+                                        'original_name': filename,
+                                        'mime': resp.headers.get('Content-Type', 'application/pdf'),
+                                        'size': pdf_size,
+                                        'source_url': catalog_url,
+                                    }
+                                    if ia_config and ia_config.get('pdf_filename'):
+                                        old_pdf_path = os.path.join(pdf_dir, ia_config['pdf_filename'])
+
+                                    try:
+                                        ingest_catalog_pdf(path, stored_name)
+                                    except Exception as exc:  # pragma: no cover - depende de libs externas
+                                        logger.exception("Error al indexar catálogo PDF", exc_info=exc)
+                                        ingest_error = 'No se pudo procesar el catálogo PDF. Verifica que el archivo no esté dañado.'
+                                        try:
+                                            os.remove(path)
+                                        except OSError:
+                                            pass
+                                        new_pdf = None
+                    except requests.RequestException:
+                        error_message = 'No se pudo descargar el catálogo desde la URL proporcionada.'
+                    if error_message and os.path.exists(path):
+                        try:
+                            os.remove(path)
+                        except OSError:
+                            pass
 
             if not error_message and ingest_error:
                 error_message = ingest_error
@@ -604,7 +680,8 @@ def configuracion_ia():
                                pdf_original_name = %s,
                                pdf_mime = %s,
                                pdf_size = %s,
-                               pdf_uploaded_at = %s
+                               pdf_uploaded_at = %s,
+                               pdf_source_url = %s
                          WHERE id = %s
                         """,
                         (
@@ -616,6 +693,7 @@ def configuracion_ia():
                             new_pdf['mime'] if new_pdf else ia_config.get('pdf_mime'),
                             new_pdf['size'] if new_pdf else ia_config.get('pdf_size'),
                             datetime.utcnow() if new_pdf else ia_config.get('pdf_uploaded_at'),
+                            new_pdf['source_url'] if new_pdf else ia_config.get('pdf_source_url'),
                             ia_config['id'],
                         ),
                     )
@@ -623,8 +701,8 @@ def configuracion_ia():
                     c.execute(
                         """
                         INSERT INTO ia_config
-                            (model_name, model_token, enabled, pdf_filename, pdf_original_name, pdf_mime, pdf_size, pdf_uploaded_at)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                            (model_name, model_token, enabled, pdf_filename, pdf_original_name, pdf_mime, pdf_size, pdf_uploaded_at, pdf_source_url)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                         """,
                         (
                             ia_model,
@@ -635,6 +713,7 @@ def configuracion_ia():
                             new_pdf['mime'] if new_pdf else None,
                             new_pdf['size'] if new_pdf else None,
                             datetime.utcnow() if new_pdf else None,
+                            new_pdf['source_url'] if new_pdf else None,
                         ),
                     )
 
