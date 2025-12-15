@@ -261,9 +261,11 @@ def set_current_tenant(tenant: TenantInfo | None):
     _CURRENT_TENANT.set(tenant)
     if tenant:
         db.set_tenant_db_settings(tenant.as_db_settings())
+        db.set_current_tenant_key(tenant.tenant_key)
         set_current_tenant_env(get_tenant_env(tenant))
     else:
         db.clear_tenant_db_settings()
+        db.clear_current_tenant_key()
         set_current_tenant_env(None)
 
 
