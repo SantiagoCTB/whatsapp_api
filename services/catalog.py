@@ -11,7 +11,16 @@ from pathlib import Path
 from typing import List
 
 if importlib.util.find_spec("fitz"):
-    import fitz  # type: ignore  # PyMuPDF
+    try:
+        import fitz  # type: ignore  # PyMuPDF
+    except Exception as exc:  # pragma: no cover - dependencia opcional en tests
+        # En Windows puede faltar la DLL subyacente de PyMuPDF; evitamos que
+        # la importación falle al arrancar la aplicación.
+        logging.getLogger(__name__).warning(
+            "No se pudo cargar PyMuPDF (fitz). Funcionalidades de catálogo deshabilitadas: %s",
+            exc,
+        )
+        fitz = None  # type: ignore
 else:  # pragma: no cover - dependencia opcional en tests
     fitz = None  # type: ignore
 
