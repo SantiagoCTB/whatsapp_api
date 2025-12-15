@@ -1,12 +1,14 @@
 import importlib.util
+import json
 import mimetypes
 import os
+import shutil
+import subprocess
 import uuid
-import json
 from datetime import datetime
-import os
 from zoneinfo import ZoneInfo
-from flask import Blueprint, render_template, request, redirect, session, url_for, jsonify
+
+from flask import Blueprint, jsonify, redirect, render_template, request, session, url_for
 from werkzeug.utils import secure_filename
 
 if importlib.util.find_spec("mysql.connector"):
@@ -50,6 +52,39 @@ def _media_root():
 
 def _media_path(filename: str):
     return os.path.join(_media_root(), filename)
+
+
+def _convert_webm_to_ogg(src_path: str):
+    if not shutil.which("ffmpeg"):
+        return None, "No se encontró ffmpeg para convertir el audio grabado."
+
+    original_name, _ = os.path.splitext(os.path.basename(src_path))
+    dest_name = f"{uuid.uuid4().hex}_{original_name}.ogg"
+    dest_path = os.path.join(_media_root(), dest_name)
+
+    result = subprocess.run(
+        [
+            "ffmpeg",
+            "-y",
+            "-i",
+            src_path,
+            "-acodec",
+            "libopus",
+            dest_path,
+        ],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+
+    if result.returncode != 0:
+        return None, "No se pudo convertir el audio a un formato compatible con WhatsApp."
+
+    try:
+        os.remove(src_path)
+    except OSError:
+        pass
+
+    return dest_path, None
 
 
 def _is_excluded_flow_key(key):
@@ -1049,13 +1084,16 @@ def send_image():
 
     # Envía la imagen por la API
     tipo_envio = 'bot_image' if origen == 'bot' else 'asesor'
-    enviar_mensaje(
+    success, error_reason = enviar_mensaje(
         numero,
         caption,
         tipo=tipo_envio,
         tipo_respuesta='image',
-        opciones=image_url
+        opciones=image_url,
+        return_error=True,
     )
+    if not success:
+        return jsonify({'error': error_reason or 'No se pudo enviar la imagen a WhatsApp'}), 502
     if origen != 'bot':
         row = get_chat_state(numero)
         step = row[0] if row else ''
@@ -1096,13 +1134,16 @@ def send_document():
 
     doc_url = url_for('static', filename=f'uploads/{unique}', _external=True)
 
-    enviar_mensaje(
+    success, error_reason = enviar_mensaje(
         numero,
         caption,
         tipo='bot_document',
         tipo_respuesta='document',
-        opciones=doc_url
+        opciones=doc_url,
+        return_error=True,
     )
+    if not success:
+        return jsonify({'error': error_reason or 'No se pudo enviar el documento a WhatsApp'}), 502
     row = get_chat_state(numero)
     step = row[0] if row else ''
     update_chat_state(numero, step, 'asesor')
@@ -1173,17 +1214,35 @@ def send_audio():
         os.remove(path)
         return jsonify({'error': 'El archivo de audio está vacío. Intenta grabar o subirlo de nuevo.'}), 400
 
+    if mime_type.startswith('audio/webm'):
+        converted_path, conversion_error = _convert_webm_to_ogg(path)
+        if not converted_path:
+            return jsonify({'error': conversion_error}), 400
+        path = converted_path
+        unique = os.path.basename(converted_path)
+
     audio_url = url_for('static', filename=f'uploads/{unique}', _external=True)
 
     # Envía el audio por la API
     tipo_envio = 'bot_audio' if origen == 'bot' else 'asesor'
-    enviar_mensaje(
+    success, error_reason = enviar_mensaje(
         numero,
         caption,
         tipo=tipo_envio,
         tipo_respuesta='audio',
-        opciones=audio_url
+        opciones=audio_url,
+        return_error=True,
     )
+    if not success:
+        return jsonify({'error': error_reason or 'No se pudo enviar el audio a WhatsApp'}), 502
+
+    if caption.strip():
+        enviar_mensaje(
+            numero,
+            caption.strip(),
+            tipo=tipo_envio,
+            tipo_respuesta='texto',
+        )
     if origen != 'bot':
         row = get_chat_state(numero)
         step = row[0] if row else ''
@@ -1223,13 +1282,16 @@ def send_video():
     video.save(path)
 
     tipo_envio = 'bot_video' if origen == 'bot' else 'asesor'
-    enviar_mensaje(
+    success, error_reason = enviar_mensaje(
         numero,
         caption,
         tipo=tipo_envio,
         tipo_respuesta='video',
-        opciones=path
+        opciones=path,
+        return_error=True,
     )
+    if not success:
+        return jsonify({'error': error_reason or 'No se pudo enviar el video a WhatsApp'}), 502
     if origen != 'bot':
         row = get_chat_state(numero)
         step = row[0] if row else ''
