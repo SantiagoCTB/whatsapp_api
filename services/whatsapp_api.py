@@ -288,6 +288,15 @@ def enviar_mensaje(
             media_url_db = opciones
 
         media_link = audio_obj.get("link")
+        logger.debug(
+            "Preparando payload de audio",
+            extra={
+                "numero": numero,
+                "tipo_respuesta": tipo_respuesta,
+                "media_link": media_link,
+                "has_media_id": bool(audio_obj.get("id")),
+            },
+        )
         data = {
             "messaging_product": "whatsapp",
             "to": numero,
