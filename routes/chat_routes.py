@@ -732,7 +732,9 @@ def send_message():
         return jsonify({'error': error_message or 'No se pudo enviar el mensaje.'}), 400
     row = get_chat_state(numero)
     step = row[0] if row else ''
-    update_chat_state(numero, step, 'asesor')
+    current_state = row[2] if row and len(row) > 2 else None
+    next_state = 'asesor' if current_state else None
+    update_chat_state(numero, step, next_state)
     return jsonify({'status': 'success'}), 200
 
 @chat_bp.route('/get_chat_list')
