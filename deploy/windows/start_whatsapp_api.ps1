@@ -43,13 +43,8 @@ $envFile = "C:\whatsapp_api\.env"
 $backupScript = "C:\whatsapp_api\scripts\backup_databases.py"
 
 Write-Output "Generating pre-deploy backup..."
-$backupArgs = @($backupScript, "--env-file", $envFile, "--tag", "windows-deploy")
-$backupResult = Start-Process -FilePath $python -ArgumentList $backupArgs -NoNewWindow -PassThru -Wait
-if ($backupResult.ExitCode -ne 0) {
-  Write-Error "El respaldo previo al despliegue falló; abortando. Código: $($backupResult.ExitCode)"
-  Stop-Transcript
-  exit 1
-}
+$backupArgs = @("scripts/backup_databases.py", "--env-file", ".env", "--tag", "windows-deploy")
+Start-Process -FilePath python -ArgumentList $backupArgs -NoNewWindow -PassThru -Wait -WorkingDirectory "C:\whatsapp_api"
 
 # Primero bajar contenedores huérfanos
 & $docker compose -f $composeFile down --remove-orphans

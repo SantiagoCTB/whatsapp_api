@@ -130,38 +130,64 @@ def _load_dependencies(env_file: str | None):
 
 
 def _collect_database_sources(Config, tenants) -> Iterable[DatabaseSource]:
+    """
+    En vez de depender de la tabla `tenants`, lista TODAS las bases existentes en el servidor
+    y las respalda una por una (excluyendo esquemas de sistema).
+    """
+
     required = {
         "DB_HOST": Config.DB_HOST,
         "DB_PORT": Config.DB_PORT,
         "DB_USER": Config.DB_USER,
         "DB_PASSWORD": Config.DB_PASSWORD,
-        "DB_NAME": Config.DB_NAME,
     }
-
-    missing = [key for key, value in required.items() if value in (None, "")]
+    missing = [k for k, v in required.items() if v in (None, "")]
     if missing:
         raise RuntimeError(
-            "Faltan variables obligatorias de conexión para la base central: "
-            + ", ".join(sorted(missing))
+            "Faltan variables obligatorias de conexión: " + ", ".join(sorted(missing))
         )
 
-    base_settings = db.DatabaseSettings(
+    try:
+        import mysql.connector  # type: ignore
+    except Exception as exc:
+        raise RuntimeError(
+            "No se pudo importar mysql.connector. Instala dependencias (pip install mysql-connector-python)."
+        ) from exc
+
+    # Conectar y listar bases
+    conn = mysql.connector.connect(
         host=Config.DB_HOST,
-        port=Config.DB_PORT,
+        port=int(Config.DB_PORT),
         user=Config.DB_USER,
         password=Config.DB_PASSWORD,
-        name=Config.DB_NAME,
     )
+    try:
+        cur = conn.cursor()
+        cur.execute("SHOW DATABASES")
+        db_names = [row[0] for row in cur.fetchall()]
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
 
-    seen: Dict[str, DatabaseSource] = {}
-    seen[base_settings.name] = (Config.DEFAULT_TENANT or "control", base_settings)
+    # Excluir bases de sistema (ajusta si quieres incluirlas)
+    system_dbs = {"information_schema", "mysql", "performance_schema", "sys"}
+    db_names = [d for d in db_names if d not in system_dbs]
 
-    for tenant in tenants.list_tenants(force_reload=True):
-        settings = tenant.as_db_settings()
-        seen[settings.name] = (tenant.tenant_key, settings)
+    # Construir settings por cada base
+    sources: list[DatabaseSource] = []
+    for name in sorted(set(db_names)):
+        settings = db.DatabaseSettings(
+            host=Config.DB_HOST,
+            port=Config.DB_PORT,
+            user=Config.DB_USER,
+            password=Config.DB_PASSWORD,
+            name=name,
+        )
+        sources.append(("server_scan", settings))
 
-    return seen.values()
-
+    return sources
 
 def _dump_database(label: str, settings, backup_root: Path, mysqldump_exe: str) -> Path:
     if not all([settings.host, settings.user, settings.name]):
@@ -216,8 +242,12 @@ def main():
     sources = _collect_database_sources(Config, tenants)
     for label, settings in sources:
         print(f"{tag}Respaldando base '{settings.name}' (origen: {label})...")
-        path = _dump_database(label, settings, backup_root, mysqldump_exe)
-        print(f"{tag}✔ Respaldo creado en {path}")
+        try:
+            path = _dump_database(label, settings, backup_root, mysqldump_exe)
+            print(f"{tag}✔ Respaldo creado en {path}")
+        except Exception as exc:
+            print(f"{tag}✖ Error respaldando '{settings.name}': {exc}", file=sys.stderr)
+            continue
 
 
 if __name__ == "__main__":
