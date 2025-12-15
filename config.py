@@ -32,6 +32,18 @@ def _load_chat_state_definitions():
                 "color": "#dc3545",
                 "text_color": "#ffffff",
             },
+            {
+                "key": "asesor",
+                "label": "Modo asesor",
+                "color": "#6f42c1",
+                "text_color": "#ffffff",
+            },
+            {
+                "key": "bot",
+                "label": "Bot activo",
+                "color": "#007bff",
+                "text_color": "#ffffff",
+            },
         ]
 
     sanitized = []
@@ -68,6 +80,28 @@ def _load_chat_state_definitions():
             }
         )
         seen_keys.add(normalized_key)
+
+    required = [
+        {
+            "key": "asesor",
+            "label": "Modo asesor",
+            "color": "#6f42c1",
+            "text_color": "#ffffff",
+        },
+        {
+            "key": "bot",
+            "label": "Bot activo",
+            "color": "#007bff",
+            "text_color": "#ffffff",
+        },
+    ]
+
+    for entry in required:
+        key = entry["key"]
+        if key in seen_keys:
+            continue
+        sanitized.append(entry)
+        seen_keys.add(key)
 
     return sanitized
 

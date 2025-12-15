@@ -196,6 +196,16 @@ def get_current_step(numero):
     return (row[0] or '').strip().lower() if row else ''
 
 
+def _extract_chat_status(row):
+    if not row or len(row) < 3:
+        return None
+    return (row[2] or '').strip().lower() or None
+
+
+def _is_agent_mode(row) -> bool:
+    return _extract_chat_status(row) == 'asesor'
+
+
 def _reply_with_ai(numero: str, user_text: str | None, *, system_prompt: str | None = None) -> bool:
     """Envía el mensaje al modelo de IA y responde al usuario."""
 
@@ -749,6 +759,16 @@ def process_buffered_messages(numero):
     if not entries:
         return
 
+    state_row = get_chat_state(numero)
+    if _is_agent_mode(state_row):
+        step = state_row[0] if state_row else None
+        update_chat_state(numero, step)
+        logger.info(
+            "Se omiten mensajes en buffer por estar en modo asesor",
+            extra={"numero": numero, "entradas": len(entries)},
+        )
+        return
+
     for entry in entries:
         if isinstance(entry, dict):
             raw_text = entry.get('raw', '')
@@ -835,6 +855,15 @@ def webhook():
                 c.execute("INSERT INTO mensajes_procesados (mensaje_id) VALUES (%s)", (wa_id,))
                 conn.commit(); conn.close()
 
+                chat_state_row = get_chat_state(from_number)
+                agent_mode = _is_agent_mode(chat_state_row)
+                estado_update = None if agent_mode else 'sin_respuesta'
+                if agent_mode:
+                    logger.info(
+                        "Chat en modo asesor; se omite flujo automático",
+                        extra={"numero": from_number, "message_id": _mask_identifier(wa_id)},
+                    )
+
                 if msg.get("referral"):
                     ref = msg["referral"]
                     step = get_current_step(from_number)
@@ -850,8 +879,9 @@ def webhook():
                         link_thumb=ref.get("thumbnail_url"),
                         step=step,
                     )
-                    update_chat_state(from_number, step, 'sin_respuesta')
-                    start_typing_feedback(from_number, wa_id)
+                    update_chat_state(from_number, step, estado_update)
+                    if not agent_mode:
+                        start_typing_feedback(from_number, wa_id)
                     continue
 
                 # AUDIO
@@ -882,8 +912,9 @@ def webhook():
                         step=step,
                     )
 
-                    update_chat_state(from_number, step, 'sin_respuesta')
-                    start_typing_feedback(from_number, wa_id)
+                    update_chat_state(from_number, step, estado_update)
+                    if not agent_mode:
+                        start_typing_feedback(from_number, wa_id)
 
                     queued = enqueue_transcription(
                         path,
@@ -897,6 +928,9 @@ def webhook():
                         logging.info("Audio encolado para transcripción: %s", media_id)
                     else:
                         logging.warning("No se pudo encolar audio %s para transcripción", media_id)
+                    if agent_mode:
+                        summary['processed'] += 1
+                        continue
                     handle_text_message(from_number, "", save=False)
                     summary['processed'] += 1
                     continue
@@ -931,11 +965,15 @@ def webhook():
                         step=step,
                     )
 
-                    update_chat_state(from_number, step, 'sin_respuesta')
-                    start_typing_feedback(from_number, wa_id)
+                    update_chat_state(from_number, step, estado_update)
+                    if not agent_mode:
+                        start_typing_feedback(from_number, wa_id)
 
                     # 4) Registro interno
                     logging.info("Video recibido: %s", media_id)
+                    if agent_mode:
+                        summary['processed'] += 1
+                        continue
                     handle_text_message(from_number, "", save=False)
                     summary['processed'] += 1
                     continue
@@ -955,9 +993,13 @@ def webhook():
                         media_url=media_url,
                         step=step,
                     )
-                    update_chat_state(from_number, step, 'sin_respuesta')
-                    start_typing_feedback(from_number, wa_id)
+                    update_chat_state(from_number, step, estado_update)
+                    if not agent_mode:
+                        start_typing_feedback(from_number, wa_id)
                     logging.info("Imagen recibida: %s", media_id)
+                    if agent_mode:
+                        summary['processed'] += 1
+                        continue
                     handle_text_message(from_number, "", save=False)
                     summary['processed'] += 1
                     continue
@@ -975,7 +1017,10 @@ def webhook():
                         reply_to_wa_id=reply_to_id,
                         step=step,
                     )
-                    update_chat_state(from_number, step, 'sin_respuesta')
+                    update_chat_state(from_number, step, estado_update)
+                    if agent_mode:
+                        summary['processed'] += 1
+                        continue
                     start_typing_feedback(from_number, wa_id)
                     with cache_lock:
                         message_buffer.setdefault(from_number, []).append(
@@ -1034,7 +1079,10 @@ def webhook():
                                 reply_to_wa_id=reply_to_id,
                                 step=step,
                             )
-                            update_chat_state(from_number, step, 'sin_respuesta')
+                            update_chat_state(from_number, step, estado_update)
+                            if agent_mode:
+                                summary['processed'] += 1
+                                continue
                             start_typing_feedback(from_number, wa_id)
                             normalized_text = normalize_text(text)
                             with cache_lock:
@@ -1052,8 +1100,9 @@ def webhook():
                             )
                             return jsonify({'status': 'buffered'}), 200
                         else:
-                            update_chat_state(from_number, step, 'sin_respuesta')
-                            start_typing_feedback(from_number, wa_id)
+                            update_chat_state(from_number, step, estado_update)
+                            if not agent_mode:
+                                start_typing_feedback(from_number, wa_id)
                             summary['processed'] += 1
                             continue
                     opt = interactive.get('list_reply') or interactive.get('button_reply') or {}
@@ -1069,7 +1118,10 @@ def webhook():
                         reply_to_wa_id=reply_to_id,
                         step=message_step,
                     )
-                    update_chat_state(from_number, step, 'sin_respuesta')
+                    update_chat_state(from_number, step, estado_update)
+                    if agent_mode:
+                        summary['processed'] += 1
+                        continue
                     start_typing_feedback(from_number, wa_id)
                     if handle_option_reply(from_number, option_id):
                         continue

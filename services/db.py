@@ -633,11 +633,17 @@ def update_mensaje_texto(id_mensaje, texto):
 
 
 def get_chat_state(numero):
-    """Obtiene el step y last_activity almacenados para un número."""
+    """Obtiene el step, ``last_activity`` y estado almacenados para un número.
+
+    El orden de las columnas se mantiene por compatibilidad (``step`` en la
+    posición 0 y ``last_activity`` en la 1). La columna ``estado`` se expone en
+    la posición 2 cuando está disponible.
+    """
+
     conn = get_connection()
     c    = conn.cursor()
     c.execute(
-        "SELECT step, last_activity FROM chat_state WHERE numero=%s",
+        "SELECT step, last_activity, estado FROM chat_state WHERE numero=%s",
         (numero,),
     )
     row = c.fetchone()
