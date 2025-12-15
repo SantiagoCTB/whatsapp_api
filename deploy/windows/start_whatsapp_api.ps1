@@ -49,8 +49,14 @@ Start-Process -FilePath python -ArgumentList $backupArgs -NoNewWindow -PassThru 
 # Primero bajar contenedores huérfanos
 & $docker compose -f $composeFile down --remove-orphans
 
+$env:DOCKER_HOST="npipe:////./pipe/docker_engine"
+& "C:\Program Files\Docker\Docker\resources\bin\docker.exe" network rm windows_default
+
+$env:DOCKER_HOST="npipe:////./pipe/docker_engine"
+& "C:\Program Files\Docker\Docker\resources\bin\docker.exe" compose -f "C:\whatsapp_api\deploy\windows\docker-compose.windows.yml" up -d --build
+
 # Luego levantar con build si hace falta
-& $docker compose -f $composeFile up -d --build
+# & $docker compose -f $composeFile up -d --build
 
 Write-Output "WhatsApp API + MySQL + Docker are now running!"
 
