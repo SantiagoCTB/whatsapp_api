@@ -10,7 +10,14 @@ set +a
 
 # Traer últimos cambios de Git
 echo "Generando backup previo al despliegue..."
-python scripts/backup_databases.py --env-file .env --tag deploy || {
+PYTHON_BIN=$(command -v python3 || command -v python || true)
+
+if [ -z "$PYTHON_BIN" ]; then
+  echo "No se encontró un intérprete de Python (python3 o python) en el PATH; abortando respaldo." >&2
+  exit 1
+fi
+
+"$PYTHON_BIN" scripts/backup_databases.py --env-file .env --tag deploy || {
   echo "El respaldo previo al despliegue falló; abortando." >&2
   exit 1
 }
