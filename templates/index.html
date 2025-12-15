@@ -278,6 +278,7 @@
         const lower = `${url}`.toLowerCase();
         if (lower.includes('.mp3')) return 'audio/mpeg';
         if (lower.includes('.ogg')) return 'audio/ogg';
+        if (lower.includes('.webm')) return 'audio/webm';
         if (lower.includes('.wav')) return 'audio/wav';
         return '';
       }
@@ -1371,13 +1372,14 @@
               if (replyWaId) {
                 const replyDiv = document.createElement('div');
                 replyDiv.className = 'reply';
+                const replyIsAudio = (replyTipo && replyTipo.includes('audio')) || guessAudioType(safeReplyUrl);
                 if (replyTipo && replyTipo.endsWith('_image') && safeReplyUrl) {
                   const img = document.createElement('img');
                   img.src = safeReplyUrl;
                   img.alt = replyText || 'Imagen del mensaje citado';
                   img.classList.add('chat-image');
                   replyDiv.appendChild(img);
-                } else if (replyTipo && replyTipo.includes('audio') && safeReplyUrl) {
+                } else if (replyIsAudio && safeReplyUrl) {
                   const a = createAudioElement(safeReplyUrl);
                   replyDiv.appendChild(a);
                 } else if (replyTipo && replyTipo.includes('video') && safeReplyUrl) {
@@ -1411,7 +1413,7 @@
                 img.alt = txt || 'Imagen del mensaje';
                 img.classList.add('chat-image');
                 div.appendChild(img);
-              } else if (tipo.includes('audio') && mediaUrl) {
+              } else if ((tipo.includes('audio') || guessAudioType(mediaUrl)) && mediaUrl) {
                 const a = createAudioElement(mediaUrl);
                 div.appendChild(a);
               } else if (tipo.includes('video') && mediaUrl) {

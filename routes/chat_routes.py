@@ -8,7 +8,7 @@ import uuid
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from flask import Blueprint, jsonify, redirect, render_template, request, session, url_for
+from flask import Blueprint, jsonify, redirect, render_template, request, send_file, session, url_for
 from werkzeug.utils import secure_filename
 
 if importlib.util.find_spec("mysql.connector"):
@@ -52,13 +52,39 @@ def _media_path(filename: str):
     return os.path.join(_media_root(), filename)
 
 
-def _convert_webm_to_mp3(src_path: str):
+@chat_bp.route('/media/<path:filename>')
+def serve_media(filename: str):
+    """Sirve archivos multimedia con el *mimetype* correcto.
+
+    Siempre fuerza un ``Content-Type`` basado en la extensión para que los
+    navegadores y WhatsApp lo reconozcan como audio reproducible.
+    """
+
+    normalized = os.path.normpath(filename).lstrip("/\\")
+    target_path = os.path.realpath(os.path.join(_media_root(), normalized))
+    base_root = os.path.realpath(_media_root())
+
+    if not target_path.startswith(base_root):
+        return jsonify({'error': 'Ruta no permitida'}), 403
+
+    if not os.path.exists(target_path):
+        return jsonify({'error': 'Archivo no encontrado'}), 404
+
+    guessed, _ = mimetypes.guess_type(target_path)
+    if (os.path.splitext(target_path)[1].lower() == '.webm'):
+        guessed = 'audio/webm'
+    mimetype = guessed or 'application/octet-stream'
+
+    return send_file(target_path, mimetype=mimetype)
+
+
+def _convert_webm_to_ogg(src_path: str):
     if not shutil.which("ffmpeg"):
         return None, "No se encontró ffmpeg para convertir el audio grabado."
 
     original_name, _ = os.path.splitext(os.path.basename(src_path))
-    dest_mp3_name = f"{uuid.uuid4().hex}_{original_name}.mp3"
-    dest_mp3_path = os.path.join(_media_root(), dest_mp3_name)
+    dest_ogg_name = f"{uuid.uuid4().hex}_{original_name}.ogg"
+    dest_ogg_path = os.path.join(_media_root(), dest_ogg_name)
 
     def _try_convert(cmd, destination):
         result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -70,30 +96,6 @@ def _convert_webm_to_mp3(src_path: str):
             pass
         return True
 
-    mp3_cmd = [
-        "ffmpeg",
-        "-y",
-        "-i",
-        src_path,
-        "-vn",
-        "-acodec",
-        "libmp3lame",
-        "-b:a",
-        "128k",
-        "-ac",
-        "1",
-        "-ar",
-        "48000",
-        "-f",
-        "mp3",
-        dest_mp3_path,
-    ]
-
-    if _try_convert(mp3_cmd, dest_mp3_path):
-        return dest_mp3_path, None
-
-    dest_ogg_name = f"{uuid.uuid4().hex}_{original_name}.ogg"
-    dest_ogg_path = os.path.join(_media_root(), dest_ogg_name)
     ogg_cmd = [
         "ffmpeg",
         "-y",
@@ -106,6 +108,8 @@ def _convert_webm_to_mp3(src_path: str):
         "96k",
         "-ac",
         "1",
+        "-ar",
+        "48000",
         "-f",
         "ogg",
         dest_ogg_path,
@@ -1256,7 +1260,7 @@ def send_audio():
     conversion_error = None
 
     if mime_type.startswith('audio/webm') or ext == '.webm':
-        converted_path, conversion_error = _convert_webm_to_mp3(path)
+        converted_path, conversion_error = _convert_webm_to_ogg(path)
         if converted_path:
             path = converted_path
             unique = os.path.basename(converted_path)
@@ -1264,18 +1268,20 @@ def send_audio():
             send_as_document = True
 
     audio_url = url_for(
-        'static',
-        filename=tenants.get_uploads_url_path(unique),
+        'chat.serve_media',
+        filename=unique,
         _external=True,
     )
 
     # Envía el audio por la API
     tipo_envio = 'bot_audio' if origen == 'bot' else 'asesor'
 
+    media_caption = ''  # No enviar caption dentro del payload de audio/documento
+
     if send_as_document:
         success, error_reason = enviar_mensaje(
             numero,
-            caption,
+            media_caption,
             tipo=tipo_envio,
             tipo_respuesta='document',
             opciones=audio_url,
@@ -1284,7 +1290,7 @@ def send_audio():
     else:
         success, error_reason = enviar_mensaje(
             numero,
-            caption,
+            media_caption,
             tipo=tipo_envio,
             tipo_respuesta='audio',
             opciones=audio_url,
@@ -1293,10 +1299,11 @@ def send_audio():
     if not success:
         return jsonify({'error': error_reason or 'No se pudo enviar el audio a WhatsApp'}), 502
 
-    if caption.strip() and not send_as_document:
+    caption_text = caption.strip()
+    if caption_text:
         enviar_mensaje(
             numero,
-            caption.strip(),
+            caption_text,
             tipo=tipo_envio,
             tipo_respuesta='texto',
         )
