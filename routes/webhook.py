@@ -209,18 +209,42 @@ def _is_agent_mode(row) -> bool:
 
 
 def _catalog_context_for_prompt(prompt: str):
+    """Obtiene páginas relevantes del catálogo y prepara un contexto robusto."""
+
     pages = find_relevant_pages(prompt, limit=3)
     if not pages:
         return "", None
 
-    context_lines = []
+    context_lines: list[str] = []
+    best_page = None
+
     for page in pages:
         snippet = (page.text_content or "").strip()
         if len(snippet) > 800:
             snippet = f"{snippet[:780]}..."
-        context_lines.append(f"Página {page.page_number}: {snippet}")
 
-    return "\n\n".join(context_lines), pages[0]
+        image_rel = ""
+        image_url = ""
+        if page.image_filename:
+            image_rel = tenants.get_uploads_url_path(f"ia_pages/{page.image_filename}")
+            try:
+                image_url = url_for("static", filename=image_rel, _external=True)
+            except RuntimeError:
+                image_url = f"/static/{image_rel}"  # Fallback si no hay contexto de request
+
+        context_lines.append(
+            "- pagina: {page}\n  pdf: {pdf}\n  texto: {texto}\n  imagen_rel: {rel}\n  imagen_url: {url}".format(
+                page=page.page_number,
+                pdf=page.pdf_filename or "catalogo.pdf",
+                texto=snippet,
+                rel=f"/static/{image_rel}" if image_rel else "",
+                url=image_url,
+            )
+        )
+
+        best_page = best_page or page
+
+    return "\n".join(context_lines), best_page
 
 
 def _reply_with_ai(numero: str, user_text: str | None, *, system_prompt: str | None = None) -> bool:
@@ -237,7 +261,16 @@ def _reply_with_ai(numero: str, user_text: str | None, *, system_prompt: str | N
     catalog_context, best_page = _catalog_context_for_prompt(prompt)
     prompt_for_model = prompt
     if catalog_context:
-        prompt_for_model = f"{prompt}\n\nContexto del catálogo:\n{catalog_context}"
+        prompt_for_model = (
+            f"{prompt}\n\n"
+            "Contexto del catálogo (usa solo esta información, cita la página y el PDF):\n"
+            f"{catalog_context}\n\n"
+            "Instrucciones para la respuesta:\n"
+            "- Responde únicamente con datos del catálogo disponible.\n"
+            "- Menciona siempre el número de página y el nombre del PDF al referirte a un producto.\n"
+            "- Si hay una URL de imagen, indica que compartirás la imagen como referencia visual.\n"
+            "- Si no hay coincidencias claras, pide más detalles al usuario sin inventar datos."
+        )
 
     response = generate_response(history, prompt_for_model, system_message=system_prompt)
     if not response:
