@@ -153,6 +153,18 @@
           <label>SESSION_TIMEOUT (segundos)
             <input type="number" min="60" name="SESSION_TIMEOUT" value="{{ tenant_env.get('SESSION_TIMEOUT','') }}" />
           </label>
+          <label>IA_API_TOKEN
+            <input name="IA_API_TOKEN" value="{{ tenant_env.get('IA_API_TOKEN','') }}" placeholder="Token del proveedor de IA" />
+          </label>
+          <label>IA_MODEL
+            <input name="IA_MODEL" value="{{ tenant_env.get('IA_MODEL','') }}" placeholder="o4-mini" />
+          </label>
+          <label>IA_HISTORY_LIMIT
+            <input type="number" min="1" name="IA_HISTORY_LIMIT" value="{{ tenant_env.get('IA_HISTORY_LIMIT','') }}" />
+          </label>
+          <label>IA_SYSTEM_MESSAGE
+            <textarea name="IA_SYSTEM_MESSAGE" rows="3" placeholder="Mensaje de sistema para el modelo de IA">{{ tenant_env.get('IA_SYSTEM_MESSAGE','') }}</textarea>
+          </label>
           <p class="help">Deja un campo vacío para usar el valor global por defecto.</p>
           <button type="submit" class="btn primary">Guardar variables</button>
         </form>
