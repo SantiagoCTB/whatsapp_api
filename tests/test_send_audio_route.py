@@ -48,11 +48,11 @@ def test_send_audio_generates_public_url_and_keeps_caption(tmp_path, client, mon
     captured = {}
 
     _patch_chat_dependencies(monkeypatch, tmp_path)
-    converted_path = tmp_path / "converted.ogg"
+    converted_path = tmp_path / "converted.mp3"
     converted_path.write_bytes(b"converted")
     monkeypatch.setattr(
         chat_routes,
-        "_convert_webm_to_ogg",
+        "_convert_webm_to_mp3",
         lambda src: (str(converted_path), None),
     )
     def fake_send(numero, caption, tipo, tipo_respuesta, opciones=None, **kwargs):
@@ -90,7 +90,7 @@ def test_send_audio_generates_public_url_and_keeps_caption(tmp_path, client, mon
     payload = response.get_json()
     assert payload["status"] == "sent_audio"
     assert payload["url"].startswith("http")
-    assert payload["url"].endswith(".ogg")
+    assert payload["url"].endswith(".mp3")
     assert captured["caption"] == "nota de voz"
     assert captured["opciones"] == payload["url"]
 
@@ -141,7 +141,7 @@ def test_send_audio_rejects_empty_recording(tmp_path, client, monkeypatch):
 
 def test_send_audio_falls_back_to_document_when_conversion_fails(tmp_path, client, monkeypatch):
     _patch_chat_dependencies(monkeypatch, tmp_path)
-    monkeypatch.setattr(chat_routes, "_convert_webm_to_ogg", lambda *_: (None, "fail"))
+    monkeypatch.setattr(chat_routes, "_convert_webm_to_mp3", lambda *_: (None, "fail"))
     captured = {}
 
     def fake_send(numero, caption, tipo, tipo_respuesta, opciones=None, **kwargs):

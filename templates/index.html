@@ -272,6 +272,25 @@
           return u;
         }
       }
+
+      function guessAudioType(url) {
+        if (!url) return '';
+        const lower = `${url}`.toLowerCase();
+        if (lower.includes('.mp3')) return 'audio/mpeg';
+        if (lower.includes('.ogg')) return 'audio/ogg';
+        if (lower.includes('.wav')) return 'audio/wav';
+        return '';
+      }
+
+      function createAudioElement(src) {
+        const audioEl = document.createElement('audio');
+        audioEl.controls = true;
+        audioEl.preload = 'metadata';
+        const audioType = guessAudioType(src);
+        if (audioType) audioEl.type = audioType;
+        audioEl.src = src;
+        return audioEl;
+      }
       const sendBtn = document.getElementById('sendBtn');
       const messageInput = document.getElementById('messageInput');
       const inputArea = document.querySelector('.inputArea');
@@ -994,11 +1013,7 @@
           img.classList.add('chat-image');
           replyPreviewEl.appendChild(img);
         } else if (url && tipo.includes('audio')) {
-          const a = document.createElement('audio');
-          a.controls=true;
-          a.preload='metadata';
-          a.type='audio/ogg';
-          a.src=url;
+          const a = createAudioElement(url);
           replyPreviewEl.appendChild(a);
         } else if (url && tipo.includes('video')) {
           const v = document.createElement('video'); v.controls=true; v.src=url; replyPreviewEl.appendChild(v);
@@ -1363,8 +1378,8 @@
                   img.classList.add('chat-image');
                   replyDiv.appendChild(img);
                 } else if (replyTipo && replyTipo.includes('audio') && safeReplyUrl) {
-                  const a = document.createElement('audio');
-                  a.controls = true; a.preload = 'metadata'; a.type = 'audio/ogg'; a.src = safeReplyUrl; replyDiv.appendChild(a);
+                  const a = createAudioElement(safeReplyUrl);
+                  replyDiv.appendChild(a);
                 } else if (replyTipo && replyTipo.includes('video') && safeReplyUrl) {
                   const v = document.createElement('video');
                   v.controls = true; v.src = safeReplyUrl; v.style.maxWidth = '100px';
@@ -1397,8 +1412,8 @@
                 img.classList.add('chat-image');
                 div.appendChild(img);
               } else if (tipo.includes('audio') && mediaUrl) {
-                const a = document.createElement('audio');
-                a.controls=true; a.preload='metadata'; a.type='audio/ogg'; a.src=mediaUrl; div.appendChild(a);
+                const a = createAudioElement(mediaUrl);
+                div.appendChild(a);
               } else if (tipo.includes('video') && mediaUrl) {
                 const v = document.createElement('video');
                 v.controls=true; v.src=mediaUrl; v.style.maxWidth='200px';
