@@ -31,8 +31,7 @@ def _get_runtime_env():
     env = tenants.get_current_tenant_env()
     token = env.get("META_TOKEN") or Config.META_TOKEN
     phone_id = env.get("PHONE_NUMBER_ID") or Config.PHONE_NUMBER_ID
-    media_root = env.get("MEDIA_ROOT") or Config.MEDIA_ROOT
-    os.makedirs(media_root, exist_ok=True)
+    media_root = tenants.get_media_root()
     return {
         "token": token,
         "phone_id": phone_id,
