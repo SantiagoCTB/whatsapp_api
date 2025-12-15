@@ -4,6 +4,7 @@ import os
 import re
 import contextvars
 import sys
+import logging
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -32,6 +33,9 @@ else:  # pragma: no cover - fallback para entornos sin el conector
     _MYSQL_AVAILABLE = False
 
 from config import Config
+
+
+logger = logging.getLogger(__name__)
 
 
 FLOW_RESPONSES_TABLE_DDL = """
@@ -638,6 +642,7 @@ def init_db(db_settings: DatabaseSettings | None = None):
           pdf_filename VARCHAR(255) NOT NULL,
           page_number INT NOT NULL,
           text_content LONGTEXT,
+          keywords TEXT,
           image_filename VARCHAR(255),
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           INDEX idx_pdf_page (pdf_filename, page_number),
@@ -653,6 +658,11 @@ def init_db(db_settings: DatabaseSettings | None = None):
         c.execute(
             "ALTER TABLE ia_catalog_pages ADD INDEX idx_tenant_pdf (tenant_key, pdf_filename, page_number);"
         )
+
+    # Migración defensiva: agregar keywords si no existe
+    c.execute("SHOW COLUMNS FROM ia_catalog_pages LIKE 'keywords';")
+    if not c.fetchone():
+        c.execute("ALTER TABLE ia_catalog_pages ADD COLUMN keywords TEXT NULL AFTER text_content;")
 
     conn.commit()
     conn.close()
@@ -964,6 +974,9 @@ def replace_catalog_pages(
                     page.text_content
                     if hasattr(page, "text_content")
                     else page.get("text_content"),
+                    ",".join(page.keywords)
+                    if hasattr(page, "keywords") and page.keywords is not None
+                    else page.get("keywords"),
                     page.image_filename
                     if hasattr(page, "image_filename")
                     else page.get("image_filename"),
@@ -973,8 +986,8 @@ def replace_catalog_pages(
                 c.executemany(
                     """
                     INSERT INTO ia_catalog_pages
-                        (tenant_key, pdf_filename, page_number, text_content, image_filename)
-                    VALUES (%s, %s, %s, %s, %s)
+                        (tenant_key, pdf_filename, page_number, text_content, keywords, image_filename)
+                    VALUES (%s, %s, %s, %s, %s, %s)
                     """,
                     buffer,
                 )
@@ -984,8 +997,8 @@ def replace_catalog_pages(
             c.executemany(
                 """
                 INSERT INTO ia_catalog_pages
-                    (tenant_key, pdf_filename, page_number, text_content, image_filename)
-                VALUES (%s, %s, %s, %s, %s)
+                    (tenant_key, pdf_filename, page_number, text_content, keywords, image_filename)
+                VALUES (%s, %s, %s, %s, %s, %s)
                 """,
                 buffer,
             )
@@ -994,54 +1007,101 @@ def replace_catalog_pages(
         conn.close()
 
 
-def search_catalog_pages(query: str, limit: int = 3):
-    """Busca páginas del catálogo que coincidan con el texto proporcionado."""
+def search_catalog_pages(
+    query: str,
+    limit: int = 3,
+    *,
+    tenant_key: str | None = None,
+    fallback_to_default: bool = True,
+):
+    """Busca páginas del catálogo que coincidan con el texto proporcionado.
+
+    Si el tenant actual no tiene catálogo indexado, puede intentar con el
+    ``DEFAULT_TENANT`` para evitar que las consultas fallen silenciosamente en
+    entornos multi-tenant mal configurados.
+    """
 
     tokens = [t for t in re.split(r"\W+", (query or "").lower()) if len(t) > 2]
     if not tokens:
+        logger.debug("Búsqueda de catálogo ignorada: sin tokens", extra={"query": query})
         return []
 
-    tenant_key = get_current_tenant_key()
+    active_tenant = tenant_key if tenant_key is not None else get_current_tenant_key()
+    default_tenant = (Config.DEFAULT_TENANT or "").strip() or None
+    tenant_candidates: list[str | None] = [active_tenant]
+    if fallback_to_default and default_tenant and default_tenant not in tenant_candidates:
+        tenant_candidates.append(default_tenant)
 
-    conn = get_connection()
-    c = conn.cursor()
-    if tenant_key:
-        c.execute(
-            """
-            SELECT pdf_filename, page_number, text_content, image_filename
-              FROM ia_catalog_pages
-             WHERE tenant_key=%s
-            """,
-            (tenant_key,),
+    def _fetch_rows(target_tenant: str | None):
+        conn = get_connection()
+        try:
+            c = conn.cursor()
+            if target_tenant:
+                c.execute(
+                    """
+                    SELECT pdf_filename, page_number, text_content, keywords, image_filename
+                      FROM ia_catalog_pages
+                     WHERE tenant_key=%s
+                    """,
+                    (target_tenant,),
+                )
+            else:
+                c.execute(
+                    """
+                    SELECT pdf_filename, page_number, text_content, keywords, image_filename
+                      FROM ia_catalog_pages
+                     WHERE tenant_key IS NULL
+                    """,
+                )
+            return c.fetchall()
+        finally:
+            conn.close()
+
+    for idx, candidate in enumerate(tenant_candidates):
+        rows = _fetch_rows(candidate)
+        scored = []
+        for pdf_filename, page_number, text_content, keywords, image_filename in rows:
+            text_lower = (text_content or "").lower()
+            kw_tokens = (keywords or "").lower().split(",") if keywords else []
+            score = sum(1 for token in tokens if token in text_lower)
+            if not score and kw_tokens:
+                score = sum(1 for token in tokens if token in kw_tokens)
+            if score:
+                scored.append(
+                    {
+                        "pdf_filename": pdf_filename,
+                        "page_number": page_number,
+                        "text_content": text_content,
+                        "keywords": keywords,
+                        "image_filename": image_filename,
+                        "score": score,
+                        "tenant_key": candidate,
+                    }
+                )
+
+        if scored:
+            if idx > 0:
+                logger.info(
+                    "Catálogo IA: se usó fallback al tenant por defecto",
+                    extra={
+                        "original_tenant": active_tenant,
+                        "fallback_tenant": candidate,
+                        "tokens": tokens,
+                    },
+                )
+            scored.sort(key=lambda item: (-item["score"], item["page_number"]))
+            return scored[:limit]
+
+        logger.debug(
+            "Catálogo IA sin coincidencias",
+            extra={"tenant": candidate, "tokens": tokens, "rows": len(rows)},
         )
-    else:
-        c.execute(
-            """
-            SELECT pdf_filename, page_number, text_content, image_filename
-              FROM ia_catalog_pages
-             WHERE tenant_key IS NULL
-            """,
-        )
-    rows = c.fetchall()
-    conn.close()
 
-    scored = []
-    for pdf_filename, page_number, text_content, image_filename in rows:
-        text_lower = (text_content or "").lower()
-        score = sum(1 for token in tokens if token in text_lower)
-        if score:
-            scored.append(
-                {
-                    "pdf_filename": pdf_filename,
-                    "page_number": page_number,
-                    "text_content": text_content,
-                    "image_filename": image_filename,
-                    "score": score,
-                }
-            )
-
-    scored.sort(key=lambda item: (-item["score"], item["page_number"]))
-    return scored[:limit]
+    logger.warning(
+        "No se encontraron coincidencias en ningún catálogo disponible",
+        extra={"tenant": active_tenant, "tokens": tokens},
+    )
+    return []
 
 
 def get_conversation(numero):
