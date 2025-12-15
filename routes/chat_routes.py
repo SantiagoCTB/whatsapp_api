@@ -1,5 +1,6 @@
 import importlib.util
 import json
+import logging
 import mimetypes
 import os
 import shutil
@@ -34,6 +35,7 @@ from services.db import (
 )
 
 chat_bp = Blueprint('chat', __name__)
+logger = logging.getLogger(__name__)
 
 BOGOTA_TZ = ZoneInfo('America/Bogota')
 MEDIA_ROOT = Config.MEDIA_ROOT
@@ -1229,6 +1231,10 @@ def send_audio():
             return jsonify({'error':'No autorizado'}), 403
 
     if not numero or not audio:
+        logger.warning(
+            "Solicitud de audio rechazada por datos faltantes",
+            extra={"numero": numero, "has_audio": bool(audio)},
+        )
         return jsonify({'error':'Falta número o audio'}), 400
 
     original_filename = audio.filename or ''
@@ -1249,6 +1255,14 @@ def send_audio():
             ext = '.ogg'
 
     if not mime_type.startswith('audio/'):
+        logger.warning(
+            "Archivo subido no es audio",
+            extra={
+                "numero": numero,
+                "original_filename": original_filename,
+                "mime_type": mime_type,
+            },
+        )
         return jsonify({'error': 'El archivo subido no parece ser un audio válido'}), 400
 
     if not ext:
@@ -1259,12 +1273,32 @@ def send_audio():
     unique = f"{uuid.uuid4().hex}_{filename}"
     path = _media_path(unique)
 
+    logger.info(
+        "Recibido audio para envío",
+        extra={
+            "numero": numero,
+            "original_filename": original_filename,
+            "mime_type": mime_type,
+            "ext": ext,
+            "target_path": path,
+            "origen": origen,
+        },
+    )
+
     try:
         audio.save(path)
     except Exception:
+        logger.exception(
+            "No se pudo guardar el audio subido",
+            extra={"numero": numero, "path": path, "original_filename": original_filename},
+        )
         return jsonify({'error': 'No se pudo guardar el audio. Intenta nuevamente.'}), 500
 
     if os.path.getsize(path) == 0:
+        logger.warning(
+            "Archivo de audio vacío tras guardado",
+            extra={"numero": numero, "path": path},
+        )
         os.remove(path)
         return jsonify({'error': 'El archivo de audio está vacío. Intenta grabar o subirlo de nuevo.'}), 400
 
@@ -1275,6 +1309,10 @@ def send_audio():
     if mime_type.startswith('audio/webm') or ext == '.webm':
         converted_path, conversion_error = _convert_webm_to_ogg(path)
         if converted_path:
+            logger.info(
+                "Audio convertido de webm a ogg",
+                extra={"numero": numero, "converted_path": converted_path},
+            )
             path = converted_path
             unique = os.path.basename(converted_path)
         else:
@@ -1286,6 +1324,11 @@ def send_audio():
                 unique = os.path.basename(fallback_path)
             except OSError:
                 pass
+    if conversion_error:
+        logger.warning(
+            "Conversión de audio a ogg con advertencias",
+            extra={"numero": numero, "conversion_error": conversion_error},
+        )
 
     audio_url = url_for(
         'chat.serve_media',
@@ -1295,14 +1338,33 @@ def send_audio():
 
     try:
         media_id = subir_media(path)
-    except Exception:
+        logger.info(
+            "Audio subido a WhatsApp",
+            extra={"numero": numero, "media_id": media_id, "path": path},
+        )
+    except Exception as exc:
         upload_error = "No se pudo subir el audio directamente a WhatsApp; se enviará usando la URL pública."
+        logger.exception(
+            "Fallo al subir audio a WhatsApp",
+            extra={"numero": numero, "path": path, "error": str(exc)},
+        )
 
     # Envía el audio por la API
     tipo_envio = 'bot_audio' if origen == 'bot' else 'asesor'
 
     media_caption = ''  # No enviar caption dentro del payload de audio/documento
     audio_payload = {"id": media_id, "link": audio_url} if media_id else audio_url
+
+    logger.info(
+        "Enviando audio por WhatsApp",
+        extra={
+            "numero": numero,
+            "tipo_envio": tipo_envio,
+            "media_id": media_id,
+            "audio_url": audio_url,
+            "caption_in_payload": bool(media_caption),
+        },
+    )
 
     success, error_reason = enviar_mensaje(
         numero,
@@ -1336,6 +1398,16 @@ def send_audio():
         warnings.append(upload_error)
     if warnings:
         response_payload['warning'] = warnings[0] if len(warnings) == 1 else warnings
+
+    logger.info(
+        "Audio enviado correctamente",
+        extra={
+            "numero": numero,
+            "audio_url": audio_url,
+            "media_id": media_id,
+            "warnings": warnings,
+        },
+    )
 
     return jsonify(response_payload), 200
 

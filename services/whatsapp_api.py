@@ -2,6 +2,7 @@ import os
 import json
 import logging
 import mimetypes
+from pathlib import Path
 import threading
 import time
 from typing import Any, Dict, Optional
@@ -288,6 +289,15 @@ def enviar_mensaje(
             media_url_db = opciones
 
         media_link = audio_obj.get("link")
+        logger.debug(
+            "Preparando payload de audio",
+            extra={
+                "numero": numero,
+                "tipo_respuesta": tipo_respuesta,
+                "media_link": media_link,
+                "has_media_id": bool(audio_obj.get("id")),
+            },
+        )
         data = {
             "messaging_product": "whatsapp",
             "to": numero,
@@ -780,10 +790,61 @@ def get_media_url(media_id):
         _external=True,
     )
 
-def subir_media(ruta_archivo):
+def _infer_mime_type(ruta_archivo: str) -> str:
     mime_type, _ = mimetypes.guess_type(ruta_archivo)
-    if not mime_type:
-        raise ValueError(f"No se pudo inferir el MIME type de {ruta_archivo}")
+    if mime_type:
+        return mime_type
+
+    extension = Path(ruta_archivo).suffix.lower()
+    fallback_by_extension = {
+        ".ogg": "audio/ogg",
+        ".oga": "audio/ogg",
+        ".opus": "audio/ogg",
+        ".webm": "audio/webm",
+        ".m4a": "audio/mp4",
+        ".aac": "audio/aac",
+        ".mp3": "audio/mpeg",
+        ".wav": "audio/wav",
+        ".amr": "audio/amr",
+    }
+    mime_type = fallback_by_extension.get(extension)
+    if mime_type:
+        logger.info(
+            "MIME type inferido por extensión",
+            extra={"ruta_archivo": ruta_archivo, "mime_type": mime_type},
+        )
+        return mime_type
+
+    try:
+        with open(ruta_archivo, "rb") as archivo:
+            header = archivo.read(16)
+        if header.startswith(b"OggS"):
+            mime_type = "audio/ogg"
+        elif header.startswith(b"ID3") or header.startswith(b"\xff\xfb"):
+            mime_type = "audio/mpeg"
+    except OSError as exc:
+        logger.warning(
+            "No se pudo leer el archivo para inferir MIME type",
+            extra={"ruta_archivo": ruta_archivo, "error": str(exc)},
+        )
+        mime_type = None
+
+    if mime_type:
+        logger.info(
+            "MIME type inferido por cabecera del archivo",
+            extra={"ruta_archivo": ruta_archivo, "mime_type": mime_type},
+        )
+        return mime_type
+
+    logger.warning(
+        "No se pudo inferir MIME type; se usará 'application/octet-stream'",
+        extra={"ruta_archivo": ruta_archivo},
+    )
+    return "application/octet-stream"
+
+
+def subir_media(ruta_archivo):
+    mime_type = _infer_mime_type(ruta_archivo)
 
     runtime = _get_runtime_env()
     url = f"{GRAPH_BASE_URL}/{runtime['phone_id']}/media"
