@@ -2,6 +2,7 @@ import contextvars
 import importlib.util
 import os
 import re
+import contextvars
 import sys
 from dataclasses import dataclass
 from datetime import datetime
@@ -85,6 +86,9 @@ class _DummyCursor:
     def execute(self, *args, **kwargs):
         self.last_query = (args, kwargs)
 
+    def executemany(self, *args, **kwargs):
+        self.last_query = (args, kwargs)
+
     def fetchone(self):
         return None
 
@@ -110,6 +114,7 @@ class _DummyConnection:
 
 
 _TENANT_DB_SETTINGS = contextvars.ContextVar("tenant_db_settings", default=None)
+_TENANT_KEY = contextvars.ContextVar("tenant_key", default=None)
 
 
 def set_tenant_db_settings(db_settings: DatabaseSettings | None):
@@ -118,6 +123,18 @@ def set_tenant_db_settings(db_settings: DatabaseSettings | None):
 
 def clear_tenant_db_settings():
     _TENANT_DB_SETTINGS.set(None)
+
+
+def set_current_tenant_key(tenant_key: str | None):
+    _TENANT_KEY.set(tenant_key)
+
+
+def clear_current_tenant_key():
+    _TENANT_KEY.set(None)
+
+
+def get_current_tenant_key() -> str | None:
+    return _TENANT_KEY.get()
 
 
 def _default_db_settings() -> DatabaseSettings:
@@ -617,15 +634,25 @@ def init_db(db_settings: DatabaseSettings | None = None):
         """
         CREATE TABLE IF NOT EXISTS ia_catalog_pages (
           id INT AUTO_INCREMENT PRIMARY KEY,
+          tenant_key VARCHAR(64) NULL,
           pdf_filename VARCHAR(255) NOT NULL,
           page_number INT NOT NULL,
           text_content LONGTEXT,
           image_filename VARCHAR(255),
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-          INDEX idx_pdf_page (pdf_filename, page_number)
+          INDEX idx_pdf_page (pdf_filename, page_number),
+          INDEX idx_tenant_pdf (tenant_key, pdf_filename, page_number)
         ) ENGINE=InnoDB;
         """
     )
+
+    # Migración defensiva: agregar tenant_key si no existe
+    c.execute("SHOW COLUMNS FROM ia_catalog_pages LIKE 'tenant_key';")
+    if not c.fetchone():
+        c.execute("ALTER TABLE ia_catalog_pages ADD COLUMN tenant_key VARCHAR(64) NULL AFTER id;")
+        c.execute(
+            "ALTER TABLE ia_catalog_pages ADD INDEX idx_tenant_pdf (tenant_key, pdf_filename, page_number);"
+        )
 
     conn.commit()
     conn.close()
@@ -905,10 +932,17 @@ def replace_catalog_pages(
     base de datos en catálogos muy extensos.
     """
 
+    tenant_key = get_current_tenant_key()
+
     conn = get_connection()
     c = conn.cursor()
     try:
-        c.execute("DELETE FROM ia_catalog_pages")
+        if tenant_key:
+            c.execute(
+                "DELETE FROM ia_catalog_pages WHERE tenant_key=%s", (tenant_key,)
+            )
+        else:
+            c.execute("DELETE FROM ia_catalog_pages WHERE tenant_key IS NULL")
         if media_root:
             pages_dir = os.path.join(media_root, "ia_pages")
             if os.path.isdir(pages_dir):
@@ -922,6 +956,7 @@ def replace_catalog_pages(
         for page in pages:
             buffer.append(
                 (
+                    tenant_key,
                     pdf_filename,
                     page.page_number
                     if hasattr(page, "page_number")
@@ -938,8 +973,8 @@ def replace_catalog_pages(
                 c.executemany(
                     """
                     INSERT INTO ia_catalog_pages
-                        (pdf_filename, page_number, text_content, image_filename)
-                    VALUES (%s, %s, %s, %s)
+                        (tenant_key, pdf_filename, page_number, text_content, image_filename)
+                    VALUES (%s, %s, %s, %s, %s)
                     """,
                     buffer,
                 )
@@ -949,8 +984,8 @@ def replace_catalog_pages(
             c.executemany(
                 """
                 INSERT INTO ia_catalog_pages
-                    (pdf_filename, page_number, text_content, image_filename)
-                VALUES (%s, %s, %s, %s)
+                    (tenant_key, pdf_filename, page_number, text_content, image_filename)
+                VALUES (%s, %s, %s, %s, %s)
                 """,
                 buffer,
             )
@@ -966,11 +1001,27 @@ def search_catalog_pages(query: str, limit: int = 3):
     if not tokens:
         return []
 
+    tenant_key = get_current_tenant_key()
+
     conn = get_connection()
     c = conn.cursor()
-    c.execute(
-        "SELECT pdf_filename, page_number, text_content, image_filename FROM ia_catalog_pages"
-    )
+    if tenant_key:
+        c.execute(
+            """
+            SELECT pdf_filename, page_number, text_content, image_filename
+              FROM ia_catalog_pages
+             WHERE tenant_key=%s
+            """,
+            (tenant_key,),
+        )
+    else:
+        c.execute(
+            """
+            SELECT pdf_filename, page_number, text_content, image_filename
+              FROM ia_catalog_pages
+             WHERE tenant_key IS NULL
+            """,
+        )
     rows = c.fetchall()
     conn.close()
 
