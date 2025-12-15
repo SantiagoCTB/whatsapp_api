@@ -57,41 +57,64 @@ def _convert_webm_to_mp3(src_path: str):
         return None, "No se encontró ffmpeg para convertir el audio grabado."
 
     original_name, _ = os.path.splitext(os.path.basename(src_path))
-    dest_name = f"{uuid.uuid4().hex}_{original_name}.mp3"
-    dest_path = os.path.join(_media_root(), dest_name)
+    dest_mp3_name = f"{uuid.uuid4().hex}_{original_name}.mp3"
+    dest_mp3_path = os.path.join(_media_root(), dest_mp3_name)
 
-    result = subprocess.run(
-        [
-            "ffmpeg",
-            "-y",
-            "-i",
-            src_path,
-            "-vn",
-            "-acodec",
-            "libmp3lame",
-            "-b:a",
-            "128k",
-            "-ac",
-            "1",
-            "-ar",
-            "48000",
-            "-f",
-            "mp3",
-            dest_path,
-        ],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
+    def _try_convert(cmd, destination):
+        result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        if result.returncode != 0 or not os.path.exists(destination):
+            return False
+        try:
+            os.remove(src_path)
+        except OSError:
+            pass
+        return True
 
-    if result.returncode != 0:
-        return None, "No se pudo convertir el audio a un formato compatible con WhatsApp."
+    mp3_cmd = [
+        "ffmpeg",
+        "-y",
+        "-i",
+        src_path,
+        "-vn",
+        "-acodec",
+        "libmp3lame",
+        "-b:a",
+        "128k",
+        "-ac",
+        "1",
+        "-ar",
+        "48000",
+        "-f",
+        "mp3",
+        dest_mp3_path,
+    ]
 
-    try:
-        os.remove(src_path)
-    except OSError:
-        pass
+    if _try_convert(mp3_cmd, dest_mp3_path):
+        return dest_mp3_path, None
 
-    return dest_path, None
+    dest_ogg_name = f"{uuid.uuid4().hex}_{original_name}.ogg"
+    dest_ogg_path = os.path.join(_media_root(), dest_ogg_name)
+    ogg_cmd = [
+        "ffmpeg",
+        "-y",
+        "-i",
+        src_path,
+        "-vn",
+        "-c:a",
+        "libopus",
+        "-b:a",
+        "96k",
+        "-ac",
+        "1",
+        "-f",
+        "ogg",
+        dest_ogg_path,
+    ]
+
+    if _try_convert(ogg_cmd, dest_ogg_path):
+        return dest_ogg_path, None
+
+    return None, "No se pudo convertir el audio a un formato compatible con WhatsApp."
 
 
 def _is_excluded_flow_key(key):
