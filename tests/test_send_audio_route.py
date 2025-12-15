@@ -161,7 +161,7 @@ def test_send_audio_rejects_empty_recording(tmp_path, client, monkeypatch):
     assert "vacío" in payload["error"].lower()
 
 
-def test_send_audio_falls_back_to_document_when_conversion_fails(tmp_path, client, monkeypatch):
+def test_send_audio_renames_to_ogg_when_conversion_fails(tmp_path, client, monkeypatch):
     _patch_chat_dependencies(monkeypatch, tmp_path)
     monkeypatch.setattr(chat_routes, "_convert_webm_to_ogg", lambda *_: (None, "fail"))
     captured = {}
@@ -197,14 +197,13 @@ def test_send_audio_falls_back_to_document_when_conversion_fails(tmp_path, clien
     assert response.status_code == 200
     payload = response.get_json()
     assert payload["status"] == "sent_audio"
-    assert payload.get("sent_as_document") is True
+    assert payload["url"].endswith(".ogg")
     assert "warning" in payload
-    assert payload["url"].endswith(".webm")
 
     assert len(captured["calls"]) == 2
 
     media_call = captured["calls"][0]
-    assert media_call["tipo_respuesta"] == "document"
+    assert media_call["tipo_respuesta"] == "audio"
     assert media_call["caption"] == ""
 
     text_call = captured["calls"][1]
