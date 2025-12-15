@@ -40,9 +40,7 @@ class CatalogPage:
 
 
 def _media_root() -> str:
-    root = tenants.get_runtime_setting("MEDIA_ROOT", default=Config.MEDIA_ROOT)
-    os.makedirs(root, exist_ok=True)
-    return root
+    return tenants.get_media_root()
 
 
 def _pages_root() -> str:

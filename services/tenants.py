@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import contextvars
 import json
+import os
 from dataclasses import dataclass
 from typing import Dict, List, Mapping
 from flask import Request
@@ -116,6 +117,27 @@ def _merge_env(defaults: Mapping, overrides: Mapping | None):
             continue
         merged[key] = coerced
     return merged
+
+
+def _resolve_media_root(base_root: str | None) -> str:
+    """Normaliza la ruta base de medios para garantizar que esté bajo ``static``.
+
+    Si el ``MEDIA_ROOT`` configurado queda fuera del directorio ``static`` de la
+    aplicación, se fuerza el valor por defecto para evitar que los archivos no
+    puedan servirse mediante ``url_for('static', ...)``.
+    """
+
+    root = base_root or Config.MEDIA_ROOT
+    if not root:
+        root = Config.MEDIA_ROOT
+
+    root = os.path.abspath(root)
+    static_root = os.path.abspath(os.path.join(Config.BASEDIR, "static"))
+
+    if os.path.commonpath([root, static_root]) != static_root:
+        root = Config.MEDIA_ROOT
+
+    return root
 
 
 def _row_to_tenant(row) -> TenantInfo | None:
@@ -279,13 +301,54 @@ def get_current_tenant() -> TenantInfo | None:
 
 def get_runtime_setting(key: str, default=None, *, cast=None):
     env = get_current_tenant_env()
-    value = env.get(key, default)
+    if key == "MEDIA_ROOT":
+        value = get_media_root()
+    else:
+        value = env.get(key, default)
     if cast and value is not None:
         try:
             value = cast(value)
         except (TypeError, ValueError):
             value = default
     return value
+
+
+def get_active_tenant_key(*, include_default: bool = True) -> str | None:
+    """Devuelve la clave del tenant activo o el tenant por defecto.
+
+    Si no hay un tenant en contexto y ``include_default`` es ``True`` se
+    utilizará ``Config.DEFAULT_TENANT`` cuando esté configurado.
+    """
+
+    tenant = get_current_tenant()
+    if tenant:
+        return tenant.tenant_key
+
+    if include_default:
+        default_key = (Config.DEFAULT_TENANT or "").strip()
+        return default_key or None
+
+    return None
+
+
+def get_media_root(*, tenant_key: str | None = None) -> str:
+    """Obtiene la ruta de medios incluyendo el subdirectorio del tenant.
+
+    - Usa ``MEDIA_ROOT`` del entorno del tenant actual (o valores por defecto).
+    - Si existe un tenant activo, agrega un subdirectorio con su ``tenant_key``.
+    - Si no hay tenant en contexto, pero se configuró ``DEFAULT_TENANT``, usa
+      ese subdirectorio.
+    """
+
+    env = get_current_tenant_env()
+    base_root = _resolve_media_root(env.get("MEDIA_ROOT") or Config.MEDIA_ROOT)
+
+    key = tenant_key or get_active_tenant_key()
+    if key:
+        base_root = os.path.join(base_root, key)
+
+    os.makedirs(base_root, exist_ok=True)
+    return base_root
 
 
 def ensure_default_tenant_registered() -> TenantInfo | None:
@@ -535,13 +598,15 @@ __all__ = [
     "get_tenant_roles",
     "get_tenant_env",
     "get_current_tenant",
-    "get_tenant",
-    "list_tenant_users",
-    "list_tenants",
-    "register_tenant",
-    "resolve_tenant_from_request",
-    "set_current_tenant",
-    "set_current_tenant_env",
+    "get_tenant", 
+    "list_tenant_users", 
+    "list_tenants", 
+    "get_active_tenant_key",
+    "get_media_root",
+    "register_tenant", 
+    "resolve_tenant_from_request", 
+    "set_current_tenant", 
+    "set_current_tenant_env", 
     "update_tenant_env",
     "update_tenant_metadata",
     "create_or_update_tenant_user",
