@@ -53,7 +53,7 @@ def test_finalizar_chat_envia_notificacion(client, monkeypatch):
 
 def test_handle_text_message_notifica_timeout(monkeypatch):
     numero = "5215551111"
-    now = datetime.now()
+    now = datetime.utcnow()
     last_activity = now - timedelta(seconds=webhook_module.SESSION_TIMEOUT + 5)
 
     monkeypatch.setattr(
@@ -108,7 +108,7 @@ def test_handle_text_message_notifica_timeout(monkeypatch):
 
 def test_handle_text_message_no_timeout_when_reciente(monkeypatch):
     numero = "5215552222"
-    last_activity = datetime.now() - timedelta(seconds=5)
+    last_activity = datetime.utcnow() - timedelta(seconds=5)
 
     monkeypatch.setattr(
         webhook_module,
@@ -139,7 +139,7 @@ def test_handle_text_message_no_timeout_when_step_missing(monkeypatch):
     """No se debe notificar cierre si no hay un paso activo previo."""
 
     numero = "5215553333"
-    last_activity = datetime.now() - timedelta(seconds=webhook_module.SESSION_TIMEOUT + 5)
+    last_activity = datetime.utcnow() - timedelta(seconds=webhook_module.SESSION_TIMEOUT + 5)
 
     monkeypatch.setattr(
         webhook_module,
