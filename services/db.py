@@ -4,6 +4,7 @@ import os
 import re
 import sys
 from dataclasses import dataclass
+from datetime import datetime
 
 if importlib.util.find_spec("mysql.connector"):
     import mysql.connector
@@ -756,9 +757,15 @@ def update_chat_state(numero, step, estado=None):
     conn = get_connection()
     c    = conn.cursor()
     c.execute(
-        "INSERT INTO chat_state (numero, step, estado, last_activity) VALUES (%s, %s, %s, NOW()) "
-        "ON DUPLICATE KEY UPDATE step=VALUES(step), estado=COALESCE(VALUES(estado), estado), last_activity=VALUES(last_activity)",
-        (numero, step, estado),
+        """
+        INSERT INTO chat_state (numero, step, estado, last_activity)
+        VALUES (%s, %s, %s, %s)
+        ON DUPLICATE KEY UPDATE
+            step = VALUES(step),
+            estado = COALESCE(VALUES(estado), estado),
+            last_activity = VALUES(last_activity)
+        """,
+        (numero, step, estado, datetime.utcnow()),
     )
     conn.commit()
     conn.close()
