@@ -52,12 +52,12 @@ def _media_path(filename: str):
     return os.path.join(_media_root(), filename)
 
 
-def _convert_webm_to_ogg(src_path: str):
+def _convert_webm_to_mp3(src_path: str):
     if not shutil.which("ffmpeg"):
         return None, "No se encontró ffmpeg para convertir el audio grabado."
 
     original_name, _ = os.path.splitext(os.path.basename(src_path))
-    dest_name = f"{uuid.uuid4().hex}_{original_name}.ogg"
+    dest_name = f"{uuid.uuid4().hex}_{original_name}.mp3"
     dest_path = os.path.join(_media_root(), dest_name)
 
     result = subprocess.run(
@@ -66,8 +66,17 @@ def _convert_webm_to_ogg(src_path: str):
             "-y",
             "-i",
             src_path,
+            "-vn",
             "-acodec",
-            "libopus",
+            "libmp3lame",
+            "-b:a",
+            "128k",
+            "-ac",
+            "1",
+            "-ar",
+            "48000",
+            "-f",
+            "mp3",
             dest_path,
         ],
         stdout=subprocess.PIPE,
@@ -1223,8 +1232,8 @@ def send_audio():
     send_as_document = False
     conversion_error = None
 
-    if mime_type.startswith('audio/webm'):
-        converted_path, conversion_error = _convert_webm_to_ogg(path)
+    if mime_type.startswith('audio/webm') or ext == '.webm':
+        converted_path, conversion_error = _convert_webm_to_mp3(path)
         if converted_path:
             path = converted_path
             unique = os.path.basename(converted_path)
