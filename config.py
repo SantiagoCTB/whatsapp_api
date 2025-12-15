@@ -117,6 +117,8 @@ class Config:
         'SESSION_TIMEOUT_MESSAGE',
         'Tu sesión ha terminado por inactividad. Hemos reiniciado la conversación.',
     )
+    IA_API_TOKEN = os.getenv('IA_API_TOKEN')
+    IA_MODEL = os.getenv('IA_MODEL', 'o4-mini')
     IA_SYSTEM_MESSAGE = os.getenv(
         'IA_SYSTEM_MESSAGE',
         'Eres un asistente virtual y debes responder de forma breve y clara.',
