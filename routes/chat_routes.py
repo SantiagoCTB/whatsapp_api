@@ -1078,7 +1078,11 @@ def send_image():
     img.save(path)
 
     # URL pública
-    image_url = url_for('static', filename=f'uploads/{unique}', _external=True)
+    image_url = url_for(
+        'static',
+        filename=tenants.get_uploads_url_path(unique),
+        _external=True,
+    )
 
     # Envía la imagen por la API
     tipo_envio = 'bot_image' if origen == 'bot' else 'asesor'
@@ -1130,7 +1134,11 @@ def send_document():
     path     = _media_path(unique)
     document.save(path)
 
-    doc_url = url_for('static', filename=f'uploads/{unique}', _external=True)
+    doc_url = url_for(
+        'static',
+        filename=tenants.get_uploads_url_path(unique),
+        _external=True,
+    )
 
     success, error_reason = enviar_mensaje(
         numero,
@@ -1223,7 +1231,11 @@ def send_audio():
         else:
             send_as_document = True
 
-    audio_url = url_for('static', filename=f'uploads/{unique}', _external=True)
+    audio_url = url_for(
+        'static',
+        filename=tenants.get_uploads_url_path(unique),
+        _external=True,
+    )
 
     # Envía el audio por la API
     tipo_envio = 'bot_audio' if origen == 'bot' else 'asesor'

@@ -307,7 +307,11 @@ def _reglas_view(template_name):
                         unique = f"{uuid.uuid4().hex}_{filename}"
                         path = os.path.join(_media_root(), unique)
                         media_file.save(path)
-                        url = url_for('static', filename=f'uploads/{unique}', _external=True)
+                        url = url_for(
+                            'static',
+                            filename=tenants.get_uploads_url_path(unique),
+                            _external=True,
+                        )
                         medias.append((url, media_file.mimetype.split(';', 1)[0]))
                 if media_url_field:
                     for url in [u.strip() for u in re.split(r'[\n,]+', media_url_field) if u.strip()]:
@@ -548,7 +552,10 @@ def configuracion_ia():
         ia_config = _get_ia_config(c)
         pdf_url = None
         if ia_config and ia_config.get('pdf_filename'):
-            pdf_url = url_for('static', filename=f"uploads/ia/{ia_config['pdf_filename']}")
+            pdf_url = url_for(
+                'static',
+                filename=tenants.get_uploads_url_path(f"ia/{ia_config['pdf_filename']}")
+            )
 
         if request.method == 'POST':
             ia_model = (request.form.get('ia_model') or 'o4-mini').strip() or 'o4-mini'
@@ -711,7 +718,10 @@ def configuracion_ia():
                 ia_config = _get_ia_config(c)
                 pdf_url = None
                 if ia_config and ia_config.get('pdf_filename'):
-                    pdf_url = url_for('static', filename=f"uploads/ia/{ia_config['pdf_filename']}")
+                    pdf_url = url_for(
+                        'static',
+                        filename=tenants.get_uploads_url_path(f"ia/{ia_config['pdf_filename']}")
+                    )
                 status_message = 'Configuración de IA actualizada correctamente.'
 
                 if new_pdf and old_pdf_path and os.path.exists(old_pdf_path):
@@ -867,7 +877,11 @@ def botones():
                         unique = f"{uuid.uuid4().hex}_{filename}"
                         path = os.path.join(_media_root(), unique)
                         media_file.save(path)
-                        url = url_for('static', filename=f'uploads/{unique}', _external=True)
+                        url = url_for(
+                            'static',
+                            filename=tenants.get_uploads_url_path(unique),
+                            _external=True,
+                        )
                         medias.append((url, media_file.mimetype.split(';', 1)[0]))
                 media_url = request.form.get('media_url', '')
                 urls = [u.strip() for u in re.split(r'[\n,]+', media_url) if u and u.strip()]

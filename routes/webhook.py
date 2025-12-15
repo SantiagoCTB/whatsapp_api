@@ -249,7 +249,9 @@ def _reply_with_ai(numero: str, user_text: str | None, *, system_prompt: str | N
         image_path = os.path.join(_media_root(), 'ia_pages', best_page.image_filename)
         if os.path.exists(image_path):
             image_url = url_for(
-                'static', filename=f"uploads/ia_pages/{best_page.image_filename}", _external=True
+                'static',
+                filename=tenants.get_uploads_url_path(f"ia_pages/{best_page.image_filename}"),
+                _external=True,
             )
             caption = f"Referencia del catálogo - página {best_page.page_number}"
             enviar_mensaje(
@@ -947,7 +949,11 @@ def webhook():
                     with open(path, 'wb') as f:
                         f.write(audio_bytes)
 
-                    public_url = url_for('static', filename=f'uploads/{filename}', _external=True)
+                    public_url = url_for(
+                        'static',
+                        filename=tenants.get_uploads_url_path(filename),
+                        _external=True,
+                    )
 
                     step = get_current_step(from_number)
                     db_id = guardar_mensaje(
@@ -999,7 +1005,11 @@ def webhook():
                         f.write(media_bytes)
 
                     # 2) URL pública
-                    public_url = url_for('static', filename=f'uploads/{filename}', _external=True)
+                    public_url = url_for(
+                        'static',
+                        filename=tenants.get_uploads_url_path(filename),
+                        _external=True,
+                    )
 
                     # 3) Guardar en BD
                     step = get_current_step(from_number)

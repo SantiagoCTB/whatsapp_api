@@ -5,6 +5,7 @@ from __future__ import annotations
 import contextvars
 import json
 import os
+import posixpath
 from dataclasses import dataclass
 from typing import Dict, List, Mapping
 from flask import Request
@@ -349,6 +350,24 @@ def get_media_root(*, tenant_key: str | None = None) -> str:
 
     os.makedirs(base_root, exist_ok=True)
     return base_root
+
+
+def get_uploads_url_path(filename: str, *, tenant_key: str | None = None) -> str:
+    """Devuelve la ruta relativa bajo ``static`` para un archivo en uploads.
+
+    Si hay un tenant activo (o un tenant por defecto configurado), agrega un
+    subdirectorio con su clave para que las URLs apunten al espacio correcto.
+    """
+
+    clean_filename = str(filename).lstrip("/ ")
+    key = tenant_key or get_active_tenant_key()
+
+    segments = ["uploads"]
+    if key:
+        segments.append(key)
+    segments.append(clean_filename)
+
+    return posixpath.join(*segments)
 
 
 def ensure_default_tenant_registered() -> TenantInfo | None:
