@@ -756,7 +756,13 @@ def handle_text_message(numero: str, texto: str, save: bool = True):
     bootstrapped = False
     timeout_seconds = _get_session_timeout()
     expired_session = False
-    if isinstance(last_time, datetime) and timeout_seconds and timeout_seconds > 0:
+    has_active_session = bool(step_db)
+    if (
+        has_active_session
+        and isinstance(last_time, datetime)
+        and timeout_seconds
+        and timeout_seconds > 0
+    ):
         elapsed_seconds = (now - last_time).total_seconds()
         expired_session = elapsed_seconds > timeout_seconds
 

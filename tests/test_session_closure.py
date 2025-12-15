@@ -133,3 +133,34 @@ def test_handle_text_message_no_timeout_when_reciente(monkeypatch):
     webhook_module.handle_text_message(numero, "Hola", save=True)
 
     assert not notified
+
+
+def test_handle_text_message_no_timeout_when_step_missing(monkeypatch):
+    """No se debe notificar cierre si no hay un paso activo previo."""
+
+    numero = "5215553333"
+    last_activity = datetime.now() - timedelta(seconds=webhook_module.SESSION_TIMEOUT + 5)
+
+    monkeypatch.setattr(
+        webhook_module,
+        "get_chat_state",
+        lambda _: (None, last_activity, None),
+    )
+
+    notified = []
+
+    monkeypatch.setattr(webhook_module, "delete_chat_state", lambda n: None)
+    monkeypatch.setattr(webhook_module, "clear_chat_runtime_state", lambda n: None)
+    monkeypatch.setattr(
+        webhook_module,
+        "notify_session_closed",
+        lambda n, origin="timeout": notified.append((n, origin)) or True,
+    )
+    monkeypatch.setattr(webhook_module, "guardar_mensaje", lambda *args, **kwargs: None)
+    monkeypatch.setattr(webhook_module, "set_user_step", lambda *args, **kwargs: None)
+    monkeypatch.setattr(webhook_module, "process_step_chain", lambda *args, **kwargs: None)
+    monkeypatch.setattr(webhook_module, "handle_global_command", lambda *args, **kwargs: True)
+
+    webhook_module.handle_text_message(numero, "Hola", save=True)
+
+    assert not notified
