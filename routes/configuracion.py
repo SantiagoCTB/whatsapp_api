@@ -552,10 +552,14 @@ def configuracion_ia():
         ia_config = _get_ia_config(c)
         pdf_url = None
         if ia_config and ia_config.get('pdf_filename'):
-            pdf_url = url_for(
-                'static',
-                filename=tenants.get_uploads_url_path(f"ia/{ia_config['pdf_filename']}")
-            )
+            pdf_filename = ia_config['pdf_filename']
+            preferred_path = os.path.join(_media_root(), pdf_filename)
+            preferred_url_path = tenants.get_uploads_url_path(pdf_filename)
+            if not os.path.exists(preferred_path):
+                legacy_path = os.path.join(_media_root(), 'ia', pdf_filename)
+                if os.path.exists(legacy_path):
+                    preferred_url_path = tenants.get_uploads_url_path(f"ia/{pdf_filename}")
+            pdf_url = url_for('static', filename=preferred_url_path)
 
         if request.method == 'POST':
             ia_model = (request.form.get('ia_model') or 'o4-mini').strip() or 'o4-mini'
@@ -563,8 +567,9 @@ def configuracion_ia():
             ia_enabled = 1 if request.form.get('ia_enabled') in {'on', '1', 'true', 't'} else 0
             catalog_url = (request.form.get('catalogo_url') or '').strip()
             pdf_file = request.files.get('catalogo_pdf')
-            pdf_dir = os.path.join(_media_root(), 'ia')
+            pdf_dir = _media_root()
             os.makedirs(pdf_dir, exist_ok=True)
+            stored_catalog_name = 'catalogo.pdf'
 
             new_pdf = None
             old_pdf_path = None
@@ -584,7 +589,7 @@ def configuracion_ia():
                 elif mime and 'pdf' not in mime:
                     error_message = 'El archivo subido no parece ser un PDF válido.'
                 else:
-                    stored_name = f"{uuid.uuid4().hex}_{filename}"
+                    stored_name = stored_catalog_name
                     path = os.path.join(pdf_dir, stored_name)
                     pdf_file.save(path)
                     pdf_size = os.path.getsize(path)
@@ -597,6 +602,10 @@ def configuracion_ia():
                     }
                     if ia_config and ia_config.get('pdf_filename'):
                         old_pdf_path = os.path.join(pdf_dir, ia_config['pdf_filename'])
+                        if not os.path.exists(old_pdf_path):
+                            legacy_path = os.path.join(pdf_dir, 'ia', ia_config['pdf_filename'])
+                            if os.path.exists(legacy_path):
+                                old_pdf_path = legacy_path
 
                     try:
                         ingest_catalog_pdf(path, stored_name)
@@ -619,7 +628,7 @@ def configuracion_ia():
                     parsed = urlparse(catalog_url)
                     base_name = os.path.basename(parsed.path) or 'catalogo.pdf'
                     filename = secure_filename(base_name) or 'catalogo.pdf'
-                    stored_name = f"{uuid.uuid4().hex}_{filename}"
+                    stored_name = stored_catalog_name
                     path = os.path.join(pdf_dir, stored_name)
                     try:
                         with requests.get(catalog_url, stream=True, timeout=120) as resp:
@@ -643,6 +652,10 @@ def configuracion_ia():
                                     }
                                     if ia_config and ia_config.get('pdf_filename'):
                                         old_pdf_path = os.path.join(pdf_dir, ia_config['pdf_filename'])
+                                        if not os.path.exists(old_pdf_path):
+                                            legacy_path = os.path.join(pdf_dir, 'ia', ia_config['pdf_filename'])
+                                            if os.path.exists(legacy_path):
+                                                old_pdf_path = legacy_path
 
                                     try:
                                         ingest_catalog_pdf(path, stored_name)
@@ -720,7 +733,7 @@ def configuracion_ia():
                 if ia_config and ia_config.get('pdf_filename'):
                     pdf_url = url_for(
                         'static',
-                        filename=tenants.get_uploads_url_path(f"ia/{ia_config['pdf_filename']}")
+                        filename=tenants.get_uploads_url_path(ia_config['pdf_filename'])
                     )
                 status_message = 'Configuración de IA actualizada correctamente.'
 
