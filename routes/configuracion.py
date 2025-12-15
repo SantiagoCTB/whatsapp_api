@@ -1,15 +1,21 @@
-from datetime import datetime
+import importlib.util
+import json
 import logging
 import os
 import re
 import uuid
-import requests
-import json
+from datetime import datetime
 
+import requests
 from flask import Blueprint, render_template, request, redirect, session, url_for, jsonify
-from mysql.connector import Error as MySQLError
 from openpyxl import load_workbook
 from werkzeug.utils import secure_filename
+
+if importlib.util.find_spec("mysql.connector"):
+    from mysql.connector import Error as MySQLError
+else:  # pragma: no cover - fallback cuando falta el conector
+    class MySQLError(Exception):
+        pass
 
 from config import Config
 from services import tenants
@@ -55,6 +61,7 @@ def _ensure_ia_config_table(cursor):
             id INT AUTO_INCREMENT PRIMARY KEY,
             model_name VARCHAR(100) NOT NULL DEFAULT 'o4-mini',
             model_token TEXT NULL,
+            enabled TINYINT(1) NOT NULL DEFAULT 1,
             pdf_filename VARCHAR(255) NULL,
             pdf_original_name VARCHAR(255) NULL,
             pdf_mime VARCHAR(100) NULL,
@@ -65,30 +72,58 @@ def _ensure_ia_config_table(cursor):
         """
     )
 
+    cursor.execute("SHOW COLUMNS FROM ia_config LIKE 'enabled';")
+    has_enabled = cursor.fetchone() is not None
+    if not has_enabled:
+        cursor.execute(
+            "ALTER TABLE ia_config ADD COLUMN enabled TINYINT(1) NOT NULL DEFAULT 1 AFTER model_token;"
+        )
+
 
 def _get_ia_config(cursor):
-    cursor.execute(
-        """
-        SELECT id, model_name, model_token, pdf_filename, pdf_original_name,
-               pdf_mime, pdf_size, pdf_uploaded_at
-          FROM ia_config
-      ORDER BY id DESC
-         LIMIT 1
-        """
-    )
-    row = cursor.fetchone()
-    if not row:
+    try:
+        cursor.execute(
+            """
+            SELECT id, model_name, model_token, enabled, pdf_filename, pdf_original_name,
+                   pdf_mime, pdf_size, pdf_uploaded_at
+              FROM ia_config
+          ORDER BY id DESC
+             LIMIT 1
+            """
+        )
+        rows = cursor.fetchall()
+    except Exception:
+        cursor.execute(
+            """
+            SELECT id, model_name, model_token, pdf_filename, pdf_original_name,
+                   pdf_mime, pdf_size, pdf_uploaded_at
+              FROM ia_config
+          ORDER BY id DESC
+             LIMIT 1
+            """
+        )
+        rows = cursor.fetchall()
+
+    if not rows:
         return None
+
+    row = rows[0]
+
+    if len(row) != 9:
+        row = (*row[:3], 1, *row[3:])
+
     keys = [
         "id",
         "model_name",
         "model_token",
+        "enabled",
         "pdf_filename",
         "pdf_original_name",
         "pdf_mime",
         "pdf_size",
         "pdf_uploaded_at",
     ]
+
     return {key: value for key, value in zip(keys, row)}
 
 
@@ -508,6 +543,7 @@ def configuracion_ia():
         if request.method == 'POST':
             ia_model = (request.form.get('ia_model') or 'o4-mini').strip() or 'o4-mini'
             ia_token = (request.form.get('ia_token') or '').strip()
+            ia_enabled = 1 if request.form.get('ia_enabled') in {'on', '1', 'true', 't'} else 0
             pdf_file = request.files.get('catalogo_pdf')
             pdf_dir = os.path.join(_media_root(), 'ia')
             os.makedirs(pdf_dir, exist_ok=True)
@@ -563,6 +599,7 @@ def configuracion_ia():
                         UPDATE ia_config
                            SET model_name = %s,
                                model_token = %s,
+                               enabled = %s,
                                pdf_filename = %s,
                                pdf_original_name = %s,
                                pdf_mime = %s,
@@ -573,6 +610,7 @@ def configuracion_ia():
                         (
                             ia_model,
                             ia_token,
+                            ia_enabled,
                             new_pdf['stored_name'] if new_pdf else ia_config.get('pdf_filename'),
                             new_pdf['original_name'] if new_pdf else ia_config.get('pdf_original_name'),
                             new_pdf['mime'] if new_pdf else ia_config.get('pdf_mime'),
@@ -585,12 +623,13 @@ def configuracion_ia():
                     c.execute(
                         """
                         INSERT INTO ia_config
-                            (model_name, model_token, pdf_filename, pdf_original_name, pdf_mime, pdf_size, pdf_uploaded_at)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s)
+                            (model_name, model_token, enabled, pdf_filename, pdf_original_name, pdf_mime, pdf_size, pdf_uploaded_at)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                         """,
                         (
                             ia_model,
                             ia_token,
+                            ia_enabled,
                             new_pdf['stored_name'] if new_pdf else None,
                             new_pdf['original_name'] if new_pdf else None,
                             new_pdf['mime'] if new_pdf else None,

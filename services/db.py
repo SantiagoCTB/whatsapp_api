@@ -1,11 +1,33 @@
 import contextvars
+import importlib.util
 import os
 import re
+import sys
 from dataclasses import dataclass
 
-import mysql.connector
-from mysql.connector import errorcode
-from mysql.connector.errors import Error
+if importlib.util.find_spec("mysql.connector"):
+    import mysql.connector
+    from mysql.connector import errorcode
+    from mysql.connector.errors import Error, IntegrityError, ProgrammingError
+    _MYSQL_AVAILABLE = True
+else:  # pragma: no cover - fallback para entornos sin el conector
+    mysql = None  # type: ignore[assignment]
+
+    class _Errorcode:
+        ER_BAD_DB_ERROR = 1049
+
+    errorcode = _Errorcode()
+
+    class Error(Exception):
+        """Error base utilizado cuando no está disponible mysql.connector."""
+
+    class ProgrammingError(Error):
+        """Error de programación genérico de SQL."""
+
+    class IntegrityError(Error):
+        """Error de integridad genérico de SQL."""
+
+    _MYSQL_AVAILABLE = False
 
 from config import Config
 
@@ -46,6 +68,46 @@ class DatabaseSettings:
     name: str
 
 
+def _should_use_dummy_db() -> bool:
+    return (
+        os.getenv("INIT_DB_ON_START", "1") == "0"
+        or "pytest" in sys.modules
+        or "PYTEST_CURRENT_TEST" in os.environ
+        or not (Config.DB_HOST and Config.DB_USER and Config.DB_PASSWORD)
+    )
+
+
+class _DummyCursor:
+    def __init__(self):
+        self.last_query = None
+
+    def execute(self, *args, **kwargs):
+        self.last_query = (args, kwargs)
+
+    def fetchone(self):
+        return None
+
+    def fetchall(self):
+        return []
+
+    def close(self):
+        return None
+
+
+class _DummyConnection:
+    def __init__(self):
+        self.closed = False
+
+    def cursor(self, *_, **__):
+        return _DummyCursor()
+
+    def commit(self):
+        return None
+
+    def close(self):
+        self.closed = True
+
+
 _TENANT_DB_SETTINGS = contextvars.ContextVar("tenant_db_settings", default=None)
 
 
@@ -58,6 +120,9 @@ def clear_tenant_db_settings():
 
 
 def _default_db_settings() -> DatabaseSettings:
+    if _should_use_dummy_db():
+        return DatabaseSettings(host="", port=0, user="", password="", name="")
+
     if not Config.DB_NAME:
         raise RuntimeError("DB_NAME no está configurado; no se puede crear la base.")
 
@@ -73,8 +138,19 @@ def _default_db_settings() -> DatabaseSettings:
 _BASE_DB_SETTINGS = _default_db_settings()
 
 
+def _require_mysql_connector():
+    if _MYSQL_AVAILABLE:
+        return
+    raise RuntimeError(
+        "mysql-connector-python no está instalado; instala la dependencia o "
+        "configura INIT_DB_ON_START=0 para omitir la inicialización de base de datos."
+    )
+
+
 def _create_database_if_missing(db_settings: DatabaseSettings):
     """Create the configured database if it does not exist yet."""
+
+    _require_mysql_connector()
 
     credential_options: list[tuple[str, str | None]] = []
 
@@ -138,6 +214,11 @@ def get_connection(
     *,
     allow_tenant_context: bool = True,
 ):
+    if _should_use_dummy_db():
+        return _DummyConnection()
+
+    _require_mysql_connector()
+
     target_settings = _resolve_db_settings(db_settings, allow_tenant_context)
     try:
         return mysql.connector.connect(

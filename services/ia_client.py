@@ -3,12 +3,26 @@
 from __future__ import annotations
 
 import logging
+import importlib.util
 from typing import Iterable, Mapping
-
-from openai import OpenAI
 
 from config import Config
 from services import tenants
+
+if importlib.util.find_spec("openai"):
+    from openai import OpenAI  # type: ignore
+else:  # pragma: no cover - fallback para entornos sin SDK
+    class _DummyCompletions:
+        @staticmethod
+        def create(*_, **__):
+            return type("_DummyResponse", (), {"choices": []})()
+
+    class _DummyChat:
+        completions = _DummyCompletions()
+
+    class OpenAI:  # type: ignore
+        def __init__(self, *_, **__):
+            self.chat = _DummyChat()
 
 logger = logging.getLogger(__name__)
 

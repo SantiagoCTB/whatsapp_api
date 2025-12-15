@@ -1,12 +1,19 @@
+import importlib.util
 import mimetypes
 import os
 import uuid
 import json
 from datetime import datetime
+import os
 from zoneinfo import ZoneInfo
 from flask import Blueprint, render_template, request, redirect, session, url_for, jsonify
 from werkzeug.utils import secure_filename
-from mysql.connector.errors import ProgrammingError
+
+if importlib.util.find_spec("mysql.connector"):
+    from mysql.connector.errors import ProgrammingError
+else:  # pragma: no cover - fallback cuando no está instalado el conector
+    class ProgrammingError(Exception):
+        pass
 from config import Config
 from services import tenants
 from services.whatsapp_api import (
@@ -26,6 +33,7 @@ from services.db import (
 chat_bp = Blueprint('chat', __name__)
 
 BOGOTA_TZ = ZoneInfo('America/Bogota')
+MEDIA_ROOT = Config.MEDIA_ROOT
 
 CHAT_STATE_DEFINITIONS = Config.CHAT_STATE_DEFINITIONS
 CHAT_STATE_KEYS = {item["key"] for item in CHAT_STATE_DEFINITIONS if item.get("key")}
@@ -310,6 +318,25 @@ def _extract_flow_segments(raw_message):
     return prepared
 
 
+def _is_ai_enabled(cursor) -> bool:
+    try:
+        if not _table_exists(cursor, 'ia_config'):
+            return True
+
+        cursor.execute("SHOW COLUMNS FROM ia_config LIKE 'enabled';")
+        has_enabled = cursor.fetchone() is not None
+        if not has_enabled:
+            return True
+
+        cursor.execute(
+            "SELECT enabled FROM ia_config ORDER BY id DESC LIMIT 1"
+        )
+        row = cursor.fetchone()
+        return bool(row[0]) if row else True
+    except Exception:
+        return True
+
+
 @chat_bp.route('/')
 def index():
     # Autenticación
@@ -322,6 +349,7 @@ def index():
     c.execute("SELECT id FROM roles WHERE keyword=%s", (rol,))
     row = c.fetchone()
     role_id = row[0] if row else None
+    ai_enabled = _is_ai_enabled(c)
 
     # Lista de chats únicos filtrados por rol
     if rol == 'admin':
@@ -382,6 +410,7 @@ def index():
         role_id=role_id,
         roles=roles_db,
         chat_state_definitions=CHAT_STATE_DEFINITIONS,
+        ai_enabled=ai_enabled,
     )
 
 @chat_bp.route('/get_chat/<numero>')
@@ -392,6 +421,9 @@ def get_chat(numero):
     conn = get_connection()
     c    = conn.cursor()
     roles = session.get('roles') or []
+    single_role = session.get('rol')
+    if not roles and single_role:
+        roles = [single_role]
     if isinstance(roles, str):
         roles = [roles]
 

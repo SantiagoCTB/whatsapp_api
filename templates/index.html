@@ -35,7 +35,7 @@
     <!-- Chat Window -->
     <div class="chatWindow" role="region" aria-label="Zona del chat. Arrastra imágenes para prepararlas antes de enviar." tabindex="0">
       <div id="botonera"></div>
-      <div id="assistanceAlert" class="assistance-alert" role="status" aria-live="polite" hidden>
+      <div id="assistanceAlert" class="assistance-alert" role="status" aria-live="polite" data-ai-enabled="{{ 'true' if ai_enabled else 'false' }}" hidden aria-hidden="true">
         <div class="assistance-alert__text">
           <strong>Modo asesor activo.</strong>
           La IA está pausada hasta reanudar el bot.
@@ -205,6 +205,7 @@
       const chatRolesSection = chatContextMenu.querySelector('[data-section="roles"]');
       const assistanceAlert = document.getElementById('assistanceAlert');
       const resumeBotBtn = document.getElementById('resumeBotBtn');
+      const aiEnabled = assistanceAlert ? assistanceAlert.dataset.aiEnabled === 'true' : true;
       let chatStateOptions = [];
       const chatStateDefinitions = {{ chat_state_definitions | tojson }};
       const availableRoles = {{ roles | tojson }};
@@ -247,6 +248,9 @@
 
       function updateAssistanceAlert(estado) {
         currentChatState = estado || null;
+        if (!assistanceAlert || !aiEnabled) {
+          return;
+        }
         const isAgent = estado === 'asesor';
         if (isAgent) {
           assistanceAlert.hidden = false;
@@ -257,17 +261,19 @@
         }
       }
 
-      resumeBotBtn.addEventListener('click', () => {
-        if (!currentChat) return;
-        resumeBotBtn.disabled = true;
-        updateChatState(currentChat, 'bot')
-          .then(() => {
-            updateAssistanceAlert('bot');
-            fetchChatList();
-          })
-          .catch(err => console.error(err))
-          .finally(() => { resumeBotBtn.disabled = false; });
-      });
+      if (resumeBotBtn) {
+        resumeBotBtn.addEventListener('click', () => {
+          if (!currentChat || !aiEnabled) return;
+          resumeBotBtn.disabled = true;
+          updateChatState(currentChat, 'bot')
+            .then(() => {
+              updateAssistanceAlert('bot');
+              fetchChatList();
+            })
+            .catch(err => console.error(err))
+            .finally(() => { resumeBotBtn.disabled = false; });
+        });
+      }
 
       function normalizeMediaUrl(u) {
         if (!u) return u;
