@@ -1,19 +1,23 @@
 from datetime import datetime
-
-from flask import Blueprint, render_template, request, redirect, session, url_for, jsonify
-from mysql.connector import Error as MySQLError
-from services.db import get_connection
-from openpyxl import load_workbook
-from werkzeug.utils import secure_filename
-from config import Config
-from services import tenants
+import logging
 import os
-import uuid
 import re
+import uuid
 import requests
 import json
 
+from flask import Blueprint, render_template, request, redirect, session, url_for, jsonify
+from mysql.connector import Error as MySQLError
+from openpyxl import load_workbook
+from werkzeug.utils import secure_filename
+
+from config import Config
+from services import tenants
+from services.catalog import ingest_catalog_pdf
+from services.db import get_connection
+
 config_bp = Blueprint('configuracion', __name__)
+logger = logging.getLogger(__name__)
 
 # El comodín '*' en `input_text` permite avanzar al siguiente paso sin validar
 # la respuesta del usuario. Si es la única regla de un paso se ejecuta
@@ -510,6 +514,7 @@ def configuracion_ia():
 
             new_pdf = None
             old_pdf_path = None
+            ingest_error = None
 
             if not ia_token:
                 error_message = 'El token del modelo es obligatorio.'
@@ -536,6 +541,20 @@ def configuracion_ia():
                     }
                     if ia_config and ia_config.get('pdf_filename'):
                         old_pdf_path = os.path.join(pdf_dir, ia_config['pdf_filename'])
+
+                    try:
+                        ingest_catalog_pdf(path, stored_name)
+                    except Exception as exc:  # pragma: no cover - depende de libs externas
+                        logger.exception("Error al indexar catálogo PDF", exc_info=exc)
+                        ingest_error = 'No se pudo procesar el catálogo PDF. Verifica que el archivo no esté dañado.'
+                        try:
+                            os.remove(path)
+                        except OSError:
+                            pass
+                        new_pdf = None
+
+            if not error_message and ingest_error:
+                error_message = ingest_error
 
             if not error_message:
                 if ia_config:

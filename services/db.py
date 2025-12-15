@@ -1,8 +1,12 @@
 import contextvars
+import os
+import re
 from dataclasses import dataclass
+
 import mysql.connector
 from mysql.connector import errorcode
 from mysql.connector.errors import Error
+
 from config import Config
 
 
@@ -526,6 +530,21 @@ def init_db(db_settings: DatabaseSettings | None = None):
     if not c.fetchone():
         c.execute("ALTER TABLE chat_state ADD COLUMN estado VARCHAR(20);")
 
+    # ia_catalog_pages: páginas del catálogo indexado para IA
+    c.execute(
+        """
+        CREATE TABLE IF NOT EXISTS ia_catalog_pages (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          pdf_filename VARCHAR(255) NOT NULL,
+          page_number INT NOT NULL,
+          text_content LONGTEXT,
+          image_filename VARCHAR(255),
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          INDEX idx_pdf_page (pdf_filename, page_number)
+        ) ENGINE=InnoDB;
+        """
+    )
+
     conn.commit()
     conn.close()
 
@@ -786,6 +805,75 @@ def obtener_ultimo_mensaje_cliente(numero):
     row = c.fetchone()
     conn.close()
     return (row[0] or "").strip() if row else ""
+
+
+def replace_catalog_pages(pdf_filename: str, pages: list, *, media_root: str | None = None):
+    """Reemplaza todas las páginas indexadas del catálogo con el PDF indicado."""
+
+    conn = get_connection()
+    c = conn.cursor()
+    try:
+        c.execute("DELETE FROM ia_catalog_pages")
+        if media_root:
+            pages_dir = os.path.join(media_root, "ia_pages")
+            if os.path.isdir(pages_dir):
+                for entry in os.listdir(pages_dir):
+                    try:
+                        os.remove(os.path.join(pages_dir, entry))
+                    except OSError:
+                        continue
+
+        for page in pages:
+            c.execute(
+                """
+                INSERT INTO ia_catalog_pages
+                    (pdf_filename, page_number, text_content, image_filename)
+                VALUES (%s, %s, %s, %s)
+                """,
+                (
+                    pdf_filename,
+                    page.page_number if hasattr(page, "page_number") else page.get("page_number"),
+                    page.text_content if hasattr(page, "text_content") else page.get("text_content"),
+                    page.image_filename if hasattr(page, "image_filename") else page.get("image_filename"),
+                ),
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def search_catalog_pages(query: str, limit: int = 3):
+    """Busca páginas del catálogo que coincidan con el texto proporcionado."""
+
+    tokens = [t for t in re.split(r"\W+", (query or "").lower()) if len(t) > 2]
+    if not tokens:
+        return []
+
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute(
+        "SELECT pdf_filename, page_number, text_content, image_filename FROM ia_catalog_pages"
+    )
+    rows = c.fetchall()
+    conn.close()
+
+    scored = []
+    for pdf_filename, page_number, text_content, image_filename in rows:
+        text_lower = (text_content or "").lower()
+        score = sum(1 for token in tokens if token in text_lower)
+        if score:
+            scored.append(
+                {
+                    "pdf_filename": pdf_filename,
+                    "page_number": page_number,
+                    "text_content": text_content,
+                    "image_filename": image_filename,
+                    "score": score,
+                }
+            )
+
+    scored.sort(key=lambda item: (-item["score"], item["page_number"]))
+    return scored[:limit]
 
 
 def get_conversation(numero):

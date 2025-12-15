@@ -6,6 +6,7 @@ gunicorn
 openpyxl
 mysql-connector-python
 openai>=1.35.0
+pymupdf
 vosk
 ffmpeg-python
 uvicorn[standard]
