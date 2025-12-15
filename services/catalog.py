@@ -200,7 +200,18 @@ def find_relevant_pages(query: str, limit: int = 3) -> List[CatalogPage]:
     """Busca páginas relevantes en el catálogo para un prompt dado."""
 
     active_tenant = tenants.get_active_tenant_key(include_default=False)
-    results = search_catalog_pages(query, limit=limit)
+
+    # Forzamos a consultar primero el catálogo del tenant activo para evitar
+    # que la IA use catálogos obsoletos de otro tenant (o del default) cuando
+    # el actual ya tiene uno configurado.
+    primary_results = search_catalog_pages(
+        query,
+        limit=limit,
+        tenant_key=active_tenant,
+        fallback_to_default=False,
+    )
+
+    results = primary_results or search_catalog_pages(query, limit=limit)
 
     if results:
         logger.debug(
