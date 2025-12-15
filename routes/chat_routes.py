@@ -1214,29 +1214,44 @@ def send_audio():
         os.remove(path)
         return jsonify({'error': 'El archivo de audio está vacío. Intenta grabar o subirlo de nuevo.'}), 400
 
+    send_as_document = False
+    conversion_error = None
+
     if mime_type.startswith('audio/webm'):
         converted_path, conversion_error = _convert_webm_to_ogg(path)
-        if not converted_path:
-            return jsonify({'error': conversion_error}), 400
-        path = converted_path
-        unique = os.path.basename(converted_path)
+        if converted_path:
+            path = converted_path
+            unique = os.path.basename(converted_path)
+        else:
+            send_as_document = True
 
     audio_url = url_for('static', filename=f'uploads/{unique}', _external=True)
 
     # Envía el audio por la API
     tipo_envio = 'bot_audio' if origen == 'bot' else 'asesor'
-    success, error_reason = enviar_mensaje(
-        numero,
-        caption,
-        tipo=tipo_envio,
-        tipo_respuesta='audio',
-        opciones=audio_url,
-        return_error=True,
-    )
+
+    if send_as_document:
+        success, error_reason = enviar_mensaje(
+            numero,
+            caption,
+            tipo=tipo_envio,
+            tipo_respuesta='document',
+            opciones=audio_url,
+            return_error=True,
+        )
+    else:
+        success, error_reason = enviar_mensaje(
+            numero,
+            caption,
+            tipo=tipo_envio,
+            tipo_respuesta='audio',
+            opciones=audio_url,
+            return_error=True,
+        )
     if not success:
         return jsonify({'error': error_reason or 'No se pudo enviar el audio a WhatsApp'}), 502
 
-    if caption.strip():
+    if caption.strip() and not send_as_document:
         enviar_mensaje(
             numero,
             caption.strip(),
@@ -1248,7 +1263,14 @@ def send_audio():
         step = row[0] if row else ''
         update_chat_state(numero, step, 'asesor')
 
-    return jsonify({'status':'sent_audio', 'url': audio_url}), 200
+    response_payload = {'status': 'sent_audio', 'url': audio_url}
+    if send_as_document:
+        response_payload.update({
+            'sent_as_document': True,
+            'warning': conversion_error or 'Se envió el audio como documento por no poder convertirlo.',
+        })
+
+    return jsonify(response_payload), 200
 
 @chat_bp.route('/send_video', methods=['POST'])
 def send_video():
