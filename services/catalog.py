@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib.util
 import logging
 import os
 import re
@@ -9,7 +10,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import List
 
-import fitz  # PyMuPDF
+if importlib.util.find_spec("fitz"):
+    import fitz  # type: ignore  # PyMuPDF
+else:  # pragma: no cover - dependencia opcional en tests
+    fitz = None  # type: ignore
 
 from config import Config
 from services import tenants
@@ -51,6 +55,9 @@ def ingest_catalog_pdf(pdf_path: str, stored_pdf_name: str) -> list[CatalogPage]
       embebido en la librería si el PDF no tiene texto reconocible).
     - Genera una imagen PNG por página y la guarda en ``static/uploads/ia_pages``.
     """
+
+    if fitz is None:
+        raise RuntimeError("PyMuPDF (fitz) no está instalado.")
 
     pages_dir = _pages_root()
     pages: list[CatalogPage] = []

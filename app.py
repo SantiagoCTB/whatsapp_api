@@ -126,18 +126,31 @@ def create_app():
         tenants.clear_current_tenant()
 
     with app.app_context():
-        tenants.bootstrap_tenant_registry()
-        default_tenant = tenants.ensure_default_tenant_registered()
+        skip_db_env = os.getenv("INIT_DB_ON_START", "1") == "0"
+        missing_db_config = not (Config.DB_HOST and Config.DB_USER and Config.DB_PASSWORD)
+        running_tests = "PYTEST_CURRENT_TEST" in os.environ or "pytest" in sys.modules
+        skip_db_setup = skip_db_env or missing_db_config or running_tests
+        default_tenant = None
 
-        # Inicializa BD por defecto para evitar errores en entornos nuevos.
-        # Puede deshabilitarse con INIT_DB_ON_START=0 si se prefiere controlar
-        # la migración manualmente.
-        if os.getenv("INIT_DB_ON_START", "1") != "0":
-            if default_tenant:
-                tenants.ensure_tenant_schema(default_tenant)
-            tenants.ensure_registered_tenants_schema(
-                skip={default_tenant.tenant_key} if default_tenant else None
+        if not skip_db_setup:
+            tenants.bootstrap_tenant_registry()
+            default_tenant = tenants.ensure_default_tenant_registered()
+
+            # Inicializa BD por defecto para evitar errores en entornos nuevos.
+            # Puede deshabilitarse con INIT_DB_ON_START=0 si se prefiere controlar
+            # la migración manualmente.
+            if os.getenv("INIT_DB_ON_START", "1") != "0":
+                if default_tenant:
+                    tenants.ensure_tenant_schema(default_tenant)
+                tenants.ensure_registered_tenants_schema(
+                    skip={default_tenant.tenant_key} if default_tenant else None
+                )
+        else:
+            reason = "INIT_DB_ON_START=0" if skip_db_env else "configuración de DB incompleta"
+            logging.getLogger(__name__).info(
+                "Se omite la inicialización de base de datos (%s).", reason
             )
+            tenants.set_current_tenant_env(tenants.get_tenant_env(None))
 
     return app
 

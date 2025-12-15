@@ -3,6 +3,7 @@ import os
 import uuid
 import json
 from datetime import datetime
+import os
 from zoneinfo import ZoneInfo
 from flask import Blueprint, render_template, request, redirect, session, url_for, jsonify
 from werkzeug.utils import secure_filename
@@ -26,6 +27,7 @@ from services.db import (
 chat_bp = Blueprint('chat', __name__)
 
 BOGOTA_TZ = ZoneInfo('America/Bogota')
+MEDIA_ROOT = Config.MEDIA_ROOT
 
 CHAT_STATE_DEFINITIONS = Config.CHAT_STATE_DEFINITIONS
 CHAT_STATE_KEYS = {item["key"] for item in CHAT_STATE_DEFINITIONS if item.get("key")}
@@ -392,6 +394,9 @@ def get_chat(numero):
     conn = get_connection()
     c    = conn.cursor()
     roles = session.get('roles') or []
+    single_role = session.get('rol')
+    if not roles and single_role:
+        roles = [single_role]
     if isinstance(roles, str):
         roles = [roles]
 

@@ -1,6 +1,7 @@
 import contextvars
 import os
 import re
+import sys
 from dataclasses import dataclass
 
 import mysql.connector
@@ -46,6 +47,46 @@ class DatabaseSettings:
     name: str
 
 
+def _should_use_dummy_db() -> bool:
+    return (
+        os.getenv("INIT_DB_ON_START", "1") == "0"
+        or "pytest" in sys.modules
+        or "PYTEST_CURRENT_TEST" in os.environ
+        or not (Config.DB_HOST and Config.DB_USER and Config.DB_PASSWORD)
+    )
+
+
+class _DummyCursor:
+    def __init__(self):
+        self.last_query = None
+
+    def execute(self, *args, **kwargs):
+        self.last_query = (args, kwargs)
+
+    def fetchone(self):
+        return None
+
+    def fetchall(self):
+        return []
+
+    def close(self):
+        return None
+
+
+class _DummyConnection:
+    def __init__(self):
+        self.closed = False
+
+    def cursor(self, *_, **__):
+        return _DummyCursor()
+
+    def commit(self):
+        return None
+
+    def close(self):
+        self.closed = True
+
+
 _TENANT_DB_SETTINGS = contextvars.ContextVar("tenant_db_settings", default=None)
 
 
@@ -58,6 +99,9 @@ def clear_tenant_db_settings():
 
 
 def _default_db_settings() -> DatabaseSettings:
+    if _should_use_dummy_db():
+        return DatabaseSettings(host="", port=0, user="", password="", name="")
+
     if not Config.DB_NAME:
         raise RuntimeError("DB_NAME no está configurado; no se puede crear la base.")
 
@@ -138,6 +182,9 @@ def get_connection(
     *,
     allow_tenant_context: bool = True,
 ):
+    if _should_use_dummy_db():
+        return _DummyConnection()
+
     target_settings = _resolve_db_settings(db_settings, allow_tenant_context)
     try:
         return mysql.connector.connect(
