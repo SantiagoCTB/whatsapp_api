@@ -755,7 +755,12 @@ def handle_text_message(numero: str, texto: str, save: bool = True):
     last_time = row[1] if row else None
     bootstrapped = False
     timeout_seconds = _get_session_timeout()
-    if last_time and timeout_seconds and (now - last_time).total_seconds() > timeout_seconds:
+    expired_session = False
+    if isinstance(last_time, datetime) and timeout_seconds and timeout_seconds > 0:
+        elapsed_seconds = (now - last_time).total_seconds()
+        expired_session = elapsed_seconds > timeout_seconds
+
+    if expired_session:
         delete_chat_state(numero)
         clear_chat_runtime_state(numero)
         step_db = None

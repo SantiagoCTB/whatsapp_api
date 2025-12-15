@@ -104,3 +104,32 @@ def test_handle_text_message_notifica_timeout(monkeypatch):
     assert steps and steps[0][0] == numero
     assert processed[0][1] == "iniciar"
     assert processed[-1][1] == "hola"
+
+
+def test_handle_text_message_no_timeout_when_reciente(monkeypatch):
+    numero = "5215552222"
+    last_activity = datetime.now() - timedelta(seconds=5)
+
+    monkeypatch.setattr(
+        webhook_module,
+        "get_chat_state",
+        lambda _: ("menu", last_activity),
+    )
+
+    notified = []
+
+    monkeypatch.setattr(webhook_module, "delete_chat_state", lambda n: None)
+    monkeypatch.setattr(webhook_module, "clear_chat_runtime_state", lambda n: None)
+    monkeypatch.setattr(
+        webhook_module,
+        "notify_session_closed",
+        lambda n, origin="timeout": notified.append((n, origin)) or True,
+    )
+    monkeypatch.setattr(webhook_module, "guardar_mensaje", lambda *args, **kwargs: None)
+    monkeypatch.setattr(webhook_module, "set_user_step", lambda *args, **kwargs: None)
+    monkeypatch.setattr(webhook_module, "process_step_chain", lambda *args, **kwargs: None)
+    monkeypatch.setattr(webhook_module, "handle_global_command", lambda *args, **kwargs: True)
+
+    webhook_module.handle_text_message(numero, "Hola", save=True)
+
+    assert not notified
