@@ -38,6 +38,18 @@ Write-Output "Starting Docker Compose..."
 
 $docker = "C:\Program Files\Docker\Docker\resources\bin\docker.exe"
 $composeFile = "C:\whatsapp_api\deploy\windows\docker-compose.windows.yml"
+$python = "python"
+$envFile = "C:\whatsapp_api\.env"
+$backupScript = "C:\whatsapp_api\scripts\backup_databases.py"
+
+Write-Output "Generating pre-deploy backup..."
+$backupArgs = @($backupScript, "--env-file", $envFile, "--tag", "windows-deploy")
+$backupResult = Start-Process -FilePath $python -ArgumentList $backupArgs -NoNewWindow -PassThru -Wait
+if ($backupResult.ExitCode -ne 0) {
+  Write-Error "El respaldo previo al despliegue falló; abortando. Código: $($backupResult.ExitCode)"
+  Stop-Transcript
+  exit 1
+}
 
 # Primero bajar contenedores huérfanos
 & $docker compose -f $composeFile down --remove-orphans

@@ -9,6 +9,12 @@ source .env
 set +a
 
 # Traer últimos cambios de Git
+echo "Generando backup previo al despliegue..."
+python scripts/backup_databases.py --env-file .env --tag deploy || {
+  echo "El respaldo previo al despliegue falló; abortando." >&2
+  exit 1
+}
+
 git pull origin main
 
 # Levantar con el compose de linux

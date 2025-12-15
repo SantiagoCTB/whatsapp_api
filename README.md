@@ -165,6 +165,14 @@ La aplicación almacena los datos en un servidor MySQL. Los antiguos archivos de
 
 Si se utilizan para pruebas locales, realiza copias de seguridad en un almacenamiento externo y evita versionarlos.
 
+### Respaldos automáticos de bases de datos
+
+* Define la carpeta donde se guardarán las copias en el `.env` usando la variable `BACKUP_ROOT` (por ejemplo: `\\Svrkiryapp\001 agestion\2025 BACK UP\AGESTION\LEADS`). Si no se define, se usará por defecto la carpeta padre del proyecto.
+* El script `scripts/backup_databases.py` genera un volcado independiente por cada base (control y tenants) en una ruta con jerarquía `<BACKUP_ROOT>/<db_name>/<AAAA-MM-DD>/<db_name>_YYYYMMDD_HHMMSS.sql`.
+* El despliegue en Linux y Windows ejecuta automáticamente un respaldo antes de actualizar (scripts `deploy/linux/deploy.sh` y `deploy/windows/start_whatsapp_api.ps1`).
+* Para un respaldo manual ejecuta: `python scripts/backup_databases.py --env-file .env`.
+* Para programar una copia diaria a la medianoche agrega una entrada cron similar a: `0 0 * * * cd /opt/whapco && /usr/bin/python3 scripts/backup_databases.py --env-file /opt/whapco/.env --tag cron >> /var/log/whapco-backup.log 2>&1`.
+
 ### Arquitectura multiempresa
 
 La aplicación funciona como una sola instancia multi-tenant. El esquema principal definido por `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD` y `DB_NAME` se usa como registro central de empresas (tabla `tenants`). Cada fila describe la base de datos exclusiva de una empresa (host, usuario y nombre de base dedicados), garantizando que los datos de cada tenant estén completamente aislados a nivel de esquema.
