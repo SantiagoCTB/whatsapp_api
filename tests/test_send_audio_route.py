@@ -29,6 +29,7 @@ def _patch_chat_dependencies(monkeypatch, media_root):
     monkeypatch.setattr(chat_routes.tenants, "get_media_root", lambda *_, **__: str(media_root))
     monkeypatch.setattr(chat_routes, "get_chat_state", lambda numero: None)
     monkeypatch.setattr(chat_routes, "update_chat_state", lambda *_, **__: None)
+    monkeypatch.setattr(chat_routes, "subir_media", lambda path: "media123")
 
 
 def test_media_root_falls_back_to_static_when_outside_static(monkeypatch, tmp_path):
@@ -109,7 +110,7 @@ def test_send_audio_generates_public_url_and_keeps_caption(tmp_path, client, mon
 
     media_call = captured["calls"][0]
     assert media_call["caption"] == ""
-    assert media_call["opciones"] == payload["url"]
+    assert media_call["opciones"] == {"id": "media123", "link": payload["url"]}
     assert media_call["tipo_respuesta"] == "audio"
 
     text_call = captured["calls"][1]
@@ -120,6 +121,7 @@ def test_send_audio_generates_public_url_and_keeps_caption(tmp_path, client, mon
 def test_send_audio_rejects_unknown_format(tmp_path, client, monkeypatch):
     _patch_chat_dependencies(monkeypatch, tmp_path)
     monkeypatch.setattr(chat_routes, "enviar_mensaje", lambda *_, **__: None)
+    monkeypatch.setattr(chat_routes, "subir_media", lambda *_: "media123")
 
     with client.session_transaction() as sess:
         sess["user"] = "tester"
@@ -142,6 +144,7 @@ def test_send_audio_rejects_unknown_format(tmp_path, client, monkeypatch):
 def test_send_audio_rejects_empty_recording(tmp_path, client, monkeypatch):
     _patch_chat_dependencies(monkeypatch, tmp_path)
     monkeypatch.setattr(chat_routes, "enviar_mensaje", lambda *_, **__: None)
+    monkeypatch.setattr(chat_routes, "subir_media", lambda *_: "media123")
 
     with client.session_transaction() as sess:
         sess["user"] = "tester"
@@ -179,6 +182,7 @@ def test_send_audio_renames_to_ogg_when_conversion_fails(tmp_path, client, monke
         return True, None
 
     monkeypatch.setattr(chat_routes, "enviar_mensaje", fake_send)
+    monkeypatch.setattr(chat_routes, "subir_media", lambda *_: "media123")
 
     with client.session_transaction() as sess:
         sess["user"] = "tester"
