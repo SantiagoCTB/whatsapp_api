@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import argparse
+import glob
 import os
 import shutil
 import subprocess
@@ -41,9 +42,41 @@ def _parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def _ensure_tools_available():
-    if not shutil.which("mysqldump"):
-        raise RuntimeError("No se encontró 'mysqldump' en el PATH; instala el cliente de MySQL para continuar.")
+def _ensure_tools_available() -> str:
+    """Return the path to ``mysqldump`` or raise an informative error.
+
+    On Windows hosts we frequently have MySQL Server installed but its binaries
+    are not added to ``PATH``. To avoid spurious failures during deployments,
+    we look in a few common locations and also allow overriding the executable
+    path with the ``MYSQLDUMP_PATH`` environment variable.
+    """
+
+    candidates = []
+
+    # Highest priority: explicit override
+    override = os.getenv("MYSQLDUMP_PATH")
+    if override:
+        candidates.append(override)
+
+    # PATH lookup
+    found = shutil.which("mysqldump")
+    if found:
+        candidates.append(found)
+
+    # Typical Windows installation folders (different versions)
+    for base in filter(None, [os.getenv("ProgramFiles"), os.getenv("ProgramFiles(x86)")]):
+        mysql_root = Path(base) / "MySQL"
+        for exe in glob.glob(str(mysql_root / "MySQL Server*" / "bin" / "mysqldump.exe")):
+            candidates.append(exe)
+
+    for path in candidates:
+        if Path(path).is_file():
+            return path
+
+    raise RuntimeError(
+        "No se encontró 'mysqldump'. Instala el cliente de MySQL o define la "
+        "variable MYSQLDUMP_PATH apuntando al ejecutable."
+    )
 
 
 def _resolve_backup_root(args: argparse.Namespace) -> Path:
@@ -101,7 +134,7 @@ def _collect_database_sources(Config, tenants) -> Iterable[DatabaseSource]:
     return seen.values()
 
 
-def _dump_database(label: str, settings, backup_root: Path) -> Path:
+def _dump_database(label: str, settings, backup_root: Path, mysqldump_exe: str) -> Path:
     if not all([settings.host, settings.user, settings.name]):
         raise RuntimeError(f"Credenciales incompletas para la base '{label}'.")
 
@@ -116,7 +149,7 @@ def _dump_database(label: str, settings, backup_root: Path) -> Path:
         env["MYSQL_PWD"] = str(settings.password)
 
     cmd = [
-        "mysqldump",
+        mysqldump_exe,
         f"-h{settings.host}",
         f"-P{settings.port}",
         f"-u{settings.user}",
@@ -141,7 +174,7 @@ def _dump_database(label: str, settings, backup_root: Path) -> Path:
 
 def main():
     args = _parse_args()
-    _ensure_tools_available()
+    mysqldump_exe = _ensure_tools_available()
 
     Config, db, tenants = _load_dependencies(args.env_file)
 
@@ -154,7 +187,7 @@ def main():
     sources = _collect_database_sources(Config, tenants)
     for label, settings in sources:
         print(f"{tag}Respaldando base '{settings.name}' (origen: {label})...")
-        path = _dump_database(label, settings, backup_root)
+        path = _dump_database(label, settings, backup_root, mysqldump_exe)
         print(f"{tag}✔ Respaldo creado en {path}")
 
 
