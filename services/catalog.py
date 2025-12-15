@@ -133,7 +133,24 @@ def ingest_catalog_pdf(pdf_path: str, stored_pdf_name: str) -> list[CatalogPage]
 def find_relevant_pages(query: str, limit: int = 3) -> List[CatalogPage]:
     """Busca páginas relevantes en el catálogo para un prompt dado."""
 
+    active_tenant = tenants.get_active_tenant_key(include_default=False)
     results = search_catalog_pages(query, limit=limit)
+
+    if results:
+        logger.debug(
+            "Páginas de catálogo encontradas para IA",
+            extra={
+                "tenant": active_tenant,
+                "page_numbers": [r.get("page_number") for r in results],
+                "pdfs": [r.get("pdf_filename") for r in results],
+                "source_tenants": [r.get("tenant_key") for r in results],
+            },
+        )
+    else:
+        logger.warning(
+            "Sin coincidencias en catálogo para el prompt dado",
+            extra={"tenant": active_tenant, "query": query[:120]},
+        )
     return [
         CatalogPage(
             page_number=row["page_number"],
