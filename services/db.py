@@ -895,8 +895,15 @@ def obtener_ultimo_mensaje_cliente(numero):
     return (row[0] or "").strip() if row else ""
 
 
-def replace_catalog_pages(pdf_filename: str, pages: list, *, media_root: str | None = None):
-    """Reemplaza todas las páginas indexadas del catálogo con el PDF indicado."""
+def replace_catalog_pages(
+    pdf_filename: str, pages, *, media_root: str | None = None, batch_size: int = 100
+):
+    """Reemplaza todas las páginas indexadas del catálogo con el PDF indicado.
+
+    Admite iterables o generadores de páginas para evitar cargar catálogos
+    completos en memoria. Inserta por lotes para reducir la presión sobre la
+    base de datos en catálogos muy extensos.
+    """
 
     conn = get_connection()
     c = conn.cursor()
@@ -911,19 +918,41 @@ def replace_catalog_pages(pdf_filename: str, pages: list, *, media_root: str | N
                     except OSError:
                         continue
 
+        buffer = []
         for page in pages:
-            c.execute(
+            buffer.append(
+                (
+                    pdf_filename,
+                    page.page_number
+                    if hasattr(page, "page_number")
+                    else page.get("page_number"),
+                    page.text_content
+                    if hasattr(page, "text_content")
+                    else page.get("text_content"),
+                    page.image_filename
+                    if hasattr(page, "image_filename")
+                    else page.get("image_filename"),
+                )
+            )
+            if len(buffer) >= batch_size:
+                c.executemany(
+                    """
+                    INSERT INTO ia_catalog_pages
+                        (pdf_filename, page_number, text_content, image_filename)
+                    VALUES (%s, %s, %s, %s)
+                    """,
+                    buffer,
+                )
+                buffer.clear()
+
+        if buffer:
+            c.executemany(
                 """
                 INSERT INTO ia_catalog_pages
                     (pdf_filename, page_number, text_content, image_filename)
                 VALUES (%s, %s, %s, %s)
                 """,
-                (
-                    pdf_filename,
-                    page.page_number if hasattr(page, "page_number") else page.get("page_number"),
-                    page.text_content if hasattr(page, "text_content") else page.get("text_content"),
-                    page.image_filename if hasattr(page, "image_filename") else page.get("image_filename"),
-                ),
+                buffer,
             )
         conn.commit()
     finally:

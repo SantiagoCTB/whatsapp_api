@@ -48,54 +48,79 @@ def _sanitize_text(text: str) -> str:
     return text
 
 
+def _page_zoom_matrix(page: "fitz.Page", max_dim: int = 2000) -> "fitz.Matrix":
+    """Calcula una matriz de zoom que evita imágenes gigantes.
+
+    Para catálogos con páginas muy grandes el factor de zoom fijo podía generar
+    bitmaps de varios cientos de MB y agotar la memoria. Se limita la dimensión
+    máxima a ``max_dim`` píxeles manteniendo la proporción.
+    """
+
+    # Evita división por cero en documentos malformados.
+    width = max(page.rect.width, 1)
+    height = max(page.rect.height, 1)
+    scale = min(max_dim / width, max_dim / height, 2.0)
+    # Si el PDF es pequeño se mantiene la resolución original o se sube hasta
+    # un factor de 2x; en páginas gigantes se reduce para proteger la memoria.
+    scale = max(scale, 0.2)
+    return fitz.Matrix(scale, scale)
+
+
 def ingest_catalog_pdf(pdf_path: str, stored_pdf_name: str) -> list[CatalogPage]:
     """Procesa el PDF y devuelve una lista de páginas con texto e imagen.
 
     - Extrae el texto de cada página usando PyMuPDF (que puede realizar OCR
       embebido en la librería si el PDF no tiene texto reconocible).
     - Genera una imagen PNG por página y la guarda en ``static/uploads/ia_pages``.
+    - Inserta las páginas de forma incremental para evitar desbordes de memoria
+      con catálogos muy grandes. Devuelve una lista vacía para mantener la firma
+      pública sin acumular todas las páginas en memoria.
     """
 
     if fitz is None:
         raise RuntimeError("PyMuPDF (fitz) no está instalado.")
 
     pages_dir = _pages_root()
-    pages: list[CatalogPage] = []
     pdf_path_obj = Path(pdf_path)
     base_name = pdf_path_obj.stem or stored_pdf_name
 
     logger.info("Procesando catálogo PDF para IA", extra={"pdf": pdf_path})
 
     doc = fitz.open(pdf_path)
-    try:
-        zoom_matrix = fitz.Matrix(2, 2)
+    page_counter = {"total": 0}
+
+    def _page_iterator():
         for page in doc:
             number = page.number + 1
             text = _sanitize_text(page.get_text("text") or "")
             if not text:
                 text = _sanitize_text(page.get_text("blocks") or "")
 
+            zoom_matrix = _page_zoom_matrix(page)
             pix = page.get_pixmap(matrix=zoom_matrix, alpha=False)
             image_name = f"{base_name}_p{number}.png"
             image_path = os.path.join(pages_dir, image_name)
             pix.save(image_path)
 
-            pages.append(
-                CatalogPage(
-                    page_number=number,
-                    text_content=text,
-                    image_filename=image_name,
-                    pdf_filename=stored_pdf_name,
-                )
+            page_counter["total"] += 1
+            yield CatalogPage(
+                page_number=number,
+                text_content=text,
+                image_filename=image_name,
+                pdf_filename=stored_pdf_name,
             )
+
+    try:
+        replace_catalog_pages(stored_pdf_name, _page_iterator(), media_root=_media_root())
     finally:
         doc.close()
 
-    replace_catalog_pages(stored_pdf_name, pages, media_root=_media_root())
     logger.info(
-        "Catálogo indexado: %d páginas almacenadas", len(pages), extra={"pdf": stored_pdf_name}
+        "Catálogo indexado: %d páginas almacenadas",
+        page_counter["total"],
+        extra={"pdf": stored_pdf_name},
     )
-    return pages
+    return []
 
 
 def find_relevant_pages(query: str, limit: int = 3) -> List[CatalogPage]:
