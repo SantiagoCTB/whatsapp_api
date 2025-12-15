@@ -31,8 +31,7 @@ def _get_runtime_env():
     env = tenants.get_current_tenant_env()
     token = env.get("META_TOKEN") or Config.META_TOKEN
     phone_id = env.get("PHONE_NUMBER_ID") or Config.PHONE_NUMBER_ID
-    media_root = env.get("MEDIA_ROOT") or Config.MEDIA_ROOT
-    os.makedirs(media_root, exist_ok=True)
+    media_root = tenants.get_media_root()
     return {
         "token": token,
         "phone_id": phone_id,
@@ -269,7 +268,11 @@ def enviar_mensaje(
     elif tipo_respuesta == 'audio':
         if opciones and os.path.isfile(opciones):
             filename   = os.path.basename(opciones)
-            public_url = url_for('static', filename=f'uploads/{filename}', _external=True)
+            public_url = url_for(
+                'static',
+                filename=tenants.get_uploads_url_path(filename),
+                _external=True,
+            )
             audio_obj  = {"link": public_url}
         else:
             audio_obj = {"link": opciones}
@@ -285,7 +288,11 @@ def enviar_mensaje(
     elif tipo_respuesta == 'video':
         if opciones and os.path.isfile(opciones):
             filename   = os.path.basename(opciones)
-            public_url = url_for('static', filename=f'uploads/{filename}', _external=True)
+            public_url = url_for(
+                'static',
+                filename=tenants.get_uploads_url_path(filename),
+                _external=True,
+            )
             video_obj  = {"link": public_url}
         else:
             video_obj  = {"link": opciones}
@@ -754,7 +761,11 @@ def get_media_url(media_id):
     with open(path, "wb") as f:
         f.write(resp2.content)
 
-    return url_for("static", filename=f"uploads/{filename}", _external=True)
+    return url_for(
+        "static",
+        filename=tenants.get_uploads_url_path(filename),
+        _external=True,
+    )
 
 def subir_media(ruta_archivo):
     mime_type, _ = mimetypes.guess_type(ruta_archivo)

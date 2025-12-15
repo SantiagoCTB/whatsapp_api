@@ -45,22 +45,7 @@ EXCLUDED_FLOW_FIELDS = {"flow_token"}
 
 
 def _media_root():
-    # Evita rutas vacías o inválidas que impidan servir los medios estáticos.
-    root = tenants.get_runtime_setting("MEDIA_ROOT", default=Config.MEDIA_ROOT)
-    if not root:
-        root = Config.MEDIA_ROOT
-
-    root = os.path.abspath(root)
-    static_root = os.path.abspath(os.path.join(Config.BASEDIR, "static"))
-
-    # Si el directorio configurado está fuera de ``static`` no se podrá servir
-    # vía ``url_for('static', ...)``. Forzamos el directorio estándar para que
-    # la URL pública y el archivo físico siempre apunten al mismo lugar.
-    if os.path.commonpath([root, static_root]) != static_root:
-        root = Config.MEDIA_ROOT
-
-    os.makedirs(root, exist_ok=True)
-    return root
+    return tenants.get_media_root()
 
 
 def _media_path(filename: str):
@@ -1093,7 +1078,11 @@ def send_image():
     img.save(path)
 
     # URL pública
-    image_url = url_for('static', filename=f'uploads/{unique}', _external=True)
+    image_url = url_for(
+        'static',
+        filename=tenants.get_uploads_url_path(unique),
+        _external=True,
+    )
 
     # Envía la imagen por la API
     tipo_envio = 'bot_image' if origen == 'bot' else 'asesor'
@@ -1145,7 +1134,11 @@ def send_document():
     path     = _media_path(unique)
     document.save(path)
 
-    doc_url = url_for('static', filename=f'uploads/{unique}', _external=True)
+    doc_url = url_for(
+        'static',
+        filename=tenants.get_uploads_url_path(unique),
+        _external=True,
+    )
 
     success, error_reason = enviar_mensaje(
         numero,
@@ -1238,7 +1231,11 @@ def send_audio():
         else:
             send_as_document = True
 
-    audio_url = url_for('static', filename=f'uploads/{unique}', _external=True)
+    audio_url = url_for(
+        'static',
+        filename=tenants.get_uploads_url_path(unique),
+        _external=True,
+    )
 
     # Envía el audio por la API
     tipo_envio = 'bot_audio' if origen == 'bot' else 'asesor'
