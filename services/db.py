@@ -1022,15 +1022,14 @@ def search_catalog_pages(
     """
 
     tokens = [t for t in re.split(r"\W+", (query or "").lower()) if len(t) > 2]
-    if not tokens:
-        logger.debug("Búsqueda de catálogo ignorada: sin tokens", extra={"query": query})
-        return []
 
     active_tenant = tenant_key if tenant_key is not None else get_current_tenant_key()
     default_tenant = (Config.DEFAULT_TENANT or "").strip() or None
     tenant_candidates: list[str | None] = [active_tenant]
     if fallback_to_default and default_tenant and default_tenant not in tenant_candidates:
         tenant_candidates.append(default_tenant)
+
+    rows_cache: list[tuple[str | None, list[tuple]]] = []
 
     def _fetch_rows(target_tenant: str | None):
         conn = get_connection()
@@ -1042,6 +1041,7 @@ def search_catalog_pages(
                     SELECT pdf_filename, page_number, text_content, keywords, image_filename
                       FROM ia_catalog_pages
                      WHERE tenant_key=%s
+                     ORDER BY page_number ASC
                     """,
                     (target_tenant,),
                 )
@@ -1051,14 +1051,51 @@ def search_catalog_pages(
                     SELECT pdf_filename, page_number, text_content, keywords, image_filename
                       FROM ia_catalog_pages
                      WHERE tenant_key IS NULL
+                     ORDER BY page_number ASC
                     """,
                 )
             return c.fetchall()
         finally:
             conn.close()
 
+    def _fallback_rows():
+        for candidate, rows in rows_cache:
+            if not rows:
+                continue
+            logger.info(
+                "Catálogo IA: sin coincidencias exactas, usando páginas sugeridas",
+                extra={"tenant": candidate, "tokens": tokens, "rows": len(rows)},
+            )
+            return [
+                {
+                    "pdf_filename": pdf_filename,
+                    "page_number": page_number,
+                    "text_content": text_content,
+                    "keywords": keywords,
+                    "image_filename": image_filename,
+                    "score": 0,
+                    "tenant_key": candidate,
+                }
+                for pdf_filename, page_number, text_content, keywords, image_filename in rows[:limit]
+            ]
+        return []
+
+    if not tokens:
+        logger.debug("Búsqueda de catálogo sin tokens, usando sugerencias", extra={"query": query})
+        for candidate in tenant_candidates:
+            rows_cache.append((candidate, _fetch_rows(candidate)))
+        fallback = _fallback_rows()
+        if fallback:
+            return fallback
+        logger.warning(
+            "No hay páginas de catálogo disponibles para sugerir",
+            extra={"tenant": active_tenant, "tokens": tokens},
+        )
+        return []
+
     for idx, candidate in enumerate(tenant_candidates):
         rows = _fetch_rows(candidate)
+        rows_cache.append((candidate, rows))
         scored = []
         for pdf_filename, page_number, text_content, keywords, image_filename in rows:
             text_lower = (text_content or "").lower()
@@ -1096,6 +1133,10 @@ def search_catalog_pages(
             "Catálogo IA sin coincidencias",
             extra={"tenant": candidate, "tokens": tokens, "rows": len(rows)},
         )
+
+    fallback_rows = _fallback_rows()
+    if fallback_rows:
+        return fallback_rows
 
     logger.warning(
         "No se encontraron coincidencias en ningún catálogo disponible",
