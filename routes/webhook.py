@@ -35,6 +35,7 @@ webhook_bp = Blueprint('webhook', __name__)
 logger = logging.getLogger(__name__)
 
 DEFAULT_FALLBACK_TEXT = "No entendí tu respuesta, intenta de nuevo."
+default_env = tenants.get_tenant_env(None)
 
 # Mapa numero -> lista de textos recibidos para procesar tras un delay
 message_buffer     = {}
@@ -67,9 +68,11 @@ def _get_session_timeout_message():
 
 
 # Valores por defecto expuestos para compatibilidad con pruebas/llamadas externas.
-SESSION_TIMEOUT = Config.SESSION_TIMEOUT
-SESSION_TIMEOUT_MESSAGE = Config.SESSION_TIMEOUT_MESSAGE
-VERIFY_TOKEN = Config.VERIFY_TOKEN
+SESSION_TIMEOUT = default_env.get("SESSION_TIMEOUT") or Config.SESSION_TIMEOUT
+SESSION_TIMEOUT_MESSAGE = (
+    default_env.get("SESSION_TIMEOUT_MESSAGE") or Config.SESSION_TIMEOUT_MESSAGE
+)
+VERIFY_TOKEN = default_env.get("VERIFY_TOKEN") or Config.VERIFY_TOKEN
 
 
 def clear_chat_runtime_state(numero: str):
