@@ -45,7 +45,11 @@ EXCLUDED_FLOW_FIELDS = {"flow_token"}
 
 
 def _media_root():
+    # Evita rutas vacías o inválidas que impidan servir los medios estáticos.
     root = tenants.get_runtime_setting("MEDIA_ROOT", default=Config.MEDIA_ROOT)
+    if not root:
+        root = Config.MEDIA_ROOT
+    root = os.path.abspath(root)
     os.makedirs(root, exist_ok=True)
     return root
 
