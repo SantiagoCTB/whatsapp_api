@@ -46,6 +46,8 @@ TENANT_ENV_KEYS = {
     "MEDIA_ROOT",
     "SESSION_TIMEOUT",
     "SESSION_TIMEOUT_MESSAGE",
+    "IA_API_TOKEN",
+    "IA_MODEL",
     "IA_SYSTEM_MESSAGE",
     "IA_HISTORY_LIMIT",
 }
@@ -81,6 +83,8 @@ def _default_tenant_env() -> dict:
         "MEDIA_ROOT": Config.MEDIA_ROOT,
         "SESSION_TIMEOUT": Config.SESSION_TIMEOUT,
         "SESSION_TIMEOUT_MESSAGE": Config.SESSION_TIMEOUT_MESSAGE,
+        "IA_API_TOKEN": Config.IA_API_TOKEN,
+        "IA_MODEL": Config.IA_MODEL,
         "IA_SYSTEM_MESSAGE": Config.IA_SYSTEM_MESSAGE,
         "IA_HISTORY_LIMIT": Config.IA_HISTORY_LIMIT,
     }
