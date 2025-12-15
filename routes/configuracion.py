@@ -1,15 +1,21 @@
-from datetime import datetime
+import importlib.util
+import json
 import logging
 import os
 import re
 import uuid
-import requests
-import json
+from datetime import datetime
 
+import requests
 from flask import Blueprint, render_template, request, redirect, session, url_for, jsonify
-from mysql.connector import Error as MySQLError
 from openpyxl import load_workbook
 from werkzeug.utils import secure_filename
+
+if importlib.util.find_spec("mysql.connector"):
+    from mysql.connector import Error as MySQLError
+else:  # pragma: no cover - fallback cuando falta el conector
+    class MySQLError(Exception):
+        pass
 
 from config import Config
 from services import tenants

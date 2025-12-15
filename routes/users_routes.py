@@ -1,6 +1,13 @@
-from flask import Blueprint, render_template, request, redirect, url_for, session
-from mysql.connector.errors import IntegrityError
+import importlib.util
+
+from flask import Blueprint, redirect, render_template, request, session, url_for
 from werkzeug.security import generate_password_hash
+
+if importlib.util.find_spec("mysql.connector"):
+    from mysql.connector.errors import IntegrityError
+else:  # pragma: no cover - fallback cuando falta el conector
+    class IntegrityError(Exception):
+        pass
 
 from routes.auth_routes import _password_strength_error
 from services.db import get_connection

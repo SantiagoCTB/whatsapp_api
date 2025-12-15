@@ -1,3 +1,4 @@
+import importlib.util
 import mimetypes
 import os
 import uuid
@@ -7,7 +8,12 @@ import os
 from zoneinfo import ZoneInfo
 from flask import Blueprint, render_template, request, redirect, session, url_for, jsonify
 from werkzeug.utils import secure_filename
-from mysql.connector.errors import ProgrammingError
+
+if importlib.util.find_spec("mysql.connector"):
+    from mysql.connector.errors import ProgrammingError
+else:  # pragma: no cover - fallback cuando no está instalado el conector
+    class ProgrammingError(Exception):
+        pass
 from config import Config
 from services import tenants
 from services.whatsapp_api import (

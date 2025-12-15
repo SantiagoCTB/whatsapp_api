@@ -1,12 +1,33 @@
 import contextvars
+import importlib.util
 import os
 import re
 import sys
 from dataclasses import dataclass
 
-import mysql.connector
-from mysql.connector import errorcode
-from mysql.connector.errors import Error
+if importlib.util.find_spec("mysql.connector"):
+    import mysql.connector
+    from mysql.connector import errorcode
+    from mysql.connector.errors import Error, IntegrityError, ProgrammingError
+    _MYSQL_AVAILABLE = True
+else:  # pragma: no cover - fallback para entornos sin el conector
+    mysql = None  # type: ignore[assignment]
+
+    class _Errorcode:
+        ER_BAD_DB_ERROR = 1049
+
+    errorcode = _Errorcode()
+
+    class Error(Exception):
+        """Error base utilizado cuando no está disponible mysql.connector."""
+
+    class ProgrammingError(Error):
+        """Error de programación genérico de SQL."""
+
+    class IntegrityError(Error):
+        """Error de integridad genérico de SQL."""
+
+    _MYSQL_AVAILABLE = False
 
 from config import Config
 
@@ -117,8 +138,19 @@ def _default_db_settings() -> DatabaseSettings:
 _BASE_DB_SETTINGS = _default_db_settings()
 
 
+def _require_mysql_connector():
+    if _MYSQL_AVAILABLE:
+        return
+    raise RuntimeError(
+        "mysql-connector-python no está instalado; instala la dependencia o "
+        "configura INIT_DB_ON_START=0 para omitir la inicialización de base de datos."
+    )
+
+
 def _create_database_if_missing(db_settings: DatabaseSettings):
     """Create the configured database if it does not exist yet."""
+
+    _require_mysql_connector()
 
     credential_options: list[tuple[str, str | None]] = []
 
@@ -184,6 +216,8 @@ def get_connection(
 ):
     if _should_use_dummy_db():
         return _DummyConnection()
+
+    _require_mysql_connector()
 
     target_settings = _resolve_db_settings(db_settings, allow_tenant_context)
     try:
