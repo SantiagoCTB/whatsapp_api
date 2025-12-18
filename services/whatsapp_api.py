@@ -157,6 +157,15 @@ def enviar_mensaje(
     *,
     return_error=False,
 ):
+    def _result(success, reason=None):
+        if return_error:
+            return success, reason
+        return success
+
+    def _fail(reason=None):
+        stop_typing_feedback(numero)
+        return _result(False, reason)
+
     try:
         runtime = _get_runtime_env()
     except RuntimeError as exc:
@@ -169,15 +178,6 @@ def enviar_mensaje(
         "Content-Type": "application/json"
     }
     media_link = None
-
-    def _result(success, reason=None):
-        if return_error:
-            return success, reason
-        return success
-
-    def _fail(reason=None):
-        stop_typing_feedback(numero)
-        return _result(False, reason)
 
     if tipo_respuesta == 'texto':
         data = {
