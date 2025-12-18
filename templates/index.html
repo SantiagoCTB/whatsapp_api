@@ -100,6 +100,8 @@
     document.addEventListener('DOMContentLoaded', () => {
       let currentChat = null, autoRefresh = null, todosChats = [], lastCount = 0, replyTo = null;
       let lastIncomingWaId = null;
+      let messagesRequestSeq = 0;
+      let lastRenderedMessagesSeq = 0;
       let typingSignalTimeout = null;
       let lastTypingSent = 0;
       const TYPING_SIGNAL_THROTTLE = 2500;
@@ -1234,7 +1236,7 @@
       // Cargar lista de chats
       function fetchChatList() {
         hideChatContextMenu();
-        fetch('/get_chat_list')
+        fetch('/get_chat_list', { cache: 'no-store' })
           .then(r=>r.json())
           .then(data=>{
             const getTimestamp = ts => ts ? new Date(ts).getTime() : 0;
@@ -1345,16 +1347,20 @@
         const mediaEls = chatBoxEl.querySelectorAll('audio, video');
         for (let m of mediaEls) if (!m.paused) return;
 
-        fetch(`/get_chat/${currentChat}`)
+        const requestId = ++messagesRequestSeq;
+        fetch(`/get_chat/${currentChat}`, { cache: 'no-store' })
           .then(r=>r.json())
           .then(data => {
+            if (requestId < lastRenderedMessagesSeq) return;
+            lastRenderedMessagesSeq = requestId;
             const msgs = data.mensajes, total = msgs.length;
             const atBottom = chatBoxEl.scrollTop + chatBoxEl.clientHeight >= chatBoxEl.scrollHeight - 5;
-            if (lastCount===0 || total<lastCount) {
-              chatBoxEl.innerHTML = ''; lastCount = 0;
-            }
+            const previousCount = lastCount;
+            const previousIncoming = lastIncomingWaId;
+            chatBoxEl.innerHTML = '';
+            lastCount = 0;
             let newestIncoming = lastIncomingWaId;
-            for (let i=lastCount; i<total; i++){
+            for (let i=0; i<total; i++){
               const [txt, tipo, url, ts, linkUrl, linkTitle, linkBody, linkThumb,
                      waId, replyWaId, replyId, replyText, replyTipo, replyUrl,
                      flowName, flowJson, flowSegments] = msgs[i];
@@ -1468,7 +1474,7 @@
 
               chatBoxEl.appendChild(div);
 
-              if (lastCount > 0 && bubble !== 'asesor') {
+              if (lastCount > 0 && bubble !== 'asesor' && previousCount > 0 && (waId !== previousIncoming)) {
                 const mediaPlaying = Array.from(chatBoxEl.querySelectorAll('audio, video')).some(m => !m.paused);
                 if (!mediaPlaying) playAlertSound();
               }
