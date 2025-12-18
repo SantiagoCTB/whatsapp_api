@@ -801,6 +801,9 @@ def send_message():
     c    = conn.cursor()
 
     roles = session.get('roles') or []
+    single_role = session.get('rol')
+    if not roles and single_role:
+        roles = [single_role]
     if isinstance(roles, str):
         roles = [roles]
 
@@ -861,6 +864,9 @@ def get_chat_list():
     c    = conn.cursor()
 
     roles = session.get('roles') or []
+    single_role = session.get('rol')
+    if not roles and single_role:
+        roles = [single_role]
     if isinstance(roles, str):
         roles = [roles]
 
