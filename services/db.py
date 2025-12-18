@@ -1012,13 +1012,13 @@ def search_catalog_pages(
     limit: int = 3,
     *,
     tenant_key: str | None = None,
-    fallback_to_default: bool = True,
+    fallback_to_default: bool = False,
 ):
     """Busca páginas del catálogo que coincidan con el texto proporcionado.
 
-    Si el tenant actual no tiene catálogo indexado, puede intentar con el
-    ``DEFAULT_TENANT`` para evitar que las consultas fallen silenciosamente en
-    entornos multi-tenant mal configurados.
+    Solo consulta el catálogo del tenant indicado (o el activo en contexto).
+    El ``DEFAULT_TENANT`` ya no se usa como respaldo automático para evitar
+    mezclar datos entre empresas.
     """
 
     tokens = [t for t in re.split(r"\W+", (query or "").lower()) if len(t) > 2]
