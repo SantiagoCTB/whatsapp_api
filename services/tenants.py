@@ -76,10 +76,10 @@ def _deserialize_metadata(raw):
     return {}
 
 
-def _default_tenant_env() -> dict:
-    return {
-        "META_TOKEN": Config.META_TOKEN,
-        "PHONE_NUMBER_ID": Config.PHONE_NUMBER_ID,
+def _default_tenant_env(*, include_legacy_credentials: bool = False) -> dict:
+    env = {
+        "META_TOKEN": None,
+        "PHONE_NUMBER_ID": None,
         "SECRET_KEY": Config.SECRET_KEY,
         "VERIFY_TOKEN": Config.VERIFY_TOKEN,
         "MEDIA_ROOT": Config.MEDIA_ROOT,
@@ -90,6 +90,14 @@ def _default_tenant_env() -> dict:
         "IA_SYSTEM_MESSAGE": Config.IA_SYSTEM_MESSAGE,
         "IA_HISTORY_LIMIT": Config.IA_HISTORY_LIMIT,
     }
+
+    if include_legacy_credentials:
+        env.update({
+            "META_TOKEN": Config.META_TOKEN,
+            "PHONE_NUMBER_ID": Config.PHONE_NUMBER_ID,
+        })
+
+    return env
 
 
 def _coerce_env_value(key: str, value):
@@ -165,8 +173,23 @@ def _tenant_has_env_value(tenant: TenantInfo, key: str, expected: str | None) ->
     return str(value).strip() == str(expected).strip()
 
 
-def get_tenant_env(tenant: TenantInfo | None = None) -> dict:
-    base_env = _default_tenant_env()
+def get_tenant_env(
+    tenant: TenantInfo | None = None, *, include_legacy_credentials: bool | None = None
+) -> dict:
+    """Devuelve el entorno efectivo de un tenant.
+
+    - Para tenants explícitos no se incluyen credenciales globales (META_TOKEN,
+      PHONE_NUMBER_ID) para evitar que distintas empresas compartan tokens por
+      accidente.
+    - Cuando ``tenant`` es ``None`` (modo legacy single-tenant), se habilita la
+      inclusión opcional de las credenciales globales si ``include_legacy_credentials``
+      es ``True`` o se deja en ``None`` (valor por defecto).
+    """
+
+    if include_legacy_credentials is None:
+        include_legacy_credentials = tenant is None
+
+    base_env = _default_tenant_env(include_legacy_credentials=include_legacy_credentials)
     if not tenant:
         return base_env
 
@@ -249,7 +272,13 @@ def find_tenant_by_phone_number_id(phone_number_id: str | None) -> TenantInfo | 
         return None
 
     for tenant in list_tenants(force_reload=True):
-        if _tenant_has_env_value(tenant, "PHONE_NUMBER_ID", phone_number_id):
+        # Forzamos las credenciales específicas del tenant para evitar matches
+        # por valores globales heredados.
+        if _tenant_has_env_value(
+            tenant,
+            "PHONE_NUMBER_ID",
+            phone_number_id,
+        ):
             return tenant
 
     return None
