@@ -867,6 +867,23 @@ def process_buffered_messages(numero):
     if not entries:
         return
 
+    def _apply_tenant_context(entry):
+        tenant_key = entry.get("tenant_key") if isinstance(entry, dict) else None
+        tenant_env = entry.get("tenant_env") if isinstance(entry, dict) else None
+
+        tenants.clear_current_tenant()
+
+        if tenant_key:
+            tenant = tenants.get_tenant(tenant_key)
+            if tenant:
+                tenants.set_current_tenant(tenant)
+                return
+
+        if tenant_env:
+            tenants.set_current_tenant_env(tenant_env)
+        else:
+            tenants.set_current_tenant_env(tenants.get_tenant_env(None))
+
     state_row = get_chat_state(numero)
     if _is_agent_mode(state_row):
         step = state_row[0] if state_row else None
@@ -892,11 +909,15 @@ def process_buffered_messages(numero):
         if not normalized_text:
             continue
 
+        _apply_tenant_context(entry)
+
         handle_text_message(
             numero,
             raw_text if raw_text else normalized_text,
             save=False,
         )
+
+    tenants.clear_current_tenant()
 
 @webhook_bp.route('/webhook', methods=['GET', 'POST'])
 def webhook():
@@ -1138,9 +1159,17 @@ def webhook():
                         summary['processed'] += 1
                         continue
                     start_typing_feedback(from_number, wa_id)
+                    current_tenant = tenants.get_current_tenant()
+                    tenant_env = dict(tenants.get_current_tenant_env() or {})
+
                     with cache_lock:
                         message_buffer.setdefault(from_number, []).append(
-                            {'raw': text, 'normalized': normalized_text}
+                            {
+                                'raw': text,
+                                'normalized': normalized_text,
+                                'tenant_key': current_tenant.tenant_key if current_tenant else None,
+                                'tenant_env': tenant_env,
+                            }
                         )
                         if from_number in pending_timers:
                             pending_timers[from_number].cancel()
@@ -1201,9 +1230,17 @@ def webhook():
                                 continue
                             start_typing_feedback(from_number, wa_id)
                             normalized_text = normalize_text(text)
+                            current_tenant = tenants.get_current_tenant()
+                            tenant_env = dict(tenants.get_current_tenant_env() or {})
+
                             with cache_lock:
                                 message_buffer.setdefault(from_number, []).append(
-                                    {'raw': text, 'normalized': normalized_text}
+                                    {
+                                        'raw': text,
+                                        'normalized': normalized_text,
+                                        'tenant_key': current_tenant.tenant_key if current_tenant else None,
+                                        'tenant_env': tenant_env,
+                                    }
                                 )
                                 if from_number in pending_timers:
                                     pending_timers[from_number].cancel()
