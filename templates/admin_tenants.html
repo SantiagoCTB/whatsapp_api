@@ -165,7 +165,12 @@
           <label>IA_SYSTEM_MESSAGE
             <textarea name="IA_SYSTEM_MESSAGE" rows="3" placeholder="Mensaje de sistema para el modelo de IA">{{ tenant_env.get('IA_SYSTEM_MESSAGE','') }}</textarea>
           </label>
-          <p class="help">Deja un campo vacío para usar el valor global por defecto.</p>
+          <p class="help">
+            Las credenciales de WhatsApp (PHONE_NUMBER_ID y META_TOKEN) se guardan por
+            empresa; deja los campos vacíos solo si todavía no tienes los datos para
+            este tenant. Ya no se comparten valores del <code>.env</code> entre
+            empresas.
+          </p>
           <button type="submit" class="btn primary">Guardar variables</button>
         </form>
       </div>

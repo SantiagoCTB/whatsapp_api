@@ -124,13 +124,18 @@ def create_app():
                     )
 
         if not tenant_key:
-            # Modo legacy (single-tenant): no se exige encabezado ni tenant
-            # por defecto. Se usa la base configurada en DB_*.
-            g.tenant = None
-            tenants.clear_current_tenant()
-            tenants.set_current_tenant_env(tenants.get_tenant_env(None))
-            session.pop("tenant", None)
-            return
+            auto_tenant = tenants.auto_select_single_tenant()
+            if auto_tenant:
+                tenant_key = auto_tenant.tenant_key
+                tenant = auto_tenant
+            else:
+                # Modo legacy (single-tenant): no se exige encabezado ni tenant
+                # por defecto. Se usa la base configurada en DB_*.
+                g.tenant = None
+                tenants.clear_current_tenant()
+                tenants.set_current_tenant_env(tenants.get_tenant_env(None))
+                session.pop("tenant", None)
+                return
 
         try:
             if header_key or query_key:
