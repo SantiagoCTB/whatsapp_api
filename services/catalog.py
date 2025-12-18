@@ -219,14 +219,41 @@ def ingest_catalog_pdf(pdf_path: str, stored_pdf_name: str) -> list[CatalogPage]
 
 
 def find_relevant_pages(query: str, limit: int = 3) -> List[CatalogPage]:
-    """Busca páginas relevantes en el catálogo para un prompt dado."""
+    """Busca páginas relevantes en el catálogo para un prompt dado.
+
+    Prioriza el catálogo del tenant activo, pero si no hay coincidencias
+    intenta un segundo pase contra el catálogo sin tenant (o el default)
+    para evitar respuestas vacías cuando el PDF se indexó fuera de contexto.
+    """
 
     active_tenant = tenants.get_active_tenant_key(include_default=False)
     default_tenant = (Config.DEFAULT_TENANT or "").strip() or None
 
-    # Solo consultamos el catálogo del tenant actual; si no hay tenant en
-    # contexto, se usa el DEFAULT_TENANT configurado para mantener el modo
-    # single-tenant sin contaminar datos entre empresas.
+    def _hydrate(rows: list[dict]) -> list[CatalogPage]:
+        hydrated: list[CatalogPage] = []
+        for row in rows:
+            text = row.get("text_content") or ""
+            keywords = row.get("keywords") if isinstance(row, dict) else None
+            if (not text or not keywords) and row.get("image_filename"):
+                image_path = os.path.join(_pages_root(), row["image_filename"])
+                ocr_text = _perform_ocr_from_image(image_path)
+                if ocr_text:
+                    text = text or ocr_text
+                    keywords = keywords or _extract_keywords(ocr_text)
+
+            hydrated.append(
+                CatalogPage(
+                    page_number=row["page_number"],
+                    text_content=text,
+                    image_filename=row.get("image_filename") or "",
+                    keywords=keywords,
+                    pdf_filename=row.get("pdf_filename"),
+                )
+            )
+
+        return hydrated
+
+    # 1) Tenant activo (o default si no hay activo)
     target_tenant = active_tenant or default_tenant
     results = search_catalog_pages(
         query,
@@ -245,31 +272,30 @@ def find_relevant_pages(query: str, limit: int = 3) -> List[CatalogPage]:
                 "source_tenants": [r.get("tenant_key") for r in results],
             },
         )
-    else:
-        logger.warning(
-            "Sin coincidencias en catálogo para el prompt dado",
-            extra={"tenant": active_tenant, "query": query[:120]},
+        return _hydrate(results)
+
+    logger.warning(
+        "Sin coincidencias en catálogo para el prompt dado",
+        extra={"tenant": active_tenant, "query": query[:120]},
+    )
+
+    # 2) Fallback controlado: entradas globales o del DEFAULT_TENANT
+    fallback_results = search_catalog_pages(
+        query,
+        limit=limit,
+        tenant_key=None,
+        fallback_to_default=True,
+    )
+
+    if fallback_results:
+        logger.info(
+            "Catálogo IA: usando fallback sin tenant para evitar respuestas vacías",
+            extra={
+                "tenant": active_tenant,
+                "tokens": query[:120],
+                "source_tenants": [r.get("tenant_key") for r in fallback_results],
+            },
         )
-    hydrated: list[CatalogPage] = []
+        return _hydrate(fallback_results)
 
-    for row in results:
-        text = row.get("text_content") or ""
-        keywords = row.get("keywords") if isinstance(row, dict) else None
-        if (not text or not keywords) and row.get("image_filename"):
-            image_path = os.path.join(_pages_root(), row["image_filename"])
-            ocr_text = _perform_ocr_from_image(image_path)
-            if ocr_text:
-                text = text or ocr_text
-                keywords = keywords or _extract_keywords(ocr_text)
-
-        hydrated.append(
-            CatalogPage(
-                page_number=row["page_number"],
-                text_content=text,
-                image_filename=row.get("image_filename") or "",
-                keywords=keywords,
-                pdf_filename=row.get("pdf_filename"),
-            )
-        )
-
-    return hydrated
+    return []
