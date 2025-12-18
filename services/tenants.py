@@ -255,6 +255,21 @@ def find_tenant_by_phone_number_id(phone_number_id: str | None) -> TenantInfo | 
     return None
 
 
+def auto_select_single_tenant(*, force_reload: bool = False) -> TenantInfo | None:
+    """Devuelve el único tenant registrado si solo existe uno.
+
+    Esto facilita escenarios en los que la app se despliega en modo multiempresa
+    pero aún no se configuró ``DEFAULT_TENANT`` ni se envía el encabezado
+    ``X-Tenant-ID`` desde el frontend. Si no hay tenants o hay más de uno,
+    retorna ``None`` para evitar ambigüedades.
+    """
+
+    tenants_list = list_tenants(force_reload=force_reload)
+    if len(tenants_list) == 1:
+        return tenants_list[0]
+    return None
+
+
 def update_tenant_metadata(tenant_key: str, metadata: Mapping | None) -> TenantInfo:
     tenant = get_tenant(tenant_key)
     if not tenant:
@@ -649,6 +664,7 @@ __all__ = [
     "register_tenant",
     "resolve_tenant_from_request",
     "find_tenant_by_phone_number_id",
+    "auto_select_single_tenant",
     "set_current_tenant",
     "set_current_tenant_env",
     "update_tenant_env",
