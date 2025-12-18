@@ -109,6 +109,76 @@ def test_dispatch_rule_breaks_cycle(monkeypatch, patch_dependencies):
     assert step == 'auto'
 
 
+def test_dispatch_rule_invokes_ai_only_for_ia_rule(monkeypatch, patch_dependencies):
+    responses = {'menu': []}
+    monkeypatch.setattr(
+        webhook_module,
+        'get_connection',
+        lambda: DummyConnection(responses),
+    )
+    monkeypatch.setattr(webhook_module, 'advance_steps', lambda *_, **__: None)
+    monkeypatch.setattr(
+        webhook_module,
+        'obtener_ultimo_mensaje_cliente',
+        lambda *_: 'mensaje cliente',
+    )
+
+    ai_calls = []
+    monkeypatch.setattr(
+        webhook_module,
+        '_reply_with_ai',
+        lambda *args, **kwargs: ai_calls.append((args, kwargs)),
+    )
+
+    regla = (
+        77,
+        'prompt del sistema',
+        'ia',
+        'texto',
+        None,
+        None,
+        None,
+        'ia',
+    )
+
+    webhook_module.dispatch_rule('5215551234', regla, step='menu')
+
+    assert len(ai_calls) == 1
+    assert ai_calls[0][0][0] == '5215551234'
+
+
+def test_dispatch_rule_skips_ai_for_non_ia_rules(monkeypatch, patch_dependencies):
+    responses = {'ia': []}
+    monkeypatch.setattr(
+        webhook_module,
+        'get_connection',
+        lambda: DummyConnection(responses),
+    )
+    monkeypatch.setattr(webhook_module, 'advance_steps', lambda *_, **__: None)
+
+    ai_calls = []
+    monkeypatch.setattr(
+        webhook_module,
+        '_reply_with_ai',
+        lambda *args, **kwargs: ai_calls.append((args, kwargs)),
+    )
+
+    regla = (
+        5,
+        'respuesta normal',
+        'siguiente',
+        'texto',
+        None,
+        None,
+        None,
+        'hola',
+    )
+
+    webhook_module.dispatch_rule('5215554321', regla, step='ia')
+
+    assert ai_calls == []
+    assert patch_dependencies.sent_messages[-1][0] == '5215554321'
+
 def test_advance_steps_unique_chain(monkeypatch, patch_dependencies):
     responses = {
         'intro': [

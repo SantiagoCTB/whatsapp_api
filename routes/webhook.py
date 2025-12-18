@@ -521,7 +521,7 @@ def dispatch_rule(numero, regla, step=None, visited=None, selected_option_id=Non
         visited.add(current_step_norm)
 
     rule_input_norm = normalize_text(input_text or "") if input_text else ""
-    if _is_ia_step(current_step) or rule_input_norm == "ia":
+    if rule_input_norm == "ia":
         _reply_with_ai(numero, obtener_ultimo_mensaje_cliente(numero), system_prompt=resp)
         return
 
