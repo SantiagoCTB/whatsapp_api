@@ -213,10 +213,9 @@ def _catalog_context_for_prompt(prompt: str):
 
     pages = find_relevant_pages(prompt, limit=3)
     if not pages:
-        return "", None
+        return "", []
 
     context_lines: list[str] = []
-    best_page = None
 
     for page in pages:
         snippet = (page.text_content or "").strip()
@@ -224,27 +223,19 @@ def _catalog_context_for_prompt(prompt: str):
             snippet = f"{snippet[:780]}..."
 
         image_rel = ""
-        image_url = ""
         if page.image_filename:
             image_rel = tenants.get_uploads_url_path(f"ia_pages/{page.image_filename}")
-            try:
-                image_url = url_for("static", filename=image_rel, _external=True)
-            except RuntimeError:
-                image_url = f"/static/{image_rel}"  # Fallback si no hay contexto de request
 
         context_lines.append(
-            "- pagina: {page}\n  pdf: {pdf}\n  texto: {texto}\n  imagen_rel: {rel}\n  imagen_url: {url}".format(
+            "- pagina: {page}\n  pdf: {pdf}\n  texto: {texto}\n  imagen_rel: {rel}".format(
                 page=page.page_number,
                 pdf=page.pdf_filename or "catalogo.pdf",
                 texto=snippet,
                 rel=f"/static/{image_rel}" if image_rel else "",
-                url=image_url,
             )
         )
 
-        best_page = best_page or page
-
-    return "\n".join(context_lines), best_page
+    return "\n".join(context_lines), pages
 
 
 def _reply_with_ai(numero: str, user_text: str | None, *, system_prompt: str | None = None) -> bool:
@@ -258,7 +249,7 @@ def _reply_with_ai(numero: str, user_text: str | None, *, system_prompt: str | N
     set_user_step(numero, "ia")
     update_chat_state(numero, "ia", "ia_activa")
     history = obtener_historial_chat(numero, limit=_ia_history_limit(), step="ia")
-    catalog_context, best_page = _catalog_context_for_prompt(prompt)
+    catalog_context, pages = _catalog_context_for_prompt(prompt)
     if not catalog_context:
         logger.warning(
             "Sin contexto de catálogo para la IA; se solicitará más información",
@@ -280,7 +271,7 @@ def _reply_with_ai(numero: str, user_text: str | None, *, system_prompt: str | N
             "Instrucciones para la respuesta:\n"
             "- Responde únicamente con datos del catálogo disponible.\n"
             "- Menciona siempre el número de página y el nombre del PDF al referirte a un producto.\n"
-            "- Si hay una URL de imagen, indica que compartirás la imagen como referencia visual.\n"
+            "- No incluyas enlaces ni imágenes en formato markdown/HTML; indica que compartirás las páginas como referencia visual.\n"
             "- Si no hay coincidencias claras, pide más detalles al usuario sin inventar datos."
         )
 
@@ -290,6 +281,7 @@ def _reply_with_ai(numero: str, user_text: str | None, *, system_prompt: str | N
         return False
 
     snippet_preview = None
+    best_page = pages[0] if pages else None
     if best_page:
         snippet_preview = (best_page.text_content or "").strip()
         if snippet_preview and len(snippet_preview) > 500:
@@ -299,25 +291,35 @@ def _reply_with_ai(numero: str, user_text: str | None, *, system_prompt: str | N
         response = f"{response}\n\nReferencia del catálogo (página {best_page.page_number}): {snippet_preview}"
 
     enviar_mensaje(numero, response, tipo="bot", step="ia")
-    if best_page and best_page.image_filename:
-        image_path = os.path.join(_media_root(), 'ia_pages', best_page.image_filename)
-        if os.path.exists(image_path):
-            image_url = url_for(
-                'static',
-                filename=tenants.get_uploads_url_path(f"ia_pages/{best_page.image_filename}"),
-                _external=True,
-            )
-            caption = f"Referencia del catálogo - página {best_page.page_number}"
-            if snippet_preview:
-                caption = f"{caption}:\n{snippet_preview}"
-            enviar_mensaje(
-                numero,
-                caption,
-                tipo="bot",
-                tipo_respuesta="image",
-                opciones=image_url,
-                step="ia",
-            )
+    for page in pages:
+        if not page.image_filename:
+            continue
+
+        image_path = os.path.join(_media_root(), 'ia_pages', page.image_filename)
+        if not os.path.exists(image_path):
+            continue
+
+        image_url = url_for(
+            'static',
+            filename=tenants.get_uploads_url_path(f"ia_pages/{page.image_filename}"),
+            _external=True,
+        )
+        page_snippet = (page.text_content or "").strip()
+        if page_snippet and len(page_snippet) > 300:
+            page_snippet = f"{page_snippet[:280]}..."
+
+        caption = f"Referencia del catálogo - página {page.page_number}"
+        if page_snippet:
+            caption = f"{caption}:\n{page_snippet}"
+
+        enviar_mensaje(
+            numero,
+            caption,
+            tipo="bot",
+            tipo_respuesta="image",
+            opciones=image_url,
+            step="ia",
+        )
     return True
 
 
