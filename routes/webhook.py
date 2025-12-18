@@ -849,7 +849,7 @@ def handle_text_message(numero: str, texto: str, save: bool = True):
     if handle_global_command(numero, texto):
         return
 
-    if _is_ia_step(get_current_step(numero)):
+    if _is_ia_step(get_current_step(numero)) and not bootstrapped:
         _reply_with_ai(numero, texto)
         return
 
