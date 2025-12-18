@@ -1233,77 +1233,108 @@
         });
       }
 
-      // Cargar lista de chats
-      function fetchChatList() {
+      function renderChatList(data) {
+        const getTimestamp = ts => ts ? new Date(ts).getTime() : 0;
+        data.sort((a, b) => getTimestamp(b.last_timestamp) - getTimestamp(a.last_timestamp));
+        todosChats = data;
+        chatListEl.innerHTML='';
+        data.forEach(c => {
+          const serverTime = c.last_timestamp ? new Date(c.last_timestamp).getTime() : null;
+          const prevTime = lastChatTimestamps[c.numero];
+          if (serverTime && prevTime && serverTime > prevTime && c.numero !== currentChat) {
+            const mediaPlaying = Array.from(document.querySelectorAll('audio, video')).some(m => !m.paused);
+            if (!mediaPlaying) playAlertSound();
+          }
+          if (serverTime) lastChatTimestamps[c.numero] = serverTime;
+          const li = document.createElement('li');
+          li.textContent = c.alias ? `${c.alias} (${c.numero})` : c.numero;
+          if (c.estado === 'sin_regla') {
+            const alertIcon = document.createElement('span');
+            alertIcon.className = 'chat-alert';
+            alertIcon.textContent = '⚠️';
+            alertIcon.title = 'Atención requerida';
+            li.insertBefore(alertIcon, li.firstChild);
+          }
+          if (c.estado) {
+            li.classList.add('estado-' + c.estado);
+            const estadoDef = chatStateDefinitionMap.get(c.estado);
+            if (estadoDef && estadoDef.label) {
+              li.title = `Estado: ${estadoDef.label}`;
+            } else {
+              li.title = `Estado: ${c.estado}`;
+            }
+          } else {
+            li.removeAttribute('title');
+          }
+          if (currentChat && c.numero === currentChat) {
+            li.classList.add('active');
+          }
+
+          // Badges por roles
+          li.querySelectorAll('.badge').forEach(b => b.remove());
+          li.querySelectorAll('.badges').forEach(bc => bc.remove());
+          const badgeContainer = document.createElement('span');
+          badgeContainer.className = 'badges';
+          if (c.roles_kw && c.roles_kw.length) {
+            c.roles_kw.forEach(r => {
+              const badge = document.createElement('span');
+              badge.className = 'badge';
+              badge.textContent = getRoleBadge(r);
+              badgeContainer.appendChild(badge);
+            });
+            li.appendChild(badgeContainer);
+          }
+
+          // Al hacer clic, seleccionar el chat
+          li.onclick = () => {
+            hideChatContextMenu();
+            selectChat(c.numero, li);
+          };
+
+          // Contextual: alias y estado
+          li.addEventListener('contextmenu', e => {
+            e.preventDefault();
+            openChatContextMenu(e, c);
+          });
+
+          chatListEl.appendChild(li);
+        });
+      }
+
+      function fetchChatList(allowRetry = true) {
         hideChatContextMenu();
         fetch('/get_chat_list', { cache: 'no-store' })
-          .then(r=>r.json())
-          .then(data=>{
-            const getTimestamp = ts => ts ? new Date(ts).getTime() : 0;
-            data.sort((a, b) => getTimestamp(b.last_timestamp) - getTimestamp(a.last_timestamp));
-            todosChats = data;
-            chatListEl.innerHTML='';
-            data.forEach(c => {
-              const serverTime = c.last_timestamp ? new Date(c.last_timestamp).getTime() : null;
-              const prevTime = lastChatTimestamps[c.numero];
-              if (serverTime && prevTime && serverTime > prevTime && c.numero !== currentChat) {
-                const mediaPlaying = Array.from(document.querySelectorAll('audio, video')).some(m => !m.paused);
-                if (!mediaPlaying) playAlertSound();
-              }
-              if (serverTime) lastChatTimestamps[c.numero] = serverTime;
-              const li = document.createElement('li');
-              li.textContent = c.alias ? `${c.alias} (${c.numero})` : c.numero;
-              if (c.estado === 'sin_regla') {
-                const alertIcon = document.createElement('span');
-                alertIcon.className = 'chat-alert';
-                alertIcon.textContent = '⚠️';
-                alertIcon.title = 'Atención requerida';
-                li.insertBefore(alertIcon, li.firstChild);
-              }
-              if (c.estado) {
-                li.classList.add('estado-' + c.estado);
-                const estadoDef = chatStateDefinitionMap.get(c.estado);
-                if (estadoDef && estadoDef.label) {
-                  li.title = `Estado: ${estadoDef.label}`;
-                } else {
-                  li.title = `Estado: ${c.estado}`;
-                }
-              } else {
-                li.removeAttribute('title');
-              }
-              if (currentChat && c.numero === currentChat) {
-                li.classList.add('active');
-              }
-
-              // Badges por roles
-              li.querySelectorAll('.badge').forEach(b => b.remove());
-              li.querySelectorAll('.badges').forEach(bc => bc.remove());
-              const badgeContainer = document.createElement('span');
-              badgeContainer.className = 'badges';
-              if (c.roles_kw && c.roles_kw.length) {
-                c.roles_kw.forEach(r => {
-                  const badge = document.createElement('span');
-                  badge.className = 'badge';
-                  badge.textContent = getRoleBadge(r);
-                  badgeContainer.appendChild(badge);
+          .then(resp => {
+            if (!resp.ok) throw new Error(`No se pudo cargar la lista de chats (HTTP ${resp.status})`);
+            return resp.json();
+          })
+          .then(data => {
+            if (!Array.isArray(data)) throw new Error('Respuesta de chats inválida');
+            renderChatList(data);
+          })
+          .catch(err => {
+            console.error('Error al cargar la lista de chats', err);
+            if (allowRetry) {
+              fetch('/get_chat_list')
+                .then(resp => {
+                  if (!resp.ok) throw new Error(`No se pudo cargar la lista de chats (HTTP ${resp.status})`);
+                  return resp.json();
+                })
+                .then(data => {
+                  if (!Array.isArray(data)) throw new Error('Respuesta de chats inválida');
+                  renderChatList(data);
+                })
+                .catch(innerErr => {
+                  console.error('Reintento sin bypass de caché falló', innerErr);
+                  if (chatListEl.children.length === 0 && Array.isArray(todosChats) && todosChats.length) {
+                    renderChatList(todosChats);
+                  }
                 });
-                li.appendChild(badgeContainer);
-              }
-
-              // Al hacer clic, seleccionar el chat
-              li.onclick = () => {
-                hideChatContextMenu();
-                selectChat(c.numero, li);
-              };
-
-              // Contextual: alias y estado
-              li.addEventListener('contextmenu', e => {
-                e.preventDefault();
-                openChatContextMenu(e, c);
-              });
-
-              chatListEl.appendChild(li);
-            });
+              return;
+            }
+            if (chatListEl.children.length === 0 && Array.isArray(todosChats) && todosChats.length) {
+              renderChatList(todosChats);
+            }
           });
       }
 
