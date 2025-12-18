@@ -1350,11 +1350,12 @@
           .then(data => {
             const msgs = data.mensajes, total = msgs.length;
             const atBottom = chatBoxEl.scrollTop + chatBoxEl.clientHeight >= chatBoxEl.scrollHeight - 5;
-            if (lastCount===0 || total<lastCount) {
-              chatBoxEl.innerHTML = ''; lastCount = 0;
-            }
+            const previousCount = lastCount;
+            const previousIncoming = lastIncomingWaId;
+            chatBoxEl.innerHTML = '';
+            lastCount = 0;
             let newestIncoming = lastIncomingWaId;
-            for (let i=lastCount; i<total; i++){
+            for (let i=0; i<total; i++){
               const [txt, tipo, url, ts, linkUrl, linkTitle, linkBody, linkThumb,
                      waId, replyWaId, replyId, replyText, replyTipo, replyUrl,
                      flowName, flowJson, flowSegments] = msgs[i];
@@ -1468,7 +1469,7 @@
 
               chatBoxEl.appendChild(div);
 
-              if (lastCount > 0 && bubble !== 'asesor') {
+              if (lastCount > 0 && bubble !== 'asesor' && previousCount > 0 && (waId !== previousIncoming)) {
                 const mediaPlaying = Array.from(chatBoxEl.querySelectorAll('audio, video')).some(m => !m.paused);
                 if (!mediaPlaying) playAlertSound();
               }
