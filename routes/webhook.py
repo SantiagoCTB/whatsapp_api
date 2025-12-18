@@ -259,6 +259,18 @@ def _reply_with_ai(numero: str, user_text: str | None, *, system_prompt: str | N
     update_chat_state(numero, "ia", "ia_activa")
     history = obtener_historial_chat(numero, limit=_ia_history_limit(), step="ia")
     catalog_context, best_page = _catalog_context_for_prompt(prompt)
+    if not catalog_context:
+        logger.warning(
+            "Sin contexto de catálogo para la IA; se solicitará más información",
+            extra={"numero": numero},
+        )
+        pedir_datos = (
+            "Ahora mismo no encuentro información del catálogo para tu consulta. "
+            "¿Puedes darme más detalles del producto, marca o categoría que buscas?"
+        )
+        enviar_mensaje(numero, pedir_datos, tipo="bot", step="ia")
+        return False
+
     prompt_for_model = prompt
     if catalog_context:
         prompt_for_model = (

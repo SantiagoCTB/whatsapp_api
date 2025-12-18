@@ -156,6 +156,15 @@ def _row_to_tenant(row) -> TenantInfo | None:
     )
 
 
+def _tenant_has_env_value(tenant: TenantInfo, key: str, expected: str | None) -> bool:
+    if not expected:
+        return False
+
+    env = get_tenant_env(tenant)
+    value = env.get(key)
+    return str(value).strip() == str(expected).strip()
+
+
 def get_tenant_env(tenant: TenantInfo | None = None) -> dict:
     base_env = _default_tenant_env()
     if not tenant:
@@ -231,6 +240,19 @@ def list_tenants(*, force_reload: bool = False) -> List[TenantInfo]:
         conn.close()
 
     return tenants_list
+
+
+def find_tenant_by_phone_number_id(phone_number_id: str | None) -> TenantInfo | None:
+    """Busca el tenant cuyo ``PHONE_NUMBER_ID`` coincida con el valor dado."""
+
+    if not phone_number_id:
+        return None
+
+    for tenant in list_tenants(force_reload=True):
+        if _tenant_has_env_value(tenant, "PHONE_NUMBER_ID", phone_number_id):
+            return tenant
+
+    return None
 
 
 def update_tenant_metadata(tenant_key: str, metadata: Mapping | None) -> TenantInfo:
@@ -624,10 +646,11 @@ __all__ = [
     "list_tenants", 
     "get_active_tenant_key",
     "get_media_root",
-    "register_tenant", 
-    "resolve_tenant_from_request", 
-    "set_current_tenant", 
-    "set_current_tenant_env", 
+    "register_tenant",
+    "resolve_tenant_from_request",
+    "find_tenant_by_phone_number_id",
+    "set_current_tenant",
+    "set_current_tenant_env",
     "update_tenant_env",
     "update_tenant_metadata",
     "create_or_update_tenant_user",
