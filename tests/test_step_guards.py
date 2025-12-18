@@ -369,3 +369,29 @@ def test_branching_chain_processes_common_steps(monkeypatch, patch_dependencies)
     mensajes = [msg for _, msg, _ in patch_dependencies.sent_messages]
     assert mensajes == ['elige opción 1', 'mensaje rama A', 'mensaje común']
     assert patch_dependencies.steps_set[-1][1] == 'final'
+
+
+def test_ai_step_skipped_on_first_message(monkeypatch):
+    states = {}
+    ai_calls = []
+
+    monkeypatch.setattr(webhook_module.Config, 'INITIAL_STEP', 'ia')
+    monkeypatch.setattr(webhook_module, 'process_step_chain', lambda *_, **__: None)
+    monkeypatch.setattr(webhook_module, 'handle_global_command', lambda *_, **__: False)
+    monkeypatch.setattr(webhook_module, 'guardar_mensaje', lambda *_, **__: None)
+
+    def fake_get_chat_state(numero):
+        return states.get(numero)
+
+    def fake_update_chat_state(numero, step, estado='espera_usuario'):
+        states[numero] = (step, datetime.utcnow(), estado)
+
+    monkeypatch.setattr(webhook_module, 'get_chat_state', fake_get_chat_state)
+    monkeypatch.setattr(webhook_module, 'update_chat_state', fake_update_chat_state)
+    monkeypatch.setattr(webhook_module, 'delete_chat_state', lambda numero: states.pop(numero, None))
+    monkeypatch.setattr(webhook_module, '_reply_with_ai', lambda *args, **kwargs: ai_calls.append((args, kwargs)))
+
+    webhook_module.handle_text_message('5215552468', 'hola')
+
+    assert states['5215552468'][0] == 'ia'
+    assert ai_calls == []
