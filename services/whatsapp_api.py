@@ -30,9 +30,22 @@ _TYPING_ENABLED = bool(getattr(Config, "ENABLE_TYPING_INDICATOR", False))
 
 def _get_runtime_env():
     env = tenants.get_current_tenant_env()
-    token = env.get("META_TOKEN") or Config.META_TOKEN
-    phone_id = env.get("PHONE_NUMBER_ID") or Config.PHONE_NUMBER_ID
+    token = (env.get("META_TOKEN") or "").strip()
+    phone_id = (env.get("PHONE_NUMBER_ID") or "").strip()
     media_root = tenants.get_media_root()
+
+    missing = []
+    if not token:
+        missing.append("META_TOKEN")
+    if not phone_id:
+        missing.append("PHONE_NUMBER_ID")
+
+    if missing:
+        raise RuntimeError(
+            "Faltan credenciales de WhatsApp en el tenant actual: "
+            + ", ".join(missing)
+        )
+
     return {
         "token": token,
         "phone_id": phone_id,
@@ -144,14 +157,6 @@ def enviar_mensaje(
     *,
     return_error=False,
 ):
-    runtime = _get_runtime_env()
-    url = f"{GRAPH_BASE_URL}/{runtime['phone_id']}/messages"
-    headers = {
-        "Authorization": f"Bearer {runtime['token']}",
-        "Content-Type": "application/json"
-    }
-    media_link = None
-
     def _result(success, reason=None):
         if return_error:
             return success, reason
@@ -160,6 +165,19 @@ def enviar_mensaje(
     def _fail(reason=None):
         stop_typing_feedback(numero)
         return _result(False, reason)
+
+    try:
+        runtime = _get_runtime_env()
+    except RuntimeError as exc:
+        logger.error("No se puede enviar mensaje: %s", exc)
+        return _result(False, str(exc))
+
+    url = f"{GRAPH_BASE_URL}/{runtime['phone_id']}/messages"
+    headers = {
+        "Authorization": f"Bearer {runtime['token']}",
+        "Content-Type": "application/json"
+    }
+    media_link = None
 
     if tipo_respuesta == 'texto':
         data = {
@@ -599,7 +617,12 @@ def enviar_mensaje(
 
 
 def _post_to_messages(payload, log_context):
-    runtime = _get_runtime_env()
+    try:
+        runtime = _get_runtime_env()
+    except RuntimeError as exc:
+        logger.error("No se puede contactar la API de WhatsApp: %s", exc)
+        return False
+
     messages_url = f"{GRAPH_BASE_URL}/{runtime['phone_id']}/messages"
     headers = {
         "Authorization": f"Bearer {runtime['token']}",
@@ -846,7 +869,12 @@ def _infer_mime_type(ruta_archivo: str) -> str:
 def subir_media(ruta_archivo):
     mime_type = _infer_mime_type(ruta_archivo)
 
-    runtime = _get_runtime_env()
+    try:
+        runtime = _get_runtime_env()
+    except RuntimeError as exc:
+        logger.error("No se puede subir media sin credenciales de tenant: %s", exc)
+        return None
+
     url = f"{GRAPH_BASE_URL}/{runtime['phone_id']}/media"
     headers = {"Authorization": f"Bearer {runtime['token']}"}
     data = {
