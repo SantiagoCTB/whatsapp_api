@@ -21,6 +21,23 @@ from routes.webhook import webhook_bp
 from routes.tablero_routes import tablero_bp
 from routes.export_routes import export_bp
 
+
+def _extract_phone_number_id(req):
+    if not req.is_json:
+        return None
+
+    payload = req.get_json(silent=True) or {}
+
+    for entry in payload.get("entry", []):
+        for change in entry.get("changes", []):
+            value = change.get("value", {}) or {}
+            metadata = value.get("metadata") or {}
+            phone_id = metadata.get("phone_number_id")
+            if phone_id:
+                return str(phone_id)
+
+    return None
+
 def _ensure_media_root():
     """Create the directory where user uploads are stored."""
     env = tenants.get_tenant_env(None)
@@ -93,6 +110,19 @@ def create_app():
             or Config.DEFAULT_TENANT
         )
 
+        tenant = None
+
+        if not tenant_key:
+            phone_number_id = _extract_phone_number_id(request)
+            if phone_number_id:
+                tenant = tenants.find_tenant_by_phone_number_id(phone_number_id)
+                if tenant:
+                    tenant_key = tenant.tenant_key
+                    logging.getLogger(__name__).info(
+                        "Tenant resuelto a partir de phone_number_id del webhook",
+                        extra={"tenant": tenant_key},
+                    )
+
         if not tenant_key:
             # Modo legacy (single-tenant): no se exige encabezado ni tenant
             # por defecto. Se usa la base configurada en DB_*.
@@ -105,7 +135,7 @@ def create_app():
         try:
             if header_key or query_key:
                 tenant = tenants.resolve_tenant_from_request(request)
-            else:
+            elif tenant is None:
                 tenant = tenants.get_tenant(tenant_key)
                 if tenant is None:
                     raise tenants.TenantNotFoundError(
