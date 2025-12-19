@@ -4,7 +4,14 @@ import threading
 import json
 import unicodedata
 from datetime import datetime
-from flask import Blueprint, Response, jsonify, request, url_for, has_app_context
+from flask import (
+    Blueprint,
+    Response,
+    jsonify,
+    request,
+    url_for,
+    has_request_context,
+)
 
 from config import Config
 from services import tenants
@@ -47,6 +54,20 @@ MAX_AUTO_STEPS = 25
 
 def _media_root():
     return tenants.get_media_root()
+
+
+def _build_public_url(path: str) -> str | None:
+    clean_path = path.lstrip("/")
+    if has_request_context():
+        base_url = request.url_root
+    else:
+        base_url = tenants.get_runtime_setting("PUBLIC_BASE_URL", default=Config.PUBLIC_BASE_URL)
+
+    if not base_url:
+        logger.warning("PUBLIC_BASE_URL no está configurado; no se puede construir URL pública.")
+        return None
+
+    return f"{base_url.rstrip('/')}/{clean_path}"
 
 
 def _get_verify_token():
@@ -288,21 +309,13 @@ def _reply_with_ai(numero: str, user_text: str | None, *, system_prompt: str | N
         if not os.path.exists(image_path):
             continue
 
-        if has_app_context():
-            image_url = url_for(
-                'static',
-                filename=tenants.get_uploads_url_path(f"ia_pages/{page.image_filename}"),
-                _external=True,
-            )
+        image_path = tenants.get_uploads_url_path(f"ia_pages/{page.image_filename}")
+        if has_request_context():
+            image_url = url_for('static', filename=image_path, _external=True)
         else:
-            from app import app as flask_app
-
-            with flask_app.app_context():
-                image_url = url_for(
-                    'static',
-                    filename=tenants.get_uploads_url_path(f"ia_pages/{page.image_filename}"),
-                    _external=True,
-                )
+            image_url = _build_public_url(f"static/{image_path}")
+        if not image_url:
+            continue
         caption = "Vista del producto"
 
         enviar_mensaje(

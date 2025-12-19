@@ -133,6 +133,7 @@ class Config:
             'y llevar a una siguiente acción como cotizar, confirmar ciudad o agendar asesoría.'
         ),
     )
+    PUBLIC_BASE_URL = os.getenv('PUBLIC_BASE_URL', '')
     IA_HISTORY_LIMIT = int(os.getenv('IA_HISTORY_LIMIT', 30))
     INITIAL_STEP = os.getenv('INITIAL_STEP', 'menu_principal')
     MAX_TRANSCRIPTION_DURATION_MS = int(os.getenv('MAX_TRANSCRIPTION_DURATION_MS', 60000))
