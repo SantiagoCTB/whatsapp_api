@@ -726,6 +726,12 @@ def guardar_mensaje(
     mensaje_id = c.lastrowid
     conn.commit()
     conn.close()
+    try:
+        from services.realtime import emit_chat_list_update, emit_chat_update
+    except ImportError:
+        return mensaje_id
+    emit_chat_update(numero)
+    emit_chat_list_update()
     return mensaje_id
 
 
