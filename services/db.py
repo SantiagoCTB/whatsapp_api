@@ -1,5 +1,6 @@
 import contextvars
 import importlib.util
+import json
 import os
 import re
 import contextvars
@@ -478,6 +479,26 @@ def init_db(db_settings: DatabaseSettings | None = None):
     ) ENGINE=InnoDB;
     """)
 
+    # estados de mensajes (callbacks de status)
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS mensajes_status (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      wa_id VARCHAR(255) NOT NULL,
+      status VARCHAR(50) NOT NULL,
+      status_timestamp BIGINT,
+      recipient_id VARCHAR(32),
+      error_code INT,
+      error_title TEXT,
+      error_message TEXT,
+      error_details TEXT,
+      payload_json LONGTEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE KEY uniq_mensajes_status (wa_id, status, status_timestamp, recipient_id),
+      INDEX idx_mensajes_status_wa_id (wa_id),
+      INDEX idx_mensajes_status_status (status)
+    ) ENGINE=InnoDB;
+    """)
+
     # respuestas de flujos (Flow)
     c.execute(FLOW_RESPONSES_TABLE_DDL)
 
@@ -733,6 +754,51 @@ def guardar_mensaje(
     emit_chat_update(numero)
     emit_chat_list_update()
     return mensaje_id
+
+
+def guardar_estado_mensaje(
+    wa_id,
+    status,
+    status_timestamp=None,
+    recipient_id=None,
+    error=None,
+    payload=None,
+):
+    if not wa_id or not status:
+        return None
+
+    error = error or {}
+    error_details = error.get("details")
+    if isinstance(error_details, (dict, list)):
+        error_details = json.dumps(error_details, ensure_ascii=False)
+
+    payload_json = None
+    if payload is not None:
+        payload_json = json.dumps(payload, ensure_ascii=False)
+
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute(
+        "INSERT IGNORE INTO mensajes_status "
+        "(wa_id, status, status_timestamp, recipient_id, error_code, error_title, "
+        "error_message, error_details, payload_json, created_at) "
+        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())",
+        (
+            wa_id,
+            status,
+            status_timestamp,
+            recipient_id,
+            error.get("code"),
+            error.get("title"),
+            error.get("message"),
+            error_details,
+            payload_json,
+        ),
+    )
+    mensaje_status_id = c.lastrowid
+    conn.commit()
+    conn.close()
+    return mensaje_status_id
 
 
 def guardar_flow_response(numero, flow_name, response_json, wa_id=None):

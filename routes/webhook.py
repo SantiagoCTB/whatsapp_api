@@ -18,6 +18,7 @@ from services import tenants
 from services.db import (
     get_connection,
     guardar_mensaje,
+    guardar_estado_mensaje,
     guardar_flow_response,
     get_chat_state,
     obtener_historial_chat,
@@ -188,7 +189,38 @@ def _extract_message_ids(payload):
                 msg_id = msg.get('id')
                 if msg_id:
                     ids.append(msg_id)
+            for status in change.get('value', {}).get('statuses', []) or []:
+                status_id = status.get('id')
+                if status_id:
+                    ids.append(status_id)
     return ids
+
+
+def _coerce_status_timestamp(raw_value):
+    if raw_value in (None, ""):
+        return None
+    try:
+        return int(raw_value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _normalize_status_error(errors):
+    if not errors:
+        return {}
+    if isinstance(errors, list):
+        error = errors[0] if errors else {}
+    elif isinstance(errors, dict):
+        error = errors
+    else:
+        return {}
+
+    return {
+        "code": error.get("code"),
+        "title": error.get("title"),
+        "message": error.get("message"),
+        "details": error.get("details") or error.get("error_data"),
+    }
 
 
 STEP_HANDLERS = {}
@@ -997,10 +1029,42 @@ def webhook():
         'processed': 0,
         'duplicates': 0,
         'unsupported': 0,
+        'statuses': 0,
     }
 
     for entry in data.get('entry', []):
         for change in entry.get('changes', []):
+            for status in change.get('value', {}).get('statuses', []) or []:
+                status_id = status.get('id')
+                status_state = status.get('status')
+                if not status_id or not status_state:
+                    summary['unsupported'] += 1
+                    continue
+
+                status_timestamp = _coerce_status_timestamp(status.get('timestamp'))
+                recipient_id = status.get('recipient_id')
+                error_info = _normalize_status_error(status.get('errors'))
+
+                guardar_estado_mensaje(
+                    status_id,
+                    status_state,
+                    status_timestamp=status_timestamp,
+                    recipient_id=recipient_id,
+                    error=error_info,
+                    payload=status,
+                )
+                summary['statuses'] += 1
+                logger.info(
+                    "Estado de mensaje recibido",
+                    extra={
+                        "message_id": _mask_identifier(status_id),
+                        "status": status_state,
+                        "timestamp": status_timestamp,
+                        "recipient_id": recipient_id,
+                        "error_code": error_info.get("code") if error_info else None,
+                    },
+                )
+
             msgs = change.get('value', {}).get('messages', []) or []
             for msg in msgs:
                 msg_type    = msg.get('type')
