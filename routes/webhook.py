@@ -4,7 +4,7 @@ import threading
 import json
 import unicodedata
 from datetime import datetime
-from flask import Blueprint, Response, jsonify, request, url_for
+from flask import Blueprint, Response, jsonify, request, url_for, has_app_context
 
 from config import Config
 from services import tenants
@@ -288,11 +288,21 @@ def _reply_with_ai(numero: str, user_text: str | None, *, system_prompt: str | N
         if not os.path.exists(image_path):
             continue
 
-        image_url = url_for(
-            'static',
-            filename=tenants.get_uploads_url_path(f"ia_pages/{page.image_filename}"),
-            _external=True,
-        )
+        if has_app_context():
+            image_url = url_for(
+                'static',
+                filename=tenants.get_uploads_url_path(f"ia_pages/{page.image_filename}"),
+                _external=True,
+            )
+        else:
+            from app import app as flask_app
+
+            with flask_app.app_context():
+                image_url = url_for(
+                    'static',
+                    filename=tenants.get_uploads_url_path(f"ia_pages/{page.image_filename}"),
+                    _external=True,
+                )
         caption = "Vista del producto"
 
         enviar_mensaje(
