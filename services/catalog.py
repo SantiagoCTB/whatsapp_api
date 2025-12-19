@@ -12,10 +12,11 @@ from typing import List
 
 try:  # pragma: no cover - dependencia opcional
     import pytesseract
-    from PIL import Image
+    from PIL import Image, ImageOps
 except Exception:  # pragma: no cover - se usa sólo si está disponible
     pytesseract = None  # type: ignore
     Image = None  # type: ignore
+    ImageOps = None  # type: ignore
 
 if importlib.util.find_spec("fitz"):
     try:
@@ -96,6 +97,15 @@ def _extract_keywords(text: str, *, max_keywords: int = 20) -> list[str]:
     return [token for token, _ in sorted_tokens[:max_keywords]]
 
 
+def _prepare_image_for_ocr(img: "Image.Image") -> "Image.Image":
+    """Normaliza la imagen para mejorar el OCR con Tesseract."""
+
+    prepared = img.convert("L")
+    if ImageOps:
+        prepared = ImageOps.autocontrast(prepared)
+    return prepared
+
+
 def _perform_ocr(pix: "fitz.Pixmap") -> str:
     """Ejecuta OCR sobre la imagen de la página si pytesseract está disponible."""
 
@@ -108,7 +118,8 @@ def _perform_ocr(pix: "fitz.Pixmap") -> str:
     try:
         mode = "RGB" if pix.n < 4 else "RGBA"
         img = Image.frombytes(mode, (pix.width, pix.height), pix.samples)
-        text = pytesseract.image_to_string(img, lang="spa+eng")
+        prepared = _prepare_image_for_ocr(img)
+        text = pytesseract.image_to_string(prepared, lang="spa+eng")
         return _sanitize_text(text)
     except Exception as exc:  # pragma: no cover - depende del runtime
         logger.warning("Fallo al ejecutar OCR de catálogo", exc_info=exc)
@@ -130,14 +141,15 @@ def _perform_ocr_from_image(path: str) -> str:
 
     try:
         with Image.open(path) as img:
-            text = pytesseract.image_to_string(img, lang="spa+eng")
+            prepared = _prepare_image_for_ocr(img)
+            text = pytesseract.image_to_string(prepared, lang="spa+eng")
             return _sanitize_text(text)
     except Exception as exc:  # pragma: no cover - depende del runtime
         logger.warning("Fallo al ejecutar OCR de imagen de catálogo", exc_info=exc)
         return ""
 
 
-def _page_zoom_matrix(page: "fitz.Page", max_dim: int = 2000) -> "fitz.Matrix":
+def _page_zoom_matrix(page: "fitz.Page", max_dim: int = 3000) -> "fitz.Matrix":
     """Calcula una matriz de zoom que evita imágenes gigantes.
 
     Para catálogos con páginas muy grandes el factor de zoom fijo podía generar
