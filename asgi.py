@@ -1,7 +1,10 @@
 # asgi.py
 import asyncio
 import logging
+import os
 import sys
+
+os.environ.setdefault("SOCKETIO_ASGI", "1")
 
 if sys.platform.startswith("win"):
     try:
