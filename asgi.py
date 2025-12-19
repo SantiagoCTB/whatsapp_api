@@ -50,16 +50,5 @@ if sys.platform.startswith("win"):
 from a2wsgi import WSGIMiddleware
 
 from app import create_app
-from services.realtime import socketio
-
 flask_app = create_app()
-
-try:  # pragma: no cover - python-socketio expone ASGIApp
-    from socketio import ASGIApp
-except ImportError:  # pragma: no cover - fallback a WSGI si falta soporte ASGI
-    ASGIApp = None
-
-if ASGIApp is not None:
-    asgi_app = ASGIApp(socketio.server, WSGIMiddleware(flask_app))
-else:
-    asgi_app = WSGIMiddleware(flask_app)
+asgi_app = WSGIMiddleware(flask_app)
