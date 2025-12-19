@@ -110,6 +110,7 @@
       let socket = null;
       let socketConnected = false;
       let socketFallbackTimer = null;
+      let pollingFallbackActive = false;
       let selectedBubble = null;
       let chatContextTarget = null;
       const notificationSoundUrl = "{{ url_for('static', filename='notificacion.mp3') }}";
@@ -1345,6 +1346,7 @@
 
       function startChatListPolling() {
         if (chatListPoll) return;
+        if (!pollingFallbackActive) return;
         chatListPoll = setInterval(fetchChatList, 5000);
       }
 
@@ -1359,6 +1361,7 @@
         socketFallbackTimer = setTimeout(() => {
           socketFallbackTimer = null;
           if (!socketConnected) {
+            pollingFallbackActive = true;
             startChatListPolling();
             if (currentChat) {
               startMessagePolling();
@@ -1369,6 +1372,7 @@
 
       function startMessagePolling() {
         if (autoRefresh) return;
+        if (!pollingFallbackActive) return;
         autoRefresh = setInterval(loadMessages, 3000);
       }
 
@@ -1384,6 +1388,7 @@
 
         socket.on('connect', () => {
           socketConnected = true;
+          pollingFallbackActive = false;
           if (socketFallbackTimer) {
             clearTimeout(socketFallbackTimer);
             socketFallbackTimer = null;
@@ -1442,7 +1447,7 @@
         }
         stopMessagePolling();
         if (!socketConnected) {
-          startMessagePolling();
+          schedulePollingFallback();
         }
         loadMessages(); loadBotonera();
       }
