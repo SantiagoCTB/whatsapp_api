@@ -1312,17 +1312,16 @@ def send_audio():
     upload_error = None
     media_id = None
 
-    if ext != '.ogg':
-        converted_path, conversion_error = _convert_audio_to_ogg(path)
-        if converted_path:
-            logger.info(
-                "Audio convertido a ogg",
-                extra={"numero": numero, "converted_path": converted_path},
-            )
-            path = converted_path
-            unique = os.path.basename(converted_path)
-            ext = '.ogg'
-            mime_type = 'audio/ogg'
+    converted_path, conversion_error = _convert_audio_to_ogg(path)
+    if converted_path:
+        logger.info(
+            "Audio convertido a ogg",
+            extra={"numero": numero, "converted_path": converted_path},
+        )
+        path = converted_path
+        unique = os.path.basename(converted_path)
+        ext = '.ogg'
+        mime_type = 'audio/ogg'
     if conversion_error:
         logger.warning(
             "Conversión de audio a ogg con advertencias",
@@ -1358,7 +1357,7 @@ def send_audio():
 
     media_caption = ''  # No enviar caption dentro del payload de audio/documento
     if media_id:
-        audio_payload = {"id": media_id, "voice": True}
+        audio_payload = {"id": media_id, "link": audio_url, "voice": True}
     else:
         audio_payload = {"link": audio_url, "voice": True}
 
