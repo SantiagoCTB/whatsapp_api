@@ -377,6 +377,8 @@
 
       const COLLAPSED_ICON = '▶';
       const EXPANDED_ICON = '▼';
+      updateMobileChatHeader(null);
+      syncMobileLayout();
 
       function openImageModal(src, altText = 'Imagen del mensaje') {
         if (!src) return;
