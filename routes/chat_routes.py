@@ -84,9 +84,9 @@ def serve_media(filename: str):
     return send_file(target_path, mimetype=mimetype)
 
 
-def _convert_webm_to_ogg(src_path: str):
+def _convert_audio_to_ogg(src_path: str):
     if not shutil.which("ffmpeg"):
-        return None, "No se encontró ffmpeg para convertir el audio grabado."
+        return None, "No se encontró ffmpeg para convertir el audio."
 
     original_name, _ = os.path.splitext(os.path.basename(src_path))
     dest_ogg_name = f"{uuid.uuid4().hex}_{original_name}.ogg"
@@ -1312,15 +1312,17 @@ def send_audio():
     upload_error = None
     media_id = None
 
-    if mime_type.startswith('audio/webm') or ext == '.webm':
-        converted_path, conversion_error = _convert_webm_to_ogg(path)
+    if ext != '.ogg':
+        converted_path, conversion_error = _convert_audio_to_ogg(path)
         if converted_path:
             logger.info(
-                "Audio convertido de webm a ogg",
+                "Audio convertido a ogg",
                 extra={"numero": numero, "converted_path": converted_path},
             )
             path = converted_path
             unique = os.path.basename(converted_path)
+            ext = '.ogg'
+            mime_type = 'audio/ogg'
     if conversion_error:
         logger.warning(
             "Conversión de audio a ogg con advertencias",
@@ -1355,7 +1357,10 @@ def send_audio():
     tipo_envio = 'bot_audio' if origen == 'bot' else 'asesor'
 
     media_caption = ''  # No enviar caption dentro del payload de audio/documento
-    audio_payload = {"id": media_id, "link": audio_url} if media_id else audio_url
+    if media_id:
+        audio_payload = {"id": media_id, "voice": True}
+    else:
+        audio_payload = {"link": audio_url, "voice": True}
 
     logger.info(
         "Enviando audio por WhatsApp",
