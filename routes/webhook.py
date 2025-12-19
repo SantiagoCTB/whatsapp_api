@@ -209,7 +209,7 @@ def _is_agent_mode(row) -> bool:
 
 
 def _catalog_context_for_prompt(prompt: str):
-    """Obtiene páginas relevantes del catálogo y prepara un contexto robusto."""
+    """Obtiene contenido relevante del portafolio y prepara un contexto robusto."""
 
     pages = find_relevant_pages(prompt, limit=3)
     if not pages:
@@ -227,9 +227,8 @@ def _catalog_context_for_prompt(prompt: str):
             image_rel = tenants.get_uploads_url_path(f"ia_pages/{page.image_filename}")
 
         context_lines.append(
-            "- pagina: {page}\n  pdf: {pdf}\n  texto: {texto}\n  imagen_rel: {rel}".format(
-                page=page.page_number,
-                pdf=page.pdf_filename or "catalogo.pdf",
+            "- registro: {registro}\n  texto: {texto}\n  imagen_rel: {rel}".format(
+                registro=page.page_number,
                 texto=snippet,
                 rel=f"/static/{image_rel}" if image_rel else "",
             )
@@ -252,11 +251,11 @@ def _reply_with_ai(numero: str, user_text: str | None, *, system_prompt: str | N
     catalog_context, pages = _catalog_context_for_prompt(prompt)
     if not catalog_context:
         logger.warning(
-            "Sin contexto de catálogo para la IA; se solicitará más información",
+            "Sin contexto de portafolio para la IA; se solicitará más información",
             extra={"numero": numero},
         )
         pedir_datos = (
-            "Ahora mismo no encuentro información del catálogo para tu consulta. "
+            "Ahora mismo no encuentro información suficiente para tu consulta. "
             "¿Puedes darme más detalles del producto, marca o categoría que buscas?"
         )
         enviar_mensaje(numero, pedir_datos, tipo="bot", step="ia")
@@ -266,12 +265,12 @@ def _reply_with_ai(numero: str, user_text: str | None, *, system_prompt: str | N
     if catalog_context:
         prompt_for_model = (
             f"{prompt}\n\n"
-            "Contexto del catálogo (usa solo esta información, cita la página y el PDF):\n"
+            "Contexto del portafolio (usa solo esta información):\n"
             f"{catalog_context}\n\n"
             "Instrucciones para la respuesta:\n"
-            "- Responde únicamente con datos del catálogo disponible.\n"
-            "- Menciona siempre el número de página y el nombre del PDF al referirte a un producto.\n"
-            "- No incluyas enlaces ni imágenes en formato markdown/HTML; indica que compartirás las páginas como referencia visual.\n"
+            "- Responde únicamente con datos disponibles en este contexto.\n"
+            "- Evita mencionar el origen del contenido o detalles internos.\n"
+            "- No incluyas enlaces ni imágenes en formato markdown/HTML.\n"
             "- Si no hay coincidencias claras, pide más detalles al usuario sin inventar datos."
         )
 
@@ -279,16 +278,6 @@ def _reply_with_ai(numero: str, user_text: str | None, *, system_prompt: str | N
     if not response:
         logger.warning("La IA no devolvió respuesta", extra={"numero": numero})
         return False
-
-    snippet_preview = None
-    best_page = pages[0] if pages else None
-    if best_page:
-        snippet_preview = (best_page.text_content or "").strip()
-        if snippet_preview and len(snippet_preview) > 500:
-            snippet_preview = f"{snippet_preview[:480]}..."
-
-    if snippet_preview:
-        response = f"{response}\n\nReferencia del catálogo (página {best_page.page_number}): {snippet_preview}"
 
     enviar_mensaje(numero, response, tipo="bot", step="ia")
     for page in pages:
@@ -304,13 +293,7 @@ def _reply_with_ai(numero: str, user_text: str | None, *, system_prompt: str | N
             filename=tenants.get_uploads_url_path(f"ia_pages/{page.image_filename}"),
             _external=True,
         )
-        page_snippet = (page.text_content or "").strip()
-        if page_snippet and len(page_snippet) > 300:
-            page_snippet = f"{page_snippet[:280]}..."
-
-        caption = f"Referencia del catálogo - página {page.page_number}"
-        if page_snippet:
-            caption = f"{caption}:\n{page_snippet}"
+        caption = "Vista del producto"
 
         enviar_mensaje(
             numero,
