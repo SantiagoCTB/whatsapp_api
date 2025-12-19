@@ -293,6 +293,8 @@ def enviar_mensaje(
                 audio_obj["id"] = opciones["id"]
             if not audio_obj and opciones.get("link"):
                 audio_obj["link"] = opciones["link"]
+            if "voice" in opciones:
+                audio_obj["voice"] = bool(opciones["voice"])
         elif opciones and os.path.isfile(opciones):
             filename   = os.path.basename(opciones)
             public_url = url_for(
