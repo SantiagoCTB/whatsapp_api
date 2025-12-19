@@ -223,6 +223,7 @@
         }
       });
       updateMobileChatHeader(null);
+      syncMobileLayout();
       const bogotaFormatter = new Intl.DateTimeFormat('es-CO', {
         timeZone: 'America/Bogota',
         hour12: false,
@@ -329,14 +330,33 @@
       const mobileChatSubtitle = document.getElementById('mobileChatSubtitle');
       const mobileChatActions = document.getElementById('mobileChatActions');
       const bodyEl = document.body;
+      function updateMobileSidebarState(shouldShowSidebar) {
+        if (shouldShowSidebar) {
+          sidebar.classList.add('visible');
+          bodyEl.classList.add('mobile-sidebar-open');
+        } else {
+          sidebar.classList.remove('visible');
+          bodyEl.classList.remove('mobile-sidebar-open');
+        }
+      }
+
+      function syncMobileLayout() {
+        const isMobile = window.matchMedia('(max-width: 768px)').matches;
+        if (!isMobile) {
+          bodyEl.classList.remove('mobile-sidebar-open');
+          sidebar.classList.remove('visible');
+          return;
+        }
+        updateMobileSidebarState(!currentChat);
+      }
+
       menuToggle.addEventListener('click', () => {
-        sidebar.classList.toggle('visible');
-        bodyEl.classList.toggle('mobile-sidebar-open');
+        const shouldOpen = !bodyEl.classList.contains('mobile-sidebar-open');
+        updateMobileSidebarState(shouldOpen);
       });
       if (mobileBackBtn) {
         mobileBackBtn.addEventListener('click', () => {
-          sidebar.classList.add('visible');
-          bodyEl.classList.add('mobile-sidebar-open');
+          updateMobileSidebarState(true);
         });
       }
 
@@ -418,6 +438,8 @@
           toggleSectionByHeader(header);
         });
       });
+
+      window.addEventListener('resize', syncMobileLayout);
 
       setSectionExpanded(chatStateSection, false);
       setSectionExpanded(chatRolesSection, false);
@@ -1265,6 +1287,7 @@
         replyPreviewEl.style.display = 'none';
         replyPreviewEl.innerHTML = '';
         updateMobileChatHeader(null);
+        syncMobileLayout();
       }
 
       chatFinishAction.addEventListener('click', () => {
@@ -1530,8 +1553,7 @@
           }
           socket.emit('join_chat', { numero });
         }
-        sidebar.classList.remove('visible');
-        bodyEl.classList.remove('mobile-sidebar-open');
+        updateMobileSidebarState(false);
         stopMessagePolling();
         if (!socketConnected) {
           schedulePollingFallback();
