@@ -34,6 +34,14 @@
 
     <!-- Chat Window -->
     <div class="chatWindow" role="region" aria-label="Zona del chat. Arrastra imágenes para prepararlas antes de enviar." tabindex="0">
+      <div class="chat-header" aria-live="polite">
+        <button type="button" id="mobileBackBtn" class="chat-header__btn" aria-label="Volver a la lista de chats">←</button>
+        <div class="chat-header__info">
+          <span id="mobileChatTitle" class="chat-header__title">Selecciona un chat</span>
+          <span id="mobileChatSubtitle" class="chat-header__subtitle"></span>
+        </div>
+        <button type="button" id="mobileChatActions" class="chat-header__btn" aria-label="Acciones del chat">⋮</button>
+      </div>
       <div id="botonera"></div>
       <div id="chatBox"></div>
       <div id="replyPreview" class="reply-preview"></div>
@@ -214,6 +222,7 @@
           chatStateDefinitionMap.set(def.key, def);
         }
       });
+      updateMobileChatHeader(null);
       const bogotaFormatter = new Intl.DateTimeFormat('es-CO', {
         timeZone: 'America/Bogota',
         hour12: false,
@@ -315,9 +324,36 @@
       }
       const sidebar = document.querySelector('.sidebar');
       const menuToggle = document.getElementById('menuToggle');
+      const mobileBackBtn = document.getElementById('mobileBackBtn');
+      const mobileChatTitle = document.getElementById('mobileChatTitle');
+      const mobileChatSubtitle = document.getElementById('mobileChatSubtitle');
+      const mobileChatActions = document.getElementById('mobileChatActions');
+      const bodyEl = document.body;
       menuToggle.addEventListener('click', () => {
         sidebar.classList.toggle('visible');
+        bodyEl.classList.toggle('mobile-sidebar-open');
       });
+      if (mobileBackBtn) {
+        mobileBackBtn.addEventListener('click', () => {
+          sidebar.classList.add('visible');
+          bodyEl.classList.add('mobile-sidebar-open');
+        });
+      }
+
+      if (mobileChatActions) {
+        mobileChatActions.addEventListener('click', event => {
+          event.stopPropagation();
+          if (!currentChat) return;
+          const chatData = todosChats.find(c => c.numero === currentChat);
+          if (!chatData) return;
+          const rect = mobileChatActions.getBoundingClientRect();
+          const coords = {
+            pageX: rect.right - 8 + window.scrollX,
+            pageY: rect.bottom + 8 + window.scrollY
+          };
+          openChatContextMenu(coords, chatData);
+        });
+      }
 
       const COLLAPSED_ICON = '▶';
       const EXPANDED_ICON = '▼';
@@ -1007,6 +1043,45 @@
           return fallbackMessage;
         }
 
+      function addLongPressListener(element, callback) {
+        let timer = null;
+        let startX = 0;
+        let startY = 0;
+        const clearTimer = () => {
+          if (timer) {
+            clearTimeout(timer);
+            timer = null;
+          }
+        };
+        element.addEventListener('touchstart', event => {
+          if (event.touches.length !== 1) return;
+          const touch = event.touches[0];
+          startX = touch.clientX;
+          startY = touch.clientY;
+          timer = setTimeout(() => {
+            timer = null;
+            callback(event);
+          }, 550);
+        }, { passive: true });
+        element.addEventListener('touchmove', event => {
+          if (!timer) return;
+          const touch = event.touches[0];
+          if (Math.abs(touch.clientX - startX) > 10 || Math.abs(touch.clientY - startY) > 10) {
+            clearTimer();
+          }
+        }, { passive: true });
+        element.addEventListener('touchend', clearTimer);
+        element.addEventListener('touchcancel', clearTimer);
+      }
+
+      function openReplyMenuAt(pageX, pageY, bubble) {
+        if (!bubble) return;
+        selectedBubble = bubble;
+        contextMenu.style.top = `${pageY}px`;
+        contextMenu.style.left = `${pageX}px`;
+        contextMenu.classList.add('show');
+      }
+
       document.addEventListener('click', () => contextMenu.classList.remove('show'));
 
       replyAction.onclick = () => {
@@ -1062,13 +1137,15 @@
 
       function openChatContextMenu(event, chatData) {
         chatContextTarget = chatData;
+        const pageX = typeof event.pageX === 'number' ? event.pageX : (typeof event.x === 'number' ? event.x : 0);
+        const pageY = typeof event.pageY === 'number' ? event.pageY : (typeof event.y === 'number' ? event.y : 0);
         chatContextMenu.style.visibility = 'hidden';
         chatContextMenu.classList.add('show');
-        chatContextMenu.style.left = `${event.pageX}px`;
-        chatContextMenu.style.top = `${event.pageY}px`;
+        chatContextMenu.style.left = `${pageX}px`;
+        chatContextMenu.style.top = `${pageY}px`;
         const rect = chatContextMenu.getBoundingClientRect();
-        let left = event.pageX;
-        let top = event.pageY;
+        let left = pageX;
+        let top = pageY;
         if (rect.right > window.innerWidth) {
           left = Math.max(0, window.innerWidth - rect.width - 8);
         }
@@ -1187,6 +1264,7 @@
         botoneraEl.innerHTML = '';
         replyPreviewEl.style.display = 'none';
         replyPreviewEl.innerHTML = '';
+        updateMobileChatHeader(null);
       }
 
       chatFinishAction.addEventListener('click', () => {
@@ -1275,6 +1353,7 @@
           }
           if (currentChat && c.numero === currentChat) {
             li.classList.add('active');
+            updateMobileChatHeader(c);
           }
 
           // Badges por roles
@@ -1302,6 +1381,11 @@
           li.addEventListener('contextmenu', e => {
             e.preventDefault();
             openChatContextMenu(e, c);
+          });
+          addLongPressListener(li, event => {
+            const touch = event.touches[0];
+            if (!touch) return;
+            openChatContextMenu({ pageX: touch.pageX, pageY: touch.pageY }, c);
           });
 
           chatListEl.appendChild(li);
@@ -1446,11 +1530,29 @@
           }
           socket.emit('join_chat', { numero });
         }
+        sidebar.classList.remove('visible');
+        bodyEl.classList.remove('mobile-sidebar-open');
         stopMessagePolling();
         if (!socketConnected) {
           schedulePollingFallback();
         }
+        updateMobileChatHeader(chatData);
         loadMessages(); loadBotonera();
+      }
+
+      function updateMobileChatHeader(chatData) {
+        if (!mobileChatTitle || !mobileChatSubtitle || !mobileChatActions) return;
+        if (!chatData) {
+          mobileChatTitle.textContent = 'Selecciona un chat';
+          mobileChatSubtitle.textContent = '';
+          mobileChatActions.disabled = true;
+          return;
+        }
+        const title = chatData.alias ? `${chatData.alias} (${chatData.numero})` : (chatData.numero || '');
+        const estadoDef = chatStateDefinitionMap.get(chatData.estado);
+        mobileChatTitle.textContent = title || 'Chat';
+        mobileChatSubtitle.textContent = estadoDef && estadoDef.label ? `Estado: ${estadoDef.label}` : (chatData.estado ? `Estado: ${chatData.estado}` : '');
+        mobileChatActions.disabled = false;
       }
 
       function updateTypingIndicator(isActive, shouldMaintainScroll = false) {
@@ -1602,10 +1704,12 @@
                 div.addEventListener('contextmenu', e => {
                   e.preventDefault();
                   e.stopPropagation();
-                  selectedBubble = div;
-                  contextMenu.style.top = e.pageY + 'px';
-                  contextMenu.style.left = e.pageX + 'px';
-                  contextMenu.classList.add('show');
+                  openReplyMenuAt(e.pageX, e.pageY, div);
+                });
+                addLongPressListener(div, event => {
+                  const touch = event.touches[0];
+                  if (!touch) return;
+                  openReplyMenuAt(touch.pageX, touch.pageY, div);
                 });
               }
 
