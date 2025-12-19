@@ -1309,7 +1309,6 @@ def send_audio():
         return jsonify({'error': 'El archivo de audio está vacío. Intenta grabar o subirlo de nuevo.'}), 400
 
     conversion_error = None
-    upload_error = None
     media_id = None
 
     converted_path, conversion_error = _convert_audio_to_ogg(path)
@@ -1346,20 +1345,24 @@ def send_audio():
             extra={"numero": numero, "media_id": media_id, "path": path},
         )
     except Exception as exc:
-        upload_error = "No se pudo subir el audio directamente a WhatsApp; se enviará usando la URL pública."
         logger.exception(
             "Fallo al subir audio a WhatsApp",
             extra={"numero": numero, "path": path, "error": str(exc)},
         )
+        return jsonify({'error': 'No se pudo subir el audio a WhatsApp.'}), 502
+
+    if not media_id:
+        logger.warning(
+            "Audio sin media_id tras subida",
+            extra={"numero": numero, "path": path},
+        )
+        return jsonify({'error': 'No se pudo obtener el media_id del audio.'}), 502
 
     # Envía el audio por la API
     tipo_envio = 'bot_audio' if origen == 'bot' else 'asesor'
 
     media_caption = ''  # No enviar caption dentro del payload de audio/documento
-    if media_id:
-        audio_payload = {"id": media_id, "link": audio_url, "voice": True}
-    else:
-        audio_payload = {"link": audio_url, "voice": True}
+    audio_payload = {"id": media_id, "voice": True}
 
     logger.info(
         "Enviando audio por WhatsApp",
@@ -1397,13 +1400,8 @@ def send_audio():
         update_chat_state(numero, step, 'asesor')
 
     response_payload = {'status': 'sent_audio', 'url': audio_url}
-    warnings = []
     if conversion_error:
-        warnings.append(conversion_error)
-    if upload_error:
-        warnings.append(upload_error)
-    if warnings:
-        response_payload['warning'] = warnings[0] if len(warnings) == 1 else warnings
+        response_payload['warning'] = conversion_error
 
     logger.info(
         "Audio enviado correctamente",
@@ -1411,7 +1409,7 @@ def send_audio():
             "numero": numero,
             "audio_url": audio_url,
             "media_id": media_id,
-            "warnings": warnings,
+            "warnings": response_payload.get("warning"),
         },
     )
 
