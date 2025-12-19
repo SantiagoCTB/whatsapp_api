@@ -60,6 +60,6 @@ except ImportError:  # pragma: no cover - fallback a WSGI si falta soporte ASGI
     ASGIApp = None
 
 if ASGIApp is not None:
-    asgi_app = ASGIApp(socketio, WSGIMiddleware(flask_app))
+    asgi_app = ASGIApp(socketio.server, WSGIMiddleware(flask_app))
 else:
     asgi_app = WSGIMiddleware(flask_app)
