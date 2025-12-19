@@ -1355,10 +1355,10 @@ def send_audio():
     tipo_envio = 'bot_audio' if origen == 'bot' else 'asesor'
 
     media_caption = ''  # No enviar caption dentro del payload de audio/documento
-    audio_payload = {"id": media_id, "link": audio_url, "voice": True} if media_id else {
-        "link": audio_url,
-        "voice": True,
-    }
+    if media_id:
+        audio_payload = {"id": media_id, "voice": True}
+    else:
+        audio_payload = {"link": audio_url, "voice": True}
 
     logger.info(
         "Enviando audio por WhatsApp",
