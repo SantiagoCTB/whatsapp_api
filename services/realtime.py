@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import os
+
 from flask_socketio import SocketIO
 
-socketio = SocketIO(async_mode="threading", cors_allowed_origins="*")
+ASYNC_MODE = "asgi" if os.getenv("SOCKETIO_ASGI") == "1" else "threading"
+socketio = SocketIO(async_mode=ASYNC_MODE, cors_allowed_origins="*")
 
 
 def init_app(app):
