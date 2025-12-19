@@ -4,7 +4,12 @@ import os
 
 from flask_socketio import SocketIO
 
-ASYNC_MODE = "asgi" if os.getenv("SOCKETIO_ASGI") == "1" else "threading"
+ALLOWED_ASYNC_MODES = {"eventlet", "gevent", "gevent_uwsgi", "threading"}
+ASYNC_MODE = os.getenv("SOCKETIO_ASYNC_MODE", "threading")
+if os.getenv("SOCKETIO_ASGI") == "1":
+    ASYNC_MODE = "threading"
+if ASYNC_MODE not in ALLOWED_ASYNC_MODES:
+    ASYNC_MODE = "threading"
 socketio = SocketIO(async_mode=ASYNC_MODE, cors_allowed_origins="*")
 
 
