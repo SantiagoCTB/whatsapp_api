@@ -93,14 +93,20 @@ def _convert_webm_to_ogg(src_path: str):
     dest_ogg_path = os.path.join(_media_root(), dest_ogg_name)
 
     def _try_convert(cmd, destination):
-        result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        result = subprocess.run(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
         if result.returncode != 0 or not os.path.exists(destination):
-            return False
+            error_output = (result.stderr or result.stdout or "").strip()
+            return False, error_output
         try:
             os.remove(src_path)
         except OSError:
             pass
-        return True
+        return True, None
 
     ogg_cmd = [
         "ffmpeg",
@@ -121,18 +127,12 @@ def _convert_webm_to_ogg(src_path: str):
         dest_ogg_path,
     ]
 
-    if _try_convert(ogg_cmd, dest_ogg_path):
+    converted, error_output = _try_convert(ogg_cmd, dest_ogg_path)
+    if converted:
         return dest_ogg_path, None
 
-    # Si ffmpeg falla, al menos renombramos/copiamos el archivo a .ogg para
-    # forzar un Content-Type reproducible en WhatsApp.
-    try:
-        fallback_path = os.path.splitext(src_path)[0] + '.ogg'
-        shutil.copy(src_path, fallback_path)
-        os.remove(src_path)
-        return fallback_path, "No se pudo convertir con ffmpeg; se envía el original renombrado a .ogg"
-    except OSError:
-        return None, "No se pudo convertir el audio a un formato compatible con WhatsApp."
+    detail = f" Detalle: {error_output}" if error_output else ""
+    return None, f"No se pudo convertir el audio a un formato compatible con WhatsApp.{detail}"
 
 
 def _is_excluded_flow_key(key):
@@ -1321,20 +1321,16 @@ def send_audio():
             )
             path = converted_path
             unique = os.path.basename(converted_path)
-        else:
-            try:
-                fallback_path = os.path.splitext(path)[0] + '.ogg'
-                shutil.copy(path, fallback_path)
-                os.remove(path)
-                path = fallback_path
-                unique = os.path.basename(fallback_path)
-            except OSError:
-                pass
     if conversion_error:
         logger.warning(
             "Conversión de audio a ogg con advertencias",
             extra={"numero": numero, "conversion_error": conversion_error},
         )
+        try:
+            os.remove(path)
+        except OSError:
+            pass
+        return jsonify({'error': conversion_error}), 422
 
     audio_url = url_for(
         'chat.serve_media',
