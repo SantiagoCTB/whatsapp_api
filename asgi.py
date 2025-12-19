@@ -52,17 +52,14 @@ from services.realtime import socketio
 
 flask_app = create_app()
 
+flask_app = create_app()
+
 try:  # pragma: no cover - python-socketio expone ASGIApp
     from socketio import ASGIApp
 except ImportError:  # pragma: no cover - fallback a WSGI si falta soporte ASGI
     ASGIApp = None
 
 if ASGIApp is not None:
-    asgi_app = ASGIApp(socketio, flask_app)
+    asgi_app = ASGIApp(socketio, WSGIMiddleware(flask_app))
 else:
-    try:  # pragma: no cover - la importación falla únicamente si falta la dependencia extra
-        from a2wsgi import WSGIMiddleware
-    except ImportError:  # pragma: no cover - a2wsgi es parte de requirements pero añadimos un plan B
-        from uvicorn.middleware.wsgi import WSGIMiddleware
-
     asgi_app = WSGIMiddleware(flask_app)
