@@ -47,10 +47,10 @@ if sys.platform.startswith("win"):
             _quiet_connection_lost
         )
 
+from a2wsgi import WSGIMiddleware
+
 from app import create_app
 from services.realtime import socketio
-
-flask_app = create_app()
 
 flask_app = create_app()
 
