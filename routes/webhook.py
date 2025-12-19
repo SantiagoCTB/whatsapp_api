@@ -258,7 +258,15 @@ def _catalog_context_for_prompt(prompt: str):
     return "\n".join(context_lines), pages
 
 
-def _reply_with_ai(numero: str, user_text: str | None, *, system_prompt: str | None = None) -> bool:
+def _reply_with_ai(
+    numero: str,
+    user_text: str | None,
+    *,
+    system_prompt: str | None = None,
+    set_step: bool = True,
+    history_step: str | None = "ia",
+    message_step: str | None = None,
+) -> bool:
     """Envía el mensaje al modelo de IA y responde al usuario."""
 
     prompt = (user_text or "").strip() or obtener_ultimo_mensaje_cliente(numero)
@@ -266,9 +274,17 @@ def _reply_with_ai(numero: str, user_text: str | None, *, system_prompt: str | N
         logger.info("Sin texto para enviar a la IA", extra={"numero": numero})
         return False
 
-    set_user_step(numero, "ia")
-    update_chat_state(numero, "ia", "ia_activa")
-    history = obtener_historial_chat(numero, limit=_ia_history_limit(), step="ia")
+    if set_step:
+        set_user_step(numero, "ia")
+        update_chat_state(numero, "ia", "ia_activa")
+
+    if history_step:
+        history = obtener_historial_chat(numero, limit=_ia_history_limit(), step=history_step)
+    else:
+        history = obtener_historial_chat(numero, limit=_ia_history_limit())
+
+    if not message_step:
+        message_step = "ia" if set_step else get_current_step(numero)
     catalog_context, pages = _catalog_context_for_prompt(prompt)
     if not catalog_context:
         logger.warning(
@@ -279,7 +295,7 @@ def _reply_with_ai(numero: str, user_text: str | None, *, system_prompt: str | N
             "Ahora mismo no encuentro información suficiente para tu consulta. "
             "¿Puedes darme más detalles del producto, marca o categoría que buscas?"
         )
-        enviar_mensaje(numero, pedir_datos, tipo="bot", step="ia")
+        enviar_mensaje(numero, pedir_datos, tipo="bot", step=message_step)
         return False
 
     prompt_for_model = prompt
@@ -300,7 +316,7 @@ def _reply_with_ai(numero: str, user_text: str | None, *, system_prompt: str | N
         logger.warning("La IA no devolvió respuesta", extra={"numero": numero})
         return False
 
-    enviar_mensaje(numero, response, tipo="bot", step="ia")
+    enviar_mensaje(numero, response, tipo="bot", step=message_step)
     for page in pages:
         if not page.image_filename:
             continue
@@ -324,7 +340,7 @@ def _reply_with_ai(numero: str, user_text: str | None, *, system_prompt: str | N
             tipo="bot",
             tipo_respuesta="image",
             opciones=image_url,
-            step="ia",
+            step=message_step,
         )
     return True
 
@@ -542,10 +558,24 @@ def dispatch_rule(numero, regla, step=None, visited=None, selected_option_id=Non
 
     rule_input_norm = normalize_text(input_text or "") if input_text else ""
     if rule_input_norm == "ia":
-        _reply_with_ai(numero, obtener_ultimo_mensaje_cliente(numero), system_prompt=resp)
+        _reply_with_ai(
+            numero,
+            obtener_ultimo_mensaje_cliente(numero),
+            system_prompt=resp,
+            set_step=False,
+            history_step=None,
+            message_step=current_step,
+        )
+        next_step = _resolve_next_step(next_step_raw, selected_option_id, opts)
+        if next_step:
+            advance_steps(numero, next_step, visited=visited)
         return
 
     media_list = media_urls.split('||') if media_urls else []
+    if tipo_resp in {'texto', 'lista', 'boton'} and not (resp or '').strip() and not media_list:
+        next_step = _resolve_next_step(next_step_raw, selected_option_id, opts)
+        advance_steps(numero, next_step, visited=visited)
+        return
     if tipo_resp in ['image', 'video', 'audio', 'document'] and media_list:
         enviar_mensaje(
             numero,

@@ -435,6 +435,8 @@ def enviar_mensaje(
             or opts.get("body_text")
             or mensaje
         )
+        if not body_text:
+            body_text = "Continuemos"
 
         interactive = {
             "type": "flow",
