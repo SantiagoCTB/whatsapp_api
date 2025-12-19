@@ -96,6 +96,7 @@
     <img id="imageModalContent" alt="Imagen del mensaje" />
   </div>
 
+  <script src="/socket.io/socket.io.js"></script>
   <script>
     document.addEventListener('DOMContentLoaded', () => {
       let currentChat = null, autoRefresh = null, todosChats = [], lastCount = 0, replyTo = null;
@@ -105,6 +106,9 @@
       let typingSignalTimeout = null;
       let lastTypingSent = 0;
       const TYPING_SIGNAL_THROTTLE = 2500;
+      let chatListPoll = null;
+      let socket = null;
+      let socketConnected = false;
       let selectedBubble = null;
       let chatContextTarget = null;
       const notificationSoundUrl = "{{ url_for('static', filename='notificacion.mp3') }}";
@@ -1338,8 +1342,74 @@
           });
       }
 
+      function startChatListPolling() {
+        if (chatListPoll) return;
+        chatListPoll = setInterval(fetchChatList, 5000);
+      }
+
+      function stopChatListPolling() {
+        if (!chatListPoll) return;
+        clearInterval(chatListPoll);
+        chatListPoll = null;
+      }
+
+      function startMessagePolling() {
+        if (autoRefresh) return;
+        autoRefresh = setInterval(loadMessages, 3000);
+      }
+
+      function stopMessagePolling() {
+        if (!autoRefresh) return;
+        clearInterval(autoRefresh);
+        autoRefresh = null;
+      }
+
+      function setupSocket() {
+        if (typeof io === 'undefined') return;
+        socket = io();
+
+        socket.on('connect', () => {
+          socketConnected = true;
+          stopChatListPolling();
+          stopMessagePolling();
+          fetchChatList();
+          if (currentChat) {
+            socket.emit('join_chat', { numero: currentChat });
+            loadMessages();
+          }
+        });
+
+        socket.on('disconnect', () => {
+          socketConnected = false;
+          startChatListPolling();
+          if (currentChat) {
+            startMessagePolling();
+          }
+        });
+
+        socket.on('chat_list_update', () => {
+          fetchChatList();
+        });
+
+        socket.on('chat_update', data => {
+          if (!data || !data.numero) return;
+          if (currentChat && data.numero === currentChat) {
+            loadMessages();
+          }
+        });
+
+        socket.on('typing_update', data => {
+          if (!data || !data.numero) return;
+          if (currentChat && data.numero === currentChat) {
+            const atBottom = chatBoxEl.scrollTop + chatBoxEl.clientHeight >= chatBoxEl.scrollHeight - 5;
+            updateTypingIndicator(Boolean(data.is_typing), atBottom);
+          }
+        });
+      }
+
       // Seleccionar chat
       function selectChat(numero, liEl) {
+        const previousChat = currentChat;
         currentChat = numero;
         const chatData = todosChats.find(c => c.numero === numero) || {};
         lastCount = 0; // reset count so the initial load doesn't trigger alerts
@@ -1349,8 +1419,16 @@
         // marcar activo
         document.querySelectorAll('#chatList li').forEach(li => li.classList.remove('active'));
         liEl.classList.add('active');
-        if (autoRefresh) clearInterval(autoRefresh);
-        autoRefresh = setInterval(loadMessages, 3000);
+        if (socketConnected && socket) {
+          if (previousChat && previousChat !== numero) {
+            socket.emit('leave_chat', { numero: previousChat });
+          }
+          socket.emit('join_chat', { numero });
+        }
+        stopMessagePolling();
+        if (!socketConnected) {
+          startMessagePolling();
+        }
         loadMessages(); loadBotonera();
       }
 
@@ -1672,14 +1750,19 @@
         const now = Date.now();
         if (!force && now - lastTypingSent < TYPING_SIGNAL_THROTTLE) return;
         lastTypingSent = now;
+        const payload = {
+          numero: currentChat,
+          message_id: lastIncomingWaId,
+          include_read: true
+        };
+        if (socketConnected && socket) {
+          socket.emit('typing_signal', payload);
+          return;
+        }
         fetch('/typing_signal', {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({
-            numero: currentChat,
-            message_id: lastIncomingWaId,
-            include_read: true
-          })
+          body: JSON.stringify(payload)
         }).catch(err => console.error('Error enviando indicador de escritura', err));
       }
 
@@ -2072,9 +2155,9 @@
       });
 
       // Inicializa
+      setupSocket();
       fetchChatList();
-      setInterval(fetchChatList, 5000); // intervalo según necesidad
-      // TODO: sustituir el sondeo por WebSockets o Server-Sent Events para actualizaciones en tiempo real
+      startChatListPolling();
     });
   </script>
 {% endblock %}
