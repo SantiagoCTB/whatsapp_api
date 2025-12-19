@@ -746,6 +746,12 @@ def start_typing_feedback(numero, message_id=None):
 
     with _typing_lock:
         _typing_ui_state.add(numero)
+    try:
+        from services.realtime import emit_typing_update
+    except ImportError:  # pragma: no cover - depende de entorno opcional
+        emit_typing_update = None
+    if emit_typing_update:
+        emit_typing_update(numero, True)
 
     with _typing_lock:
         session = _typing_sessions.get(numero)
@@ -768,6 +774,12 @@ def start_typing_feedback(numero, message_id=None):
 def stop_typing_feedback(numero):
     with _typing_lock:
         _typing_ui_state.discard(numero)
+    try:
+        from services.realtime import emit_typing_update
+    except ImportError:  # pragma: no cover - depende de entorno opcional
+        emit_typing_update = None
+    if emit_typing_update:
+        emit_typing_update(numero, False)
 
     with _typing_lock:
         session = _typing_sessions.pop(numero, None)

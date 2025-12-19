@@ -20,6 +20,7 @@ from routes.users_routes import users_bp
 from routes.webhook import webhook_bp
 from routes.tablero_routes import tablero_bp
 from routes.export_routes import export_bp
+from services.realtime import init_app as init_socketio, socketio
 
 
 def _extract_phone_number_id(req):
@@ -94,6 +95,8 @@ def create_app():
     app.register_blueprint(webhook_bp)
     app.register_blueprint(tablero_bp)
     app.register_blueprint(export_bp)
+    init_socketio(app)
+    import routes.socket_routes  # noqa: F401
 
     @app.before_request
     def bind_tenant():
@@ -190,8 +193,9 @@ def create_app():
     return app
 
 # Objeto WSGI para Gunicorn
-app = create_app()
+running_tests = "PYTEST_CURRENT_TEST" in os.environ or "pytest" in sys.modules
+app = None if running_tests else create_app()
 
 if __name__ == '__main__':
     port = int(os.getenv('PORT', 5000))
-    app.run(host='0.0.0.0', port=port)
+    socketio.run(create_app(), host='0.0.0.0', port=port)

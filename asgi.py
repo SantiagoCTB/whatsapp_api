@@ -47,11 +47,22 @@ if sys.platform.startswith("win"):
             _quiet_connection_lost
         )
 
-from app import app as flask_app  # <-- si tu Flask está en app.py y la instancia se llama 'app'
+from app import create_app
+from services.realtime import socketio
+
+flask_app = create_app()
 
 try:  # pragma: no cover - la importación falla únicamente si falta la dependencia extra
     from a2wsgi import WSGIMiddleware
 except ImportError:  # pragma: no cover - a2wsgi es parte de requirements pero añadimos un plan B
     from uvicorn.middleware.wsgi import WSGIMiddleware
 
-asgi_app = WSGIMiddleware(flask_app)
+try:  # pragma: no cover - python-socketio expone ASGIApp
+    from socketio import ASGIApp
+except ImportError:  # pragma: no cover - fallback a WSGI si falta soporte ASGI
+    ASGIApp = None
+
+if ASGIApp is not None:
+    asgi_app = ASGIApp(socketio, WSGIMiddleware(flask_app))
+else:
+    asgi_app = WSGIMiddleware(flask_app)
