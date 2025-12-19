@@ -103,6 +103,7 @@
       let lastIncomingWaId = null;
       let messagesRequestSeq = 0;
       let lastRenderedMessagesSeq = 0;
+      let lastMessagesFingerprint = null;
       let typingSignalTimeout = null;
       let lastTypingSent = 0;
       const TYPING_SIGNAL_THROTTLE = 2500;
@@ -1484,9 +1485,16 @@
             lastRenderedMessagesSeq = requestId;
             const msgs = data.mensajes, total = msgs.length;
             const atBottom = chatBoxEl.scrollTop + chatBoxEl.clientHeight >= chatBoxEl.scrollHeight - 5;
+            const currentFingerprint = buildMessagesFingerprint(msgs);
+            if (currentFingerprint === lastMessagesFingerprint) {
+              updateTypingIndicator(Boolean(data.is_typing), atBottom);
+              if (atBottom) chatBoxEl.scrollTop = chatBoxEl.scrollHeight;
+              return;
+            }
+            lastMessagesFingerprint = currentFingerprint;
             const previousCount = lastCount;
             const previousIncoming = lastIncomingWaId;
-            chatBoxEl.innerHTML = '';
+            const nextChildren = document.createDocumentFragment();
             lastCount = 0;
             let newestIncoming = lastIncomingWaId;
             for (let i=0; i<total; i++){
@@ -1601,7 +1609,7 @@
                 });
               }
 
-              chatBoxEl.appendChild(div);
+              nextChildren.appendChild(div);
 
               if (lastCount > 0 && bubble !== 'asesor' && previousCount > 0 && (waId !== previousIncoming)) {
                 const mediaPlaying = Array.from(chatBoxEl.querySelectorAll('audio, video')).some(m => !m.paused);
@@ -1609,10 +1617,18 @@
               }
               lastCount = i + 1;
             }
+            chatBoxEl.replaceChildren(nextChildren);
             lastIncomingWaId = newestIncoming;
             updateTypingIndicator(Boolean(data.is_typing), atBottom);
             if (atBottom) chatBoxEl.scrollTop = chatBoxEl.scrollHeight;
           });
+      }
+
+      function buildMessagesFingerprint(msgs) {
+        if (!Array.isArray(msgs) || msgs.length === 0) return '0';
+        const first = msgs[0] || [];
+        const last = msgs[msgs.length - 1] || [];
+        return `${msgs.length}|${first[8] || ''}|${last[8] || ''}|${last[3] || ''}`;
       }
 
       // Botones rápidos
