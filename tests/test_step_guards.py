@@ -395,3 +395,76 @@ def test_ai_step_skipped_on_first_message(monkeypatch):
 
     assert states['5215552468'][0] == 'ia'
     assert ai_calls == []
+
+
+def test_rule_sequence_respects_order_with_ai_and_flow(monkeypatch, patch_dependencies):
+    responses = {
+        'iniciar': [
+            (
+                101,
+                'saludo inicial',
+                'menu_principal',
+                'texto',
+                None,
+                None,
+                None,
+                '*',
+            )
+        ],
+        'menu_principal': [
+            (
+                102,
+                '',
+                'flow_step',
+                'texto',
+                None,
+                None,
+                None,
+                'ia',
+            )
+        ],
+        'flow_step': [
+            (
+                103,
+                '',
+                None,
+                'flow',
+                None,
+                '{"flow_cta":"Continuar","flow_name":"flow_prueba"}',
+                None,
+                '*',
+            )
+        ],
+    }
+
+    monkeypatch.setattr(webhook_module.Config, 'INITIAL_STEP', 'iniciar')
+    monkeypatch.setattr(
+        webhook_module,
+        'get_connection',
+        lambda: DummyConnection(responses),
+    )
+    monkeypatch.setattr(webhook_module, 'guardar_mensaje', lambda *_, **__: None)
+    monkeypatch.setattr(webhook_module, 'handle_global_command', lambda *_, **__: False)
+    monkeypatch.setattr(
+        webhook_module,
+        'obtener_ultimo_mensaje_cliente',
+        lambda *_: 'mensaje cliente',
+    )
+
+    ai_calls = []
+    monkeypatch.setattr(
+        webhook_module,
+        '_reply_with_ai',
+        lambda *args, **kwargs: ai_calls.append((args, kwargs)),
+    )
+
+    webhook_module.handle_text_message('5215551111', 'hola')
+    webhook_module.handle_text_message('5215551111', 'ia')
+
+    mensajes = [msg for _, msg, _ in patch_dependencies.sent_messages]
+    steps = [step for _, _, step in patch_dependencies.sent_messages]
+
+    assert mensajes == ['saludo inicial', '']
+    assert steps == ['iniciar', 'flow_step']
+    assert len(ai_calls) == 1
+    assert patch_dependencies.steps_set[-1][1] == 'flow_step'
