@@ -50,7 +50,7 @@ Start-Process -FilePath python -ArgumentList $backupArgs -NoNewWindow -PassThru 
 & $docker compose -f $composeFile down --remove-orphans
 
 $env:DOCKER_HOST="npipe:////./pipe/docker_engine"
-& "C:\Program Files\Docker\Docker\resources\bin\docker.exe" network rm windows_default
+& "C:\Program Files\Docker\Docker\resources\bin\docker.exe" network rm whapco_win 2>$null
 
 $env:DOCKER_HOST="npipe:////./pipe/docker_engine"
 & "C:\Program Files\Docker\Docker\resources\bin\docker.exe" compose -f "C:\whatsapp_api\deploy\windows\docker-compose.windows.yml" up -d --build

@@ -26,12 +26,15 @@ ENV PATH="C:\\ffmpeg\\bin;C:\\Python312;C:\\Python312\\Scripts;${PATH}"
 # 2) Dependencias Python
 COPY requirements.txt .\
 
-RUN python -m pip install --upgrade pip; `
-    python -m pip install -r requirements.txt; `
-    python -m pip install "uvicorn[standard]" a2wsgi asgiref
+RUN C:\\Python312\\python.exe -m pip install --upgrade pip; `
+    C:\\Python312\\python.exe -m pip install -r requirements.txt; `
+    C:\\Python312\\python.exe -m pip install "uvicorn[standard]" a2wsgi asgiref
 
 # 3) Copiar código
 COPY . .\
+
+# 3.1) Asegurar carpeta de uploads para static
+RUN New-Item -ItemType Directory -Path C:\\app\\static\\uploads -Force | Out-Null
 
 # 4) Fullchain (solo si existen los archivos)
 # Si siempre tienes esos certs en el repo, puedes dejarlo sin el if.
