@@ -90,20 +90,20 @@ def serve_media(filename: str):
         guessed = 'audio/ogg'
     elif ext == '.m4a':
         guessed = 'audio/mp4'
+    elif ext == '.mp3':
+        guessed = 'audio/mpeg'
     mimetype = guessed or 'application/octet-stream'
 
     return send_file(target_path, mimetype=mimetype)
 
 
-def _convert_audio_variants(src_path: str):
+def _convert_audio_to_mp3(src_path: str):
     if not shutil.which("ffmpeg"):
         return None, None, "No se encontró ffmpeg para convertir el audio."
 
     original_name, _ = os.path.splitext(os.path.basename(src_path))
-    dest_ogg_name = f"{uuid.uuid4().hex}_{original_name}.ogg"
-    dest_m4a_name = f"{uuid.uuid4().hex}_{original_name}.m4a"
-    dest_ogg_path = os.path.join(_media_root(), dest_ogg_name)
-    dest_m4a_path = os.path.join(_media_root(), dest_m4a_name)
+    dest_mp3_name = f"{uuid.uuid4().hex}_{original_name}.mp3"
+    dest_mp3_path = os.path.join(_media_root(), dest_mp3_name)
 
     def _try_convert(cmd, destination):
         result = subprocess.run(
@@ -117,92 +117,29 @@ def _convert_audio_variants(src_path: str):
             return False, error_output
         return True, None
 
-    ogg_cmd = [
+    mp3_cmd = [
         "ffmpeg",
         "-y",
         "-i",
         src_path,
         "-vn",
         "-c:a",
-        "libopus",
-        "-b:a",
-        "96k",
-        "-ac",
-        "1",
-        "-ar",
-        "48000",
-        "-f",
-        "ogg",
-        dest_ogg_path,
-    ]
-
-    m4a_cmd = [
-        "ffmpeg",
-        "-y",
-        "-i",
-        src_path,
-        "-vn",
-        "-c:a",
-        "aac",
+        "libmp3lame",
         "-b:a",
         "128k",
         "-ac",
         "1",
         "-ar",
         "44100",
-        dest_m4a_path,
+        dest_mp3_path,
     ]
 
-    ogg_converted, ogg_error = _try_convert(ogg_cmd, dest_ogg_path)
-    m4a_converted, m4a_error = _try_convert(m4a_cmd, dest_m4a_path)
+    converted, error_output = _try_convert(mp3_cmd, dest_mp3_path)
+    if converted:
+        return dest_mp3_path, None
 
-    if ogg_converted and m4a_converted:
-        try:
-            os.remove(src_path)
-        except OSError:
-            pass
-        return dest_ogg_path, dest_m4a_path, None
-
-    for failed_path, converted in (
-        (dest_ogg_path, ogg_converted),
-        (dest_m4a_path, m4a_converted),
-    ):
-        if converted and os.path.exists(failed_path):
-            try:
-                os.remove(failed_path)
-            except OSError:
-                pass
-
-    error_details = []
-    if ogg_error:
-        error_details.append(f"OGG: {ogg_error}")
-    if m4a_error:
-        error_details.append(f"M4A: {m4a_error}")
-    detail_text = f" Detalle: {' | '.join(error_details)}" if error_details else ""
-    return None, None, f"No se pudo convertir el audio a un formato compatible.{detail_text}"
-
-
-def _client_prefers_m4a(user_agent: str | None = None) -> bool:
-    ua = (user_agent or request.headers.get("User-Agent", "")).lower()
-    if not ua:
-        return True
-    if any(device in ua for device in ("iphone", "ipad", "ipod")):
-        return True
-    if "safari" in ua and "chrome" not in ua and "chromium" not in ua:
-        return True
-    return True
-
-
-def _select_audio_variant(audio_payload: dict, prefer_m4a: bool | None = None) -> str | None:
-    if prefer_m4a is None:
-        prefer_m4a = _client_prefers_m4a()
-    ogg_url = audio_payload.get("audio_ogg_url")
-    m4a_url = audio_payload.get("audio_m4a_url")
-    if prefer_m4a and m4a_url:
-        return m4a_url
-    if ogg_url:
-        return ogg_url
-    return m4a_url
+    detail = f" Detalle: {error_output}" if error_output else ""
+    return None, f"No se pudo convertir el audio a un formato compatible.{detail}"
 
 
 def _is_excluded_flow_key(key):
@@ -1396,20 +1333,19 @@ def send_audio():
     media_id = None
     m4a_filename = None
 
-    ogg_path, m4a_path, conversion_error = _convert_audio_variants(path)
-    if ogg_path and m4a_path:
+    converted_path, conversion_error = _convert_audio_to_mp3(path)
+    if converted_path:
         logger.info(
-            "Audio convertido a ogg/m4a",
-            extra={"numero": numero, "ogg_path": ogg_path, "m4a_path": m4a_path},
+            "Audio convertido a mp3",
+            extra={"numero": numero, "converted_path": converted_path},
         )
-        path = ogg_path
-        unique = os.path.basename(ogg_path)
-        m4a_filename = os.path.basename(m4a_path)
-        ext = '.ogg'
-        mime_type = 'audio/ogg'
+        path = converted_path
+        unique = os.path.basename(converted_path)
+        ext = '.mp3'
+        mime_type = 'audio/mpeg'
     if conversion_error:
         logger.warning(
-            "Conversión de audio a ogg/m4a con advertencias",
+            "Conversión de audio a mp3 con advertencias",
             extra={"numero": numero, "conversion_error": conversion_error},
         )
         try:
@@ -1460,11 +1396,7 @@ def send_audio():
     tipo_envio = 'bot_audio' if origen == 'bot' else 'asesor'
 
     media_caption = ''  # No enviar caption dentro del payload de audio/documento
-    audio_payload = {
-        "id": media_id,
-        "link": json.dumps(audio_urls, ensure_ascii=False),
-        "voice": True,
-    }
+    audio_payload = {"id": media_id, "link": audio_url, "voice": True}
 
     logger.info(
         "Enviando audio por WhatsApp",
