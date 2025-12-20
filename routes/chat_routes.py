@@ -88,18 +88,22 @@ def serve_media(filename: str):
         guessed = 'audio/webm'
     elif ext == '.ogg':
         guessed = 'audio/ogg'
+    elif ext == '.m4a':
+        guessed = 'audio/mp4'
+    elif ext == '.mp3':
+        guessed = 'audio/mpeg'
     mimetype = guessed or 'application/octet-stream'
 
     return send_file(target_path, mimetype=mimetype)
 
 
-def _convert_audio_to_ogg(src_path: str):
+def _convert_audio_to_mp3(src_path: str):
     if not shutil.which("ffmpeg"):
         return None, "No se encontró ffmpeg para convertir el audio."
 
     original_name, _ = os.path.splitext(os.path.basename(src_path))
-    dest_ogg_name = f"{uuid.uuid4().hex}_{original_name}.ogg"
-    dest_ogg_path = os.path.join(_media_root(), dest_ogg_name)
+    dest_mp3_name = f"{uuid.uuid4().hex}_{original_name}.mp3"
+    dest_mp3_path = os.path.join(_media_root(), dest_mp3_name)
 
     def _try_convert(cmd, destination):
         result = subprocess.run(
@@ -117,31 +121,29 @@ def _convert_audio_to_ogg(src_path: str):
             pass
         return True, None
 
-    ogg_cmd = [
+    mp3_cmd = [
         "ffmpeg",
         "-y",
         "-i",
         src_path,
         "-vn",
         "-c:a",
-        "libopus",
+        "libmp3lame",
         "-b:a",
-        "96k",
+        "128k",
         "-ac",
         "1",
         "-ar",
-        "48000",
-        "-f",
-        "ogg",
-        dest_ogg_path,
+        "44100",
+        dest_mp3_path,
     ]
 
-    converted, error_output = _try_convert(ogg_cmd, dest_ogg_path)
+    converted, error_output = _try_convert(mp3_cmd, dest_mp3_path)
     if converted:
-        return dest_ogg_path, None
+        return dest_mp3_path, None
 
     detail = f" Detalle: {error_output}" if error_output else ""
-    return None, f"No se pudo convertir el audio a un formato compatible con WhatsApp.{detail}"
+    return None, f"No se pudo convertir el audio a un formato compatible.{detail}"
 
 
 def _is_excluded_flow_key(key):
@@ -1322,19 +1324,19 @@ def send_audio():
     conversion_error = None
     media_id = None
 
-    converted_path, conversion_error = _convert_audio_to_ogg(path)
+    converted_path, conversion_error = _convert_audio_to_mp3(path)
     if converted_path:
         logger.info(
-            "Audio convertido a ogg",
+            "Audio convertido a mp3",
             extra={"numero": numero, "converted_path": converted_path},
         )
         path = converted_path
         unique = os.path.basename(converted_path)
-        ext = '.ogg'
-        mime_type = 'audio/ogg'
+        ext = '.mp3'
+        mime_type = 'audio/mpeg'
     if conversion_error:
         logger.warning(
-            "Conversión de audio a ogg con advertencias",
+            "Conversión de audio a mp3 con advertencias",
             extra={"numero": numero, "conversion_error": conversion_error},
         )
         try:
@@ -1374,7 +1376,7 @@ def send_audio():
     tipo_envio = 'bot_audio' if origen == 'bot' else 'asesor'
 
     media_caption = ''  # No enviar caption dentro del payload de audio/documento
-    audio_payload = {"id": media_id, "voice": True}
+    audio_payload = {"id": media_id, "link": audio_url, "voice": True}
 
     logger.info(
         "Enviando audio por WhatsApp",

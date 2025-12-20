@@ -62,11 +62,11 @@ def test_send_audio_generates_public_url_and_keeps_caption(tmp_path, client, mon
     captured = {}
 
     _patch_chat_dependencies(monkeypatch, tmp_path)
-    converted_path = tmp_path / "converted.ogg"
+    converted_path = tmp_path / "converted.mp3"
     converted_path.write_bytes(b"converted")
     monkeypatch.setattr(
         chat_routes,
-        "_convert_webm_to_ogg",
+        "_convert_audio_to_mp3",
         lambda src: (str(converted_path), None),
     )
     def fake_send(numero, caption, tipo, tipo_respuesta, opciones=None, **kwargs):
@@ -103,14 +103,16 @@ def test_send_audio_generates_public_url_and_keeps_caption(tmp_path, client, mon
     payload = response.get_json()
     assert payload["status"] == "sent_audio"
     assert payload["url"].startswith("http")
-    assert payload["url"].endswith(".ogg")
+    assert payload["url"].endswith(".mp3")
     assert "/media/" in payload["url"]
 
     assert len(captured["calls"]) == 2
 
     media_call = captured["calls"][0]
     assert media_call["caption"] == ""
-    assert media_call["opciones"] == {"id": "media123", "link": payload["url"]}
+    assert media_call["opciones"]["id"] == "media123"
+    assert media_call["opciones"]["link"] == payload["url"]
+    assert media_call["opciones"]["voice"] is True
     assert media_call["tipo_respuesta"] == "audio"
 
     text_call = captured["calls"][1]
@@ -166,7 +168,7 @@ def test_send_audio_rejects_empty_recording(tmp_path, client, monkeypatch):
 
 def test_send_audio_rejects_when_conversion_fails(tmp_path, client, monkeypatch):
     _patch_chat_dependencies(monkeypatch, tmp_path)
-    monkeypatch.setattr(chat_routes, "_convert_webm_to_ogg", lambda *_: (None, "fail"))
+    monkeypatch.setattr(chat_routes, "_convert_audio_to_mp3", lambda *_: (None, "fail"))
     captured = {}
 
     def fake_send(numero, caption, tipo, tipo_respuesta, opciones=None, **kwargs):
