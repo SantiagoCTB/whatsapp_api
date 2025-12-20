@@ -15,33 +15,33 @@ def _load_chat_state_definitions():
     if not definitions:
         definitions = [
             {
-                "key": "verde",
-                "label": "Verde",
+                "key": "esperando_respuesta",
+                "label": "Esperando respuesta",
+                "color": "#f0ad4e",
+                "text_color": "#1f1f1f",
+            },
+            {
+                "key": "asesor",
+                "label": "Asesor",
                 "color": "#28a745",
                 "text_color": "#ffffff",
             },
             {
-                "key": "amarillo",
-                "label": "Amarillo",
-                "color": "#ffc107",
-                "text_color": "#2d2d2d",
+                "key": "en_flujo",
+                "label": "En flujo",
+                "color": "#0d6efd",
+                "text_color": "#ffffff",
             },
             {
-                "key": "rojo",
-                "label": "Rojo",
+                "key": "inactivo",
+                "label": "Inactivo",
+                "color": "#6c757d",
+                "text_color": "#ffffff",
+            },
+            {
+                "key": "error_flujo",
+                "label": "Error de flujo",
                 "color": "#dc3545",
-                "text_color": "#ffffff",
-            },
-            {
-                "key": "asesor",
-                "label": "Modo asesor",
-                "color": "#6f42c1",
-                "text_color": "#ffffff",
-            },
-            {
-                "key": "bot",
-                "label": "Bot activo",
-                "color": "#007bff",
                 "text_color": "#ffffff",
             },
         ]
@@ -84,14 +84,14 @@ def _load_chat_state_definitions():
     required = [
         {
             "key": "asesor",
-            "label": "Modo asesor",
-            "color": "#6f42c1",
+            "label": "Asesor",
+            "color": "#28a745",
             "text_color": "#ffffff",
         },
         {
-            "key": "bot",
-            "label": "Bot activo",
-            "color": "#007bff",
+            "key": "en_flujo",
+            "label": "En flujo",
+            "color": "#0d6efd",
             "text_color": "#ffffff",
         },
     ]

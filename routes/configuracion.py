@@ -21,7 +21,7 @@ else:  # pragma: no cover - fallback cuando falta el conector
 from config import Config
 from services import tenants
 from services.catalog import ingest_catalog_pdf
-from services.db import get_connection
+from services.db import get_connection, get_chat_state_definitions
 
 config_bp = Blueprint('configuracion', __name__)
 logger = logging.getLogger(__name__)
@@ -51,6 +51,28 @@ def _url_ok(url):
         return ok, mime
     except requests.RequestException:
         return False, None
+
+
+def _normalize_state_key(raw_key: str | None) -> str | None:
+    if not raw_key:
+        return None
+    cleaned = re.sub(r"[^a-z0-9_-]+", "_", raw_key.strip().lower()).strip("_")
+    if not cleaned:
+        return None
+    return cleaned[:40]
+
+
+def _coerce_hex_color(value: str | None, default: str) -> str:
+    if not value:
+        return default
+    candidate = value.strip()
+    if not candidate:
+        return default
+    if not candidate.startswith("#"):
+        candidate = f"#{candidate}"
+    if re.fullmatch(r"#[0-9a-fA-F]{6}", candidate):
+        return candidate
+    return default
 
 
 def _ensure_ia_config_table(cursor):
@@ -531,9 +553,95 @@ def _reglas_view(template_name):
                             d[key] = value
                     d['flow_options'] = parsed_opts
             reglas.append(d)
-        return render_template(template_name, reglas=reglas)
+        chat_state_definitions = get_chat_state_definitions(include_hidden=True)
+        return render_template(
+            template_name,
+            reglas=reglas,
+            chat_state_definitions=chat_state_definitions,
+        )
     finally:
         conn.close()
+
+
+@config_bp.route('/chat_states', methods=['POST'])
+def save_chat_state_definition():
+    if not _require_admin():
+        return redirect(url_for("auth.login"))
+
+    get_chat_state_definitions(include_hidden=True)
+    raw_key = request.form.get('state_key')
+    original_key = request.form.get('original_key')
+    label = (request.form.get('label') or '').strip()
+    color_hex = _coerce_hex_color(request.form.get('color_hex'), '#666666')
+    text_color_hex = _coerce_hex_color(request.form.get('text_color_hex'), '#ffffff')
+    priority_raw = request.form.get('priority')
+    visible = 1 if request.form.get('visible') in {'1', 'true', 'on', 'yes'} else 0
+
+    state_key = _normalize_state_key(raw_key)
+    if not state_key:
+        return redirect(url_for('configuracion.reglas'))
+
+    if not label:
+        label = state_key.replace("_", " ").title()
+
+    try:
+        priority = int(priority_raw) if priority_raw is not None else 0
+    except (TypeError, ValueError):
+        priority = 0
+
+    conn = get_connection()
+    c = conn.cursor()
+    try:
+        if original_key:
+            original_key = _normalize_state_key(original_key)
+        if original_key and original_key != state_key:
+            c.execute(
+                "DELETE FROM chat_state_definitions WHERE state_key = %s",
+                (original_key,),
+            )
+
+        c.execute(
+            """
+            INSERT INTO chat_state_definitions
+                (state_key, label, color_hex, text_color_hex, priority, visible)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            ON DUPLICATE KEY UPDATE
+                label = VALUES(label),
+                color_hex = VALUES(color_hex),
+                text_color_hex = VALUES(text_color_hex),
+                priority = VALUES(priority),
+                visible = VALUES(visible)
+            """,
+            (state_key, label, color_hex, text_color_hex, priority, visible),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    return redirect(url_for('configuracion.reglas'))
+
+
+@config_bp.route('/chat_states/delete', methods=['POST'])
+def delete_chat_state_definition():
+    if not _require_admin():
+        return redirect(url_for("auth.login"))
+
+    state_key = _normalize_state_key(request.form.get('state_key'))
+    if not state_key:
+        return redirect(url_for('configuracion.reglas'))
+
+    conn = get_connection()
+    c = conn.cursor()
+    try:
+        c.execute(
+            "DELETE FROM chat_state_definitions WHERE state_key = %s",
+            (state_key,),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    return redirect(url_for('configuracion.reglas'))
 
 
 @config_bp.route('/configuracion/ia', methods=['GET', 'POST'])

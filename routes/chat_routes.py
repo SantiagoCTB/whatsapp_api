@@ -32,7 +32,9 @@ from services.db import (
     update_chat_state,
     delete_chat_state,
     hide_chat,
+    get_chat_state_definitions,
 )
+from services.normalize_text import normalize_text
 
 chat_bp = Blueprint('chat', __name__)
 logger = logging.getLogger(__name__)
@@ -49,8 +51,24 @@ def _preferred_url_scheme() -> str:
     return "https"
 MEDIA_ROOT = Config.MEDIA_ROOT
 
-CHAT_STATE_DEFINITIONS = Config.CHAT_STATE_DEFINITIONS
-CHAT_STATE_KEYS = {item["key"] for item in CHAT_STATE_DEFINITIONS if item.get("key")}
+ALLOWED_RULE_TYPES = {
+    "texto",
+    "boton",
+    "lista",
+    "flow",
+    "image",
+    "document",
+    "video",
+    "audio",
+}
+
+LEGACY_STATE_MAP = {
+    "sin_regla": "asesor",
+    "sin_respuesta": "esperando_respuesta",
+    "espera_usuario": "esperando_respuesta",
+    "bot": "en_flujo",
+    "ia_activa": "en_flujo",
+}
 
 
 EXCLUDED_FLOW_FIELDS = {"flow_token"}
@@ -62,6 +80,63 @@ def _media_root():
 
 def _media_path(filename: str):
     return os.path.join(_media_root(), filename)
+
+
+def _load_chat_state_definitions(include_hidden: bool = False):
+    definitions = get_chat_state_definitions(include_hidden=include_hidden)
+    keys = {item["key"] for item in definitions if item.get("key")}
+    return definitions, keys
+
+
+def _session_timeout_seconds() -> int:
+    runtime = tenants.get_current_tenant_env()
+    timeout = runtime.get("SESSION_TIMEOUT") if runtime else None
+    if isinstance(timeout, int):
+        return timeout
+    try:
+        return int(timeout)
+    except (TypeError, ValueError):
+        return Config.SESSION_TIMEOUT
+
+
+def _select_matching_rule(rules, text_norm: str | None):
+    wildcard = None
+    for rule in rules:
+        input_text = (rule[1] or '').strip()
+        if input_text == '*':
+            wildcard = rule
+            continue
+        if input_text and text_norm and normalize_text(input_text) == text_norm:
+            return rule
+    return wildcard
+
+
+def _rule_is_invalid(rule, cursor) -> bool:
+    tipo = (rule[3] or '').strip().lower()
+    if tipo not in ALLOWED_RULE_TYPES:
+        return True
+
+    opciones = rule[4]
+    if tipo in {"boton", "lista", "flow"} and opciones:
+        try:
+            if isinstance(opciones, str):
+                json.loads(opciones)
+        except (TypeError, ValueError):
+            return True
+
+    next_steps = [step.strip().lower() for step in (rule[2] or '').split(',') if step.strip()]
+    if next_steps:
+        placeholders = ','.join(['%s'] * len(next_steps))
+        cursor.execute(
+            f"SELECT DISTINCT step FROM reglas WHERE step IN ({placeholders})",
+            tuple(next_steps),
+        )
+        existing = {row[0] for row in cursor.fetchall()}
+        missing = [step for step in next_steps if step not in existing]
+        if missing:
+            return True
+
+    return False
 
 
 @chat_bp.route('/media/<path:filename>')
@@ -527,6 +602,7 @@ def index():
     roles_db = c.fetchall()
 
     conn.close()
+    chat_state_definitions, _ = _load_chat_state_definitions()
     return render_template(
         'index.html',
         chats=chats,
@@ -534,7 +610,7 @@ def index():
         rol=rol,
         role_id=role_id,
         roles=roles_db,
-        chat_state_definitions=CHAT_STATE_DEFINITIONS,
+        chat_state_definitions=chat_state_definitions,
         ai_enabled=ai_enabled,
     )
 
@@ -947,6 +1023,10 @@ def get_chat_list():
     if 'numeros' not in locals():
         numeros = [row[0] for row in c.fetchall()]
 
+    chat_state_definitions, _ = _load_chat_state_definitions(include_hidden=True)
+    chat_state_def_map = {item["key"]: item for item in chat_state_definitions if item.get("key")}
+    timeout_seconds = _session_timeout_seconds()
+    now = datetime.utcnow()
     chats = []
     for numero in numeros:
         # Alias
@@ -956,13 +1036,15 @@ def get_chat_list():
 
         # Último mensaje y su timestamp
         c.execute(
-            "SELECT mensaje, timestamp FROM mensajes WHERE numero = %s "
+            "SELECT mensaje, timestamp, tipo FROM mensajes WHERE numero = %s "
             "ORDER BY timestamp DESC LIMIT 1",
             (numero,)
         )
         fila = c.fetchone()
         last_ts = _to_bogota_iso(fila[1]) if fila and fila[1] else None
+        last_ts_raw = fila[1] if fila else None
         ultimo = fila[0] if fila else ""
+        last_tipo = fila[2] if fila else None
         requiere_asesor = "asesor" in ultimo.lower()
 
         # Roles asociados al número y nombre/keyword
@@ -983,9 +1065,66 @@ def get_chat_list():
         inicial_rol = role_keywords[0][0].upper() if role_keywords else None
 
         # Estado actual del chat
-        c.execute("SELECT estado FROM chat_state WHERE numero = %s", (numero,))
-        fila = c.fetchone()
-        estado = fila[0] if fila else None
+        c.execute(
+            "SELECT step, last_activity, estado FROM chat_state WHERE numero = %s",
+            (numero,),
+        )
+        fila_estado = c.fetchone()
+        step = fila_estado[0] if fila_estado else None
+        last_activity = fila_estado[1] if fila_estado else None
+        stored_estado = fila_estado[2] if fila_estado else None
+
+        estado = None
+        inactivity_reference = last_activity or last_ts_raw
+        if (
+            inactivity_reference
+            and timeout_seconds
+            and timeout_seconds > 0
+            and isinstance(inactivity_reference, datetime)
+        ):
+            elapsed = (now - inactivity_reference).total_seconds()
+            if elapsed > timeout_seconds:
+                estado = "inactivo"
+
+        if not estado:
+            if stored_estado in LEGACY_STATE_MAP:
+                stored_estado = LEGACY_STATE_MAP[stored_estado]
+
+            if stored_estado == "asesor" or requiere_asesor:
+                estado = "asesor"
+            elif last_tipo and str(last_tipo).startswith("bot"):
+                estado = "esperando_respuesta"
+            elif last_tipo and str(last_tipo).startswith("asesor"):
+                estado = "asesor"
+            elif last_tipo and str(last_tipo).startswith("cliente"):
+                if not step:
+                    estado = "asesor"
+                else:
+                    c.execute(
+                        """
+                        SELECT id, input_text, siguiente_step, tipo, opciones
+                          FROM reglas
+                         WHERE step = %s
+                         ORDER BY id
+                        """,
+                        (step,),
+                    )
+                    rules = c.fetchall()
+                    if not rules:
+                        estado = "asesor"
+                    else:
+                        text_norm = normalize_text(ultimo or "")
+                        matched_rule = _select_matching_rule(rules, text_norm)
+                        if not matched_rule:
+                            estado = "asesor"
+                        elif _rule_is_invalid(matched_rule, c):
+                            estado = "error_flujo"
+                        else:
+                            estado = "en_flujo"
+            elif stored_estado:
+                estado = stored_estado
+
+        estado_def = chat_state_def_map.get(estado) if estado else None
 
         chats.append({
             "numero": numero,
@@ -995,6 +1134,9 @@ def get_chat_list():
             "roles_kw": role_keywords,
             "inicial_rol": inicial_rol,
             "estado": estado,
+            "estado_label": estado_def.get("label") if estado_def else None,
+            "estado_color": estado_def.get("color") if estado_def else None,
+            "estado_text_color": estado_def.get("text_color") if estado_def else None,
             "last_timestamp": last_ts,
         })
 
@@ -1086,7 +1228,8 @@ def set_chat_state():
     elif estado is not None:
         estado = None
 
-    if estado is not None and estado not in CHAT_STATE_KEYS:
+    _, chat_state_keys = _load_chat_state_definitions(include_hidden=True)
+    if estado is not None and estado not in chat_state_keys:
         return jsonify({"error": "Estado no permitido"}), 400
 
     if estado is None:
