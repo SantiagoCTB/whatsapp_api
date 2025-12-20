@@ -167,6 +167,25 @@
       text-overflow: ellipsis;
       min-width: 0;
     }
+    .chat-list-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      min-width: 0;
+      flex: 1 1 auto;
+    }
+    .chat-source-icon {
+      width: 32px;
+      height: 32px;
+      object-fit: contain;
+      flex: 0 0 auto;
+    }
+    .chat-list-text {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
     #chatList li:hover {
       background:var(--accent-hover); color:var(--text-light);
       transform:translateX(4px);
