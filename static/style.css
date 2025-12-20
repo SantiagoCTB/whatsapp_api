@@ -175,8 +175,8 @@
       flex: 1 1 auto;
     }
     .chat-source-icon {
-      width: 32px;
-      height: 32px;
+      width: 16px;
+      height: 16px;
       object-fit: contain;
       flex: 0 0 auto;
     }

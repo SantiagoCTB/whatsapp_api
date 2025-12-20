@@ -1048,12 +1048,12 @@ def get_chat_list():
         requiere_asesor = "asesor" in ultimo.lower()
 
         c.execute(
-            "SELECT mensaje FROM mensajes WHERE numero = %s "
+            "SELECT link_url FROM mensajes WHERE numero = %s "
             "ORDER BY timestamp ASC, id ASC LIMIT 1",
             (numero,),
         )
         fila = c.fetchone()
-        primer_mensaje = fila[0] if fila else ""
+        primer_link = fila[0] if fila else ""
 
         # Roles asociados al número y nombre/keyword
         c.execute(
@@ -1146,7 +1146,7 @@ def get_chat_list():
             "estado_color": estado_def.get("color") if estado_def else None,
             "estado_text_color": estado_def.get("text_color") if estado_def else None,
             "last_timestamp": last_ts,
-            "first_message": primer_mensaje,
+            "first_link_url": primer_link,
         })
 
     conn.close()
