@@ -38,6 +38,15 @@ chat_bp = Blueprint('chat', __name__)
 logger = logging.getLogger(__name__)
 
 BOGOTA_TZ = ZoneInfo('America/Bogota')
+
+
+def _preferred_url_scheme() -> str:
+    scheme = tenants.get_runtime_setting(
+        "PREFERRED_URL_SCHEME", default=Config.PREFERRED_URL_SCHEME
+    )
+    if scheme:
+        return str(scheme).strip()
+    return "https"
 MEDIA_ROOT = Config.MEDIA_ROOT
 
 CHAT_STATE_DEFINITIONS = Config.CHAT_STATE_DEFINITIONS
@@ -1138,6 +1147,7 @@ def send_image():
         'static',
         filename=tenants.get_uploads_url_path(unique),
         _external=True,
+        _scheme=_preferred_url_scheme(),
     )
 
     # Envía la imagen por la API
@@ -1194,6 +1204,7 @@ def send_document():
         'static',
         filename=tenants.get_uploads_url_path(unique),
         _external=True,
+        _scheme=_preferred_url_scheme(),
     )
 
     success, error_reason = enviar_mensaje(
@@ -1336,6 +1347,7 @@ def send_audio():
         'chat.serve_media',
         filename=unique,
         _external=True,
+        _scheme=_preferred_url_scheme(),
     )
 
     try:
