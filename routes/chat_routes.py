@@ -310,6 +310,29 @@ def _parse_flow_segments(raw_message):
     return segments
 
 
+def _select_audio_variant(audio_urls):
+    """Return the best audio URL available from a dict payload."""
+    if not audio_urls:
+        return None
+
+    if isinstance(audio_urls, str):
+        trimmed = audio_urls.strip()
+        return trimmed or None
+
+    if not isinstance(audio_urls, dict):
+        return None
+
+    for key in ("audio_m4a_url", "audio_ogg_url", "audio_url"):
+        value = audio_urls.get(key)
+        if value is None:
+            continue
+        value_str = str(value).strip()
+        if value_str and value_str.lower() != "none":
+            return value_str
+
+    return None
+
+
 def sanitize_media_url(url):
     """Normaliza URLs de medios para evitar mixed content."""
 
