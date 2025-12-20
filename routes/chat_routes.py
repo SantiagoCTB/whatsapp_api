@@ -322,7 +322,7 @@ def _select_audio_variant(audio_urls):
     if not isinstance(audio_urls, dict):
         return None
 
-    for key in ("audio_m4a_url", "audio_ogg_url", "audio_url"):
+    for key in ("audio_mp3_url", "audio_m4a_url", "audio_ogg_url", "audio_url"):
         value = audio_urls.get(key)
         if value is None:
             continue
@@ -354,7 +354,7 @@ def sanitize_media_url(url):
         except json.JSONDecodeError:
             parsed = None
         if isinstance(parsed, dict) and (
-            "audio_ogg_url" in parsed or "audio_m4a_url" in parsed
+            "audio_mp3_url" in parsed or "audio_ogg_url" in parsed or "audio_m4a_url" in parsed
         ):
             preferred = _select_audio_variant(parsed)
             if preferred:
@@ -1354,7 +1354,6 @@ def send_audio():
 
     conversion_error = None
     media_id = None
-    m4a_filename = None
 
     converted_path, conversion_error = _convert_audio_to_mp3(path)
     if converted_path:
@@ -1377,22 +1376,13 @@ def send_audio():
             pass
         return jsonify({'error': conversion_error}), 422
 
-    audio_url_ogg = url_for(
+    audio_url = url_for(
         'chat.serve_media',
         filename=unique,
         _external=True,
         _scheme=_preferred_url_scheme(),
     )
-    audio_url_m4a = url_for(
-        'chat.serve_media',
-        filename=m4a_filename,
-        _external=True,
-        _scheme=_preferred_url_scheme(),
-    )
-    audio_urls = {
-        "audio_ogg_url": audio_url_ogg,
-        "audio_m4a_url": audio_url_m4a,
-    }
+    audio_urls = {"audio_mp3_url": audio_url}
     preferred_audio_url = _select_audio_variant(audio_urls)
 
     try:
@@ -1419,7 +1409,7 @@ def send_audio():
     tipo_envio = 'bot_audio' if origen == 'bot' else 'asesor'
 
     media_caption = ''  # No enviar caption dentro del payload de audio/documento
-    audio_payload = {"id": media_id, "link": audio_url, "voice": True}
+    audio_payload = {"id": media_id, "link": preferred_audio_url, "voice": True}
 
     logger.info(
         "Enviando audio por WhatsApp",

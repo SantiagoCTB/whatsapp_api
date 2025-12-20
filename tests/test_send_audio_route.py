@@ -107,8 +107,7 @@ def test_send_audio_generates_public_url_and_keeps_caption(tmp_path, client, mon
     assert payload["url"].startswith("http")
     assert payload["url"].endswith(".mp3")
     assert "/media/" in payload["url"]
-    assert payload["urls"]["audio_ogg_url"].endswith(".ogg")
-    assert payload["urls"]["audio_m4a_url"].endswith(".m4a")
+    assert payload["urls"]["audio_mp3_url"].endswith(".mp3")
 
     assert len(captured["calls"]) == 2
 
