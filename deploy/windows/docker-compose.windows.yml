@@ -10,10 +10,6 @@
       MEDIA_ROOT: 'C:\app\static\uploads'
       TZ: America/Bogota
 
-      # MySQL lo levanta tu .ps1 en el HOST:
-      DB_HOST: host.docker.internal
-      DB_PORT: 3306
-
     ports:
       - "443:8000"
 
