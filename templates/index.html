@@ -114,6 +114,7 @@
       let lastMessagesFingerprint = null;
       let typingSignalTimeout = null;
       let lastTypingSent = 0;
+      let shouldScrollToBottomOnLoad = false;
       const TYPING_SIGNAL_THROTTLE = 2500;
       let chatListPoll = null;
       let socket = null;
@@ -1587,6 +1588,7 @@
         lastCount = 0; // reset count so the initial load doesn't trigger alerts
         lastIncomingWaId = null;
         lastTypingSent = 0;
+        shouldScrollToBottomOnLoad = true;
         updateTypingIndicator(false);
         // marcar activo
         document.querySelectorAll('#chatList li').forEach(li => li.classList.remove('active'));
@@ -1653,11 +1655,13 @@
             if (requestId < lastRenderedMessagesSeq) return;
             lastRenderedMessagesSeq = requestId;
             const msgs = data.mensajes, total = msgs.length;
-            const atBottom = chatBoxEl.scrollTop + chatBoxEl.clientHeight >= chatBoxEl.scrollHeight - 5;
+            const atBottom = shouldScrollToBottomOnLoad
+              || chatBoxEl.scrollTop + chatBoxEl.clientHeight >= chatBoxEl.scrollHeight - 5;
             const currentFingerprint = buildMessagesFingerprint(msgs);
             if (currentFingerprint === lastMessagesFingerprint) {
               updateTypingIndicator(Boolean(data.is_typing), atBottom);
               if (atBottom) chatBoxEl.scrollTop = chatBoxEl.scrollHeight;
+              shouldScrollToBottomOnLoad = false;
               return;
             }
             lastMessagesFingerprint = currentFingerprint;
@@ -1792,6 +1796,7 @@
             lastIncomingWaId = newestIncoming;
             updateTypingIndicator(Boolean(data.is_typing), atBottom);
             if (atBottom) chatBoxEl.scrollTop = chatBoxEl.scrollHeight;
+            shouldScrollToBottomOnLoad = false;
           });
       }
 
