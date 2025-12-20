@@ -597,6 +597,23 @@
           if (roleIcons[keyword]) return roleIcons[keyword];
           return computeRoleAbbreviation(keyword) || keyword.charAt(0).toUpperCase();
         }
+
+        const CHAT_SOURCE_LOGOS = {
+          instagram: "{{ url_for('static', filename='logo-instagram.png') }}",
+          facebook: "{{ url_for('static', filename='logo-facebook.png') }}",
+          whatsapp: "{{ url_for('static', filename='logo-whatsapp.png') }}"
+        };
+
+        function resolveChatSourceLogo(firstMessage) {
+          const value = (firstMessage || '').toString().toLowerCase();
+          if (value.includes('instagram.com') || value.includes('instagr.am')) {
+            return { key: 'instagram', label: 'Instagram' };
+          }
+          if (value.includes('facebook.com') || value.includes('fb.com') || value.includes('m.me') || value.includes('messenger.com')) {
+            return { key: 'facebook', label: 'Facebook' };
+          }
+          return { key: 'whatsapp', label: 'WhatsApp' };
+        }
         let isSending = false;
         let isSendingImage = false;
         let isSendingAudio = false;
@@ -1392,7 +1409,23 @@
           }
           if (serverTime) lastChatTimestamps[c.numero] = serverTime;
           const li = document.createElement('li');
-          li.textContent = c.alias ? `${c.alias} (${c.numero})` : c.numero;
+          const labelWrapper = document.createElement('span');
+          labelWrapper.className = 'chat-list-label';
+
+          const sourceInfo = resolveChatSourceLogo(c.first_message);
+          const sourceIcon = document.createElement('img');
+          sourceIcon.className = 'chat-source-icon';
+          sourceIcon.src = CHAT_SOURCE_LOGOS[sourceInfo.key] || CHAT_SOURCE_LOGOS.whatsapp;
+          sourceIcon.alt = sourceInfo.label;
+          sourceIcon.title = sourceInfo.label;
+
+          const textLabel = document.createElement('span');
+          textLabel.className = 'chat-list-text';
+          textLabel.textContent = c.alias ? `${c.alias} (${c.numero})` : c.numero;
+
+          labelWrapper.appendChild(sourceIcon);
+          labelWrapper.appendChild(textLabel);
+          li.appendChild(labelWrapper);
           if (c.estado === 'error_flujo') {
             const alertIcon = document.createElement('span');
             alertIcon.className = 'chat-alert';
