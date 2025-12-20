@@ -99,7 +99,7 @@ def serve_media(filename: str):
 
 def _convert_audio_to_mp3(src_path: str):
     if not shutil.which("ffmpeg"):
-        return None, "No se encontró ffmpeg para convertir el audio."
+        return None, None, "No se encontró ffmpeg para convertir el audio."
 
     original_name, _ = os.path.splitext(os.path.basename(src_path))
     dest_mp3_name = f"{uuid.uuid4().hex}_{original_name}.mp3"
@@ -115,10 +115,6 @@ def _convert_audio_to_mp3(src_path: str):
         if result.returncode != 0 or not os.path.exists(destination):
             error_output = (result.stderr or result.stdout or "").strip()
             return False, error_output
-        try:
-            os.remove(src_path)
-        except OSError:
-            pass
         return True, None
 
     mp3_cmd = [
@@ -328,6 +324,18 @@ def sanitize_media_url(url):
 
     if not normalized:
         return url
+
+    if normalized.startswith("{"):
+        try:
+            parsed = json.loads(normalized)
+        except json.JSONDecodeError:
+            parsed = None
+        if isinstance(parsed, dict) and (
+            "audio_ogg_url" in parsed or "audio_m4a_url" in parsed
+        ):
+            preferred = _select_audio_variant(parsed)
+            if preferred:
+                normalized = str(preferred).strip()
 
     lower = normalized.lower()
 
@@ -1323,6 +1331,7 @@ def send_audio():
 
     conversion_error = None
     media_id = None
+    m4a_filename = None
 
     converted_path, conversion_error = _convert_audio_to_mp3(path)
     if converted_path:
@@ -1345,12 +1354,23 @@ def send_audio():
             pass
         return jsonify({'error': conversion_error}), 422
 
-    audio_url = url_for(
+    audio_url_ogg = url_for(
         'chat.serve_media',
         filename=unique,
         _external=True,
         _scheme=_preferred_url_scheme(),
     )
+    audio_url_m4a = url_for(
+        'chat.serve_media',
+        filename=m4a_filename,
+        _external=True,
+        _scheme=_preferred_url_scheme(),
+    )
+    audio_urls = {
+        "audio_ogg_url": audio_url_ogg,
+        "audio_m4a_url": audio_url_m4a,
+    }
+    preferred_audio_url = _select_audio_variant(audio_urls)
 
     try:
         media_id = subir_media(path)
@@ -1384,7 +1404,8 @@ def send_audio():
             "numero": numero,
             "tipo_envio": tipo_envio,
             "media_id": media_id,
-            "audio_url": audio_url,
+            "audio_url": preferred_audio_url,
+            "audio_urls": audio_urls,
             "caption_in_payload": bool(media_caption),
         },
     )
@@ -1413,7 +1434,7 @@ def send_audio():
         step = row[0] if row else ''
         update_chat_state(numero, step, 'asesor')
 
-    response_payload = {'status': 'sent_audio', 'url': audio_url}
+    response_payload = {'status': 'sent_audio', 'url': preferred_audio_url, 'urls': audio_urls}
     if conversion_error:
         response_payload['warning'] = conversion_error
 
@@ -1421,7 +1442,8 @@ def send_audio():
         "Audio enviado correctamente",
         extra={
             "numero": numero,
-            "audio_url": audio_url,
+            "audio_url": preferred_audio_url,
+            "audio_urls": audio_urls,
             "media_id": media_id,
             "warnings": response_payload.get("warning"),
         },

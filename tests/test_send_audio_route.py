@@ -1,3 +1,4 @@
+import json
 import os
 import io
 import sys
@@ -64,6 +65,7 @@ def test_send_audio_generates_public_url_and_keeps_caption(tmp_path, client, mon
     _patch_chat_dependencies(monkeypatch, tmp_path)
     converted_path = tmp_path / "converted.mp3"
     converted_path.write_bytes(b"converted")
+    converted_m4a_path.write_bytes(b"converted")
     monkeypatch.setattr(
         chat_routes,
         "_convert_audio_to_mp3",
@@ -105,6 +107,8 @@ def test_send_audio_generates_public_url_and_keeps_caption(tmp_path, client, mon
     assert payload["url"].startswith("http")
     assert payload["url"].endswith(".mp3")
     assert "/media/" in payload["url"]
+    assert payload["urls"]["audio_ogg_url"].endswith(".ogg")
+    assert payload["urls"]["audio_m4a_url"].endswith(".m4a")
 
     assert len(captured["calls"]) == 2
 
