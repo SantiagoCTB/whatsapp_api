@@ -99,7 +99,7 @@ def serve_media(filename: str):
 
 def _convert_audio_to_mp3(src_path: str):
     if not shutil.which("ffmpeg"):
-        return None, None, "No se encontró ffmpeg para convertir el audio."
+        return None, "No se encontró ffmpeg para convertir el audio."
 
     original_name, _ = os.path.splitext(os.path.basename(src_path))
     dest_mp3_name = f"{uuid.uuid4().hex}_{original_name}.mp3"
@@ -1376,9 +1376,17 @@ def send_audio():
             pass
         return jsonify({'error': conversion_error}), 422
 
+    media_filename = unique or os.path.basename(path)
+    if not media_filename:
+        logger.error(
+            "No se pudo determinar el nombre del archivo de audio",
+            extra={"numero": numero, "path": path, "unique": unique},
+        )
+        return jsonify({'error': 'No se pudo generar la URL del audio.'}), 500
+
     audio_url = url_for(
         'chat.serve_media',
-        filename=unique,
+        filename=media_filename,
         _external=True,
         _scheme=_preferred_url_scheme(),
     )
