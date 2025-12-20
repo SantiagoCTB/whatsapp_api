@@ -65,6 +65,106 @@ TENANTS_TABLE_DDL = """
     ) ENGINE=InnoDB;
 """
 
+CHAT_STATE_DEFAULTS = [
+    {
+        "key": "esperando_respuesta",
+        "label": "Esperando respuesta",
+        "color": "#f0ad4e",
+        "text_color": "#1f1f1f",
+        "priority": 40,
+        "visible": 1,
+    },
+    {
+        "key": "asesor",
+        "label": "Asesor",
+        "color": "#28a745",
+        "text_color": "#ffffff",
+        "priority": 30,
+        "visible": 1,
+    },
+    {
+        "key": "en_flujo",
+        "label": "En flujo",
+        "color": "#0d6efd",
+        "text_color": "#ffffff",
+        "priority": 20,
+        "visible": 1,
+    },
+    {
+        "key": "inactivo",
+        "label": "Inactivo",
+        "color": "#6c757d",
+        "text_color": "#ffffff",
+        "priority": 10,
+        "visible": 1,
+    },
+    {
+        "key": "error_flujo",
+        "label": "Error de flujo",
+        "color": "#dc3545",
+        "text_color": "#ffffff",
+        "priority": 50,
+        "visible": 1,
+    },
+]
+
+
+def _ensure_chat_state_definitions(cursor):
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS chat_state_definitions (
+          state_key VARCHAR(40) PRIMARY KEY,
+          label VARCHAR(100) NOT NULL,
+          color_hex VARCHAR(10) NOT NULL,
+          text_color_hex VARCHAR(10) NOT NULL,
+          priority INT NOT NULL DEFAULT 0,
+          visible TINYINT(1) NOT NULL DEFAULT 1
+        ) ENGINE=InnoDB;
+        """
+    )
+
+    cursor.execute("SHOW COLUMNS FROM chat_state_definitions LIKE 'text_color_hex';")
+    if not cursor.fetchone():
+        cursor.execute(
+            "ALTER TABLE chat_state_definitions ADD COLUMN text_color_hex VARCHAR(10) NOT NULL DEFAULT '#ffffff';"
+        )
+
+    cursor.execute("SHOW COLUMNS FROM chat_state_definitions LIKE 'priority';")
+    if not cursor.fetchone():
+        cursor.execute(
+            "ALTER TABLE chat_state_definitions ADD COLUMN priority INT NOT NULL DEFAULT 0;"
+        )
+
+    cursor.execute("SHOW COLUMNS FROM chat_state_definitions LIKE 'visible';")
+    if not cursor.fetchone():
+        cursor.execute(
+            "ALTER TABLE chat_state_definitions ADD COLUMN visible TINYINT(1) NOT NULL DEFAULT 1;"
+        )
+
+
+def _seed_chat_state_definitions(cursor):
+    for definition in CHAT_STATE_DEFAULTS:
+        cursor.execute(
+            """
+            INSERT INTO chat_state_definitions
+                (state_key, label, color_hex, text_color_hex, priority, visible)
+            SELECT %s, %s, %s, %s, %s, %s
+            FROM DUAL
+            WHERE NOT EXISTS (
+                SELECT 1 FROM chat_state_definitions WHERE state_key = %s
+            )
+            """,
+            (
+                definition["key"],
+                definition["label"],
+                definition["color"],
+                definition["text_color"],
+                definition["priority"],
+                definition["visible"],
+                definition["key"],
+            ),
+        )
+
 
 @dataclass(frozen=True)
 class DatabaseSettings:
@@ -654,6 +754,9 @@ def init_db(db_settings: DatabaseSettings | None = None):
     if not c.fetchone():
         c.execute("ALTER TABLE chat_state ADD COLUMN estado VARCHAR(20);")
 
+    _ensure_chat_state_definitions(c)
+    _seed_chat_state_definitions(c)
+
     # ia_catalog_pages: páginas del catálogo indexado para IA
     c.execute(
         """
@@ -878,6 +981,48 @@ def update_chat_state(numero, step, estado=None):
     )
     conn.commit()
     conn.close()
+
+
+def get_chat_state_definitions(include_hidden: bool = False):
+    conn = get_connection()
+    c = conn.cursor()
+    try:
+        _ensure_chat_state_definitions(c)
+        _seed_chat_state_definitions(c)
+        conn.commit()
+        if include_hidden:
+            c.execute(
+                """
+                SELECT state_key, label, color_hex, text_color_hex, priority, visible
+                  FROM chat_state_definitions
+                 ORDER BY priority DESC, label
+                """
+            )
+        else:
+            c.execute(
+                """
+                SELECT state_key, label, color_hex, text_color_hex, priority, visible
+                  FROM chat_state_definitions
+                 WHERE visible = 1
+                 ORDER BY priority DESC, label
+                """
+            )
+        rows = c.fetchall()
+    finally:
+        conn.close()
+    definitions = []
+    for row in rows:
+        definitions.append(
+            {
+                "key": row[0],
+                "label": row[1],
+                "color": row[2],
+                "text_color": row[3],
+                "priority": row[4],
+                "visible": bool(row[5]),
+            }
+        )
+    return definitions
 
 
 def hide_chat(numero):

@@ -121,6 +121,76 @@
     <button type="submit" class="btn-primary">Importar reglas</button>
 </form>
 
+<h3>Estados de chat</h3>
+<p>Define los estados automáticos del chat y sus colores para la lista de conversaciones.</p>
+<form id="chatStateForm" method="POST" action="{{ url_for('configuracion.save_chat_state_definition') }}">
+    <input type="hidden" id="original_key" name="original_key">
+    <label for="state_key">Key:</label>
+    <input type="text" id="state_key" name="state_key" placeholder="ej. esperando_respuesta" required>
+
+    <label for="state_label">Etiqueta visible:</label>
+    <input type="text" id="state_label" name="label" placeholder="Esperando respuesta">
+
+    <label for="state_color">Color:</label>
+    <input type="color" id="state_color" name="color_hex" value="#666666">
+
+    <label for="state_text_color">Color de texto:</label>
+    <input type="color" id="state_text_color" name="text_color_hex" value="#ffffff">
+
+    <label for="state_priority">Prioridad:</label>
+    <input type="number" id="state_priority" name="priority" value="0">
+
+    <label class="checkbox-field" for="state_visible">
+        <input type="checkbox" id="state_visible" name="visible" checked>
+        Visible en la UI
+    </label>
+
+    <button type="submit" class="btn-primary">Guardar estado</button>
+</form>
+
+<div class="state-grid">
+    {% for estado in chat_state_definitions %}
+    <details class="state-card">
+        <summary>
+            <span class="state-color-dot" style="background-color: {{ estado.color }};"></span>
+            <div class="rule-summary-text">
+                <span><strong>{{ estado.label }}</strong></span>
+                <span class="muted-text">{{ estado.key }}</span>
+            </div>
+        </summary>
+        <div class="rule-content">
+            <dl class="rule-fields">
+                <div class="rule-field">
+                    <dt>Color</dt>
+                    <dd>{{ estado.color }}</dd>
+                </div>
+                <div class="rule-field">
+                    <dt>Color texto</dt>
+                    <dd>{{ estado.text_color }}</dd>
+                </div>
+                <div class="rule-field">
+                    <dt>Prioridad</dt>
+                    <dd>{{ estado.priority }}</dd>
+                </div>
+                <div class="rule-field">
+                    <dt>Visible</dt>
+                    <dd>{{ 'Sí' if estado.visible else 'No' }}</dd>
+                </div>
+            </dl>
+            <div class="rule-actions">
+                <form onsubmit="event.preventDefault();">
+                    <button class="edit-btn btn-primary" type="button" onclick='cargarEstadoChat({{ estado|tojson }})'>Editar</button>
+                </form>
+                <form method="POST" action="{{ url_for('configuracion.delete_chat_state_definition') }}">
+                    <input type="hidden" name="state_key" value="{{ estado.key }}">
+                    <button class="delete-btn btn-primary" type="submit">Eliminar</button>
+                </form>
+            </div>
+        </div>
+    </details>
+    {% endfor %}
+</div>
+
 <h3>Reglas existentes</h3>
 <div class="rules-grid">
     {% for regla in reglas %}
@@ -489,6 +559,18 @@ function cargarRegla(regla) {
     toggleListFields();
     toggleButtonFields();
     toggleFlowFields();
+}
+
+function cargarEstadoChat(estado) {
+    if (!estado) return;
+    document.getElementById('original_key').value = estado.key || '';
+    document.getElementById('state_key').value = estado.key || '';
+    document.getElementById('state_label').value = estado.label || '';
+    document.getElementById('state_color').value = estado.color || '#666666';
+    document.getElementById('state_text_color').value = estado.text_color || '#ffffff';
+    document.getElementById('state_priority').value = estado.priority ?? 0;
+    document.getElementById('state_visible').checked = Boolean(estado.visible);
+    document.getElementById('state_key').focus();
 }
 </script>
 {% endblock %}

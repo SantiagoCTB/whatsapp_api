@@ -193,6 +193,11 @@
       line-height: 1;
       pointer-events: none;
     }
+    #chatList li .badge.state-badge {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.2px;
+    }
     .chat-alert {
       display: inline-flex;
       align-items: center;
@@ -976,6 +981,51 @@
       gap: 12px 24px;
       color: var(--text-main);
       font-size: 0.95rem;
+    }
+
+    .muted-text {
+      color: var(--timestamp-color);
+      font-size: 0.85rem;
+    }
+
+    .checkbox-field {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 10px 0;
+    }
+
+    .state-grid {
+      display: grid;
+      gap: 16px;
+      margin: 16px 0 24px;
+    }
+
+    .state-card {
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      background: #fff;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+      overflow: hidden;
+    }
+
+    .state-card > summary {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 16px;
+      cursor: pointer;
+      list-style: none;
+      background: rgba(13, 110, 253, 0.08);
+    }
+
+    .state-card > summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .state-card[open] > summary {
+      border-bottom: 1px solid var(--border-color);
+      background: rgba(13, 110, 253, 0.14);
     }
 
     .rule-content {
