@@ -134,6 +134,7 @@ class Config:
         ),
     )
     PUBLIC_BASE_URL = os.getenv('PUBLIC_BASE_URL', '')
+    PREFERRED_URL_SCHEME = os.getenv('PREFERRED_URL_SCHEME', 'https')
     IA_HISTORY_LIMIT = int(os.getenv('IA_HISTORY_LIMIT', 30))
     INITIAL_STEP = os.getenv('INITIAL_STEP', 'menu_principal')
     MAX_TRANSCRIPTION_DURATION_MS = int(os.getenv('MAX_TRANSCRIPTION_DURATION_MS', 60000))

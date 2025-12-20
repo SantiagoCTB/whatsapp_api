@@ -147,6 +147,14 @@ Sistema de login y logout
 
 División completa en módulos con Blueprints y servicios
 
+## HTTPS y URLs públicas detrás de un proxy
+
+Cuando la app corre detrás de Nginx/otro proxy TLS, asegúrate de reenviar el
+esquema original con `X-Forwarded-Proto` (por ejemplo `https`) para que Flask
+genere URLs externas correctas. El ejemplo de `deploy/linux/nginx/nginx.conf`
+ya envía ese encabezado. Si necesitas forzar un esquema específico, define la
+variable de entorno `PREFERRED_URL_SCHEME=https`.
+
 ## Comandos globales
 
 El bot cuenta con comandos globales que se ejecutan antes del flujo principal.

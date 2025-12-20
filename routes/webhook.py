@@ -71,6 +71,24 @@ def _build_public_url(path: str) -> str | None:
     return f"{base_url.rstrip('/')}/{clean_path}"
 
 
+def _preferred_url_scheme() -> str:
+    scheme = tenants.get_runtime_setting(
+        "PREFERRED_URL_SCHEME", default=Config.PREFERRED_URL_SCHEME
+    )
+    if scheme:
+        return str(scheme).strip()
+    return "https"
+
+
+def _normalize_media_url(url: str | None) -> str | None:
+    if not url:
+        return url
+    normalized = str(url).strip()
+    if normalized.lower().startswith("http://"):
+        return f"https://{normalized[len('http://'):]}"
+    return normalized
+
+
 def _get_verify_token():
     return tenants.get_runtime_setting("VERIFY_TOKEN", default=Config.VERIFY_TOKEN)
 
@@ -359,7 +377,12 @@ def _reply_with_ai(
 
         image_path = tenants.get_uploads_url_path(f"ia_pages/{page.image_filename}")
         if has_request_context():
-            image_url = url_for('static', filename=image_path, _external=True)
+            image_url = url_for(
+                'static',
+                filename=image_path,
+                _external=True,
+                _scheme=_preferred_url_scheme(),
+            )
         else:
             image_url = _build_public_url(f"static/{image_path}")
         if not image_url:
@@ -1132,7 +1155,9 @@ def webhook():
                         'static',
                         filename=tenants.get_uploads_url_path(filename),
                         _external=True,
+                        _scheme=_preferred_url_scheme(),
                     )
+                    public_url = _normalize_media_url(public_url)
 
                     step = get_current_step(from_number)
                     db_id = guardar_mensaje(
@@ -1188,7 +1213,9 @@ def webhook():
                         'static',
                         filename=tenants.get_uploads_url_path(filename),
                         _external=True,
+                        _scheme=_preferred_url_scheme(),
                     )
+                    public_url = _normalize_media_url(public_url)
 
                     # 3) Guardar en BD
                     step = get_current_step(from_number)
