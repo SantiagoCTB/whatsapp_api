@@ -6,16 +6,16 @@ SHELL ["cmd", "/S", "/C"]
 WORKDIR C:\app
 
 # 1) Dependencias
-RUN powershell -Command ^
-  "$ErrorActionPreference='Stop';" ^
-  "$url='https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip';" ^
-  "Write-Host ('Downloading: ' + $url);" ^
-  "curl.exe -L --retry 5 --retry-delay 2 -o ffmpeg.zip $url;" ^
-  "if (!(Test-Path ffmpeg.zip)) { throw 'ffmpeg.zip was not downloaded'; }" ^
-  "Expand-Archive ffmpeg.zip -DestinationPath C:\ffmpeg;" ^
-  "Remove-Item ffmpeg.zip -Force;" ^
-  "$ffdir = Get-ChildItem C:\ffmpeg | Where-Object { $_.PSIsContainer } | Select-Object -First 1;" ^
-  "Move-Item ($ffdir.FullName + '\bin') C:\ffmpeg\bin -Force;" ^
+RUN powershell -NoProfile -Command `
+  "$ErrorActionPreference='Stop';" `
+  "$url='https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip';" `
+  "Write-Host ('Downloading: ' + $url);" `
+  "curl.exe -L --retry 5 --retry-delay 2 -o ffmpeg.zip $url;" `
+  "if (!(Test-Path ffmpeg.zip)) { throw 'ffmpeg.zip was not downloaded'; }" `
+  "Expand-Archive ffmpeg.zip -DestinationPath C:\ffmpeg;" `
+  "Remove-Item ffmpeg.zip -Force;" `
+  "$ffdir = Get-ChildItem C:\ffmpeg | Where-Object { $_.PSIsContainer } | Select-Object -First 1;" `
+  "Move-Item ($ffdir.FullName + '\bin') C:\ffmpeg\bin -Force;" `
   "Remove-Item $ffdir.FullName -Recurse -Force"
 ENV PATH="C:\\ffmpeg\\bin;${PATH}"
 COPY requirements.txt .
