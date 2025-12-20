@@ -6,7 +6,7 @@ SHELL ["cmd", "/S", "/C"]
 WORKDIR C:\app
 
 # 1) Dependencias
-RUN powershell -Command "$ProgressPreference='SilentlyContinue'; Invoke-WebRequest -Uri https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip -OutFile ffmpeg.zip; Expand-Archive ffmpeg.zip -DestinationPath C:\\ffmpeg; Remove-Item ffmpeg.zip; $ffdir = Get-ChildItem C:\\ffmpeg | Select-Object -First 1; Move-Item \"$($ffdir.FullName)\\bin\" C:\\ffmpeg\\bin; Remove-Item $ffdir.FullName -Recurse"
+RUN powershell -Command "$ProgressPreference='SilentlyContinue'; [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -Uri https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip -OutFile ffmpeg.zip; Expand-Archive ffmpeg.zip -DestinationPath C:\\ffmpeg; Remove-Item ffmpeg.zip; $ffdir = Get-ChildItem C:\\ffmpeg | Select-Object -First 1; Move-Item \"$($ffdir.FullName)\\bin\" C:\\ffmpeg\\bin; Remove-Item $ffdir.FullName -Recurse"
 ENV PATH="C:\\ffmpeg\\bin;${PATH}"
 COPY requirements.txt .
 RUN python -m pip install --upgrade pip `
