@@ -293,10 +293,13 @@
       function guessAudioType(url) {
         if (!url) return '';
         const lower = `${url}`.toLowerCase();
+        const isSafari = /safari/i.test(navigator.userAgent) && !/chrome|chromium|android/i.test(navigator.userAgent);
         if (lower.includes('.mp3')) return 'audio/mpeg';
         if (lower.includes('.ogg')) return 'audio/ogg';
         if (lower.includes('.webm')) return 'audio/webm';
         if (lower.includes('.wav')) return 'audio/wav';
+        if (lower.includes('.m4a')) return 'audio/mp4';
+        if (lower.includes('.aac')) return isSafari ? 'audio/mp4' : 'audio/aac';
         return '';
       }
 
@@ -305,8 +308,27 @@
         audioEl.controls = true;
         audioEl.preload = 'metadata';
         const audioType = guessAudioType(src);
-        if (audioType) audioEl.type = audioType;
-        audioEl.src = src;
+        const lower = `${src}`.toLowerCase();
+        const isAacVariant = lower.includes('.m4a') || lower.includes('.aac');
+        const sourceTypes = audioType ? [audioType] : [];
+        if (isAacVariant && audioType) {
+          const safariFallback = audioType === 'audio/mp4' ? 'audio/aac' : 'audio/mp4';
+          if (!sourceTypes.includes(safariFallback)) {
+            sourceTypes.push(safariFallback);
+          }
+        }
+        if (sourceTypes.length === 0) {
+          const sourceEl = document.createElement('source');
+          sourceEl.src = src;
+          audioEl.appendChild(sourceEl);
+        } else {
+          sourceTypes.forEach((type) => {
+            const sourceEl = document.createElement('source');
+            sourceEl.src = src;
+            sourceEl.type = type;
+            audioEl.appendChild(sourceEl);
+          });
+        }
         return audioEl;
       }
       const sendBtn = document.getElementById('sendBtn');
