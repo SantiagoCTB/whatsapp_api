@@ -585,22 +585,77 @@
     }
     .record-controls {
       display:flex;
-      gap:8px;
+      flex-direction:column;
+      gap:10px;
       margin-top:8px;
+      padding:12px;
+      background:var(--bg-chat);
+      border:1px solid var(--border-color);
+      border-radius:16px;
+      box-shadow:0 8px 16px rgba(0,0,0,0.08);
+      max-width:320px;
     }
-    .record-controls button {
-      width:36px; height:36px;
-      border-radius:50%;
+    .record-controls__header {
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+    }
+    .record-controls__title {
+      font-weight:600;
+      color:var(--text-dark);
+      font-size:14px;
+    }
+    .record-controls__timer {
+      padding:4px 10px;
+      border-radius:999px;
+      background:rgba(0,0,0,0.08);
+      color:var(--text-dark);
+      font-size:13px;
+      font-weight:600;
+      letter-spacing:0.5px;
+      min-width:64px;
+      text-align:center;
+    }
+    .record-controls__timer[data-state="recording"] {
+      background:rgba(255, 77, 79, 0.18);
+      color:#c53030;
+    }
+    .record-controls__actions {
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+    }
+    .record-controls__btn {
+      display:flex;
+      align-items:center;
+      gap:6px;
       border:none;
+      padding:8px 14px;
+      border-radius:999px;
       background:var(--accent-neon);
       color:var(--text-light);
-      font-size:20px;
+      font-size:14px;
+      font-weight:600;
       cursor:pointer;
       transition:transform 0.2s, background 0.3s;
     }
-    .record-controls button:disabled {
+    .record-controls__btn--stop {
+      background:var(--accent);
+    }
+    .record-controls__btn:disabled {
       background:#aaa;
       cursor:default;
+      transform:none;
+    }
+    .record-controls__icon {
+      font-size:18px;
+    }
+    .record-controls__hint {
+      margin:0;
+      font-size:12px;
+      color:var(--text-dark);
+      opacity:0.7;
     }
     .audio-status {
       margin-top:6px;

@@ -62,8 +62,21 @@
       <input id="audioInput" type="file" accept="audio/*" style="display:none;">
       <input id="videoInput" type="file" accept="video/*" style="display:none;">
       <div id="recordControls" class="record-controls" style="display:none;">
-        <button id="startRecord" title="Grabar">⏺️</button>
-        <button id="stopRecord" title="Detener" disabled>⏹️</button>
+        <div class="record-controls__header">
+          <span class="record-controls__title">Grabadora de audio</span>
+          <span id="recordTimer" class="record-controls__timer" aria-live="polite">00:00</span>
+        </div>
+        <div class="record-controls__actions">
+          <button id="startRecord" class="record-controls__btn record-controls__btn--start" title="Grabar">
+            <span class="record-controls__icon" aria-hidden="true">⏺️</span>
+            <span>Grabar</span>
+          </button>
+          <button id="stopRecord" class="record-controls__btn record-controls__btn--stop" title="Detener" disabled>
+            <span class="record-controls__icon" aria-hidden="true">⏹️</span>
+            <span>Detener</span>
+          </button>
+        </div>
+        <p class="record-controls__hint">Pulsa grabar para iniciar y detener para enviar.</p>
       </div>
       <div id="audioStatus" class="audio-status" aria-live="polite" hidden></div>
     </div>
@@ -2011,10 +2024,13 @@
       const audIn = document.getElementById('audioInput');
       const vidIn = document.getElementById('videoInput');
       const recordControls = document.getElementById('recordControls');
+      const recordTimerEl = document.getElementById('recordTimer');
       const startRecBtn = document.getElementById('startRecord');
       const stopRecBtn  = document.getElementById('stopRecord');
       let mediaRecorder = null;
       let audioChunks = [];
+      let recordTimerInterval = null;
+      let recordStartTime = null;
       document.getElementById('attachImage').onclick = () => imgIn.click();
       let recordedMimeType = '';
       document.getElementById('attachAudio').onclick = async () => {
@@ -2041,6 +2057,7 @@
           mediaRecorder.onstop = async () => {
             isRecordingAudio = false;
             updateSendButtons();
+            stopRecordTimer();
             const totalSize = audioChunks.reduce((acc, chunk) => acc + (chunk ? chunk.size : 0), 0);
             if (!totalSize) {
               setAudioStatus('No se capturó audio. Intenta de nuevo.', 'error', 4000);
@@ -2058,6 +2075,7 @@
           attachMenu.classList.remove('show');
           startRecBtn.disabled = false;
           stopRecBtn.disabled = true;
+          resetRecordTimer();
           setAudioStatus('Micrófono listo. Presiona grabar para empezar.', 'info', 2500);
         } catch(err) {
           setAudioStatus('No se pudo acceder al micrófono. Sube un archivo.', 'error', 4000);
@@ -2072,6 +2090,7 @@
           startRecBtn.disabled = true;
           stopRecBtn.disabled = false;
           isRecordingAudio = true;
+          startRecordTimer();
           setAudioStatus('Grabando…', 'recording');
           updateSendButtons();
         }
@@ -2083,10 +2102,49 @@
           startRecBtn.disabled = false;
           stopRecBtn.disabled = true;
           isRecordingAudio = false;
+          stopRecordTimer();
           setAudioStatus('Procesando grabación…', 'uploading');
           updateSendButtons();
         }
       };
+
+      function formatRecordTime(totalSeconds) {
+        const minutes = Math.floor(totalSeconds / 60);
+        const seconds = totalSeconds % 60;
+        return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+      }
+
+      function updateRecordTimer() {
+        if (!recordTimerEl || recordStartTime === null) return;
+        const elapsedSeconds = Math.floor((Date.now() - recordStartTime) / 1000);
+        recordTimerEl.textContent = formatRecordTime(elapsedSeconds);
+        recordTimerEl.dataset.state = 'recording';
+      }
+
+      function startRecordTimer() {
+        recordStartTime = Date.now();
+        updateRecordTimer();
+        if (recordTimerInterval) clearInterval(recordTimerInterval);
+        recordTimerInterval = setInterval(updateRecordTimer, 500);
+      }
+
+      function stopRecordTimer() {
+        if (recordTimerInterval) {
+          clearInterval(recordTimerInterval);
+          recordTimerInterval = null;
+        }
+        recordStartTime = null;
+        if (recordTimerEl) {
+          recordTimerEl.dataset.state = 'idle';
+        }
+      }
+
+      function resetRecordTimer() {
+        stopRecordTimer();
+        if (recordTimerEl) {
+          recordTimerEl.textContent = '00:00';
+        }
+      }
 
       async function sendFile(inputEl, endpoint) {
         if (!currentChat) return;
