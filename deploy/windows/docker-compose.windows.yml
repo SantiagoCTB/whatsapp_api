@@ -6,11 +6,26 @@
     env_file:
       - ../../.env
     environment:
+      PORT: 8000
       MEDIA_ROOT: 'C:\app\static\uploads'
+      TZ: America/Bogota
+
+      # MySQL lo levanta tu .ps1 en el HOST:
+      DB_HOST: host.docker.internal
+      DB_PORT: 3306
+
     ports:
       - "443:8000"
+
     volumes:
-      # AJUSTA esta ruta a donde tengas clonado el repo en Windows
       - 'C:\whatsapp_api\static\uploads:C:\app\static\uploads'
+
     restart: unless-stopped
     isolation: hyperv
+    networks:
+      - whapco_win
+
+networks:
+  whapco_win:
+    name: whapco_win
+    driver: nat

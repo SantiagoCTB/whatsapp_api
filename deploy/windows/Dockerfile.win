@@ -1,38 +1,49 @@
 # escape=`
 FROM python:3.12-windowsservercore-ltsc2025
 
-SHELL ["cmd", "/S", "/C"]
+SHELL ["powershell", "-NoProfile", "-Command", "$ErrorActionPreference='Stop'; $ProgressPreference='SilentlyContinue';"]
 
 WORKDIR C:\app
 
-# 1) Dependencias
-RUN powershell -NoProfile -Command `
-  "$ErrorActionPreference='Stop';" `
-  "$url='https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip';" `
-  "Write-Host ('Downloading: ' + $url);" `
-  "curl.exe -L --retry 5 --retry-delay 2 -o ffmpeg.zip $url;" `
-  "if (!(Test-Path ffmpeg.zip)) { throw 'ffmpeg.zip was not downloaded'; }" `
-  "Expand-Archive ffmpeg.zip -DestinationPath C:\ffmpeg;" `
-  "Remove-Item ffmpeg.zip -Force;" `
-  "$ffdir = Get-ChildItem C:\ffmpeg | Where-Object { $_.PSIsContainer } | Select-Object -First 1;" `
-  "Move-Item ($ffdir.FullName + '\bin') C:\ffmpeg\bin -Force;" `
-  "Remove-Item $ffdir.FullName -Recurse -Force"
-ENV PATH="C:\\ffmpeg\\bin;${PATH}"
-COPY requirements.txt .
-RUN python -m pip install --upgrade pip `
- && pip install -r requirements.txt `
- && pip install uvicorn[standard] a2wsgi asgiref
+# 1) Instalar FFmpeg (BtbN builds)
+RUN $url='https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip'; `
+    Write-Host ('Downloading: ' + $url); `
+    curl.exe -L --retry 5 --retry-delay 2 -o C:\ffmpeg.zip $url; `
+    if (!(Test-Path C:\ffmpeg.zip)) { throw 'ffmpeg.zip was not downloaded' }; `
+    New-Item -ItemType Directory -Path C:\ffmpeg -Force | Out-Null; `
+    Expand-Archive C:\ffmpeg.zip -DestinationPath C:\ffmpeg -Force; `
+    Remove-Item C:\ffmpeg.zip -Force; `
+    $ffdir = Get-ChildItem C:\ffmpeg | Where-Object { $_.PSIsContainer } | Select-Object -First 1; `
+    if (-not $ffdir) { throw 'FFmpeg folder not found after unzip' }; `
+    if (Test-Path C:\ffmpeg\bin) { Remove-Item C:\ffmpeg\bin -Recurse -Force }; `
+    Move-Item ($ffdir.FullName + '\bin') C:\ffmpeg\bin -Force; `
+    Remove-Item $ffdir.FullName -Recurse -Force; `
+    if (!(Test-Path C:\ffmpeg\bin\ffmpeg.exe)) { throw 'ffmpeg.exe not found after install' }
 
-# 2) Código + certificados
-COPY . .
+# Asegurar PATH para runtime
+ENV PATH="C:\\ffmpeg\\bin;C:\\Python312;C:\\Python312\\Scripts;${PATH}"
 
-# 3) Construir el fullchain (cert + cadena) de forma segura en Windows
-RUN powershell -Command "Get-Content certs\\agestion-net.crt, certs\\cabundle.crt | Set-Content -Encoding ascii certs\\fullchain.crt"
+# 2) Dependencias Python
+COPY requirements.txt .\
 
-# 4) TLS directo en 8000
+RUN python -m pip install --upgrade pip; `
+    python -m pip install -r requirements.txt; `
+    python -m pip install "uvicorn[standard]" a2wsgi asgiref
+
+# 3) Copiar código
+COPY . .\
+
+# 4) Fullchain (solo si existen los archivos)
+# Si siempre tienes esos certs en el repo, puedes dejarlo sin el if.
+RUN if (Test-Path 'certs\agestion-net.crt' -and (Test-Path 'certs\cabundle.crt')) { `
+      Get-Content 'certs\agestion-net.crt','certs\cabundle.crt' | Set-Content -Encoding ascii 'certs\fullchain.crt' `
+    } else { `
+      Write-Host 'Cert files not found; skipping fullchain generation.' `
+    }
+
 ENV PORT=8000
 EXPOSE 8000
 
-# IMPORTANTE: usar rutas con "/" para Python en Windows
-# Usa el nombre correcto de tu app ASGI
-CMD uvicorn asgi:asgi_app --host 0.0.0.0 --port %PORT% --ssl-keyfile certs/agestion-net.key --ssl-certfile certs/fullchain.crt --ssl-keyfile-password "%SSL_KEY_PASSWORD%"
+# 5) Arranque (recomendado fijo 8000 en Windows container)
+# Nota: elimino el --ssl-keyfile-password porque uvicorn no siempre soporta esa opción según versión.
+CMD ["python","-m","uvicorn","asgi:asgi_app","--host","0.0.0.0","--port","8000","--ssl-keyfile","certs/agestion-net.key","--ssl-certfile","certs/fullchain.crt"]
