@@ -873,6 +873,7 @@ def configuracion_signup():
     return render_template(
         'configuracion_signup.html',
         signup_config_code=Config.SIGNUP_FACEBOOK,
+        facebook_app_id=Config.FACEBOOK_APP_ID,
         tenant_key=tenant_key,
     )
 
