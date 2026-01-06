@@ -2,6 +2,7 @@ from __future__ import annotations
 from __future__ import annotations
 
 import json
+import logging
 from flask import Blueprint, abort, redirect, render_template, request, session, url_for
 
 from config import Config
@@ -9,6 +10,7 @@ from services import tenants
 
 
 tenant_admin_bp = Blueprint("tenant_admin", __name__, url_prefix="/admin/tenants")
+logger = logging.getLogger(__name__)
 
 
 @tenant_admin_bp.before_request
@@ -178,7 +180,13 @@ def save_tenant_signup(tenant_key: str):
     try:
         payload = request.get_json(force=True) or {}
     except Exception:
+        logger.exception("Admin: error al parsear el payload JSON de signup", extra={"tenant_key": tenant_key})
         return {"ok": False, "error": "Payload inválido"}, 400
+
+    logger.info(
+        "Admin: procesando signup embebido",
+        extra={"tenant_key": tenant_key, "payload_keys": sorted(list(payload.keys()))},
+    )
 
     current_env = tenants.get_tenant_env(tenant)
     env_updates = {key: current_env.get(key) for key in tenants.TENANT_ENV_KEYS}
@@ -195,10 +203,36 @@ def save_tenant_signup(tenant_key: str):
         }
     )
 
+    logger.info(
+        "Admin: actualizando entorno con datos de signup",
+        extra={
+            "tenant_key": tenant_key,
+            "has_meta_token": bool(env_updates.get("META_TOKEN")),
+            "has_long_lived": bool(env_updates.get("LONG_LIVED_TOKEN")),
+            "has_phone_number_id": bool(env_updates.get("PHONE_NUMBER_ID")),
+            "has_waba_id": bool(env_updates.get("WABA_ID")),
+            "has_business_id": bool(env_updates.get("BUSINESS_ID")),
+        },
+    )
+
     business_info = payload.get("business") or payload.get("business_info")
     metadata_updates = {}
     if isinstance(business_info, dict) and business_info:
         metadata_updates["whatsapp_business"] = business_info
+
+    if metadata_updates:
+        logger.info(
+            "Admin: guardando metadata de negocio desde signup",
+            extra={
+                "tenant_key": tenant_key,
+                "metadata_fields": sorted(list(metadata_updates.keys())),
+            },
+        )
+    else:
+        logger.info(
+            "Admin: payload de signup sin metadata de negocio",
+            extra={"tenant_key": tenant_key},
+        )
 
     tenants.update_tenant_env(tenant_key, env_updates)
     if metadata_updates:

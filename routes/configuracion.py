@@ -870,6 +870,15 @@ def configuracion_signup():
     tenant = tenants.get_current_tenant()
     tenant_key = tenant.tenant_key if tenant else None
 
+    logger.info(
+        "Renderizando signup embebido",
+        extra={
+            "tenant_key": tenant_key,
+            "facebook_app_id_configured": bool(Config.FACEBOOK_APP_ID),
+            "signup_config_code_present": bool(Config.SIGNUP_FACEBOOK),
+        },
+    )
+
     return render_template(
         'configuracion_signup.html',
         signup_config_code=Config.SIGNUP_FACEBOOK,
@@ -885,12 +894,22 @@ def save_signup():
 
     tenant = tenants.get_current_tenant()
     if not tenant:
+        logger.warning("Signup embebido falló: tenant actual no encontrado")
         return {"ok": False, "error": "No se encontró la empresa actual."}, 400
 
     try:
         payload = request.get_json(force=True) or {}
     except Exception:
+        logger.exception("Signup embebido falló al parsear el payload JSON")
         return {"ok": False, "error": "Payload inválido"}, 400
+
+    logger.info(
+        "Procesando signup embebido",
+        extra={
+            "tenant_key": tenant.tenant_key,
+            "payload_keys": sorted(list(payload.keys())),
+        },
+    )
 
     current_env = tenants.get_tenant_env(tenant)
     env_updates = {key: current_env.get(key) for key in tenants.TENANT_ENV_KEYS}
@@ -907,10 +926,36 @@ def save_signup():
         }
     )
 
+    logger.info(
+        "Actualizando entorno con datos del signup embebido",
+        extra={
+            "tenant_key": tenant.tenant_key,
+            "has_meta_token": bool(env_updates.get("META_TOKEN")),
+            "has_long_lived": bool(env_updates.get("LONG_LIVED_TOKEN")),
+            "has_phone_number_id": bool(env_updates.get("PHONE_NUMBER_ID")),
+            "has_waba_id": bool(env_updates.get("WABA_ID")),
+            "has_business_id": bool(env_updates.get("BUSINESS_ID")),
+        },
+    )
+
     business_info = payload.get("business") or payload.get("business_info")
     metadata_updates = {}
     if isinstance(business_info, dict) and business_info:
         metadata_updates["whatsapp_business"] = business_info
+
+    if metadata_updates:
+        logger.info(
+            "Guardando metadata de negocio desde signup embebido",
+            extra={
+                "tenant_key": tenant.tenant_key,
+                "metadata_fields": sorted(list(metadata_updates.keys())),
+            },
+        )
+    else:
+        logger.info(
+            "No se encontró metadata de negocio en el payload de signup",
+            extra={"tenant_key": tenant.tenant_key},
+        )
 
     tenants.update_tenant_env(tenant.tenant_key, env_updates)
     if metadata_updates:
