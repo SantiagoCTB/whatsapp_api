@@ -29,16 +29,16 @@ def _serve_landing_page(filename: str):
     return response
 
 
-@landing_bp.route("/privacidad")
+@landing_bp.route("/privacidad", strict_slashes=False)
 def privacidad():
     return _serve_landing_page("privacidad.html")
 
 
-@landing_bp.route("/aviso")
+@landing_bp.route("/aviso", strict_slashes=False)
 def aviso():
     return _serve_landing_page("aviso.html")
 
 
-@landing_bp.route("/terminos")
+@landing_bp.route("/terminos", strict_slashes=False)
 def terminos():
     return _serve_landing_page("terminos.html")
