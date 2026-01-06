@@ -61,28 +61,35 @@
 {% block scripts %}
 {{ super() }}
 <script>
-  (function(d, s, id) {
-    var js, fjs = d.getElementsByTagName(s)[0];
-    if (d.getElementById(id)) { return; }
-    js = d.createElement(s); js.id = id;
-    js.src = "https://connect.facebook.net/en_US/sdk.js";
-    fjs.parentNode.insertBefore(js, fjs);
-  }(document, 'script', 'facebook-jssdk'));
+  const facebookSdkReady = new Promise((resolve, reject) => {
+    (function(d, s, id) {
+      var js, fjs = d.getElementsByTagName(s)[0];
+      if (d.getElementById(id)) { return; }
+      js = d.createElement(s); js.id = id;
+      js.src = "https://connect.facebook.net/en_US/sdk.js";
+      fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
 
-  window.fbAsyncInit = function() {
-    if (!window.FB) return;
-    try {
-      FB.init({
-        appId: '{{ facebook_app_id or '' }}',
-        cookie: true,
-        xfbml: true,
-        version: 'v20.0'
-      });
-      FB.AppEvents && FB.AppEvents.logPageView();
-    } catch (err) {
-      console.warn('No se pudo inicializar el SDK de Facebook', err);
-    }
-  };
+    window.fbAsyncInit = function() {
+      if (!window.FB) {
+        reject(new Error('Facebook SDK no disponible'));
+        return;
+      }
+      try {
+        FB.init({
+          appId: '{{ facebook_app_id or '' }}',
+          cookie: true,
+          xfbml: true,
+          version: 'v20.0'
+        });
+        FB.AppEvents && FB.AppEvents.logPageView();
+        resolve(FB);
+      } catch (err) {
+        console.warn('No se pudo inicializar el SDK de Facebook', err);
+        reject(err);
+      }
+    };
+  });
 </script>
 <script>
   (function() {
@@ -100,20 +107,21 @@
       statusBox.style.color = isError ? '#c0392b' : '#2c3e50';
     };
 
-    function statusChangeCallback(response) {
-      if (response && response.status === 'connected') {
-        updateStatus('Sesión de Facebook detectada. Puedes continuar con el signup.');
-      }
-    }
-
     window.checkLoginState = function() {
       if (!facebookAppId) {
         updateStatus('Falta configurar FACEBOOK_APP_ID.', true);
         return;
       }
-      if (!window.FB || !FB.getLoginStatus) return;
-      FB.getLoginStatus(function(response) {
-        statusChangeCallback(response);
+      facebookSdkReady.then((FB) => {
+        if (FB && FB.getLoginStatus) {
+          FB.getLoginStatus(function(response) {
+            if (response && response.status === 'connected') {
+              updateStatus('Sesión de Facebook detectada. Puedes continuar con el signup.');
+            }
+          });
+        }
+      }).catch(() => {
+        updateStatus('No se pudo cargar el SDK de Facebook.', true);
       });
     };
 
@@ -158,10 +166,33 @@
         return;
       }
 
-      const popupUrl = `https://www.facebook.com/v20.0/dialog/oauth?config_id=${encodeURIComponent(configCode)}&state=${encodeURIComponent(tenantKey || 'default')}&redirect_uri=${encodeURIComponent(window.location.href)}`;
-      const features = 'width=700,height=800,menubar=no,toolbar=no';
-      window.open(popupUrl, 'wa_signup', features);
-      updateStatus('Se abrió el flujo de Embedded Signup en una nueva ventana.');
+      facebookSdkReady.then((FB) => {
+        if (!FB || !FB.login) {
+          updateStatus('El SDK de Facebook no está listo. Revisa tu conexión y APP_ID.', true);
+          return;
+        }
+
+        updateStatus('Abriendo el diálogo de Embedded Signup...');
+        FB.login(
+          function(response) {
+            if (response && response.status === 'connected') {
+              updateStatus('Sesión de Facebook detectada. Completa el cuadro de diálogo para continuar.');
+            } else {
+              updateStatus('No se pudo abrir el diálogo de Facebook. Verifica los permisos del navegador.', true);
+            }
+          },
+          {
+            config_id: configCode,
+            response_type: 'code',
+            override_default_response_type: true,
+          },
+        );
+      }).catch(() => {
+        const popupUrl = `https://www.facebook.com/v20.0/dialog/oauth?app_id=${encodeURIComponent(facebookAppId)}&config_id=${encodeURIComponent(configCode)}&state=${encodeURIComponent(tenantKey || 'default')}&redirect_uri=${encodeURIComponent(window.location.href)}`;
+        const features = 'width=700,height=800,menubar=no,toolbar=no';
+        window.open(popupUrl, 'wa_signup', features);
+        updateStatus('Se abrió el flujo de Embedded Signup en una nueva ventana (modo respaldo).');
+      });
     });
   })();
 </script>
