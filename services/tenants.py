@@ -43,6 +43,9 @@ _CURRENT_TENANT_ENV = contextvars.ContextVar("current_tenant_env", default=None)
 TENANT_ENV_KEYS = {
     "META_TOKEN",
     "PHONE_NUMBER_ID",
+    "LONG_LIVED_TOKEN",
+    "WABA_ID",
+    "BUSINESS_ID",
     "SECRET_KEY",
     "VERIFY_TOKEN",
     "MEDIA_ROOT",
@@ -80,6 +83,9 @@ def _default_tenant_env(*, include_legacy_credentials: bool = False) -> dict:
     env = {
         "META_TOKEN": None,
         "PHONE_NUMBER_ID": None,
+        "LONG_LIVED_TOKEN": None,
+        "WABA_ID": None,
+        "BUSINESS_ID": None,
         "SECRET_KEY": Config.SECRET_KEY,
         "VERIFY_TOKEN": Config.VERIFY_TOKEN,
         "MEDIA_ROOT": Config.MEDIA_ROOT,

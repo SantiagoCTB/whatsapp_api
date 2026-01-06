@@ -1,6 +1,6 @@
 import requests
 
-from services import whatsapp_api
+from services import tenants, whatsapp_api
 
 
 class DummyResponse:
@@ -23,6 +23,13 @@ class DummyResponse:
 def _patch_common_dependencies(monkeypatch):
     monkeypatch.setattr(whatsapp_api, "stop_typing_feedback", lambda *_, **__: None)
     monkeypatch.setattr(whatsapp_api, "guardar_mensaje", lambda *_, **__: None)
+    tenants.set_current_tenant_env(
+        {
+            "META_TOKEN": "test-token",
+            "PHONE_NUMBER_ID": "12345",
+            "LONG_LIVED_TOKEN": "test-token",
+        }
+    )
 
 
 def test_enviar_mensaje_continues_when_head_fails(monkeypatch):
