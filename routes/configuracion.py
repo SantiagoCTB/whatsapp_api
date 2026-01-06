@@ -39,6 +39,39 @@ def _require_admin():
     return "user" in session and 'admin' in (session.get('roles') or [])
 
 
+def _resolve_signup_tenant():
+    """Obtiene el tenant activo para el flujo de Embedded Signup.
+
+    - Usa el tenant en contexto cuando existe.
+    - Si no hay tenant en contexto, intenta usar el tenant activo (incluye
+      DEFAULT_TENANT) y lo recupera del registro.
+    """
+
+    tenant = tenants.get_current_tenant()
+    if tenant:
+        return tenant
+
+    fallback_key = tenants.get_active_tenant_key()
+    if not fallback_key:
+        return None
+
+    tenant = tenants.get_tenant(fallback_key)
+    if tenant:
+        return tenant
+
+    # En ambientes donde el DEFAULT_TENANT existe pero aún no se ha
+    # materializado en la base, intentamos registrarlo para evitar que el
+    # flujo se bloquee por no encontrar el tenant.
+    try:
+        return tenants.ensure_default_tenant_registered()
+    except Exception:
+        logger.exception(
+            "No se pudo resolver el tenant para Embedded Signup",
+            extra={"tenant_key": fallback_key},
+        )
+        return None
+
+
 def _normalize_input(text):
     """Normaliza una lista separada por comas."""
     return ','.join(t.strip().lower() for t in (text or '').split(',') if t.strip())
@@ -867,8 +900,8 @@ def configuracion_signup():
     if not _require_admin():
         return redirect(url_for("auth.login"))
 
-    tenant = tenants.get_current_tenant()
-    tenant_key = tenant.tenant_key if tenant else None
+    tenant = _resolve_signup_tenant()
+    tenant_key = tenant.tenant_key if tenant else tenants.get_active_tenant_key()
 
     logger.info(
         "Renderizando signup embebido",
@@ -892,7 +925,7 @@ def save_signup():
     if not _require_admin():
         return {"ok": False, "error": "No autorizado"}, 403
 
-    tenant = tenants.get_current_tenant()
+    tenant = _resolve_signup_tenant()
     if not tenant:
         logger.warning("Signup embebido falló: tenant actual no encontrado")
         return {"ok": False, "error": "No se encontró la empresa actual."}, 400
