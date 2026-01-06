@@ -72,15 +72,7 @@
 {{ super() }}
 <script>
   const facebookSdkReady = new Promise((resolve, reject) => {
-    (function(d, s, id) {
-      var js, fjs = d.getElementsByTagName(s)[0];
-      if (d.getElementById(id)) { return; }
-      js = d.createElement(s); js.id = id;
-      js.src = "https://connect.facebook.net/en_US/sdk.js";
-      fjs.parentNode.insertBefore(js, fjs);
-    }(document, 'script', 'facebook-jssdk'));
-
-    window.fbAsyncInit = function() {
+    const initSdk = () => {
       if (!window.FB) {
         reject(new Error('Facebook SDK no disponible'));
         return;
@@ -99,6 +91,22 @@
         reject(err);
       }
     };
+
+    window.fbAsyncInit = initSdk;
+
+    if (window.FB) {
+      initSdk();
+      return;
+    }
+
+    if (!document.getElementById('facebook-jssdk')) {
+      (function(d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        js = d.createElement(s); js.id = id;
+        js.src = "https://connect.facebook.net/en_US/sdk.js";
+        fjs.parentNode.insertBefore(js, fjs);
+      }(document, 'script', 'facebook-jssdk'));
+    }
   });
 </script>
 <script>
