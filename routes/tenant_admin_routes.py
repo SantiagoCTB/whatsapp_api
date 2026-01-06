@@ -38,6 +38,7 @@ def dashboard():
         tenant_roles=tenant_roles,
         tenant_users=tenant_users,
         tenant_env=tenant_env,
+        signup_config_code=Config.SIGNUP_FACEBOOK,
         message=message,
         error=error,
     )
@@ -165,6 +166,48 @@ def update_tenant_env(tenant_key: str):
             msg="Variables de entorno actualizadas.",
         )
     )
+
+
+@tenant_admin_bp.route("/<tenant_key>/signup", methods=["POST"])
+def save_tenant_signup(tenant_key: str):
+    tenant = tenants.get_tenant(tenant_key)
+    if not tenant:
+        abort(404)
+
+    try:
+        payload = request.get_json(force=True) or {}
+    except Exception:
+        return {"ok": False, "error": "Payload inválido"}, 400
+
+    current_env = tenants.get_tenant_env(tenant)
+    env_updates = {key: current_env.get(key) for key in tenants.TENANT_ENV_KEYS}
+    env_updates.update(
+        {
+            "META_TOKEN": payload.get("access_token") or payload.get("token"),
+            "LONG_LIVED_TOKEN": payload.get("access_token")
+            or payload.get("long_lived_token"),
+            "PHONE_NUMBER_ID": payload.get("phone_number_id")
+            or payload.get("phone_id"),
+            "WABA_ID": payload.get("waba_id"),
+            "BUSINESS_ID": payload.get("business_id")
+            or payload.get("business_manager_id"),
+        }
+    )
+
+    business_info = payload.get("business") or payload.get("business_info")
+    metadata_updates = {}
+    if isinstance(business_info, dict) and business_info:
+        metadata_updates["whatsapp_business"] = business_info
+
+    tenants.update_tenant_env(tenant_key, env_updates)
+    if metadata_updates:
+        tenants.update_tenant_metadata(tenant_key, metadata_updates)
+
+    return {
+        "ok": True,
+        "message": "Credenciales de WhatsApp actualizadas.",
+        "env": tenants.get_tenant_env(tenants.get_tenant(tenant_key)),
+    }
 
 
 @tenant_admin_bp.route("/<tenant_key>/delete", methods=["POST"])

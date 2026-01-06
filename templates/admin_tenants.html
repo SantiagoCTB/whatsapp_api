@@ -135,8 +135,17 @@
           <label>META_TOKEN
             <input name="META_TOKEN" value="{{ tenant_env.get('META_TOKEN','') }}" placeholder="token de Meta" />
           </label>
+          <label>LONG_LIVED_TOKEN
+            <input name="LONG_LIVED_TOKEN" value="{{ tenant_env.get('LONG_LIVED_TOKEN','') }}" placeholder="token largo generado por Meta" />
+          </label>
           <label>PHONE_NUMBER_ID
             <input name="PHONE_NUMBER_ID" value="{{ tenant_env.get('PHONE_NUMBER_ID','') }}" placeholder="630532376819353" />
+          </label>
+          <label>WABA_ID
+            <input name="WABA_ID" value="{{ tenant_env.get('WABA_ID','') }}" placeholder="1234567890" />
+          </label>
+          <label>BUSINESS_ID
+            <input name="BUSINESS_ID" value="{{ tenant_env.get('BUSINESS_ID','') }}" placeholder="ID del Business Manager" />
           </label>
           <label>SECRET_KEY
             <input name="SECRET_KEY" value="{{ tenant_env.get('SECRET_KEY','') }}" placeholder="my_secret_token" />
@@ -174,8 +183,95 @@
           <button type="submit" class="btn primary">Guardar variables</button>
         </form>
       </div>
+      <div>
+        <h3>Integraciones</h3>
+        <div class="meta-grid">
+          <div><strong>WABA_ID:</strong> {{ tenant_env.get('WABA_ID') or '—' }}</div>
+          <div><strong>BUSINESS_ID:</strong> {{ tenant_env.get('BUSINESS_ID') or '—' }}</div>
+          <div><strong>Phone number:</strong> {{ tenant_env.get('PHONE_NUMBER_ID') or '—' }}</div>
+          <div><strong>Token largo:</strong> {{ tenant_env.get('LONG_LIVED_TOKEN') or tenant_env.get('META_TOKEN') or '—' }}</div>
+          <div><strong>Business info:</strong> {{ (selected_tenant.metadata.get('whatsapp_business') if selected_tenant.metadata else {}) or '—' }}</div>
+        </div>
+        <p class="help">Usa el Embedded Signup para generar las credenciales directamente desde Meta y guardarlas en este tenant.</p>
+        <button
+          id="wa-signup-trigger"
+          class="btn primary"
+          data-config-code="{{ signup_config_code or '' }}"
+          data-tenant="{{ selected_tenant.tenant_key }}"
+          {% if not signup_config_code %}disabled{% endif %}
+        >
+          Abrir Embedded Signup
+        </button>
+        {% if not signup_config_code %}
+        <p class="alert alert-error" style="margin-top: 0.5rem">Falta configurar SIGNUP_FACEBOOK en el entorno.</p>
+        {% endif %}
+        <div id="wa-signup-status" class="help" style="margin-top: 0.5rem"></div>
+      </div>
     </div>
   </section>
   {% endif %}
 </div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+  (function() {
+    const trigger = document.getElementById('wa-signup-trigger');
+    if (!trigger) return;
+
+    const configCode = trigger.dataset.configCode;
+    const tenantKey = trigger.dataset.tenant;
+    const statusBox = document.getElementById('wa-signup-status');
+
+    const updateStatus = (message, isError) => {
+      if (!statusBox) return;
+      statusBox.textContent = message || '';
+      statusBox.style.color = isError ? '#c0392b' : '#2c3e50';
+    };
+
+    function handleSignupMessage(event) {
+      if (event.origin !== 'https://www.facebook.com') return;
+      let data = event.data;
+      if (typeof data === 'string') {
+        try { data = JSON.parse(data); } catch (err) { return; }
+      }
+
+      if (!data || data.type !== 'WA_EMBEDDED_SIGNUP' || data.event !== 'FINISH') {
+        return;
+      }
+
+      const payload = data.data || {};
+      fetch(`/admin/tenants/${tenantKey}/signup`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+        .then((resp) => resp.json())
+        .then((resp) => {
+          if (resp.ok) {
+            updateStatus(resp.message || 'Credenciales guardadas. Recarga la página para ver los cambios.');
+            setTimeout(() => window.location.reload(), 1200);
+          } else {
+            updateStatus(resp.error || 'No se pudieron guardar las credenciales.', true);
+          }
+        })
+        .catch(() => updateStatus('Error al enviar los datos del signup.', true));
+    }
+
+    window.addEventListener('message', handleSignupMessage);
+
+    trigger.addEventListener('click', function() {
+      if (!configCode) {
+        updateStatus('Falta configurar SIGNUP_FACEBOOK.', true);
+        return;
+      }
+
+      const popupUrl = `https://www.facebook.com/v20.0/dialog/oauth?config_id=${encodeURIComponent(configCode)}&state=${encodeURIComponent(tenantKey)}&redirect_uri=${encodeURIComponent(window.location.href)}`;
+      const features = 'width=700,height=800,menubar=no,toolbar=no';
+      window.open(popupUrl, 'wa_signup', features);
+      updateStatus('Se abrió el flujo de Embedded Signup en una nueva ventana.');
+    });
+  })();
+</script>
 {% endblock %}

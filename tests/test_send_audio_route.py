@@ -65,6 +65,7 @@ def test_send_audio_generates_public_url_and_keeps_caption(tmp_path, client, mon
     _patch_chat_dependencies(monkeypatch, tmp_path)
     converted_path = tmp_path / "converted.mp3"
     converted_path.write_bytes(b"converted")
+    converted_m4a_path = tmp_path / "converted.m4a"
     converted_m4a_path.write_bytes(b"converted")
     monkeypatch.setattr(
         chat_routes,
