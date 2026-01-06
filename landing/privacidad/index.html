@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Política de privacidad | Whapco</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #0b1021;
+      --card: rgba(255, 255, 255, 0.04);
+      --text: #f7f8fb;
+      --muted: #cbd2e7;
+      --accent: #25d366;
+      --border: rgba(255, 255, 255, 0.08);
+      --shadow: 0 25px 80px rgba(0, 0, 0, 0.35);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      background: radial-gradient(circle at 20% 20%, rgba(37, 211, 102, 0.08), transparent 35%),
+                  radial-gradient(circle at 80% 10%, rgba(86, 107, 255, 0.12), transparent 32%),
+                  var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 24px clamp(16px, 4vw, 48px);
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    .logo-mark {
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, #25d366, #5df8c2);
+      display: grid;
+      place-items: center;
+      color: #0b1021;
+      font-weight: 800;
+      box-shadow: 0 10px 40px rgba(37, 211, 102, 0.35);
+    }
+
+    nav {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .btn {
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--text);
+      padding: 10px 18px;
+      border-radius: 10px;
+      font-weight: 600;
+      text-decoration: none;
+      transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .btn:hover { border-color: rgba(255,255,255,0.35); transform: translateY(-1px); }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #25d366, #20be5a);
+      color: #0b1021;
+      border: none;
+      box-shadow: 0 12px 40px rgba(37, 211, 102, 0.35);
+    }
+
+    main { padding: 0 clamp(16px, 4vw, 48px) 64px; }
+
+    footer {
+      max-width: 1100px;
+      margin: 48px auto 0;
+      padding: 24px clamp(16px, 4vw, 48px) 48px;
+      color: var(--muted);
+      text-align: center;
+      font-size: 0.95rem;
+    }
+
+    .legal-main {
+      max-width: 960px;
+      margin: 0 auto 32px;
+    }
+
+    .legal-card {
+      border: 1px solid var(--border);
+      background: var(--card);
+      padding: clamp(18px, 4vw, 32px);
+      border-radius: 18px;
+      box-shadow: var(--shadow);
+    }
+
+    .legal-card h1 {
+      margin: 8px 0 12px;
+      font-size: clamp(26px, 4vw, 38px);
+      letter-spacing: -0.01em;
+    }
+
+    .legal-card p { color: var(--muted); line-height: 1.65; }
+
+    .legal-section { margin: 18px 0; }
+
+    .legal-section h2 {
+      margin: 0 0 8px;
+      font-size: 1.15rem;
+      color: #e8edf9;
+    }
+
+    .legal-section h3 {
+      margin: 10px 0 6px;
+      font-size: 1.05rem;
+      color: #dbe6ff;
+    }
+
+    .legal-section ul {
+      margin: 8px 0 0 18px;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    .tagline {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: rgba(37, 211, 102, 0.12);
+      color: #d2f7e3;
+      font-weight: 600;
+      font-size: 0.95rem;
+    }
+
+    a { color: #7fe9b0; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 8px;
+      color: var(--muted);
+    }
+
+    th, td {
+      border: 1px solid var(--border);
+      padding: 10px;
+      text-align: left;
+    }
+
+    th { color: var(--text); }
+
+    blockquote {
+      margin: 12px 0;
+      padding: 12px 14px;
+      border-left: 3px solid #25d366;
+      background: rgba(255, 255, 255, 0.03);
+      color: var(--muted);
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="logo">
+      <div class="logo-mark">W</div>
+      <div>
+        <div>Whapco</div>
+        <small style="color: var(--muted); font-weight: 600;">Multiagente · Multicanal</small>
+      </div>
+    </div>
+    <nav>
+      <a class="btn" href="./index.html">Inicio</a>
+      <a class="btn" href="https://app.whapco.site/login">Iniciar sesión</a>
+    </nav>
+  </header>
+
+  <main>
+    <div class="legal-main">
+      <div class="legal-card">
+        <div class="tagline">Política de privacidad</div>
+        <h1>Política de privacidad y tratamiento de datos personales</h1>
+        <p><strong>WHAPCO – S Y J PUBLICIDAD S.A.S.</strong></p>
+        <p>En <strong>S Y J PUBLICIDAD S.A.S.</strong> (en adelante, "la Compañía"), valoramos tu privacidad. Esta política detalla cómo recolectamos, usamos y protegemos la información personal a través de nuestra plataforma <strong>Whapco</strong>. Al interactuar con nosotros, aceptas los términos aquí descritos.</p>
+
+        <div class="legal-section">
+          <h2>1. Identificación del Responsable</h2>
+          <ul>
+            <li><strong>Razón Social:</strong> S Y J PUBLICIDAD S.A.S.</li>
+            <li><strong>Nombre Comercial:</strong> Whapco</li>
+            <li><strong>Domicilio:</strong> Colombia</li>
+            <li><strong>Contacto para Privacidad:</strong> <a href="mailto:team@whapco.com">team@whapco.com</a></li>
+          </ul>
+        </div>
+
+        <div class="legal-section">
+          <h2>2. Generalidades</h2>
+          <h3>Alcance</h3>
+          <p>Esta política es aplicable a usuarios, clientes, prospectos, proveedores, contratistas y cualquier tercero cuyos datos sean tratados por la Compañía.</p>
+          <h3>Marco Legal</h3>
+          <p>Nuestras prácticas se rigen por la normativa colombiana vigente:</p>
+          <ul>
+            <li>Ley 1581 de 2012 y Decretos 1377 de 2013 y 1074 de 2015.</li>
+            <li>Circulares de la Superintendencia de Industria y Comercio (SIC).</li>
+          </ul>
+        </div>
+
+        <div class="legal-section">
+          <h2>3. ¿Qué datos recolectamos?</h2>
+          <p>Dependiendo de tu relación con Whapco, tratamos las siguientes categorías de datos:</p>
+          <table>
+            <tr>
+              <th>Categoría</th>
+              <th>Ejemplos</th>
+            </tr>
+            <tr>
+              <td><strong>Identificación y Contacto</strong></td>
+              <td>Nombre, correo electrónico, teléfono, empresa.</td>
+            </tr>
+            <tr>
+              <td><strong>Uso de Plataforma</strong></td>
+              <td>Credenciales de acceso, configuración de flujos y metadatos técnicos.</td>
+            </tr>
+            <tr>
+              <td><strong>Gestión de Terceros</strong></td>
+              <td>Datos de clientes finales gestionados por el usuario (en calidad de Encargado).</td>
+            </tr>
+            <tr>
+              <td><strong>Información Comercial</strong></td>
+              <td>Datos para facturación, pagos y cumplimiento de contratos.</td>
+            </tr>
+          </table>
+          <blockquote><strong>Nota sobre Datos Sensibles:</strong> Whapco no solicita datos sensibles. Si llegaran a tratarse, se hará bajo autorización explícita y estrictas medidas de seguridad.</blockquote>
+        </div>
+
+        <div class="legal-section">
+          <h2>4. Finalidades del Tratamiento</h2>
+          <h3>A. Operación del Servicio</h3>
+          <ul>
+            <li>Administrar cuentas de usuario y prestar servicios de automatización y mensajería.</li>
+            <li>Gestionar conversaciones y configuraciones personalizadas.</li>
+            <li>Brindar soporte técnico eficiente.</li>
+          </ul>
+          <h3>B. Relación Comercial y Legal</h3>
+          <ul>
+            <li>Procesar facturación, pagos y cumplir con obligaciones contractuales.</li>
+            <li>Prevenir fraudes y asegurar el uso correcto de la plataforma.</li>
+          </ul>
+          <h3>C. Mejora y Comunicación</h3>
+          <ul>
+            <li>Optimizar funcionalidades mediante el análisis de rendimiento.</li>
+            <li>Enviar notificaciones operativas, cambios en el servicio y comunicaciones comerciales (previa autorización).</li>
+          </ul>
+        </div>
+
+        <div class="legal-section">
+          <h2>5. El Rol de Whapco como Encargado</h2>
+          <p>Cuando los usuarios gestionan datos de sus propios clientes finales a través de Whapco, la Compañía actúa únicamente como <strong>Encargado del Tratamiento</strong>. Esto significa que seguimos estrictamente las instrucciones del usuario responsable y los términos del contrato de servicio.</p>
+        </div>
+
+        <div class="legal-section">
+          <h2>6. Tus Derechos como Titular</h2>
+          <p>De acuerdo con la ley, tienes derecho a:</p>
+          <ol>
+            <li><strong>Conocer, actualizar y rectificar</strong> tus datos personales.</li>
+            <li><strong>Solicitar prueba</strong> de la autorización otorgada.</li>
+            <li><strong>Ser informado</strong> sobre el uso que se le da a tus datos.</li>
+            <li><strong>Revocar la autorización o solicitar la supresión</strong> de datos cuando sea legalmente procedente.</li>
+            <li><strong>Presentar quejas</strong> ante la SIC por infracciones a la ley de protección de datos.</li>
+          </ol>
+        </div>
+
+        <div class="legal-section">
+          <h2>7. Procedimiento para Consultas y Reclamos</h2>
+          <p>Puedes ejercer tus derechos enviando una comunicación al correo: <strong><a href="mailto:privacidad@whapco.site">privacidad@whapco.site</a></strong>.</p>
+          <ul>
+            <li><strong>Consultas:</strong> Se atenderán en un plazo máximo de <strong>10 días hábiles</strong>.</li>
+            <li><strong>Reclamos:</strong> Se atenderán en un plazo máximo de <strong>15 días hábiles</strong>.</li>
+          </ul>
+        </div>
+
+        <div class="legal-section">
+          <h2>8. Seguridad e Integraciones</h2>
+          <h3>Protección de la Información</h3>
+          <p>Aplicamos medidas técnicas y administrativas para evitar el acceso no autorizado, pérdida o alteración de la información, conforme al estado actual de la tecnología.</p>
+          <h3>Integraciones con Terceros (WhatsApp / Meta)</h3>
+          <p>Whapco utiliza la API de WhatsApp Business. El uso de esta herramienta está sujeto a las políticas de Meta. La Compañía no se hace responsable por cambios o limitaciones impuestas por dichos proveedores externos.</p>
+          <ul>
+            <li><a href="https://www.whatsapp.com/legal/business-policy/">Política de WhatsApp Business</a></li>
+            <li><a href="https://www.whatsapp.com/legal/business-data-processing-terms">Términos de Procesamiento de Datos de WhatsApp</a></li>
+          </ul>
+        </div>
+
+        <div class="legal-section">
+          <h2>9. Vigencia y Modificaciones</h2>
+          <p>Los datos se conservarán mientras persista la finalidad que dio origen a su tratamiento o exista una obligación legal de mantenerlos. Esta política puede ser actualizada. Cualquier cambio relevante será notificado a través de la plataforma Whapco.</p>
+          <p><strong>Fecha de última actualización:</strong> Enero 2026</p>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <footer>
+    Construido para equipos que necesitan salir al aire rápido. Inicia sesión para continuar.
+    <br>
+    <a href="./privacidad" style="color:#7fe9b0; text-decoration: none;">Política de privacidad</a>
+    ·
+    <a href="./terminos" style="color:#7fe9b0; text-decoration: none;">Términos y condiciones</a>
+    ·
+    <a href="./aviso" style="color:#7fe9b0; text-decoration: none;">Aviso legal</a>
+  </footer>
+</body>
+</html>
