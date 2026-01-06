@@ -861,6 +861,66 @@ def configuracion_ia():
     finally:
         conn.close()
 
+
+@config_bp.route('/configuracion/signup', methods=['GET'])
+def configuracion_signup():
+    if not _require_admin():
+        return redirect(url_for("auth.login"))
+
+    tenant = tenants.get_current_tenant()
+    tenant_key = tenant.tenant_key if tenant else None
+
+    return render_template(
+        'configuracion_signup.html',
+        signup_config_code=Config.SIGNUP_FACEBOOK,
+        tenant_key=tenant_key,
+    )
+
+
+@config_bp.route('/configuracion/signup', methods=['POST'])
+def save_signup():
+    if not _require_admin():
+        return {"ok": False, "error": "No autorizado"}, 403
+
+    tenant = tenants.get_current_tenant()
+    if not tenant:
+        return {"ok": False, "error": "No se encontró la empresa actual."}, 400
+
+    try:
+        payload = request.get_json(force=True) or {}
+    except Exception:
+        return {"ok": False, "error": "Payload inválido"}, 400
+
+    current_env = tenants.get_tenant_env(tenant)
+    env_updates = {key: current_env.get(key) for key in tenants.TENANT_ENV_KEYS}
+    env_updates.update(
+        {
+            "META_TOKEN": payload.get("access_token") or payload.get("token"),
+            "LONG_LIVED_TOKEN": payload.get("access_token")
+            or payload.get("long_lived_token"),
+            "PHONE_NUMBER_ID": payload.get("phone_number_id")
+            or payload.get("phone_id"),
+            "WABA_ID": payload.get("waba_id"),
+            "BUSINESS_ID": payload.get("business_id")
+            or payload.get("business_manager_id"),
+        }
+    )
+
+    business_info = payload.get("business") or payload.get("business_info")
+    metadata_updates = {}
+    if isinstance(business_info, dict) and business_info:
+        metadata_updates["whatsapp_business"] = business_info
+
+    tenants.update_tenant_env(tenant.tenant_key, env_updates)
+    if metadata_updates:
+        tenants.update_tenant_metadata(tenant.tenant_key, metadata_updates)
+
+    return {
+        "ok": True,
+        "message": "Credenciales de WhatsApp actualizadas.",
+        "env": tenants.get_tenant_env(tenant),
+    }
+
 @config_bp.route('/configuracion', methods=['GET', 'POST'])
 def configuracion():
     return _reglas_view('configuracion.html')
