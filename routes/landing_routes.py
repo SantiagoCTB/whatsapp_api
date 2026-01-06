@@ -1,6 +1,6 @@
 import os
 
-from flask import Blueprint, abort, current_app, send_file
+from flask import Blueprint, abort, current_app
 
 from config import Config
 
@@ -17,7 +17,12 @@ def _serve_landing_page(filename: str):
         current_app.logger.error("Landing page not found: %s", path)
         abort(404)
 
-    response = send_file(path, mimetype="text/html; charset=utf-8")
+    with open(path, "r", encoding="utf-8") as fp:
+        html_content = fp.read()
+
+    response = current_app.response_class(
+        html_content, status=200, content_type="text/html; charset=utf-8"
+    )
     current_app.logger.info(
         "Landing page served", extra={"path": path, "content_type": response.mimetype}
     )
