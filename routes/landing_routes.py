@@ -11,14 +11,14 @@ LANDING_DIR = os.path.join(Config.BASEDIR, "landing")
 
 @landing_bp.route("/privacidad")
 def privacidad():
-    return send_from_directory(LANDING_DIR, "privacidad.html")
+    return send_from_directory(LANDING_DIR, "privacidad.html", mimetype="text/html")
 
 
 @landing_bp.route("/aviso")
 def aviso():
-    return send_from_directory(LANDING_DIR, "aviso.html")
+    return send_from_directory(LANDING_DIR, "aviso.html", mimetype="text/html")
 
 
 @landing_bp.route("/terminos")
 def terminos():
-    return send_from_directory(LANDING_DIR, "terminos.html")
+    return send_from_directory(LANDING_DIR, "terminos.html", mimetype="text/html")
