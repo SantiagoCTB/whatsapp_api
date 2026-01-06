@@ -39,6 +39,7 @@ def dashboard():
         tenant_users=tenant_users,
         tenant_env=tenant_env,
         signup_config_code=Config.SIGNUP_FACEBOOK,
+        facebook_app_id=Config.FACEBOOK_APP_ID,
         message=message,
         error=error,
     )
