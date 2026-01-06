@@ -155,6 +155,29 @@ genere URLs externas correctas. El ejemplo de `deploy/linux/nginx/nginx.conf`
 ya envía ese encabezado. Si necesitas forzar un esquema específico, define la
 variable de entorno `PREFERRED_URL_SCHEME=https`.
 
+## Diagnóstico rápido para Embedded Signup
+
+Si el cuadro de login de Facebook no aparece en `/configuracion/signup`, sigue
+estos pasos desde el contenedor web:
+
+1. Ejecuta el chequeo básico de entorno:
+
+   ```bash
+   python scripts/check_embedded_signup.py
+   ```
+
+   Esto valida la presencia de `FACEBOOK_APP_ID`, `SIGNUP_FACEBOOK`, la
+   resolución DNS hacia Facebook y que el esquema preferido sea HTTPS.
+
+2. Carga `/configuracion/signup` y revisa la sección **Diagnóstico rápido** en la
+   tarjeta de Embedded Signup. Marca en tiempo real si falta alguna variable de
+   entorno, si el tenant actual no se resolvió o si el SDK de Facebook no
+   respondió dentro del tiempo esperado.
+
+3. Abre la consola del navegador (F12) para ver errores de red de `sdk.js` o
+   bloqueos de terceros. Si el SDK no carga, verifica conectividad saliente o
+   políticas de contenido (CSP/proxy).
+
 ## Comandos globales
 
 El bot cuenta con comandos globales que se ejecutan antes del flujo principal.
