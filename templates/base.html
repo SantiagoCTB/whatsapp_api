@@ -4,6 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta http-equiv="Permissions-Policy" content="unload=(self)">
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="{% block og_title %}Whapco{% endblock %}">
+    <meta property="og:description" content="{% block og_description %}Plataforma de mensajería multiagente y multicanal.{% endblock %}">
+    <meta property="og:image" content="{% block og_image %}{{ url_for('static', filename='fondo_general.jpeg', _external=True) }}{% endblock %}">
     <title>{% block title %}Whapco{% endblock %}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
   </head>
