@@ -28,6 +28,16 @@
         <p class="muted">Requiere iniciar sesión en Facebook para completar el proceso.</p>
     </div>
     <div class="form-row">
+        <div class="muted" style="margin-bottom: 0.25rem">Diagnóstico rápido</div>
+        <ul id="wa-signup-health" class="muted" style="margin: 0; padding-left: 1rem; line-height: 1.4;">
+            <li data-check="config-code">Código de configuración presente</li>
+            <li data-check="app-id">FACEBOOK_APP_ID configurado</li>
+            <li data-check="tenant">Tenant resuelto para el signup</li>
+            <li data-check="protocol">Página servida sobre HTTPS</li>
+            <li data-check="sdk">SDK de Facebook cargado</li>
+        </ul>
+    </div>
+    <div class="form-row">
         <fb:login-button
           scope="public_profile,email"
           config_id="{{ signup_config_code or '' }}"
@@ -100,6 +110,7 @@
     const configCode = trigger.dataset.configCode;
     const tenantKey = trigger.dataset.tenant;
     const statusBox = document.getElementById('wa-signup-status');
+    const healthList = document.getElementById('wa-signup-health');
 
     const updateStatus = (message, isError) => {
       if (!statusBox) return;
@@ -107,12 +118,36 @@
       statusBox.style.color = isError ? '#c0392b' : '#2c3e50';
     };
 
+    const markHealth = (check, ok, detail) => {
+      if (!healthList) return;
+      const item = healthList.querySelector(`[data-check="${check}"]`);
+      if (!item) return;
+      const prefix = ok ? '✅' : '⚠️';
+      item.textContent = `${prefix} ${detail}`;
+      item.style.color = ok ? '#2c3e50' : '#c0392b';
+    };
+
+    const runSyncHealth = () => {
+      markHealth('config-code', Boolean(configCode), 'Código de configuración presente');
+      markHealth('app-id', Boolean(facebookAppId), 'FACEBOOK_APP_ID configurado');
+      markHealth('tenant', Boolean(tenantKey), 'Tenant resuelto para el signup');
+      markHealth('protocol', window.location.protocol === 'https:', 'Página servida sobre HTTPS');
+    };
+
+    runSyncHealth();
+
+    const sdkTimeout = setTimeout(() => {
+      markHealth('sdk', false, 'SDK de Facebook no respondió (ver consola del navegador)');
+    }, 6000);
+
     window.checkLoginState = function() {
       if (!facebookAppId) {
         updateStatus('Falta configurar FACEBOOK_APP_ID.', true);
         return;
       }
       facebookSdkReady.then((FB) => {
+        clearTimeout(sdkTimeout);
+        markHealth('sdk', true, 'SDK de Facebook cargado');
         if (FB && FB.getLoginStatus) {
           FB.getLoginStatus(function(response) {
             if (response && response.status === 'connected') {
