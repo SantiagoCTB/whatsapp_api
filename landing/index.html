@@ -184,6 +184,89 @@
       text-align: center;
       font-size: 0.95rem;
     }
+
+    .cookie-banner {
+      position: fixed;
+      left: clamp(16px, 4vw, 48px);
+      right: clamp(16px, 4vw, 48px);
+      bottom: 24px;
+      background: #f5f5f5;
+      color: #2c2c2c;
+      border-radius: 18px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
+      padding: 24px;
+      display: grid;
+      gap: 16px;
+      z-index: 20;
+      opacity: 0;
+      transform: translateY(20px);
+      transition: opacity 0.3s ease, transform 0.3s ease;
+    }
+
+    .cookie-banner--visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .cookie-banner__header {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      font-size: 1.6rem;
+      font-weight: 700;
+    }
+
+    .cookie-banner__icon {
+      width: 44px;
+      height: 44px;
+      border-radius: 14px;
+      background: #3d3d3d;
+      display: grid;
+      place-items: center;
+    }
+
+    .cookie-banner__icon svg { width: 26px; height: 26px; }
+
+    .cookie-banner__text {
+      margin: 0;
+      line-height: 1.6;
+      font-size: 1.02rem;
+    }
+
+    .cookie-banner__text a {
+      color: #2c2c2c;
+      font-weight: 600;
+    }
+
+    .cookie-banner__actions {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .cookie-btn {
+      border-radius: 10px;
+      padding: 10px 22px;
+      font-weight: 600;
+      font-size: 1rem;
+      border: 1px solid #2c2c2c;
+      background: transparent;
+      cursor: pointer;
+    }
+
+    .cookie-btn--accept {
+      background: #2f7d32;
+      border-color: #2f7d32;
+      color: #fff;
+    }
+
+    .cookie-btn:focus-visible { outline: 2px solid #2c2c2c; outline-offset: 2px; }
+
+    @media (max-width: 640px) {
+      .cookie-banner__actions { justify-content: stretch; }
+      .cookie-btn { flex: 1 1 auto; text-align: center; }
+    }
   </style>
 </head>
 <body>
@@ -277,5 +360,52 @@
     ·
     <a href="./aviso" style="color:#7fe9b0; text-decoration: none;">Aviso legal</a>
   </footer>
+
+  <section id="cookie-banner" class="cookie-banner" role="dialog" aria-live="polite" aria-label="Aviso de cookies" hidden>
+    <div class="cookie-banner__header">
+      <span class="cookie-banner__icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none">
+          <path d="M12 2a10 10 0 1 0 10 10 5 5 0 0 1-10-10Z" fill="#f5f5f5"/>
+          <circle cx="9" cy="9" r="1.5" fill="#2c2c2c"/>
+          <circle cx="14" cy="12" r="1.5" fill="#2c2c2c"/>
+          <circle cx="10.5" cy="14.5" r="1.2" fill="#2c2c2c"/>
+        </svg>
+      </span>
+      <span>Utilizamos cookies</span>
+    </div>
+    <p class="cookie-banner__text">
+      Usamos cookies para mejorar su experiencia de navegación en nuestra web, para mostrarle contenidos personalizados y para analizar el tráfico en nuestra web.
+      <a href="./privacidad">Ver política de cookies</a>
+    </p>
+    <div class="cookie-banner__actions">
+      <button type="button" class="cookie-btn cookie-btn--accept" data-cookie-action="accepted">Aceptar</button>
+      <button type="button" class="cookie-btn" data-cookie-action="rejected">Rechazar</button>
+    </div>
+  </section>
+
+  <script>
+    const banner = document.getElementById('cookie-banner');
+    const storedConsent = localStorage.getItem('cookie-consent');
+
+    if (!storedConsent) {
+      banner.hidden = false;
+      requestAnimationFrame(() => {
+        banner.classList.add('cookie-banner--visible');
+      });
+    }
+
+    banner.addEventListener('click', (event) => {
+      const action = event.target.closest('[data-cookie-action]');
+      if (!action) {
+        return;
+      }
+
+      localStorage.setItem('cookie-consent', action.dataset.cookieAction);
+      banner.classList.remove('cookie-banner--visible');
+      window.setTimeout(() => {
+        banner.hidden = true;
+      }, 300);
+    });
+  </script>
 </body>
 </html>
