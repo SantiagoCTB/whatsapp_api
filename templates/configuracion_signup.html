@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% block title %}Embedded Signup{% endblock %}
+{% block title %}Integraciones{% endblock %}
 {% block body_class %}page{% endblock %}
 {% block content %}
 <div class="top-right">
@@ -8,55 +8,97 @@
     </a>
 </div>
 
-<h2>Embedded Signup</h2>
+<h2>Integraciones</h2>
 <div class="page-tabs">
     <a class="tab-link" href="{{ url_for('configuracion.reglas') }}">Reglas</a>
     <a class="tab-link" href="{{ url_for('configuracion.configuracion_ia') }}">Configuración IA</a>
-    <a class="tab-link active" href="{{ url_for('configuracion.configuracion_signup') }}">Embedded Signup</a>
+    <a class="tab-link active" href="{{ url_for('configuracion.configuracion_signup') }}">Integraciones</a>
 </div>
 
 <p>
-    Conecta tu cuenta de WhatsApp Business desde Meta sin salir del panel.
-    Usa el botón de abajo para abrir el flujo de Embedded Signup usando el
-    <code>SIGNUP_FACEBOOK</code> configurado en el entorno. Al finalizar, las
-    credenciales se guardarán automáticamente en esta empresa.
+    Administra tus conexiones con Meta desde un solo lugar. Puedes activar
+    WhatsApp Business con el flujo de Embedded Signup y habilitar el login
+    de Instagram con la URL que te entrega Meta.
 </p>
 
 <div id="fb-root"></div>
-<div class="card">
-    <div class="form-row">
-        <p class="muted">Requiere iniciar sesión en Facebook para completar el proceso.</p>
+<div class="integrations-grid">
+    <div class="integration-card card">
+        <div class="integration-header">
+            <img
+                class="integration-logo"
+                src="{{ url_for('static', filename='logo-whatsapp.png') }}"
+                alt="Logo de WhatsApp"
+            >
+            <div>
+                <h3>WhatsApp Business</h3>
+                <p class="muted">Conecta tu cuenta desde Meta y guarda las credenciales automáticamente.</p>
+            </div>
+        </div>
+        <div class="integration-body">
+            <p class="muted">Requiere iniciar sesión en Facebook para completar el proceso.</p>
+            <div class="muted" style="margin-bottom: 0.25rem">Diagnóstico rápido</div>
+            <ul id="wa-signup-health" class="muted" style="margin: 0; padding-left: 1rem; line-height: 1.4;">
+                <li data-check="config-code">Código de configuración presente</li>
+                <li data-check="app-id">FACEBOOK_APP_ID configurado</li>
+                <li data-check="tenant">Tenant resuelto para el signup</li>
+                <li data-check="protocol">Página servida sobre HTTPS</li>
+                <li data-check="sdk">SDK de Facebook cargado</li>
+            </ul>
+            <div class="form-row" style="margin-top: 1rem;">
+                <button
+                    id="wa-signup-trigger"
+                    class="btn-primary"
+                    data-config-code="{{ signup_config_code or '' }}"
+                    data-tenant="{{ tenant_key or '' }}"
+                    {% if not signup_config_code or not tenant_key or not facebook_app_id %}disabled{% endif %}
+                >
+                    Abrir Embedded Signup
+                </button>
+                {% if not tenant_key %}
+                <p class="alert alert-error" style="margin-top: 0.5rem">No se pudo identificar el tenant actual.</p>
+                {% endif %}
+                {% if not signup_config_code %}
+                <p class="alert alert-error" style="margin-top: 0.5rem">Falta configurar SIGNUP_FACEBOOK en el entorno.</p>
+                {% endif %}
+                {% if not facebook_app_id %}
+                <p class="alert alert-error" style="margin-top: 0.5rem">Falta configurar FACEBOOK_APP_ID en el entorno.</p>
+                {% endif %}
+                <div id="wa-signup-status" class="help" style="margin-top: 0.5rem"></div>
+            </div>
+        </div>
     </div>
-    <div class="form-row">
-        <div class="muted" style="margin-bottom: 0.25rem">Diagnóstico rápido</div>
-        <ul id="wa-signup-health" class="muted" style="margin: 0; padding-left: 1rem; line-height: 1.4;">
-            <li data-check="config-code">Código de configuración presente</li>
-            <li data-check="app-id">FACEBOOK_APP_ID configurado</li>
-            <li data-check="tenant">Tenant resuelto para el signup</li>
-            <li data-check="protocol">Página servida sobre HTTPS</li>
-            <li data-check="sdk">SDK de Facebook cargado</li>
-        </ul>
-    </div>
-    <div class="form-row">
-        <button
-            id="wa-signup-trigger"
-            class="btn-primary"
-            data-config-code="{{ signup_config_code or '' }}"
-            data-tenant="{{ tenant_key or '' }}"
-            {% if not signup_config_code or not tenant_key or not facebook_app_id %}disabled{% endif %}
-        >
-            Abrir Embedded Signup
-        </button>
-        {% if not tenant_key %}
-        <p class="alert alert-error" style="margin-top: 0.5rem">No se pudo identificar el tenant actual.</p>
-        {% endif %}
-        {% if not signup_config_code %}
-        <p class="alert alert-error" style="margin-top: 0.5rem">Falta configurar SIGNUP_FACEBOOK en el entorno.</p>
-        {% endif %}
-        {% if not facebook_app_id %}
-        <p class="alert alert-error" style="margin-top: 0.5rem">Falta configurar FACEBOOK_APP_ID en el entorno.</p>
-        {% endif %}
-        <div id="wa-signup-status" class="help" style="margin-top: 0.5rem"></div>
+
+    <div class="integration-card card">
+        <div class="integration-header">
+            <img
+                class="integration-logo"
+                src="{{ url_for('static', filename='logo-instagram.png') }}"
+                alt="Logo de Instagram"
+            >
+            <div>
+                <h3>Instagram</h3>
+                <p class="muted">Inicia la sesión del negocio para habilitar la integración.</p>
+            </div>
+        </div>
+        <div class="integration-body">
+            <p class="muted">
+                Usa la URL configurada en <code>SIGNUP_INSTRAGRAM</code> para abrir el flujo de login.
+            </p>
+            {% if signup_instagram_url %}
+            <a
+                class="btn-primary"
+                href="{{ signup_instagram_url }}"
+                target="_blank"
+                rel="noopener"
+            >
+                Abrir signup de Instagram
+            </a>
+            {% else %}
+            <button class="btn-primary" disabled>Configura SIGNUP_INSTRAGRAM</button>
+            <p class="alert alert-error" style="margin-top: 0.5rem">Falta configurar SIGNUP_INSTRAGRAM en el entorno.</p>
+            {% endif %}
+        </div>
     </div>
 </div>
 {% endblock %}

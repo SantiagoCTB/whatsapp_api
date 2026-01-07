@@ -916,6 +916,7 @@ def configuracion_signup():
         'configuracion_signup.html',
         signup_config_code=Config.SIGNUP_FACEBOOK,
         facebook_app_id=Config.FACEBOOK_APP_ID,
+        signup_instagram_url=Config.SIGNUP_INSTRAGRAM,
         tenant_key=tenant_key,
     )
 
