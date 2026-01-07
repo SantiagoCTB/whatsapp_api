@@ -893,6 +893,44 @@
       box-shadow: 0 10px 35px rgba(0, 0, 0, 0.05);
     }
 
+    .integrations-grid {
+      display: grid;
+      gap: 20px;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      margin-top: 24px;
+    }
+
+    .integration-card {
+      border-radius: 16px;
+      padding: 24px;
+      background: #fff;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .integration-header {
+      display: flex;
+      gap: 16px;
+      align-items: center;
+    }
+
+    .integration-logo {
+      width: 48px;
+      height: 48px;
+      object-fit: contain;
+      border-radius: 12px;
+      background: #f4f6ff;
+      padding: 8px;
+      box-shadow: inset 0 0 0 1px #dbe2ff;
+    }
+
+    .integration-body {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
     .form-row {
       margin-bottom: 16px;
     }

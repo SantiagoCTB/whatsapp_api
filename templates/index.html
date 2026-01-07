@@ -13,7 +13,7 @@
       <div id="settingsMenu">
         <a href="{{ url_for('configuracion.reglas') }}">Reglas</a>
         <a href="{{ url_for('configuracion.botones') }}">Botones</a>
-        <a href="{{ url_for('configuracion.configuracion_signup') }}">Embedded Signup</a>
+        <a href="{{ url_for('configuracion.configuracion_signup') }}">Integraciones</a>
         {% if session.get('roles') and 'admin' in session['roles'] %}
         <a href="{{ url_for('roles.roles') }}">Roles</a>
         <a href="{{ url_for('usuarios.manage_users') }}">Usuarios</a>
