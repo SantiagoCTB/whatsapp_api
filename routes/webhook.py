@@ -105,6 +105,21 @@ def _get_session_timeout_message():
     )
 
 
+def _get_messenger_disclosure_message():
+    return tenants.get_runtime_setting(
+        "MESSENGER_AUTOMATION_DISCLOSURE_MESSAGE",
+        default=Config.MESSENGER_AUTOMATION_DISCLOSURE_MESSAGE,
+    )
+
+
+def _get_messenger_disclosure_reset_seconds() -> int:
+    return tenants.get_runtime_setting(
+        "MESSENGER_DISCLOSURE_RESET_SECONDS",
+        default=Config.MESSENGER_DISCLOSURE_RESET_SECONDS,
+        cast=int,
+    )
+
+
 # Valores por defecto expuestos para compatibilidad con pruebas/llamadas externas.
 SESSION_TIMEOUT = default_env.get("SESSION_TIMEOUT") or Config.SESSION_TIMEOUT
 SESSION_TIMEOUT_MESSAGE = (
@@ -221,6 +236,49 @@ def _coerce_status_timestamp(raw_value):
         return int(raw_value)
     except (TypeError, ValueError):
         return None
+
+
+def _coerce_messenger_timestamp(raw_value):
+    timestamp = _coerce_status_timestamp(raw_value)
+    if timestamp is None:
+        return None
+    if timestamp > 10_000_000_000:
+        return int(timestamp / 1000)
+    return timestamp
+
+
+def _should_send_messenger_disclosure(chat_state_row) -> bool:
+    message = _get_messenger_disclosure_message()
+    if not message:
+        return False
+
+    reset_seconds = _get_messenger_disclosure_reset_seconds()
+    if reset_seconds is None or reset_seconds <= 0:
+        return False
+
+    if not chat_state_row:
+        return True
+
+    last_activity = chat_state_row[1] if len(chat_state_row) > 1 else None
+    if not isinstance(last_activity, datetime):
+        return True
+
+    elapsed_seconds = (datetime.utcnow() - last_activity).total_seconds()
+    return elapsed_seconds >= reset_seconds
+
+
+def _maybe_send_messenger_disclosure(numero: str, chat_state_row, step: str | None):
+    if not _should_send_messenger_disclosure(chat_state_row):
+        return
+    message = _get_messenger_disclosure_message()
+    if not message:
+        return
+    sent = enviar_mensaje(numero, message, tipo="bot", step=step)
+    if not sent:
+        logger.warning(
+            "No se pudo enviar el mensaje de divulgación automatizada",
+            extra={"numero": numero},
+        )
 
 
 def _normalize_status_error(errors):
@@ -447,12 +505,74 @@ def _mark_message_processed(message_id: str | None) -> bool:
 def _handle_messenger_payload(data, summary):
     for entry in data.get("entry", []):
         for event in entry.get("messaging", []) or []:
+            handled = False
             message = event.get("message") or {}
-            if message.get("is_echo"):
-                continue
             sender_id = (event.get("sender") or {}).get("id")
             if not sender_id:
                 summary["unsupported"] += 1
+                continue
+
+            delivery = event.get("delivery") or {}
+            if delivery:
+                mids = delivery.get("mids") or []
+                timestamp = _coerce_messenger_timestamp(delivery.get("watermark"))
+                recipient_id = (event.get("recipient") or {}).get("id")
+                for mid in mids:
+                    guardar_estado_mensaje(
+                        mid,
+                        "delivered",
+                        status_timestamp=timestamp,
+                        recipient_id=recipient_id,
+                        payload=delivery,
+                    )
+                    summary["statuses"] += 1
+                handled = True
+
+            read_event = event.get("read") or {}
+            if read_event:
+                mids = read_event.get("mids") or []
+                if read_event.get("mid"):
+                    mids.append(read_event.get("mid"))
+                timestamp = _coerce_messenger_timestamp(read_event.get("watermark"))
+                recipient_id = (event.get("recipient") or {}).get("id")
+                for mid in mids:
+                    guardar_estado_mensaje(
+                        mid,
+                        "read",
+                        status_timestamp=timestamp,
+                        recipient_id=recipient_id,
+                        payload=read_event,
+                    )
+                    summary["statuses"] += 1
+                handled = True
+
+            reaction_event = event.get("reaction") or {}
+            if reaction_event:
+                reaction_mid = reaction_event.get("mid")
+                if reaction_mid:
+                    recipient_id = (event.get("recipient") or {}).get("id")
+                    guardar_estado_mensaje(
+                        reaction_mid,
+                        "reaction",
+                        status_timestamp=_coerce_messenger_timestamp(event.get("timestamp")),
+                        recipient_id=recipient_id,
+                        payload=reaction_event,
+                    )
+                    summary["statuses"] += 1
+                handled = True
+
+            if message.get("is_echo"):
+                message_id = message.get("mid")
+                if message_id:
+                    guardar_estado_mensaje(
+                        message_id,
+                        "sent",
+                        status_timestamp=_coerce_messenger_timestamp(event.get("timestamp")),
+                        recipient_id=sender_id,
+                        payload=message,
+                    )
+                    summary["statuses"] += 1
+                handled = True
                 continue
 
             message_id = message.get("mid")
@@ -469,40 +589,48 @@ def _handle_messenger_payload(data, summary):
                     extra={"numero": sender_id, "message_id": _mask_identifier(message_id)},
                 )
 
-            if message.get("text"):
-                text = message.get("text", "").strip()
-                normalized_text = normalize_text(text)
+            quick_reply_payload = (message.get("quick_reply") or {}).get("payload")
+            text = (message.get("text") or "").strip()
+            if text or quick_reply_payload:
+                stored_text = text or (quick_reply_payload or "")
+                normalized_text = normalize_text(quick_reply_payload or text)
                 step = get_current_step(sender_id)
                 guardar_mensaje(
                     sender_id,
-                    text,
+                    stored_text,
                     "cliente_messenger",
                     wa_id=message_id,
                     step=step,
                 )
+                if not agent_mode:
+                    _maybe_send_messenger_disclosure(sender_id, chat_state_row, step)
                 update_chat_state(sender_id, step, estado_update)
                 if agent_mode:
                     summary["processed"] += 1
+                    handled = True
+                elif normalized_text:
+                    current_tenant = tenants.get_current_tenant()
+                    tenant_env = dict(tenants.get_current_tenant_env() or {})
+                    with cache_lock:
+                        message_buffer.setdefault(sender_id, []).append(
+                            {
+                                "raw": quick_reply_payload or text,
+                                "normalized": normalized_text,
+                                "tenant_key": current_tenant.tenant_key if current_tenant else None,
+                                "tenant_env": tenant_env,
+                            }
+                        )
+                        if sender_id in pending_timers:
+                            pending_timers[sender_id].cancel()
+                        timer = threading.Timer(3, process_buffered_messages, args=(sender_id,))
+                        pending_timers[sender_id] = timer
+                    timer.start()
+                    summary["processed"] += 1
+                    handled = True
                     continue
-
-                current_tenant = tenants.get_current_tenant()
-                tenant_env = dict(tenants.get_current_tenant_env() or {})
-                with cache_lock:
-                    message_buffer.setdefault(sender_id, []).append(
-                        {
-                            "raw": text,
-                            "normalized": normalized_text,
-                            "tenant_key": current_tenant.tenant_key if current_tenant else None,
-                            "tenant_env": tenant_env,
-                        }
-                    )
-                    if sender_id in pending_timers:
-                        pending_timers[sender_id].cancel()
-                    timer = threading.Timer(3, process_buffered_messages, args=(sender_id,))
-                    pending_timers[sender_id] = timer
-                timer.start()
-                summary["processed"] += 1
-                continue
+                else:
+                    summary["processed"] += 1
+                    handled = True
 
             attachments = message.get("attachments") or []
             if attachments:
@@ -522,15 +650,66 @@ def _handle_messenger_payload(data, summary):
                         media_url=media_url,
                         step=step,
                     )
+                if not agent_mode:
+                    _maybe_send_messenger_disclosure(sender_id, chat_state_row, step)
                 update_chat_state(sender_id, step, estado_update)
                 if agent_mode:
                     summary["processed"] += 1
-                    continue
-                handle_text_message(sender_id, "", save=False)
-                summary["processed"] += 1
-                continue
+                    handled = True
+                else:
+                    handle_text_message(sender_id, "", save=False)
+                    summary["processed"] += 1
+                    handled = True
 
-            summary["unsupported"] += 1
+            postback = event.get("postback") or {}
+            if postback and not message:
+                postback_id = postback.get("mid")
+                if postback_id and _mark_message_processed(postback_id):
+                    summary["duplicates"] += 1
+                    continue
+                payload_text = (postback.get("payload") or "").strip()
+                title_text = (postback.get("title") or "").strip()
+                effective_text = payload_text or title_text
+                step = get_current_step(sender_id)
+                guardar_mensaje(
+                    sender_id,
+                    effective_text,
+                    "cliente_messenger_postback",
+                    wa_id=postback_id,
+                    step=step,
+                )
+                if not agent_mode:
+                    _maybe_send_messenger_disclosure(sender_id, chat_state_row, step)
+                update_chat_state(sender_id, step, estado_update)
+                if agent_mode:
+                    summary["processed"] += 1
+                    handled = True
+                elif effective_text:
+                    current_tenant = tenants.get_current_tenant()
+                    tenant_env = dict(tenants.get_current_tenant_env() or {})
+                    normalized_payload = normalize_text(effective_text)
+                    with cache_lock:
+                        message_buffer.setdefault(sender_id, []).append(
+                            {
+                                "raw": effective_text,
+                                "normalized": normalized_payload,
+                                "tenant_key": current_tenant.tenant_key if current_tenant else None,
+                                "tenant_env": tenant_env,
+                            }
+                        )
+                        if sender_id in pending_timers:
+                            pending_timers[sender_id].cancel()
+                        timer = threading.Timer(3, process_buffered_messages, args=(sender_id,))
+                        pending_timers[sender_id] = timer
+                    timer.start()
+                    summary["processed"] += 1
+                    handled = True
+                else:
+                    summary["processed"] += 1
+                    handled = True
+
+            if not handled:
+                summary["unsupported"] += 1
 
 
 def _canonicalize_step_name(value: str) -> str:
