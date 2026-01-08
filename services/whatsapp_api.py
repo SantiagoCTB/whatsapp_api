@@ -267,28 +267,52 @@ def enviar_mensaje(
             "Content-Type": "application/json",
         }
 
-        payload = None
+        payload = {
+            "recipient": {"id": numero},
+            "messaging_type": "RESPONSE",
+        }
+        if reply_to_wa_id:
+            payload["reply_to"] = {"mid": reply_to_wa_id}
+
         attachment_type = None
         attachment_url = None
+        attachments = None
         if tipo_respuesta == "texto":
-            payload = {"recipient": {"id": numero}, "message": {"text": mensaje}}
+            payload["message"] = {"text": mensaje}
         elif tipo_respuesta in {"image", "audio", "video", "document"}:
             attachment_type = "file" if tipo_respuesta == "document" else tipo_respuesta
-            if isinstance(opciones, dict):
-                attachment_url = opciones.get("link") or opciones.get("id")
-            else:
-                attachment_url = opciones
-            if not attachment_url:
-                return _fail("No se pudo enviar el adjunto a Messenger.")
-            payload = {
-                "recipient": {"id": numero},
-                "message": {
+            if isinstance(opciones, list) and tipo_respuesta == "image":
+                attachments = []
+                for item in opciones:
+                    if isinstance(item, dict):
+                        url = item.get("link") or item.get("id")
+                    else:
+                        url = item
+                    if not url:
+                        continue
+                    attachments.append({"type": "image", "payload": {"url": url}})
+                if attachments:
+                    payload["message"] = {"attachments": attachments}
+            if "message" not in payload:
+                if isinstance(opciones, dict):
+                    attachment_url = opciones.get("link") or opciones.get("id")
+                else:
+                    attachment_url = opciones
+                if not attachment_url:
+                    return _fail("No se pudo enviar el adjunto a Messenger.")
+                payload["message"] = {
                     "attachment": {
                         "type": attachment_type,
                         "payload": {"url": attachment_url, "is_reusable": True},
                     }
-                },
-            }
+                }
+        elif tipo_respuesta in {"lista", "boton", "flow"}:
+            logger.warning(
+                "Tipo no soportado por Messenger; se envía texto de fallback",
+                extra={"numero": numero, "tipo_respuesta": tipo_respuesta},
+            )
+            fallback_text = mensaje or "Por favor responde con texto."
+            payload["message"] = {"text": fallback_text}
         else:
             return _fail("Tipo de respuesta no soportado para Messenger.")
 
@@ -316,6 +340,9 @@ def enviar_mensaje(
             message_id = resp.json().get("message_id")
         except Exception:
             message_id = None
+
+        if attachments and not attachment_url:
+            attachment_url = attachments[0].get("payload", {}).get("url")
 
         tipo_db = tipo
         if "messenger" not in tipo_db:
