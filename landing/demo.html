@@ -9,14 +9,15 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
   <style>
     :root {
-      color-scheme: light;
-      --bg: #f6f7fb;
-      --text: #1f2430;
-      --muted: #6a7383;
-      --accent: #5b3df5;
-      --border: rgba(91, 61, 245, 0.45);
-      --card: #ffffff;
-      --shadow: 0 20px 45px rgba(21, 23, 31, 0.08);
+      color-scheme: dark;
+      --bg: #0b1021;
+      --text: #f7f8fb;
+      --muted: #cbd2e7;
+      --accent: #25d366;
+      --border: rgba(255, 255, 255, 0.12);
+      --card: rgba(255, 255, 255, 0.04);
+      --shadow: 0 25px 80px rgba(0, 0, 0, 0.35);
+      --input-bg: rgba(15, 23, 42, 0.65);
     }
 
     * { box-sizing: border-box; }
@@ -24,7 +25,9 @@
     body {
       margin: 0;
       font-family: 'Inter', system-ui, -apple-system, sans-serif;
-      background: var(--bg);
+      background: radial-gradient(circle at 20% 20%, rgba(37, 211, 102, 0.08), transparent 35%),
+                  radial-gradient(circle at 80% 10%, rgba(86, 107, 255, 0.12), transparent 32%),
+                  var(--bg);
       color: var(--text);
       min-height: 100vh;
       display: flex;
@@ -53,22 +56,28 @@
       width: 42px;
       height: 42px;
       border-radius: 12px;
-      background: linear-gradient(135deg, #5b3df5, #7d6dff);
+      background: linear-gradient(135deg, #25d366, #5df8c2);
       display: grid;
       place-items: center;
-      color: #fff;
+      color: #0b1021;
       font-weight: 800;
-      box-shadow: 0 10px 30px rgba(91, 61, 245, 0.25);
+      box-shadow: 0 10px 40px rgba(37, 211, 102, 0.35);
     }
 
     .nav-link {
       text-decoration: none;
       color: var(--text);
       font-weight: 600;
-      border: 1px solid rgba(31, 36, 48, 0.15);
+      border: 1px solid var(--border);
       padding: 8px 16px;
       border-radius: 10px;
-      background: #fff;
+      background: transparent;
+      transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .nav-link:hover {
+      border-color: rgba(255, 255, 255, 0.35);
+      transform: translateY(-1px);
     }
 
     main {
@@ -83,7 +92,7 @@
       border-radius: 28px;
       padding: 32px;
       box-shadow: var(--shadow);
-      border: 1px solid rgba(91, 61, 245, 0.1);
+      border: 1px solid var(--border);
     }
 
     .form-card h1 {
@@ -126,7 +135,7 @@
       padding: 12px 16px;
       font-size: 0.95rem;
       font-family: inherit;
-      background: #fff;
+      background: var(--input-bg);
       color: var(--text);
       outline: none;
     }
@@ -174,11 +183,21 @@
       padding: 14px 18px;
       border-radius: 999px;
       border: none;
-      background: #2f3143;
-      color: #fff;
+      background: linear-gradient(135deg, #25d366, #20be5a);
+      color: #0b1021;
       font-weight: 700;
       font-size: 1rem;
       cursor: pointer;
+      box-shadow: 0 12px 40px rgba(37, 211, 102, 0.35);
+    }
+
+    input::placeholder,
+    textarea::placeholder {
+      color: rgba(203, 210, 231, 0.7);
+    }
+
+    select:invalid {
+      color: rgba(203, 210, 231, 0.7);
     }
 
     @media (max-width: 480px) {
