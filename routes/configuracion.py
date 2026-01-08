@@ -87,6 +87,58 @@ def _url_ok(url):
         return False, None
 
 
+def _fetch_page_accounts(user_token: str):
+    if not user_token:
+        return {"ok": False, "error": "Falta el token de usuario para consultar páginas."}
+
+    url = f"https://graph.facebook.com/{Config.FACEBOOK_GRAPH_API_VERSION}/me/accounts"
+    params = {
+        "fields": "id,name,access_token",
+        "access_token": user_token,
+    }
+
+    try:
+        response = requests.get(url, params=params, timeout=15)
+    except requests.RequestException:
+        logger.warning("No se pudo conectar con Graph API para listar páginas.")
+        return {"ok": False, "error": "No se pudo conectar con la API de Meta."}
+
+    payload = {}
+    try:
+        payload = response.json()
+    except ValueError:
+        payload = {}
+
+    if response.status_code >= 400:
+        details = payload.get("error") if isinstance(payload, dict) else None
+        return {
+            "ok": False,
+            "error": "No se pudieron obtener las páginas.",
+            "details": details,
+        }
+
+    data = payload.get("data") if isinstance(payload, dict) else None
+    if not isinstance(data, list):
+        return {"ok": False, "error": "No se encontraron páginas disponibles."}
+
+    pages = []
+    for entry in data:
+        if not isinstance(entry, dict):
+            continue
+        page_id = entry.get("id")
+        if not page_id:
+            continue
+        pages.append(
+            {
+                "id": page_id,
+                "name": entry.get("name"),
+                "access_token": entry.get("access_token"),
+            }
+        )
+
+    return {"ok": True, "pages": pages}
+
+
 def _normalize_state_key(raw_key: str | None) -> str | None:
     if not raw_key:
         return None
@@ -904,6 +956,9 @@ def configuracion_signup():
     tenant = _resolve_signup_tenant()
     tenant_key = tenant.tenant_key if tenant else tenants.get_active_tenant_key()
     tenant_env = tenants.get_tenant_env(tenant)
+    page_selection = {}
+    if tenant and isinstance(tenant.metadata, dict):
+        page_selection = tenant.metadata.get("page_selection") or {}
 
     logger.info(
         "Renderizando signup embebido",
@@ -922,6 +977,9 @@ def configuracion_signup():
         tenant_key=tenant_key,
         tenant_waba_id=tenant_env.get("WABA_ID"),
         tenant_phone_number_id=tenant_env.get("PHONE_NUMBER_ID"),
+        messenger_page_id=tenant_env.get("PAGE_ID"),
+        messenger_platform=tenant_env.get("PLATFORM"),
+        messenger_page_name=page_selection.get("page_name"),
     )
 
 
@@ -1061,6 +1119,105 @@ def whatsapp_save_phone_number():
         "ok": True,
         "message": "Número de WhatsApp actualizado.",
         "env": tenants.get_tenant_env(tenant),
+    }
+
+
+@config_bp.route('/configuracion/messenger/pages', methods=['POST'])
+def messenger_pages():
+    if not _require_admin():
+        return {"ok": False, "error": "No autorizado"}, 403
+
+    tenant = _resolve_signup_tenant()
+    if not tenant:
+        return {"ok": False, "error": "No se encontró la empresa actual."}, 400
+
+    try:
+        payload = request.get_json(force=True) or {}
+    except Exception:
+        return {"ok": False, "error": "Payload inválido"}, 400
+
+    provided_token = (payload.get("user_access_token") or "").strip()
+    tenant_env = tenants.get_tenant_env(tenant)
+    token = provided_token or (tenant_env.get("MESSENGER_TOKEN") or "").strip()
+
+    if provided_token:
+        env_updates = {key: tenant_env.get(key) for key in tenants.TENANT_ENV_KEYS}
+        env_updates["MESSENGER_TOKEN"] = provided_token
+        tenants.update_tenant_env(tenant.tenant_key, env_updates)
+
+    response = _fetch_page_accounts(token)
+    if not response.get("ok"):
+        return response, 400
+
+    pages = response.get("pages", [])
+    return {"ok": True, "pages": [{"id": page["id"], "name": page.get("name")} for page in pages]}
+
+
+@config_bp.route('/configuracion/messenger/page', methods=['POST'])
+def messenger_save_page():
+    if not _require_admin():
+        return {"ok": False, "error": "No autorizado"}, 403
+
+    tenant = _resolve_signup_tenant()
+    if not tenant:
+        return {"ok": False, "error": "No se encontró la empresa actual."}, 400
+
+    try:
+        payload = request.get_json(force=True) or {}
+    except Exception:
+        return {"ok": False, "error": "Payload inválido"}, 400
+
+    page_id = (payload.get("page_id") or "").strip()
+    platform = (payload.get("platform") or "").strip().lower()
+    provided_token = (payload.get("user_access_token") or "").strip()
+
+    if not page_id:
+        return {"ok": False, "error": "Selecciona una página válida."}, 400
+
+    if platform not in {"messenger", "instagram"}:
+        return {"ok": False, "error": "Selecciona una plataforma válida."}, 400
+
+    tenant_env = tenants.get_tenant_env(tenant)
+    token = provided_token or (tenant_env.get("MESSENGER_TOKEN") or "").strip()
+    response = _fetch_page_accounts(token)
+    if not response.get("ok"):
+        return response, 400
+
+    page_entry = None
+    for page in response.get("pages", []):
+        if str(page.get("id")) == page_id:
+            page_entry = page
+            break
+
+    if not page_entry or not page_entry.get("access_token"):
+        return {"ok": False, "error": "No se pudo obtener el token de la página."}, 400
+
+    env_updates = {key: tenant_env.get(key) for key in tenants.TENANT_ENV_KEYS}
+    env_updates["PAGE_ID"] = page_entry.get("id")
+    env_updates["PAGE_ACCESS_TOKEN"] = page_entry.get("access_token")
+    env_updates["PLATFORM"] = platform
+    if provided_token:
+        env_updates["MESSENGER_TOKEN"] = provided_token
+
+    tenants.update_tenant_env(tenant.tenant_key, env_updates)
+
+    metadata_updates = {
+        "page_selection": {
+            "page_id": page_entry.get("id"),
+            "page_name": page_entry.get("name"),
+            "platform": platform,
+        }
+    }
+    tenants.update_tenant_metadata(tenant.tenant_key, metadata_updates)
+
+    return {
+        "ok": True,
+        "message": "Página de Messenger/Instagram actualizada.",
+        "page": {
+            "id": page_entry.get("id"),
+            "name": page_entry.get("name"),
+            "platform": platform,
+        },
     }
 
 @config_bp.route('/configuracion', methods=['GET', 'POST'])
