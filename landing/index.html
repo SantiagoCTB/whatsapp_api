@@ -178,6 +178,51 @@
       color: #d2f7e3;
     }
 
+    .clients-section {
+      max-width: 1100px;
+      margin: 64px auto 0;
+      padding: 28px;
+      border-radius: 18px;
+      border: 1px solid var(--border);
+      background: rgba(255, 255, 255, 0.03);
+      box-shadow: var(--shadow);
+      text-align: center;
+    }
+
+    .clients-section h2 {
+      margin: 0 0 10px;
+      font-size: clamp(20px, 2.4vw, 28px);
+      letter-spacing: -0.01em;
+    }
+
+    .clients-section p {
+      margin: 0 0 20px;
+      color: var(--muted);
+    }
+
+    .clients-logos {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 18px;
+      align-items: center;
+    }
+
+    .client-logo {
+      border-radius: 16px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      background: rgba(11, 16, 33, 0.6);
+      padding: 16px;
+      display: grid;
+      place-items: center;
+      min-height: 110px;
+    }
+
+    .client-logo img {
+      width: min(220px, 100%);
+      height: auto;
+      filter: drop-shadow(0 10px 20px rgba(0, 0, 0, 0.35));
+    }
+
     footer {
       max-width: 1100px;
       margin: 48px auto 0;
@@ -355,6 +400,22 @@
         <div>
           <strong>Responde y mide</strong>
           <p>Gestiona chats en tiempo real, usa respuestas rápidas y revisa métricas en el tablero.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="clients-section" aria-labelledby="clientes-title">
+      <h2 id="clientes-title">Algunos de nuestros clientes</h2>
+      <p>Marcas que confían en nuestro equipo para crecer con WhatsApp.</p>
+      <div class="clients-logos">
+        <div class="client-logo">
+          <img src="/static/clientes/agestion.svg" alt="Logo de Agestion">
+        </div>
+        <div class="client-logo">
+          <img src="/static/clientes/berlop.svg" alt="Logo de Berlop">
+        </div>
+        <div class="client-logo">
+          <img src="/static/clientes/barber-men.svg" alt="Logo de Barber Men">
         </div>
       </div>
     </section>
