@@ -33,6 +33,7 @@ from services.db import (
     delete_chat_state,
     hide_chat,
     get_chat_state_definitions,
+    obtener_ultimo_mensaje_cliente_info,
 )
 from services.normalize_text import normalize_text
 
@@ -954,6 +955,21 @@ def send_message():
     if not autorizado:
         return jsonify({'error': 'No autorizado'}), 403
 
+    last_client_info = obtener_ultimo_mensaje_cliente_info(numero)
+    last_client_tipo = (last_client_info or {}).get("tipo") or ""
+    is_messenger_chat = "messenger" in str(last_client_tipo).lower()
+    if is_messenger_chat:
+        last_client_ts = (last_client_info or {}).get("timestamp")
+        if not isinstance(last_client_ts, datetime):
+            return jsonify({
+                'error': 'El usuario de Facebook tiene que haber enviado mensajes a esta página antes de escribirle.'
+            }), 400
+        elapsed_seconds = (datetime.utcnow() - last_client_ts).total_seconds()
+        if elapsed_seconds > 24 * 3600:
+            return jsonify({
+                'error': 'El usuario de Facebook tiene que haber enviado mensajes a esta página antes de escribirle.'
+            }), 400
+
     # Envía por la API y guarda internamente
     ok, error_message = enviar_mensaje(
         numero,
@@ -1054,6 +1070,20 @@ def get_chat_list():
         )
         fila = c.fetchone()
         primer_link = fila[0] if fila else ""
+        c.execute(
+            """
+            SELECT tipo FROM mensajes
+             WHERE numero = %s
+               AND (tipo = 'cliente' OR tipo LIKE 'cliente_%')
+             ORDER BY timestamp ASC, id ASC
+             LIMIT 1
+            """,
+            (numero,),
+        )
+        fila = c.fetchone()
+        primer_tipo = fila[0] if fila else ""
+        if not primer_link and primer_tipo and "messenger" in str(primer_tipo).lower():
+            primer_link = "messenger"
 
         # Roles asociados al número y nombre/keyword
         c.execute(

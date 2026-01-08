@@ -1149,6 +1149,29 @@ def obtener_ultimo_mensaje_cliente(numero):
     return (row[0] or "").strip() if row else ""
 
 
+def obtener_ultimo_mensaje_cliente_info(numero):
+    """Retorna el timestamp y tipo del último mensaje del cliente."""
+
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute(
+        """
+        SELECT tipo, timestamp
+          FROM mensajes
+         WHERE numero = %s
+           AND (tipo = 'cliente' OR tipo LIKE 'cliente_%')
+         ORDER BY timestamp DESC
+         LIMIT 1
+        """,
+        (numero,),
+    )
+    row = c.fetchone()
+    conn.close()
+    if not row:
+        return None
+    return {"tipo": row[0], "timestamp": row[1]}
+
+
 def replace_catalog_pages(
     pdf_filename: str, pages, *, media_root: str | None = None, batch_size: int = 100
 ):
