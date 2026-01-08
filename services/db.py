@@ -579,6 +579,28 @@ def init_db(db_settings: DatabaseSettings | None = None):
     ) ENGINE=InnoDB;
     """)
 
+    # mensajes de backfill (Messenger/Instagram)
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS page_messages (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      tenant_key VARCHAR(64),
+      platform VARCHAR(20),
+      page_id VARCHAR(64),
+      conversation_id VARCHAR(255),
+      message_id VARCHAR(255) NOT NULL,
+      created_time TEXT,
+      from_id VARCHAR(255),
+      to_ids_json TEXT,
+      message TEXT,
+      reply_to_mid VARCHAR(255),
+      is_self_reply TINYINT(1),
+      inserted_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE KEY uniq_page_messages (tenant_key, message_id),
+      INDEX idx_page_messages_tenant (tenant_key),
+      INDEX idx_page_messages_platform (platform)
+    ) ENGINE=InnoDB;
+    """)
+
     # estados de mensajes (callbacks de status)
     c.execute("""
     CREATE TABLE IF NOT EXISTS mensajes_status (
@@ -857,6 +879,50 @@ def guardar_mensaje(
     emit_chat_update(numero)
     emit_chat_list_update()
     return mensaje_id
+
+
+def guardar_page_message(
+    *,
+    tenant_key,
+    platform,
+    page_id,
+    conversation_id,
+    message_id,
+    created_time,
+    from_id,
+    to_ids_json,
+    message,
+    reply_to_mid=None,
+    is_self_reply=None,
+    db_settings: DatabaseSettings | None = None,
+):
+    if not tenant_key or not message_id:
+        return None
+
+    conn = get_connection(ensure_database=True, db_settings=db_settings)
+    c = conn.cursor()
+    c.execute(
+        "INSERT IGNORE INTO page_messages "
+        "(tenant_key, platform, page_id, conversation_id, message_id, created_time, "
+        "from_id, to_ids_json, message, reply_to_mid, is_self_reply, inserted_at) "
+        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())",
+        (
+            tenant_key,
+            platform,
+            page_id,
+            conversation_id,
+            message_id,
+            created_time,
+            from_id,
+            to_ids_json,
+            message,
+            reply_to_mid,
+            1 if is_self_reply else 0 if is_self_reply is not None else None,
+        ),
+    )
+    conn.commit()
+    conn.close()
+    return message_id
 
 
 def guardar_estado_mensaje(
