@@ -305,6 +305,23 @@ def find_tenant_by_phone_number_id(phone_number_id: str | None) -> TenantInfo | 
     return None
 
 
+def find_tenant_by_page_id(page_id: str | None) -> TenantInfo | None:
+    """Busca el tenant cuyo ``PAGE_ID`` coincida con el valor dado."""
+
+    if not page_id:
+        return None
+
+    for tenant in list_tenants(force_reload=True):
+        if _tenant_has_env_value(
+            tenant,
+            "PAGE_ID",
+            page_id,
+        ):
+            return tenant
+
+    return None
+
+
 def auto_select_single_tenant(*, force_reload: bool = False) -> TenantInfo | None:
     """Devuelve el único tenant registrado si solo existe uno.
 
@@ -783,6 +800,7 @@ __all__ = [
     "register_tenant",
     "resolve_tenant_from_request",
     "find_tenant_by_phone_number_id",
+    "find_tenant_by_page_id",
     "auto_select_single_tenant",
     "set_current_tenant",
     "set_current_tenant_env",

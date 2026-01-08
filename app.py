@@ -40,6 +40,18 @@ def _extract_phone_number_id(req):
 
     return None
 
+
+def _extract_page_id(req):
+    if not req.is_json:
+        return None
+
+    payload = req.get_json(silent=True) or {}
+    for entry in payload.get("entry", []):
+        page_id = entry.get("id")
+        if page_id:
+            return str(page_id)
+    return None
+
 def _ensure_media_root():
     """Create the directory where user uploads are stored."""
     env = tenants.get_tenant_env(None)
@@ -125,6 +137,16 @@ def create_app():
                     tenant_key = tenant.tenant_key
                     logging.getLogger(__name__).info(
                         "Tenant resuelto a partir de phone_number_id del webhook",
+                        extra={"tenant": tenant_key},
+                    )
+        if not tenant_key:
+            page_id = _extract_page_id(request)
+            if page_id:
+                tenant = tenants.find_tenant_by_page_id(page_id)
+                if tenant:
+                    tenant_key = tenant.tenant_key
+                    logging.getLogger(__name__).info(
+                        "Tenant resuelto a partir de page_id del webhook",
                         extra={"tenant": tenant_key},
                     )
 
