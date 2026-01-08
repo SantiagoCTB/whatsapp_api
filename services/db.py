@@ -830,6 +830,9 @@ def guardar_mensaje(
     link_thumb=None,
     step=None,
     regla_id=None,
+    timestamp=None,
+    dedupe_wa_id=False,
+    db_settings: DatabaseSettings | None = None,
 ):
     """Guarda un mensaje en la tabla ``mensajes``.
 
@@ -839,19 +842,30 @@ def guardar_mensaje(
     (``link_url``, ``link_title``, ``link_body``, ``link_thumb``). También puede
     registrar el ``step`` del flujo y el ``regla_id`` que originó el mensaje.
     """
-    if tipo == 'cliente':
+    if tipo and str(tipo).startswith('cliente'):
         unhide_chat(numero)
 
     if tipo != 'referral':
         link_url = link_title = link_body = link_thumb = None
 
-    conn = get_connection()
+    conn = get_connection(ensure_database=True, db_settings=db_settings)
     c = conn.cursor()
+    if dedupe_wa_id and wa_id:
+        c.execute("SELECT 1 FROM mensajes WHERE wa_id = %s LIMIT 1", (wa_id,))
+        if c.fetchone():
+            conn.close()
+            return None
+    if timestamp is None:
+        timestamp_placeholder = "NOW()"
+        timestamp_value = ()
+    else:
+        timestamp_placeholder = "%s"
+        timestamp_value = (timestamp,)
     c.execute(
         "INSERT INTO mensajes "
         "(numero, mensaje, tipo, wa_id, reply_to_wa_id, media_id, media_url, mime_type, "
         "link_url, link_title, link_body, link_thumb, step, regla_id, timestamp) "
-        "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW())",
+        f"VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,{timestamp_placeholder})",
         (
             numero,
             mensaje,
@@ -867,7 +881,8 @@ def guardar_mensaje(
             link_thumb,
             step,
             regla_id,
-        ),
+        )
+        + timestamp_value,
     )
     mensaje_id = c.lastrowid
     conn.commit()
