@@ -144,6 +144,26 @@
       gap: 14px;
     }
 
+    .plan-card--featured {
+      border-color: rgba(37, 211, 102, 0.6);
+      background: rgba(37, 211, 102, 0.08);
+      position: relative;
+    }
+
+    .plan-card--featured::before {
+      content: "Más popular";
+      position: absolute;
+      top: -14px;
+      right: 20px;
+      background: #25d366;
+      color: #0b1021;
+      font-weight: 700;
+      font-size: 0.8rem;
+      padding: 6px 12px;
+      border-radius: 999px;
+      box-shadow: 0 12px 30px rgba(37, 211, 102, 0.4);
+    }
+
     .plan-label {
       font-weight: 700;
       font-size: 1.1rem;
@@ -249,7 +269,7 @@
           <span class="badge">🟩 Plan Básico</span>
           <span>Para empezar</span>
         </div>
-        <p class="plan-price">$390.000 / mes</p>
+        <p class="plan-price">$380.000 / mes</p>
         <p class="plan-detail">Para negocios que están empezando o manejan pocos mensajes.</p>
         <ul class="plan-list">
           <li>🤖 Bot de IA</li>
@@ -262,7 +282,7 @@
         <p class="plan-detail"><strong>Ideal para:</strong> emprendimientos, tiendas pequeñas.</p>
       </article>
 
-      <article class="plan-card plan-card--pro">
+      <article class="plan-card plan-card--pro plan-card--featured">
         <div class="plan-label">
           <span class="badge">🟨 Plan Profesional</span>
           <span>Para crecer</span>
@@ -296,13 +316,17 @@
           <li>📊 Reporte empresarial: análisis detallado y recomendaciones</li>
           <li>🏆 Acompañamiento estratégico</li>
         </ul>
+        <p class="plan-detail"><strong>Ideal para:</strong> transporte intermunicipal, inmobiliarias, tiendas grandes, empresas de servicio.</p>
       </article>
     </section>
 
     <section class="cta">
       <div>
         <strong>¿Listo para automatizar tu atención?</strong>
-        <p class="plan-detail" style="margin: 6px 0 0;">Agenda una demo y te ayudamos a elegir el plan perfecto.</p>
+        <p class="plan-detail" style="margin: 6px 0 0;">
+          Si te encuentras interesad@ podemos hablar más sobre tu negocio y te ofrecemos de manera GRATUITA
+          1 número de WhatsApp con IA por 1 semana, para que lo pruebes.
+        </p>
       </div>
       <a class="btn btn-primary" href="./demo">Agendar demo</a>
     </section>
