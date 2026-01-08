@@ -429,6 +429,110 @@ def _get_step_from_options(opciones_json, option_id):
     return None
 
 
+def _mark_message_processed(message_id: str | None) -> bool:
+    if not message_id:
+        return False
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("SELECT 1 FROM mensajes_procesados WHERE mensaje_id = %s", (message_id,))
+    if c.fetchone():
+        conn.close()
+        return True
+    c.execute("INSERT INTO mensajes_procesados (mensaje_id) VALUES (%s)", (message_id,))
+    conn.commit()
+    conn.close()
+    return False
+
+
+def _handle_messenger_payload(data, summary):
+    for entry in data.get("entry", []):
+        for event in entry.get("messaging", []) or []:
+            message = event.get("message") or {}
+            if message.get("is_echo"):
+                continue
+            sender_id = (event.get("sender") or {}).get("id")
+            if not sender_id:
+                summary["unsupported"] += 1
+                continue
+
+            message_id = message.get("mid")
+            if _mark_message_processed(message_id):
+                summary["duplicates"] += 1
+                continue
+
+            chat_state_row = get_chat_state(sender_id)
+            agent_mode = _is_agent_mode(chat_state_row)
+            estado_update = None if agent_mode else "sin_respuesta"
+            if agent_mode:
+                logger.info(
+                    "Chat en modo asesor; se omite flujo automático",
+                    extra={"numero": sender_id, "message_id": _mask_identifier(message_id)},
+                )
+
+            if message.get("text"):
+                text = message.get("text", "").strip()
+                normalized_text = normalize_text(text)
+                step = get_current_step(sender_id)
+                guardar_mensaje(
+                    sender_id,
+                    text,
+                    "cliente_messenger",
+                    wa_id=message_id,
+                    step=step,
+                )
+                update_chat_state(sender_id, step, estado_update)
+                if agent_mode:
+                    summary["processed"] += 1
+                    continue
+
+                current_tenant = tenants.get_current_tenant()
+                tenant_env = dict(tenants.get_current_tenant_env() or {})
+                with cache_lock:
+                    message_buffer.setdefault(sender_id, []).append(
+                        {
+                            "raw": text,
+                            "normalized": normalized_text,
+                            "tenant_key": current_tenant.tenant_key if current_tenant else None,
+                            "tenant_env": tenant_env,
+                        }
+                    )
+                    if sender_id in pending_timers:
+                        pending_timers[sender_id].cancel()
+                    timer = threading.Timer(3, process_buffered_messages, args=(sender_id,))
+                    pending_timers[sender_id] = timer
+                timer.start()
+                summary["processed"] += 1
+                continue
+
+            attachments = message.get("attachments") or []
+            if attachments:
+                step = get_current_step(sender_id)
+                for attachment in attachments:
+                    attach_type = (attachment.get("type") or "").lower()
+                    payload = attachment.get("payload") or {}
+                    media_url = payload.get("url")
+                    tipo_db = (
+                        f"cliente_messenger_{attach_type}" if attach_type else "cliente_messenger"
+                    )
+                    guardar_mensaje(
+                        sender_id,
+                        "",
+                        tipo_db,
+                        wa_id=message_id,
+                        media_url=media_url,
+                        step=step,
+                    )
+                update_chat_state(sender_id, step, estado_update)
+                if agent_mode:
+                    summary["processed"] += 1
+                    continue
+                handle_text_message(sender_id, "", save=False)
+                summary["processed"] += 1
+                continue
+
+            summary["unsupported"] += 1
+
+
 def _canonicalize_step_name(value: str) -> str:
     value = _normalize_step_name(value)
     return ''.join(ch for ch in value if ch.isalnum())
@@ -1054,6 +1158,14 @@ def webhook():
         'unsupported': 0,
         'statuses': 0,
     }
+
+    if data.get("object") == "page":
+        _handle_messenger_payload(data, summary)
+        logger.info(
+            "Returning status=received reason=processed messenger payload summary=%s",
+            summary,
+        )
+        return jsonify({'status': 'received'}), 200
 
     for entry in data.get('entry', []):
         for change in entry.get('changes', []):

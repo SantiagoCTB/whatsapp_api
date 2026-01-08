@@ -602,6 +602,7 @@
         const CHAT_SOURCE_LOGOS = {
           instagram: "{{ url_for('static', filename='logo-instagram.png') }}",
           facebook: "{{ url_for('static', filename='logo-facebook.png') }}",
+          messenger: "{{ url_for('static', filename='logo-facebook.png') }}",
           whatsapp: "{{ url_for('static', filename='logo-whatsapp.png') }}"
         };
 
@@ -610,7 +611,10 @@
           if (value.includes('instagram.com') || value.includes('instagr.am')) {
             return { key: 'instagram', label: 'Instagram' };
           }
-          if (value.includes('facebook.com') || value.includes('fb.com') || value.includes('fb.me') || value.includes('m.me') || value.includes('messenger.com')) {
+          if (value.includes('messenger.com') || value.includes('m.me') || value === 'messenger') {
+            return { key: 'messenger', label: 'Messenger' };
+          }
+          if (value.includes('facebook.com') || value.includes('fb.com') || value.includes('fb.me')) {
             return { key: 'facebook', label: 'Facebook' };
           }
           return { key: 'whatsapp', label: 'WhatsApp' };

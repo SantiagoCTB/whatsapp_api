@@ -5,6 +5,7 @@ import mimetypes
 from pathlib import Path
 import threading
 import time
+from datetime import datetime
 from typing import Any, Dict, Optional
 
 import requests
@@ -12,7 +13,7 @@ from flask import url_for
 
 from config import Config
 from services import tenants
-from services.db import guardar_mensaje
+from services.db import guardar_mensaje, obtener_ultimo_mensaje_cliente_info
 
 
 logger = logging.getLogger(__name__)
@@ -51,6 +52,35 @@ def _get_runtime_env():
         "phone_id": phone_id,
         "media_root": media_root,
     }
+
+
+def _get_messenger_env():
+    env = tenants.get_current_tenant_env()
+    token = (env.get("MESSENGER_TOKEN") or "").strip()
+
+    if not token:
+        raise RuntimeError("Faltan credenciales de Messenger en el tenant actual: MESSENGER_TOKEN")
+
+    return {"token": token}
+
+
+def _resolve_message_channel(numero: str) -> str:
+    last_client_info = obtener_ultimo_mensaje_cliente_info(numero)
+    last_tipo = (last_client_info or {}).get("tipo") or ""
+    if "messenger" in str(last_tipo).lower():
+        return "messenger"
+    return "whatsapp"
+
+
+def _messenger_window_open(numero: str) -> bool:
+    last_client_info = obtener_ultimo_mensaje_cliente_info(numero)
+    if not last_client_info:
+        return False
+    last_ts = last_client_info.get("timestamp")
+    if not isinstance(last_ts, datetime):
+        return False
+    elapsed_seconds = (datetime.utcnow() - last_ts).total_seconds()
+    return elapsed_seconds <= 24 * 3600
 
 
 def _extract_error_details(response: requests.Response) -> Dict[str, Any]:
@@ -216,6 +246,97 @@ def enviar_mensaje(
     def _fail(reason=None):
         stop_typing_feedback(numero)
         return _result(False, reason)
+
+    channel = _resolve_message_channel(numero)
+    if channel == "messenger":
+        try:
+            runtime = _get_messenger_env()
+        except RuntimeError as exc:
+            logger.error("No se puede enviar mensaje de Messenger: %s", exc)
+            return _result(False, str(exc))
+
+        if not _messenger_window_open(numero):
+            return _result(
+                False,
+                "El usuario de Facebook tiene que haber enviado mensajes a esta página antes de escribirle.",
+            )
+
+        url = f"{GRAPH_BASE_URL}/me/messages"
+        headers = {
+            "Authorization": f"Bearer {runtime['token']}",
+            "Content-Type": "application/json",
+        }
+
+        payload = None
+        attachment_type = None
+        attachment_url = None
+        if tipo_respuesta == "texto":
+            payload = {"recipient": {"id": numero}, "message": {"text": mensaje}}
+        elif tipo_respuesta in {"image", "audio", "video", "document"}:
+            attachment_type = "file" if tipo_respuesta == "document" else tipo_respuesta
+            if isinstance(opciones, dict):
+                attachment_url = opciones.get("link") or opciones.get("id")
+            else:
+                attachment_url = opciones
+            if not attachment_url:
+                return _fail("No se pudo enviar el adjunto a Messenger.")
+            payload = {
+                "recipient": {"id": numero},
+                "message": {
+                    "attachment": {
+                        "type": attachment_type,
+                        "payload": {"url": attachment_url, "is_reusable": True},
+                    }
+                },
+            }
+        else:
+            return _fail("Tipo de respuesta no soportado para Messenger.")
+
+        try:
+            resp = requests.post(url, headers=headers, json=payload, timeout=10)
+        except requests.RequestException as exc:
+            logger.error("Error enviando solicitud a Messenger API: %s", exc)
+            return _fail("No se pudo conectar con la API de Messenger.")
+
+        if not resp.ok:
+            error_details = _extract_error_details(resp)
+            logger.error(
+                "Fallo al enviar mensaje a Messenger API",
+                extra={"status_code": resp.status_code, "details": error_details},
+            )
+            friendly_reason = (
+                error_details.get("message")
+                or error_details.get("raw_text")
+                or "Messenger rechazó el mensaje."
+            )
+            return _fail(friendly_reason)
+
+        stop_typing_feedback(numero)
+        try:
+            message_id = resp.json().get("message_id")
+        except Exception:
+            message_id = None
+
+        tipo_db = tipo
+        if "messenger" not in tipo_db:
+            tipo_db = f"{tipo_db}_messenger"
+        if tipo_respuesta in {"image", "audio", "video", "document"} and not tipo_db.endswith(
+            f"_{tipo_respuesta}"
+        ):
+            tipo_db = f"{tipo_db}_{tipo_respuesta}"
+
+        guardar_mensaje(
+            numero,
+            mensaje,
+            tipo_db,
+            wa_id=message_id,
+            reply_to_wa_id=reply_to_wa_id,
+            media_id=None,
+            media_url=attachment_url,
+            step=step,
+            regla_id=regla_id,
+        )
+        return _result(True)
 
     try:
         runtime = _get_runtime_env()
@@ -643,8 +764,10 @@ def enviar_mensaje(
     except Exception:
         wa_id = None
     tipo_db = tipo
-    if tipo_respuesta in {"image", "audio", "video", "document"} and "_" not in tipo:
-        tipo_db = f"{tipo}_{tipo_respuesta}"
+    if tipo_respuesta in {"image", "audio", "video", "document"} and not tipo_db.endswith(
+        f"_{tipo_respuesta}"
+    ):
+        tipo_db = f"{tipo_db}_{tipo_respuesta}"
 
     media_url_db = None
     if tipo_respuesta == 'video':

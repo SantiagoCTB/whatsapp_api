@@ -110,6 +110,7 @@ class Config:
     SESSION_PERMANENT = False
     SECRET_KEY = os.getenv('SECRET_KEY')
     META_TOKEN = os.getenv('META_TOKEN')
+    MESSENGER_TOKEN = os.getenv('MESSENGER_TOKEN')
     PHONE_NUMBER_ID = os.getenv('PHONE_NUMBER_ID')
     VERIFY_TOKEN = os.getenv('VERIFY_TOKEN',"my_secret_token")
     SESSION_TIMEOUT = int(os.getenv('SESSION_TIMEOUT_SECONDS', 1800))
