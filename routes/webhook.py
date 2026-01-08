@@ -1296,6 +1296,7 @@ def process_buffered_messages(numero):
     tenants.clear_current_tenant()
 
 @webhook_bp.route('/webhook', methods=['GET', 'POST'])
+@webhook_bp.route('/messaging-webhook', methods=['GET', 'POST'])
 def webhook():
     relevant_headers = {
         header: request.headers.get(header)
@@ -1344,7 +1345,7 @@ def webhook():
             "Returning status=received reason=processed messenger payload summary=%s",
             summary,
         )
-        return jsonify({'status': 'received'}), 200
+        return Response("EVENT_RECEIVED", status=200, mimetype="text/plain")
 
     for entry in data.get('entry', []):
         for change in entry.get('changes', []):
