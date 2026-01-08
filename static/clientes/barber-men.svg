@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="380" height="200" viewBox="0 0 380 200" role="img" aria-label="Barber Men">
+  <defs>
+    <linearGradient id="barberGold" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0%" stop-color="#f7d47a"/>
+      <stop offset="100%" stop-color="#c8942b"/>
+    </linearGradient>
+  </defs>
+  <rect width="380" height="200" rx="28" fill="#0f0f0f" />
+  <circle cx="190" cy="60" r="34" fill="none" stroke="url(#barberGold)" stroke-width="6" />
+  <text x="190" y="75" text-anchor="middle" font-family="'Georgia', 'Times New Roman', serif" font-size="34" font-weight="700" fill="url(#barberGold)">B</text>
+  <text x="190" y="135" text-anchor="middle" font-family="'Georgia', 'Times New Roman', serif" font-size="44" font-weight="700" fill="url(#barberGold)" letter-spacing="4">BARBER MEN</text>
+  <text x="190" y="165" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="16" font-weight="600" fill="#f7d47a" letter-spacing="2">TIENDA</text>
+</svg>
