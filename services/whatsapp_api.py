@@ -145,6 +145,57 @@ def _normalize_flow_options(raw_options: Dict[str, Any]) -> Dict[str, Any]:
 
     return options
 
+
+def list_phone_numbers(token: str, waba_id: str) -> Dict[str, Any]:
+    if not token or not waba_id:
+        return {"ok": False, "error": "Faltan credenciales para consultar números."}
+
+    url = f"{GRAPH_BASE_URL}/{waba_id}/phone_numbers"
+    params = {
+        "fields": "id,display_phone_number,verified_name,quality_rating,code_verification_status",
+    }
+    headers = {"Authorization": f"Bearer {token}"}
+
+    try:
+        response = requests.get(url, params=params, headers=headers, timeout=15)
+    except requests.RequestException as exc:
+        logger.warning("Error consultando números de WhatsApp: %s", exc)
+        return {"ok": False, "error": "No se pudo conectar con la API de Meta."}
+
+    if response.status_code >= 400:
+        details = _extract_error_details(response)
+        logger.warning(
+            "Respuesta inválida al listar números de WhatsApp",
+            extra={"status": response.status_code, "details": details},
+        )
+        return {"ok": False, "error": "No se pudieron obtener los números.", "details": details}
+
+    try:
+        payload = response.json()
+    except ValueError:
+        logger.warning("Respuesta inválida al listar números de WhatsApp: no JSON")
+        return {"ok": False, "error": "Respuesta inválida de la API."}
+
+    data = payload.get("data") if isinstance(payload, dict) else None
+    if not isinstance(data, list):
+        return {"ok": False, "error": "No se encontraron números disponibles."}
+
+    phone_numbers = []
+    for item in data:
+        if not isinstance(item, dict):
+            continue
+        phone_numbers.append(
+            {
+                "id": item.get("id"),
+                "display_phone_number": item.get("display_phone_number"),
+                "verified_name": item.get("verified_name"),
+                "quality_rating": item.get("quality_rating"),
+                "code_verification_status": item.get("code_verification_status"),
+            }
+        )
+
+    return {"ok": True, "data": phone_numbers}
+
 def enviar_mensaje(
     numero,
     mensaje,
