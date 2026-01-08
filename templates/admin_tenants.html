@@ -138,6 +138,19 @@
           <label>MESSENGER_TOKEN
             <input name="MESSENGER_TOKEN" value="{{ tenant_env.get('MESSENGER_TOKEN','') }}" placeholder="token de Messenger" />
           </label>
+          <label>PAGE_ID
+            <input name="PAGE_ID" value="{{ tenant_env.get('PAGE_ID','') }}" placeholder="ID de la Page" />
+          </label>
+          <label>PAGE_ACCESS_TOKEN
+            <input name="PAGE_ACCESS_TOKEN" value="{{ tenant_env.get('PAGE_ACCESS_TOKEN','') }}" placeholder="token de acceso de la Page" />
+          </label>
+          <label>PLATFORM (messenger | instagram)
+            <select name="PLATFORM">
+              <option value="" {% if not tenant_env.get('PLATFORM') %}selected{% endif %}>Seleccionar</option>
+              <option value="messenger" {% if tenant_env.get('PLATFORM') == 'messenger' %}selected{% endif %}>messenger</option>
+              <option value="instagram" {% if tenant_env.get('PLATFORM') == 'instagram' %}selected{% endif %}>instagram</option>
+            </select>
+          </label>
           <label>LONG_LIVED_TOKEN
             <input name="LONG_LIVED_TOKEN" value="{{ tenant_env.get('LONG_LIVED_TOKEN','') }}" placeholder="token largo generado por Meta" />
           </label>

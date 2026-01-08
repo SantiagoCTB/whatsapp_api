@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import contextvars
 import json
+import logging
 import os
 import posixpath
 from dataclasses import dataclass
@@ -14,6 +15,8 @@ from werkzeug.security import generate_password_hash
 from config import Config
 from services import db
 
+
+logger = logging.getLogger(__name__)
 
 @dataclass
 class TenantInfo:
@@ -43,6 +46,9 @@ _CURRENT_TENANT_ENV = contextvars.ContextVar("current_tenant_env", default=None)
 TENANT_ENV_KEYS = {
     "META_TOKEN",
     "MESSENGER_TOKEN",
+    "PAGE_ID",
+    "PAGE_ACCESS_TOKEN",
+    "PLATFORM",
     "PHONE_NUMBER_ID",
     "LONG_LIVED_TOKEN",
     "WABA_ID",
@@ -84,6 +90,9 @@ def _default_tenant_env(*, include_legacy_credentials: bool = False) -> dict:
     env = {
         "META_TOKEN": None,
         "MESSENGER_TOKEN": None,
+        "PAGE_ID": None,
+        "PAGE_ACCESS_TOKEN": None,
+        "PLATFORM": None,
         "PHONE_NUMBER_ID": None,
         "LONG_LIVED_TOKEN": None,
         "WABA_ID": None,
@@ -103,6 +112,9 @@ def _default_tenant_env(*, include_legacy_credentials: bool = False) -> dict:
         env.update({
             "META_TOKEN": Config.META_TOKEN,
             "MESSENGER_TOKEN": Config.MESSENGER_TOKEN,
+            "PAGE_ID": Config.PAGE_ID,
+            "PAGE_ACCESS_TOKEN": Config.PAGE_ACCESS_TOKEN,
+            "PLATFORM": Config.PLATFORM,
             "PHONE_NUMBER_ID": Config.PHONE_NUMBER_ID,
         })
 
@@ -339,6 +351,8 @@ def update_tenant_env(tenant_key: str, env_updates: Mapping | None) -> TenantInf
     if not tenant:
         raise TenantNotFoundError(f"No se encontró la empresa '{tenant_key}'.")
 
+    previous_env = get_tenant_env(tenant)
+
     metadata = dict(tenant.metadata or {})
     env_section = metadata.get("env") if isinstance(metadata.get("env"), dict) else {}
     env_section = dict(env_section)
@@ -352,7 +366,74 @@ def update_tenant_env(tenant_key: str, env_updates: Mapping | None) -> TenantInf
             env_section[key] = coerced
 
     metadata["env"] = env_section
-    return update_tenant_metadata(tenant_key, metadata)
+    updated_tenant = update_tenant_metadata(tenant_key, metadata)
+    _trigger_page_backfill_if_needed(previous_env, updated_tenant)
+    return updated_tenant
+
+
+def _normalize_platform(value: str | None) -> str | None:
+    if not value:
+        return None
+    normalized = str(value).strip().lower()
+    if normalized in {"messenger", "instagram"}:
+        return normalized
+    return None
+
+
+def _should_trigger_page_backfill(previous_env: dict, new_env: dict) -> bool:
+    keys = ("PAGE_ID", "PAGE_ACCESS_TOKEN", "PLATFORM")
+    changed = any(
+        str(previous_env.get(key) or "").strip()
+        != str(new_env.get(key) or "").strip()
+        for key in keys
+    )
+    if not changed:
+        return False
+
+    page_id = (new_env.get("PAGE_ID") or "").strip()
+    page_token = (new_env.get("PAGE_ACCESS_TOKEN") or "").strip()
+    platform = _normalize_platform(new_env.get("PLATFORM"))
+    return bool(page_id and page_token and platform)
+
+
+def _trigger_page_backfill_if_needed(previous_env: dict, tenant: TenantInfo | None):
+    if not tenant:
+        return
+    new_env = get_tenant_env(tenant)
+    if not _should_trigger_page_backfill(previous_env, new_env):
+        return
+
+    page_id = (new_env.get("PAGE_ID") or "").strip()
+    page_token = (new_env.get("PAGE_ACCESS_TOKEN") or "").strip()
+    platform = _normalize_platform(new_env.get("PLATFORM"))
+    if not platform:
+        return
+
+    try:
+        ensure_tenant_schema(tenant)
+    except Exception:
+        logger.exception(
+            "No se pudo preparar el esquema del tenant para backfill",
+            extra={"tenant_key": tenant.tenant_key},
+        )
+        return
+
+    try:
+        from services import page_backfill
+    except Exception:
+        logger.exception(
+            "No se pudo importar el módulo de backfill",
+            extra={"tenant_key": tenant.tenant_key},
+        )
+        return
+
+    page_backfill.enqueue_page_backfill(
+        tenant_key=tenant.tenant_key,
+        db_settings=tenant.as_db_settings(),
+        page_id=page_id,
+        access_token=page_token,
+        platform=platform,
+    )
 
 
 def set_current_tenant(tenant: TenantInfo | None):
