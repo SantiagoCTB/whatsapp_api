@@ -948,6 +948,13 @@ def save_signup():
             "payload_keys": sorted(list(payload.keys())),
         },
     )
+    logger.info(
+        "Payload completo de signup embebido",
+        extra={
+            "tenant_key": tenant.tenant_key,
+            "payload": payload,
+        },
+    )
 
     current_env = tenants.get_tenant_env(tenant)
     env_updates = {key: current_env.get(key) for key in tenants.TENANT_ENV_KEYS}
@@ -977,7 +984,9 @@ def save_signup():
     )
 
     business_info = payload.get("business") or payload.get("business_info")
-    metadata_updates = {}
+    metadata_updates = {
+        "embedded_signup_payload": payload,
+    }
     if isinstance(business_info, dict) and business_info:
         metadata_updates["whatsapp_business"] = business_info
 
