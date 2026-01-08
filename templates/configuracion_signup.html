@@ -51,6 +51,8 @@
                     class="btn-primary"
                     data-config-code="{{ signup_config_code or '' }}"
                     data-tenant="{{ tenant_key or '' }}"
+                    data-waba-id="{{ tenant_waba_id or '' }}"
+                    data-phone-number-id="{{ tenant_phone_number_id or '' }}"
                     {% if not signup_config_code or not tenant_key or not facebook_app_id %}disabled{% endif %}
                 >
                     Abrir Embedded Signup
@@ -65,6 +67,17 @@
                 <p class="alert alert-error" style="margin-top: 0.5rem">Falta configurar FACEBOOK_APP_ID en el entorno.</p>
                 {% endif %}
                 <div id="wa-signup-status" class="help" style="margin-top: 0.5rem"></div>
+            </div>
+            <div class="form-row" style="margin-top: 1rem;">
+                <label class="muted" for="wa-phone-select">Número de WhatsApp</label>
+                <select id="wa-phone-select" disabled>
+                    <option value="">Selecciona un número disponible</option>
+                </select>
+                <div style="display: flex; gap: 0.5rem;">
+                    <button id="wa-phone-refresh" class="btn-secondary" type="button">Actualizar lista</button>
+                    <button id="wa-phone-save" class="btn-primary" type="button">Guardar número</button>
+                </div>
+                <div id="wa-phone-status" class="help" style="margin-top: 0.5rem"></div>
             </div>
         </div>
     </div>
@@ -152,13 +165,25 @@
     const facebookAppId = '{{ facebook_app_id or '' }}';
     const configCode = trigger.dataset.configCode;
     const tenantKey = trigger.dataset.tenant;
+    const wabaId = trigger.dataset.wabaId;
+    const currentPhoneNumberId = trigger.dataset.phoneNumberId;
     const statusBox = document.getElementById('wa-signup-status');
     const healthList = document.getElementById('wa-signup-health');
+    const phoneSelect = document.getElementById('wa-phone-select');
+    const phoneStatus = document.getElementById('wa-phone-status');
+    const phoneRefresh = document.getElementById('wa-phone-refresh');
+    const phoneSave = document.getElementById('wa-phone-save');
 
     const updateStatus = (message, isError) => {
       if (!statusBox) return;
       statusBox.textContent = message || '';
       statusBox.style.color = isError ? '#c0392b' : '#2c3e50';
+    };
+
+    const updatePhoneStatus = (message, isError) => {
+      if (!phoneStatus) return;
+      phoneStatus.textContent = message || '';
+      phoneStatus.style.color = isError ? '#c0392b' : '#2c3e50';
     };
 
     const markHealth = (check, ok, detail) => {
@@ -203,6 +228,45 @@
       });
     };
 
+    const populatePhoneNumbers = (numbers) => {
+      if (!phoneSelect) return;
+      phoneSelect.innerHTML = '<option value="">Selecciona un número disponible</option>';
+      numbers.forEach((item) => {
+        if (!item || !item.id) return;
+        const option = document.createElement('option');
+        const labelParts = [];
+        if (item.display_phone_number) labelParts.push(item.display_phone_number);
+        if (item.verified_name) labelParts.push(`(${item.verified_name})`);
+        option.textContent = labelParts.join(' ') || item.id;
+        option.value = item.id;
+        if (currentPhoneNumberId && item.id === currentPhoneNumberId) {
+          option.selected = true;
+        }
+        phoneSelect.appendChild(option);
+      });
+      phoneSelect.disabled = false;
+    };
+
+    const fetchPhoneNumbers = () => {
+      if (!phoneSelect) return;
+      updatePhoneStatus('Consultando números disponibles...');
+      fetch(`{{ url_for('configuracion.whatsapp_phone_numbers') }}`)
+        .then((resp) => resp.json())
+        .then((resp) => {
+          if (!resp.ok) {
+            updatePhoneStatus(resp.error || 'No se pudieron cargar los números.', true);
+            phoneSelect.disabled = true;
+            return;
+          }
+          populatePhoneNumbers(resp.data || []);
+          updatePhoneStatus('Números cargados.');
+        })
+        .catch(() => {
+          updatePhoneStatus('Error al consultar los números.', true);
+          phoneSelect.disabled = true;
+        });
+    };
+
     function handleSignupMessage(event) {
       if (event.origin !== 'https://www.facebook.com') return;
       let data = event.data;
@@ -215,21 +279,38 @@
       }
 
       const payload = data.data || {};
-      fetch(`{{ url_for('configuracion.save_signup') }}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      })
-        .then((resp) => resp.json())
-        .then((resp) => {
-          if (resp.ok) {
-            updateStatus(resp.message || 'Credenciales guardadas. Recarga la página para ver los cambios.');
-            setTimeout(() => window.location.reload(), 1200);
-          } else {
-            updateStatus(resp.error || 'No se pudieron guardar las credenciales.', true);
-          }
+
+      const sendPayload = (token) => {
+        if (token && !payload.access_token) {
+          payload.access_token = token;
+        }
+        fetch(`{{ url_for('configuracion.save_signup') }}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
         })
-        .catch(() => updateStatus('Error al enviar los datos del signup.', true));
+          .then((resp) => resp.json())
+          .then((resp) => {
+            if (resp.ok) {
+              updateStatus(resp.message || 'Credenciales guardadas. Recarga la página para ver los cambios.');
+              setTimeout(() => window.location.reload(), 1200);
+            } else {
+              updateStatus(resp.error || 'No se pudieron guardar las credenciales.', true);
+            }
+          })
+          .catch(() => updateStatus('Error al enviar los datos del signup.', true));
+      };
+
+      facebookSdkReady.then((FB) => {
+        if (!FB || !FB.getLoginStatus) {
+          sendPayload();
+          return;
+        }
+        FB.getLoginStatus((response) => {
+          const token = response && response.authResponse ? response.authResponse.accessToken : null;
+          sendPayload(token);
+        });
+      }).catch(() => sendPayload());
     }
 
     window.addEventListener('message', handleSignupMessage);
@@ -272,6 +353,40 @@
         updateStatus('Se abrió el flujo de Embedded Signup en una nueva ventana (modo respaldo).');
       });
     });
+
+    if (wabaId) {
+      fetchPhoneNumbers();
+    } else {
+      updatePhoneStatus('Completa el signup para cargar los números disponibles.');
+    }
+
+    if (phoneRefresh) {
+      phoneRefresh.addEventListener('click', fetchPhoneNumbers);
+    }
+
+    if (phoneSave) {
+      phoneSave.addEventListener('click', () => {
+        if (!phoneSelect || !phoneSelect.value) {
+          updatePhoneStatus('Selecciona un número para guardar.', true);
+          return;
+        }
+        updatePhoneStatus('Guardando número seleccionado...');
+        fetch(`{{ url_for('configuracion.whatsapp_save_phone_number') }}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone_number_id: phoneSelect.value }),
+        })
+          .then((resp) => resp.json())
+          .then((resp) => {
+            if (resp.ok) {
+              updatePhoneStatus(resp.message || 'Número actualizado.');
+            } else {
+              updatePhoneStatus(resp.error || 'No se pudo guardar el número.', true);
+            }
+          })
+          .catch(() => updatePhoneStatus('Error al guardar el número.', true));
+      });
+    }
   })();
 </script>
 {% endblock %}

@@ -962,9 +962,23 @@
       overflow: hidden;
       transition: transform 0.2s, background 0.3s, color 0.3s;
     }
+
+    .btn-secondary {
+      background: #f1f4f8;
+      color: #2c3e50;
+      border: 1px solid #d7dde4;
+      padding: 10px 20px;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background 0.3s, color 0.3s;
+    }
     .btn-primary:hover {
       transform: scale(1.05);
       background: var(--accent-hover);
+    }
+
+    .btn-secondary:hover {
+      background: #e4e9f0;
     }
     .btn-primary::after {
       content: '';

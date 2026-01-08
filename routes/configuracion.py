@@ -21,6 +21,7 @@ else:  # pragma: no cover - fallback cuando falta el conector
 from config import Config
 from services import tenants
 from services.catalog import ingest_catalog_pdf
+from services.whatsapp_api import list_phone_numbers
 from services.db import get_connection, get_chat_state_definitions
 
 config_bp = Blueprint('configuracion', __name__)
@@ -902,6 +903,7 @@ def configuracion_signup():
 
     tenant = _resolve_signup_tenant()
     tenant_key = tenant.tenant_key if tenant else tenants.get_active_tenant_key()
+    tenant_env = tenants.get_tenant_env(tenant)
 
     logger.info(
         "Renderizando signup embebido",
@@ -918,6 +920,8 @@ def configuracion_signup():
         facebook_app_id=Config.FACEBOOK_APP_ID,
         signup_instagram_url=Config.SIGNUP_INSTRAGRAM,
         tenant_key=tenant_key,
+        tenant_waba_id=tenant_env.get("WABA_ID"),
+        tenant_phone_number_id=tenant_env.get("PHONE_NUMBER_ID"),
     )
 
 
@@ -998,6 +1002,55 @@ def save_signup():
     return {
         "ok": True,
         "message": "Credenciales de WhatsApp actualizadas.",
+        "env": tenants.get_tenant_env(tenant),
+    }
+
+
+@config_bp.route('/configuracion/whatsapp/phone-numbers', methods=['GET'])
+def whatsapp_phone_numbers():
+    if not _require_admin():
+        return {"ok": False, "error": "No autorizado"}, 403
+
+    tenant = _resolve_signup_tenant()
+    if not tenant:
+        return {"ok": False, "error": "No se encontró la empresa actual."}, 400
+
+    tenant_env = tenants.get_tenant_env(tenant)
+    token = tenant_env.get("META_TOKEN")
+    waba_id = tenant_env.get("WABA_ID")
+
+    response = list_phone_numbers(token, waba_id)
+    status = 200 if response.get("ok") else 400
+    return response, status
+
+
+@config_bp.route('/configuracion/whatsapp/phone-number', methods=['POST'])
+def whatsapp_save_phone_number():
+    if not _require_admin():
+        return {"ok": False, "error": "No autorizado"}, 403
+
+    tenant = _resolve_signup_tenant()
+    if not tenant:
+        return {"ok": False, "error": "No se encontró la empresa actual."}, 400
+
+    try:
+        payload = request.get_json(force=True) or {}
+    except Exception:
+        return {"ok": False, "error": "Payload inválido"}, 400
+
+    phone_number_id = (payload.get("phone_number_id") or "").strip()
+    if not phone_number_id:
+        return {"ok": False, "error": "Selecciona un número válido."}, 400
+
+    current_env = tenants.get_tenant_env(tenant)
+    env_updates = {key: current_env.get(key) for key in tenants.TENANT_ENV_KEYS}
+    env_updates["PHONE_NUMBER_ID"] = phone_number_id
+
+    tenants.update_tenant_env(tenant.tenant_key, env_updates)
+
+    return {
+        "ok": True,
+        "message": "Número de WhatsApp actualizado.",
         "env": tenants.get_tenant_env(tenant),
     }
 
