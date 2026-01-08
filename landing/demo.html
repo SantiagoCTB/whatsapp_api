@@ -9,12 +9,12 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
   <style>
     :root {
-      color-scheme: dark;
+      color-scheme: light;
       --bg: #0b1021;
       --text: #f7f8fb;
       --muted: #cbd2e7;
       --accent: #25d366;
-      --border: rgba(255, 255, 255, 0.12);
+      --border: rgba(255, 255, 255, 0.08);
       --card: rgba(255, 255, 255, 0.04);
       --shadow: 0 25px 80px rgba(0, 0, 0, 0.35);
       --input-bg: rgba(15, 23, 42, 0.65);
@@ -53,8 +53,8 @@
     }
 
     .logo-mark {
-      width: 42px;
-      height: 42px;
+      width: 44px;
+      height: 44px;
       border-radius: 12px;
       background: linear-gradient(135deg, #25d366, #5df8c2);
       display: grid;
@@ -64,20 +64,34 @@
       box-shadow: 0 10px 40px rgba(37, 211, 102, 0.35);
     }
 
-    .nav-link {
+    nav {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .btn {
       text-decoration: none;
       color: var(--text);
       font-weight: 600;
       border: 1px solid var(--border);
-      padding: 8px 16px;
+      padding: 10px 18px;
       border-radius: 10px;
       background: transparent;
       transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
     }
 
-    .nav-link:hover {
+    .btn:hover {
       border-color: rgba(255, 255, 255, 0.35);
       transform: translateY(-1px);
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #25d366, #20be5a);
+      color: #0b1021;
+      border: none;
+      box-shadow: 0 12px 40px rgba(37, 211, 102, 0.35);
     }
 
     main {
@@ -89,7 +103,7 @@
       max-width: 520px;
       margin: 12px auto 0;
       background: var(--card);
-      border-radius: 28px;
+      border-radius: 18px;
       padding: 32px;
       box-shadow: var(--shadow);
       border: 1px solid var(--border);
@@ -130,7 +144,7 @@
     select,
     textarea {
       width: 100%;
-      border-radius: 999px;
+      border-radius: 12px;
       border: 1.6px solid var(--border);
       padding: 12px 16px;
       font-size: 0.95rem;
@@ -153,7 +167,7 @@
     }
 
     .phone-group select {
-      border-radius: 999px;
+      border-radius: 12px;
     }
 
     .checkbox-row {
@@ -214,7 +228,12 @@
         <small style="color: var(--muted); font-weight: 600;">Agenda tu demo</small>
       </div>
     </div>
-    <a class="nav-link" href="./index">Volver</a>
+    <nav>
+      <a class="btn" href="./index#features">Producto</a>
+      <a class="btn" href="./index#como-funciona">Cómo funciona</a>
+      <a class="btn btn-primary" href="./demo">Agendar demo</a>
+      <a class="btn" href="https://app.whapco.site/login">Iniciar sesión</a>
+    </nav>
   </header>
 
   <main>
