@@ -1,0 +1,293 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Whapco | Agenda una demo</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f6f7fb;
+      --text: #1f2430;
+      --muted: #6a7383;
+      --accent: #5b3df5;
+      --border: rgba(91, 61, 245, 0.45);
+      --card: #ffffff;
+      --shadow: 0 20px 45px rgba(21, 23, 31, 0.08);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 24px clamp(16px, 4vw, 48px);
+      max-width: 1100px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    .logo-mark {
+      width: 42px;
+      height: 42px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, #5b3df5, #7d6dff);
+      display: grid;
+      place-items: center;
+      color: #fff;
+      font-weight: 800;
+      box-shadow: 0 10px 30px rgba(91, 61, 245, 0.25);
+    }
+
+    .nav-link {
+      text-decoration: none;
+      color: var(--text);
+      font-weight: 600;
+      border: 1px solid rgba(31, 36, 48, 0.15);
+      padding: 8px 16px;
+      border-radius: 10px;
+      background: #fff;
+    }
+
+    main {
+      flex: 1;
+      padding: 0 clamp(16px, 4vw, 48px) 64px;
+    }
+
+    .form-card {
+      max-width: 520px;
+      margin: 12px auto 0;
+      background: var(--card);
+      border-radius: 28px;
+      padding: 32px;
+      box-shadow: var(--shadow);
+      border: 1px solid rgba(91, 61, 245, 0.1);
+    }
+
+    .form-card h1 {
+      margin: 0 0 8px;
+      font-size: 1.8rem;
+      letter-spacing: -0.02em;
+    }
+
+    .form-card p {
+      margin: 0 0 24px;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    form {
+      display: grid;
+      gap: 16px;
+    }
+
+    .row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 12px;
+    }
+
+    label {
+      display: block;
+      font-size: 0.9rem;
+      font-weight: 600;
+      margin-bottom: 6px;
+      color: var(--muted);
+    }
+
+    input,
+    select,
+    textarea {
+      width: 100%;
+      border-radius: 999px;
+      border: 1.6px solid var(--border);
+      padding: 12px 16px;
+      font-size: 0.95rem;
+      font-family: inherit;
+      background: #fff;
+      color: var(--text);
+      outline: none;
+    }
+
+    textarea {
+      border-radius: 18px;
+      resize: vertical;
+      min-height: 96px;
+    }
+
+    .phone-group {
+      display: grid;
+      grid-template-columns: 96px 1fr;
+      gap: 12px;
+    }
+
+    .phone-group select {
+      border-radius: 999px;
+    }
+
+    .checkbox-row {
+      display: grid;
+      grid-template-columns: 20px 1fr;
+      gap: 12px;
+      align-items: start;
+      font-size: 0.92rem;
+      color: var(--muted);
+    }
+
+    .checkbox-row input {
+      width: 18px;
+      height: 18px;
+      margin-top: 2px;
+      accent-color: var(--accent);
+    }
+
+    .checkbox-row a {
+      color: var(--accent);
+      font-weight: 600;
+      text-decoration: underline;
+    }
+
+    .submit-btn {
+      margin-top: 8px;
+      padding: 14px 18px;
+      border-radius: 999px;
+      border: none;
+      background: #2f3143;
+      color: #fff;
+      font-weight: 700;
+      font-size: 1rem;
+      cursor: pointer;
+    }
+
+    @media (max-width: 480px) {
+      .form-card { padding: 24px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="logo">
+      <div class="logo-mark">W</div>
+      <div>
+        <div>Whapco</div>
+        <small style="color: var(--muted); font-weight: 600;">Agenda tu demo</small>
+      </div>
+    </div>
+    <a class="nav-link" href="./index">Volver</a>
+  </header>
+
+  <main>
+    <section class="form-card">
+      <h1>Agendar demo</h1>
+      <p>Completa los datos y un asesor se pondrá en contacto contigo.</p>
+      <form>
+        <div class="row">
+          <div>
+            <label for="nombre">Nombre</label>
+            <input id="nombre" name="nombre" type="text" placeholder="Nombre" required>
+          </div>
+          <div>
+            <label for="apellido">Apellido</label>
+            <input id="apellido" name="apellido" type="text" placeholder="Apellido" required>
+          </div>
+        </div>
+
+        <div>
+          <label for="empresa">Nombre de la empresa</label>
+          <input id="empresa" name="empresa" type="text" placeholder="Nombre de la empresa" required>
+        </div>
+
+        <div>
+          <label for="opcion">Selecciona una opción</label>
+          <select id="opcion" name="opcion" required>
+            <option value="" selected disabled>Selecciona una opción</option>
+            <option value="ventas">Ventas</option>
+            <option value="soporte">Soporte</option>
+            <option value="marketing">Marketing</option>
+          </select>
+        </div>
+
+        <div>
+          <label for="correo">Correo corporativo</label>
+          <input id="correo" name="correo" type="email" placeholder="Correo corporativo" required>
+        </div>
+
+        <div>
+          <label for="solucion">En qué solución estás interesado</label>
+          <select id="solucion" name="solucion" required>
+            <option value="" selected disabled>En qué solución estás interesado</option>
+            <option value="whatsapp">WhatsApp multiagente</option>
+            <option value="omnicanal">Inbox omnicanal</option>
+            <option value="automatizacion">Automatizaciones</option>
+          </select>
+        </div>
+
+        <div>
+          <label for="telefono">Número de teléfono</label>
+          <div class="phone-group">
+            <select id="codigo" name="codigo" aria-label="Indicativo">
+              <option value="+57">🇨🇴 +57</option>
+              <option value="+52">🇲🇽 +52</option>
+              <option value="+51">🇵🇪 +51</option>
+              <option value="+1">🇺🇸 +1</option>
+            </select>
+            <input id="telefono" name="telefono" type="tel" placeholder="Número de teléfono" required>
+          </div>
+        </div>
+
+        <div>
+          <label for="contacto">¿Cómo prefieres ser contactado?</label>
+          <select id="contacto" name="contacto" required>
+            <option value="" selected disabled>¿Cómo prefieres ser contactado?</option>
+            <option value="whatsapp">WhatsApp</option>
+            <option value="correo">Correo</option>
+            <option value="llamada">Llamada</option>
+          </select>
+        </div>
+
+        <div>
+          <label for="legal">¿Tu empresa está legalmente constituida?</label>
+          <select id="legal" name="legal" required>
+            <option value="" selected disabled>¿Tu empresa está legalmente constituida?</option>
+            <option value="si">Sí</option>
+            <option value="no">No</option>
+            <option value="proceso">En proceso</option>
+          </select>
+        </div>
+
+        <div class="checkbox-row">
+          <input id="terms" name="terms" type="checkbox" required>
+          <label for="terms">
+            He leído y acepto los <a href="./terminos">términos y condiciones</a> y la
+            <a href="./privacidad">política de tratamiento de datos personales</a>.
+          </label>
+        </div>
+
+        <button class="submit-btn" type="submit">Empezar DEMO</button>
+      </form>
+    </section>
+  </main>
+</body>
+</html>
