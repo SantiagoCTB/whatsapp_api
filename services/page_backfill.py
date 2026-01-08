@@ -1,6 +1,7 @@
 import json
 import logging
 import threading
+from datetime import datetime, timezone
 from typing import Any, Dict, List
 
 import requests
@@ -231,6 +232,29 @@ def _store_message_detail(
         db_settings=db_settings,
     )
 
+    numero = _resolve_numero_from_message(
+        from_id=from_obj.get("id"),
+        to_ids=to_ids,
+        page_id=page_id,
+    )
+    if not numero:
+        return
+
+    tipo_base = "asesor" if str(from_obj.get("id") or "") == str(page_id) else "cliente"
+    channel = "messenger" if platform == "messenger" else "instagram"
+    tipo = f"{tipo_base}_{channel}"
+
+    db.guardar_mensaje(
+        numero,
+        detail.get("message") or "",
+        tipo,
+        wa_id=message_id,
+        reply_to_wa_id=reply_to.get("mid"),
+        timestamp=_parse_created_time(detail.get("created_time")),
+        dedupe_wa_id=True,
+        db_settings=db_settings,
+    )
+
 
 def _extract_to_ids(to_obj: Dict[str, Any]) -> List[str]:
     data = to_obj.get("data")
@@ -244,6 +268,44 @@ def _extract_to_ids(to_obj: Dict[str, Any]) -> List[str]:
         if to_id:
             ids.append(str(to_id))
     return ids
+
+
+def _resolve_numero_from_message(
+    *,
+    from_id: str | None,
+    to_ids: List[str],
+    page_id: str | None,
+) -> str | None:
+    if from_id:
+        from_id = str(from_id)
+    page_id = str(page_id) if page_id else None
+    normalized_to_ids = [str(item) for item in to_ids if item]
+
+    if page_id and from_id == page_id:
+        for candidate in normalized_to_ids:
+            if candidate != page_id:
+                return candidate
+        return None
+
+    if from_id:
+        return from_id
+
+    for candidate in normalized_to_ids:
+        if candidate != page_id:
+            return candidate
+    return None
+
+
+def _parse_created_time(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    for fmt in ("%Y-%m-%dT%H:%M:%S%z", "%Y-%m-%dT%H:%M:%S.%f%z"):
+        try:
+            parsed = datetime.strptime(value, fmt)
+            return parsed.astimezone(timezone.utc).replace(tzinfo=None)
+        except ValueError:
+            continue
+    return None
 
 
 def _safe_json(response: requests.Response) -> Dict[str, Any] | List[Any]:
