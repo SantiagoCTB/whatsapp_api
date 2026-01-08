@@ -56,12 +56,14 @@ def _get_runtime_env():
 
 def _get_messenger_env():
     env = tenants.get_current_tenant_env()
-    token = (env.get("MESSENGER_TOKEN") or "").strip()
+    page_token = (env.get("PAGE_ACCESS_TOKEN") or "").strip()
+    fallback_token = (env.get("MESSENGER_TOKEN") or "").strip()
+    token = page_token or fallback_token
     page_id = (env.get("PAGE_ID") or "").strip()
 
     missing = []
     if not token:
-        missing.append("MESSENGER_TOKEN")
+        missing.append("PAGE_ACCESS_TOKEN/MESSENGER_TOKEN")
     if not page_id:
         missing.append("PAGE_ID")
     if missing:
@@ -70,6 +72,27 @@ def _get_messenger_env():
         )
 
     return {"token": token, "page_id": page_id}
+
+
+def _get_messenger_messaging_type() -> str:
+    value = tenants.get_runtime_setting(
+        "MESSENGER_MESSAGING_TYPE", default="RESPONSE"
+    )
+    normalized = str(value or "").strip().upper()
+    if normalized in {"RESPONSE", "UPDATE", "MESSAGE_TAG"}:
+        return normalized
+    if normalized:
+        logger.warning(
+            "MESSENGER_MESSAGING_TYPE inválido; se usará RESPONSE",
+            extra={"messaging_type": normalized},
+        )
+    return "RESPONSE"
+
+
+def _get_messenger_message_tag() -> str | None:
+    tag = tenants.get_runtime_setting("MESSENGER_MESSAGE_TAG", default="")
+    tag = str(tag or "").strip()
+    return tag or None
 
 
 def _resolve_message_channel(numero: str) -> str:
@@ -275,10 +298,18 @@ def enviar_mensaje(
             "Content-Type": "application/json",
         }
 
+        messaging_type = _get_messenger_messaging_type()
         payload = {
             "recipient": {"id": numero},
-            "messaging_type": "RESPONSE",
+            "messaging_type": messaging_type,
         }
+        if messaging_type == "MESSAGE_TAG":
+            message_tag = _get_messenger_message_tag()
+            if not message_tag:
+                return _fail(
+                    "Debes configurar MESSENGER_MESSAGE_TAG para enviar mensajes etiquetados."
+                )
+            payload["tag"] = message_tag
         if reply_to_wa_id:
             payload["reply_to"] = {"mid": reply_to_wa_id}
 
