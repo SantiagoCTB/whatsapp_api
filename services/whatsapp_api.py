@@ -57,11 +57,19 @@ def _get_runtime_env():
 def _get_messenger_env():
     env = tenants.get_current_tenant_env()
     token = (env.get("MESSENGER_TOKEN") or "").strip()
+    page_id = (env.get("PAGE_ID") or "").strip()
 
+    missing = []
     if not token:
-        raise RuntimeError("Faltan credenciales de Messenger en el tenant actual: MESSENGER_TOKEN")
+        missing.append("MESSENGER_TOKEN")
+    if not page_id:
+        missing.append("PAGE_ID")
+    if missing:
+        raise RuntimeError(
+            "Faltan credenciales de Messenger en el tenant actual: " + ", ".join(missing)
+        )
 
-    return {"token": token}
+    return {"token": token, "page_id": page_id}
 
 
 def _resolve_message_channel(numero: str) -> str:
@@ -261,7 +269,7 @@ def enviar_mensaje(
                 "El usuario de Facebook tiene que haber enviado mensajes a esta página antes de escribirle.",
             )
 
-        url = f"{GRAPH_BASE_URL}/me/messages"
+        url = f"{GRAPH_BASE_URL}/{runtime['page_id']}/messages"
         headers = {
             "Authorization": f"Bearer {runtime['token']}",
             "Content-Type": "application/json",
