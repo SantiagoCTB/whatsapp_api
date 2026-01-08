@@ -1,0 +1,321 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Whapco | Planes y precios">
+  <meta property="og:description" content="Conoce los planes de Whapco y elige el que mejor se adapta al movimiento de tu negocio.">
+  <meta property="og:image" content="https://app.whapco.site/static/fondo_general.jpeg">
+  <meta property="og:url" content="https://app.whapco.site/landing/precios">
+  <title>Whapco | Planes y precios</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #0b1021;
+      --card: rgba(255, 255, 255, 0.04);
+      --text: #f7f8fb;
+      --muted: #cbd2e7;
+      --accent: #25d366;
+      --border: rgba(255, 255, 255, 0.08);
+      --shadow: 0 25px 80px rgba(0, 0, 0, 0.35);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      background: radial-gradient(circle at 20% 20%, rgba(37, 211, 102, 0.08), transparent 35%),
+                  radial-gradient(circle at 80% 10%, rgba(86, 107, 255, 0.12), transparent 32%),
+                  var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 24px clamp(16px, 4vw, 48px);
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    .logo-mark {
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, #25d366, #5df8c2);
+      display: grid;
+      place-items: center;
+      color: #0b1021;
+      font-weight: 800;
+      box-shadow: 0 10px 40px rgba(37, 211, 102, 0.35);
+    }
+
+    nav {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--text);
+      padding: 10px 18px;
+      border-radius: 10px;
+      font-weight: 600;
+      text-decoration: none;
+      transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .btn:hover { border-color: rgba(255,255,255,0.35); transform: translateY(-1px); }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #25d366, #20be5a);
+      color: #0b1021;
+      border: none;
+      box-shadow: 0 12px 40px rgba(37, 211, 102, 0.35);
+    }
+
+    main { padding: 0 clamp(16px, 4vw, 48px) 64px; }
+
+    .hero {
+      max-width: 1100px;
+      margin: 0 auto 40px;
+      display: grid;
+      gap: 20px;
+    }
+
+    .hero h1 {
+      font-size: clamp(32px, 4vw, 46px);
+      margin: 0;
+      letter-spacing: -0.02em;
+    }
+
+    .hero p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: rgba(37, 211, 102, 0.12);
+      color: #d2f7e3;
+      font-weight: 600;
+      font-size: 0.95rem;
+      width: fit-content;
+    }
+
+    .plan-grid {
+      max-width: 1100px;
+      margin: 0 auto 48px;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 18px;
+    }
+
+    .plan-card {
+      border: 1px solid var(--border);
+      background: var(--card);
+      padding: 22px;
+      border-radius: 18px;
+      box-shadow: var(--shadow);
+      display: grid;
+      gap: 14px;
+    }
+
+    .plan-label {
+      font-weight: 700;
+      font-size: 1.1rem;
+      letter-spacing: -0.01em;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .plan-price {
+      font-size: 1.6rem;
+      font-weight: 700;
+      margin: 0;
+    }
+
+    .plan-detail {
+      color: var(--muted);
+      margin: 0;
+      line-height: 1.5;
+    }
+
+    .plan-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      display: grid;
+      gap: 10px;
+      color: var(--text);
+    }
+
+    .plan-list li {
+      display: flex;
+      gap: 10px;
+      line-height: 1.5;
+    }
+
+    .badge {
+      padding: 6px 12px;
+      border-radius: 999px;
+      font-weight: 600;
+      font-size: 0.85rem;
+    }
+
+    .plan-card--basic .badge { background: rgba(37, 211, 102, 0.2); color: #b7f4d4; }
+    .plan-card--pro .badge { background: rgba(255, 208, 76, 0.2); color: #ffe29e; }
+    .plan-card--enterprise .badge { background: rgba(106, 162, 255, 0.2); color: #c5ddff; }
+
+    .cta {
+      max-width: 1100px;
+      margin: 0 auto;
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 24px;
+      background: rgba(255, 255, 255, 0.03);
+      box-shadow: var(--shadow);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    footer {
+      max-width: 1100px;
+      margin: 48px auto 0;
+      padding: 24px clamp(16px, 4vw, 48px) 48px;
+      color: var(--muted);
+      text-align: center;
+      font-size: 0.95rem;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="logo">
+      <div class="logo-mark">W</div>
+      <div>
+        <div>Whapco</div>
+        <small style="color: var(--muted); font-weight: 600;">Multiagente · Multicanal</small>
+      </div>
+    </div>
+    <nav>
+      <a class="btn" href="./">Inicio</a>
+      <a class="btn" href="./demo">Agendar demo</a>
+      <a class="btn btn-primary" href="https://app.whapco.site/login">Iniciar sesión</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="hero">
+      <span class="pill">Planes de Whapco</span>
+      <h1>Elige el plan ideal para tu negocio.</h1>
+      <p>
+        En Whapco automatizamos la atención de tu negocio con un bot de IA (incluido en todos los planes),
+        para que tus clientes reciban respuestas rápidas, claras y 24/7.
+      </p>
+      <p>Tenemos 3 planes según el movimiento de tu negocio:</p>
+    </section>
+
+    <section class="plan-grid">
+      <article class="plan-card plan-card--basic">
+        <div class="plan-label">
+          <span class="badge">🟩 Plan Básico</span>
+          <span>Para empezar</span>
+        </div>
+        <p class="plan-price">$390.000 / mes</p>
+        <p class="plan-detail">Para negocios que están empezando o manejan pocos mensajes.</p>
+        <ul class="plan-list">
+          <li>🤖 Bot de IA</li>
+          <li>💬 Hasta 2.000 chats al mes</li>
+          <li>👤 1 usuario</li>
+          <li>🔄 2 flujos (cotización, pedidos, preguntas frecuentes…)</li>
+          <li>📊 Reporte básico: cuántos chats llegaron y a qué horas</li>
+          <li>🚀 Configuración inicial</li>
+        </ul>
+        <p class="plan-detail"><strong>Ideal para:</strong> emprendimientos, tiendas pequeñas.</p>
+      </article>
+
+      <article class="plan-card plan-card--pro">
+        <div class="plan-label">
+          <span class="badge">🟨 Plan Profesional</span>
+          <span>Para crecer</span>
+        </div>
+        <p class="plan-price">$490.000 / mes</p>
+        <p class="plan-detail">Para negocios que reciben más mensajes y necesitan un sistema más completo.</p>
+        <ul class="plan-list">
+          <li>🤖 Bot de IA</li>
+          <li>💬 Hasta 5.000 chats al mes</li>
+          <li>👥 3 usuarios</li>
+          <li>🔄 5 flujos más completos y con opciones avanzadas</li>
+          <li>📈 Reporte avanzado: ventas generadas, conversiones, mensajes atendidos</li>
+          <li>⚙️ Ajustes mensuales</li>
+        </ul>
+        <p class="plan-detail"><strong>Ideal para:</strong> restaurantes, glampings, transporte, tiendas medianas.</p>
+      </article>
+
+      <article class="plan-card plan-card--enterprise">
+        <div class="plan-label">
+          <span class="badge">🟦 Plan Empresarial</span>
+          <span>Para escalar</span>
+        </div>
+        <p class="plan-price">$600.000 / mes</p>
+        <p class="plan-detail">Para empresas con alto volumen y necesidad de automatización total.</p>
+        <ul class="plan-list">
+          <li>🤖 Bot de IA</li>
+          <li>💬 Hasta 10.000 chats al mes</li>
+          <li>👥 Usuarios ilimitados (todo tu equipo)</li>
+          <li>🔄 Flujos avanzados</li>
+          <li>💬 Envío masivo de mensajería</li>
+          <li>📊 Reporte empresarial: análisis detallado y recomendaciones</li>
+          <li>🏆 Acompañamiento estratégico</li>
+        </ul>
+      </article>
+    </section>
+
+    <section class="cta">
+      <div>
+        <strong>¿Listo para automatizar tu atención?</strong>
+        <p class="plan-detail" style="margin: 6px 0 0;">Agenda una demo y te ayudamos a elegir el plan perfecto.</p>
+      </div>
+      <a class="btn btn-primary" href="./demo">Agendar demo</a>
+    </section>
+  </main>
+
+  <footer>
+    Construido para equipos que necesitan salir al aire rápido. Inicia sesión para continuar.
+    <br>
+    <a href="./privacidad" style="color:#7fe9b0; text-decoration: none;">Política de privacidad</a>
+    ·
+    <a href="./terminos" style="color:#7fe9b0; text-decoration: none;">Términos y condiciones</a>
+    ·
+    <a href="./aviso" style="color:#7fe9b0; text-decoration: none;">Aviso legal</a>
+  </footer>
+</body>
+</html>
