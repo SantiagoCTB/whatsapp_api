@@ -206,6 +206,9 @@
           <div><strong>BUSINESS_ID:</strong> {{ tenant_env.get('BUSINESS_ID') or '—' }}</div>
           <div><strong>Phone number:</strong> {{ tenant_env.get('PHONE_NUMBER_ID') or '—' }}</div>
           <div><strong>Token largo:</strong> {{ tenant_env.get('LONG_LIVED_TOKEN') or tenant_env.get('META_TOKEN') or '—' }}</div>
+          <div><strong>Page ID:</strong> {{ tenant_env.get('PAGE_ID') or '—' }}</div>
+          <div><strong>Plataforma:</strong> {{ tenant_env.get('PLATFORM') or '—' }}</div>
+          <div><strong>Page name:</strong> {{ (selected_tenant.metadata.get('page_selection', {}).get('page_name') if selected_tenant.metadata else None) or '—' }}</div>
           <div><strong>Business info:</strong> {{ (selected_tenant.metadata.get('whatsapp_business') if selected_tenant.metadata else {}) or '—' }}</div>
         </div>
         <p class="help">Usa el Embedded Signup para generar las credenciales directamente desde Meta y guardarlas en este tenant.</p>

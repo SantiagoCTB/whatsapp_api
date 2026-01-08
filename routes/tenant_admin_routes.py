@@ -1,5 +1,4 @@
 from __future__ import annotations
-from __future__ import annotations
 
 import json
 import logging
@@ -11,6 +10,33 @@ from services import tenants
 
 tenant_admin_bp = Blueprint("tenant_admin", __name__, url_prefix="/admin/tenants")
 logger = logging.getLogger(__name__)
+
+
+def _sync_page_selection_metadata(tenant: tenants.TenantInfo) -> None:
+    tenant_env = tenants.get_tenant_env(tenant)
+    page_id = (tenant_env.get("PAGE_ID") or "").strip()
+    platform = (tenant_env.get("PLATFORM") or "").strip().lower()
+
+    metadata = dict(tenant.metadata or {})
+    page_selection = metadata.get("page_selection") if isinstance(metadata.get("page_selection"), dict) else {}
+    page_selection = dict(page_selection)
+
+    if not page_id:
+        if "page_selection" in metadata:
+            metadata.pop("page_selection", None)
+            tenants.update_tenant_metadata(tenant.tenant_key, metadata)
+        return
+
+    if platform not in {"messenger", "instagram"}:
+        platform = page_selection.get("platform") or None
+
+    page_name = page_selection.get("page_name") if page_selection.get("page_id") == page_id else None
+    metadata["page_selection"] = {
+        "page_id": page_id,
+        "page_name": page_name,
+        "platform": platform,
+    }
+    tenants.update_tenant_metadata(tenant.tenant_key, metadata)
 
 
 @tenant_admin_bp.before_request
@@ -161,6 +187,9 @@ def update_tenant_env(tenant_key: str):
 
     env_payload = {key: request.form.get(key) for key in tenants.TENANT_ENV_KEYS}
     tenants.update_tenant_env(tenant_key, env_payload)
+    updated_tenant = tenants.get_tenant(tenant_key, force_reload=True)
+    if updated_tenant:
+        _sync_page_selection_metadata(updated_tenant)
 
     return redirect(
         url_for(
