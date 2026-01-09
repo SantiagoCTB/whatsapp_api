@@ -1410,6 +1410,14 @@ def instagram_save_token():
         tenant.tenant_key,
         {"instagram_account": account},
     )
+    logger.info(
+        "Token de Instagram actualizado",
+        extra={
+            "tenant_key": tenant.tenant_key,
+            "instagram_account_id": account.get("id"),
+            "instagram_username": account.get("username"),
+        },
+    )
 
     return {
         "ok": True,
