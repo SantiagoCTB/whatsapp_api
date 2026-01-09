@@ -471,6 +471,14 @@ def _trigger_page_backfill_if_needed(previous_env: dict, tenant: TenantInfo | No
         if not _should_trigger_page_backfill(previous_env, new_env, platform):
             continue
         page_id, page_token = _resolve_page_credentials(new_env, platform)
+        logger.info(
+            "Encolando backfill de conversaciones",
+            extra={
+                "tenant_key": tenant.tenant_key,
+                "platform": platform,
+                "page_id": page_id,
+            },
+        )
         page_backfill.enqueue_page_backfill(
             tenant_key=tenant.tenant_key,
             db_settings=tenant.as_db_settings(),
