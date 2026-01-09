@@ -109,37 +109,61 @@ def fetch_instagram_user(access_token: str) -> Dict[str, Any] | None:
 
 def fetch_instagram_conversations(access_token: str) -> List[Dict[str, Any]]:
     url = f"{GRAPH_INSTAGRAM_BASE_URL}/me/conversations"
-    params = {"platform": "instagram", "access_token": access_token}
+    params = {
+        "platform": "instagram",
+        "fields": "id,updated_time,participants",
+        "access_token": access_token,
+    }
     headers = {"Authorization": f"Bearer {access_token}"}
 
-    try:
-        response = requests.get(url, params=params, headers=headers, timeout=15)
-    except requests.RequestException as exc:
-        logger.warning("Error consultando conversaciones de Instagram: %s", exc)
-        return []
-
-    if not response.ok:
-        _log_graph_error("instagram_conversations", response)
-        return []
-
-    payload = _safe_json(response)
-    data = payload.get("data") if isinstance(payload, dict) else None
-    if not isinstance(data, list):
-        return []
-
     conversations: List[Dict[str, Any]] = []
-    for entry in data:
-        if not isinstance(entry, dict):
-            continue
-        conversation_id = entry.get("id")
-        if not conversation_id:
-            continue
-        conversations.append(
-            {
-                "id": conversation_id,
-                "updated_time": entry.get("updated_time"),
-            }
-        )
+    next_url = url
+    next_params = params
+    retried_without_fields = False
+
+    while next_url:
+        try:
+            response = requests.get(
+                next_url, params=next_params, headers=headers, timeout=15
+            )
+        except requests.RequestException as exc:
+            logger.warning("Error consultando conversaciones de Instagram: %s", exc)
+            break
+
+        if not response.ok:
+            if not retried_without_fields and next_params and "fields" in next_params:
+                logger.info(
+                    "Reintentando conversaciones de Instagram sin fields",
+                    extra={"status": response.status_code},
+                )
+                next_params = {k: v for k, v in next_params.items() if k != "fields"}
+                retried_without_fields = True
+                continue
+            _log_graph_error("instagram_conversations", response)
+            break
+
+        next_params = None
+
+        payload = _safe_json(response)
+        data = payload.get("data") if isinstance(payload, dict) else None
+        if isinstance(data, list):
+            for entry in data:
+                if not isinstance(entry, dict):
+                    continue
+                conversation_id = entry.get("id")
+                if not conversation_id:
+                    continue
+                conversations.append(
+                    {
+                        "id": conversation_id,
+                        "updated_time": entry.get("updated_time"),
+                        "participant_ids": _extract_participant_ids(entry),
+                    }
+                )
+
+        paging = payload.get("paging") if isinstance(payload, dict) else None
+        next_url = paging.get("next") if isinstance(paging, dict) else None
+
     return conversations
 
 
@@ -267,6 +291,7 @@ def run_page_backfill(
             return
 
         page_id = str(instagram_user.get("id"))
+        actor_id = page_id
         conversations = fetch_instagram_conversations(access_token)
         if not conversations:
             logger.info(
@@ -280,14 +305,20 @@ def run_page_backfill(
             conversation_id = conversation.get("id")
             if not conversation_id:
                 continue
+            participant_ids = conversation.get("participant_ids") or []
             messages = fetch_instagram_messages(conversation_id, access_token)
             for message in messages:
                 message_id = message.get("id")
                 if not message_id or message_id in seen_message_ids:
                     continue
                 seen_message_ids.add(message_id)
-                _store_message_detail(
+                enriched_message = _ensure_instagram_to_field(
                     message,
+                    participant_ids=participant_ids,
+                    actor_id=actor_id,
+                )
+                _store_message_detail(
+                    enriched_message,
                     tenant_key=tenant_key,
                     db_settings=db_settings,
                     platform=platform,
@@ -440,6 +471,54 @@ def _extract_to_ids(to_obj: Dict[str, Any]) -> List[str]:
         if to_id:
             ids.append(str(to_id))
     return ids
+
+
+def _extract_participant_ids(entry: Dict[str, Any]) -> List[str]:
+    participants = entry.get("participants")
+    if not isinstance(participants, dict):
+        return []
+    data = participants.get("data")
+    if not isinstance(data, list):
+        return []
+    ids = []
+    for participant in data:
+        if not isinstance(participant, dict):
+            continue
+        participant_id = participant.get("id")
+        if participant_id:
+            ids.append(str(participant_id))
+    return ids
+
+
+def _ensure_instagram_to_field(
+    message: Dict[str, Any],
+    *,
+    participant_ids: List[str],
+    actor_id: str | None,
+) -> Dict[str, Any]:
+    if not isinstance(message, dict):
+        return message
+    to_obj = message.get("to") if isinstance(message.get("to"), dict) else {}
+    existing_to_ids = _extract_to_ids(to_obj)
+    if existing_to_ids:
+        return message
+
+    from_obj = message.get("from") if isinstance(message.get("from"), dict) else {}
+    from_id = str(from_obj.get("id") or "")
+
+    fallback_ids = []
+    for participant_id in participant_ids:
+        if participant_id and participant_id != from_id:
+            fallback_ids.append(participant_id)
+    if not fallback_ids and actor_id and actor_id != from_id:
+        fallback_ids.append(actor_id)
+
+    if not fallback_ids:
+        return message
+
+    enriched = dict(message)
+    enriched["to"] = {"data": [{"id": participant_id} for participant_id in fallback_ids]}
+    return enriched
 
 
 def _resolve_numero_from_message(
