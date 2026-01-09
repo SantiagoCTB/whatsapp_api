@@ -608,7 +608,7 @@
 
         function resolveChatSourceLogo(linkUrl) {
           const value = (linkUrl || '').toString().toLowerCase();
-          if (value.includes('instagram.com') || value.includes('instagr.am')) {
+          if (value === 'instagram' || value.includes('instagram.com') || value.includes('instagr.am')) {
             return { key: 'instagram', label: 'Instagram' };
           }
           if (value.includes('messenger.com') || value.includes('m.me') || value === 'messenger') {
