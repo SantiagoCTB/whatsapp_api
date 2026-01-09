@@ -12,7 +12,15 @@ from services import db
 
 logger = logging.getLogger(__name__)
 
-GRAPH_BASE_URL = f"https://graph.facebook.com/{Config.FACEBOOK_GRAPH_API_VERSION}"
+GRAPH_FACEBOOK_BASE_URL = f"https://graph.facebook.com/{Config.FACEBOOK_GRAPH_API_VERSION}"
+GRAPH_INSTAGRAM_BASE_URL = f"https://graph.instagram.com/{Config.FACEBOOK_GRAPH_API_VERSION}"
+
+
+def _resolve_graph_base_url(platform: str, page_id: str) -> str:
+    normalized = (platform or "").strip().lower()
+    if normalized == "instagram" and page_id == "me":
+        return GRAPH_INSTAGRAM_BASE_URL
+    return GRAPH_FACEBOOK_BASE_URL
 
 
 def fetch_conversations(
@@ -21,6 +29,7 @@ def fetch_conversations(
     platform: str,
     *,
     include_owner: bool = True,
+    base_url: str | None = None,
 ) -> List[Dict[str, Any]]:
     params = {
         "platform": platform,
@@ -29,7 +38,8 @@ def fetch_conversations(
     if include_owner:
         params["fields"] = "messages,is_owner"
 
-    url = f"{GRAPH_BASE_URL}/{page_id}/conversations"
+    graph_base_url = base_url or _resolve_graph_base_url(platform, page_id)
+    url = f"{graph_base_url}/{page_id}/conversations"
     try:
         response = requests.get(url, params=params, timeout=15)
     except requests.RequestException as exc:
@@ -79,8 +89,10 @@ def fetch_conversations(
 def fetch_conversation_messages(
     conversation_id: str,
     access_token: str,
+    *,
+    base_url: str,
 ) -> List[Dict[str, Any]]:
-    url = f"{GRAPH_BASE_URL}/{conversation_id}"
+    url = f"{base_url}/{conversation_id}"
     params = {
         "fields": "messages",
         "access_token": access_token,
@@ -104,8 +116,13 @@ def fetch_conversation_messages(
     return [item for item in data if isinstance(item, dict)]
 
 
-def fetch_message_detail(message_id: str, access_token: str) -> Dict[str, Any] | None:
-    url = f"{GRAPH_BASE_URL}/{message_id}"
+def fetch_message_detail(
+    message_id: str,
+    access_token: str,
+    *,
+    base_url: str,
+) -> Dict[str, Any] | None:
+    url = f"{base_url}/{message_id}"
     params = {
         "fields": "id,created_time,from,to,message,reply_to",
         "access_token": access_token,
@@ -138,7 +155,13 @@ def run_page_backfill(
         extra={"tenant_key": tenant_key, "platform": platform},
     )
 
-    conversations = fetch_conversations(page_id, access_token, platform)
+    base_url = _resolve_graph_base_url(platform, page_id)
+    conversations = fetch_conversations(
+        page_id,
+        access_token,
+        platform,
+        base_url=base_url,
+    )
     if not conversations:
         logger.info(
             "No se encontraron conversaciones para backfill",
@@ -151,13 +174,21 @@ def run_page_backfill(
         conversation_id = conversation.get("id")
         if not conversation_id:
             continue
-        messages = fetch_conversation_messages(conversation_id, access_token)
+        messages = fetch_conversation_messages(
+            conversation_id,
+            access_token,
+            base_url=base_url,
+        )
         for message in messages:
             message_id = message.get("id")
             if not message_id or message_id in seen_message_ids:
                 continue
             seen_message_ids.add(message_id)
-            detail = fetch_message_detail(message_id, access_token)
+            detail = fetch_message_detail(
+                message_id,
+                access_token,
+                base_url=base_url,
+            )
             if not detail:
                 continue
             _store_message_detail(

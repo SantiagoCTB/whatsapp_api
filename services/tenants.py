@@ -427,6 +427,15 @@ def _resolve_page_credentials(env: dict, platform: str) -> tuple[str, str]:
 
     page_id = page_id or (env.get("PAGE_ID") or "").strip()
     page_token = page_token or (env.get("PAGE_ACCESS_TOKEN") or "").strip()
+
+    if normalized == "instagram":
+        instagram_token = (env.get("INSTAGRAM_TOKEN") or "").strip()
+        if instagram_token:
+            if not page_id:
+                page_id = "me"
+            if not page_token:
+                page_token = instagram_token
+
     return page_id, page_token
 
 
