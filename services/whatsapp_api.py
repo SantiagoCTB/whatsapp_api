@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 
 API_VERSION = os.getenv("WHATSAPP_API_VERSION", "v19.0")
 GRAPH_BASE_URL = f"https://graph.facebook.com/{API_VERSION}"
+INSTAGRAM_GRAPH_BASE_URL = "https://graph.instagram.com/v24.0"
 
 _typing_lock = threading.Lock()
 _typing_sessions = {}
@@ -83,13 +84,19 @@ def _get_messenger_env():
 def _get_instagram_env():
     env = tenants.get_current_tenant_env()
     token = (env.get("INSTAGRAM_TOKEN") or "").strip()
+    page_id = (env.get("PAGE_ID") or "").strip()
 
+    missing = []
     if not token:
+        missing.append("INSTAGRAM_TOKEN")
+    if not page_id:
+        missing.append("PAGE_ID")
+    if missing:
         raise RuntimeError(
-            "Faltan credenciales de Instagram en el tenant actual: INSTAGRAM_TOKEN"
+            "Faltan credenciales de Instagram en el tenant actual: " + ", ".join(missing)
         )
 
-    return {"token": token, "page_id": "me"}
+    return {"token": token, "page_id": page_id}
 
 
 def _get_messenger_messaging_type() -> str:
@@ -317,7 +324,7 @@ def enviar_mensaje(
                 "El usuario de Facebook tiene que haber enviado mensajes a esta página antes de escribirle.",
             )
 
-        url = f"{GRAPH_BASE_URL}/{runtime['page_id']}/messages"
+        url = f"{INSTAGRAM_GRAPH_BASE_URL}/{runtime['page_id']}/messages"
         headers = {
             "Authorization": f"Bearer {runtime['token']}",
             "Content-Type": "application/json",
@@ -442,7 +449,7 @@ def enviar_mensaje(
                 "El usuario de Instagram tiene que haber enviado mensajes a esta cuenta antes de escribirle.",
             )
 
-        url = f"{GRAPH_BASE_URL}/{runtime['page_id']}/messages"
+        url = f"{INSTAGRAM_GRAPH_BASE_URL}/{runtime['page_id']}/messages"
         headers = {
             "Authorization": f"Bearer {runtime['token']}",
             "Content-Type": "application/json",
@@ -1051,7 +1058,7 @@ def _post_to_messenger(payload, log_context):
         logger.error("No se puede contactar la API de Messenger: %s", exc)
         return False
 
-    messages_url = f"{GRAPH_BASE_URL}/{runtime['page_id']}/messages"
+    messages_url = f"{INSTAGRAM_GRAPH_BASE_URL}/{runtime['page_id']}/messages"
     headers = {
         "Authorization": f"Bearer {runtime['token']}",
         "Content-Type": "application/json",
@@ -1093,7 +1100,7 @@ def _post_to_instagram(payload, log_context):
         logger.error("No se puede contactar la API de Instagram: %s", exc)
         return False
 
-    messages_url = f"{GRAPH_BASE_URL}/{runtime['page_id']}/messages"
+    messages_url = f"{INSTAGRAM_GRAPH_BASE_URL}/{runtime['page_id']}/messages"
     headers = {
         "Authorization": f"Bearer {runtime['token']}",
         "Content-Type": "application/json",
