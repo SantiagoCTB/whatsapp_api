@@ -307,6 +307,14 @@ def run_page_backfill(
         page_id = str(instagram_user.get("id"))
         instagram_username = instagram_user.get("username")
         actor_id = None
+        logger.info(
+            "Backfill de Instagram: cuenta resuelta",
+            extra={
+                "tenant_key": tenant_key,
+                "instagram_me_id": page_id,
+                "instagram_username": instagram_username,
+            },
+        )
         conversations = fetch_instagram_conversations(access_token)
         if not conversations:
             logger.info(
@@ -314,6 +322,14 @@ def run_page_backfill(
                 extra={"tenant_key": tenant_key, "platform": platform},
             )
             return
+        logger.info(
+            "Backfill de Instagram: conversaciones obtenidas",
+            extra={
+                "tenant_key": tenant_key,
+                "instagram_me_id": page_id,
+                "conversation_count": len(conversations),
+            },
+        )
 
         seen_message_ids = set()
         for conversation in conversations:
@@ -327,7 +343,26 @@ def run_page_backfill(
                     participants,
                     instagram_username,
                 )
+                if actor_id:
+                    logger.info(
+                        "Backfill de Instagram: actor_id resuelto desde participants",
+                        extra={
+                            "tenant_key": tenant_key,
+                            "conversation_id": conversation_id,
+                            "actor_id": actor_id,
+                            "instagram_username": instagram_username,
+                        },
+                    )
             messages = fetch_instagram_messages(conversation_id, access_token)
+            logger.info(
+                "Backfill de Instagram: mensajes obtenidos",
+                extra={
+                    "tenant_key": tenant_key,
+                    "conversation_id": conversation_id,
+                    "message_count": len(messages),
+                    "participant_ids": participant_ids,
+                },
+            )
             for message in messages:
                 message_id = message.get("id")
                 if not message_id or message_id in seen_message_ids:
@@ -340,6 +375,17 @@ def run_page_backfill(
                         and from_obj.get("username") == instagram_username
                     ):
                         actor_id = str(from_obj.get("id") or "") or None
+                        if actor_id:
+                            logger.info(
+                                "Backfill de Instagram: actor_id resuelto desde mensaje",
+                                extra={
+                                    "tenant_key": tenant_key,
+                                    "conversation_id": conversation_id,
+                                    "message_id": message_id,
+                                    "actor_id": actor_id,
+                                    "instagram_username": instagram_username,
+                                },
+                            )
                 enriched_message = _ensure_instagram_to_field(
                     message,
                     participant_ids=participant_ids,
@@ -497,6 +543,20 @@ def _store_message_detail(
         )
 
     if not numero:
+        if (platform or "").strip().lower() == "instagram":
+            logger.info(
+                "Backfill de Instagram: numero no resuelto, se omite guardar_mensaje",
+                extra={
+                    "instagram_me_id": instagram_me_id,
+                    "instagram_username": instagram_username,
+                    "conversation_id": conversation_id,
+                    "message_id": message_id,
+                    "from_id": from_obj.get("id"),
+                    "to_ids": to_ids,
+                    "participant_ids": participant_ids or [],
+                    "actor_id": actor_id,
+                },
+            )
         return
 
     compare_id = actor_id or page_id
