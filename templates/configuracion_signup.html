@@ -122,25 +122,18 @@
                 alt="Logo de Messenger"
             >
             <div>
-                <h3>Messenger / Instagram (Conversaciones)</h3>
-                <p class="muted">Selecciona la página para construir los chats de los últimos 30 días.</p>
+                <h3>Messenger (Conversaciones)</h3>
+                <p class="muted">Selecciona la página de Facebook para construir los chats de los últimos 30 días.</p>
             </div>
         </div>
         <div class="integration-body">
             <p class="muted" style="margin-top: 0;">
                 Paso 1: pega un <strong>token de usuario</strong>. Paso 2: consulta tus páginas. Paso 3: guarda la
-                página y la plataforma.
+                página de Messenger.
             </p>
             <div class="form-row">
                 <label class="muted" for="messenger-user-token">Token de usuario (solo se guarda si lo envías)</label>
                 <input id="messenger-user-token" type="password" placeholder="EAA...">
-            </div>
-            <div class="form-row">
-                <label class="muted" for="messenger-platform-select">Plataforma</label>
-                <select id="messenger-platform-select">
-                    <option value="messenger" {% if messenger_platform == 'messenger' %}selected{% endif %}>Messenger</option>
-                    <option value="instagram" {% if messenger_platform == 'instagram' %}selected{% endif %}>Instagram</option>
-                </select>
             </div>
             <div class="form-row">
                 <label class="muted" for="messenger-page-select">Página de Meta</label>
@@ -155,9 +148,44 @@
             </div>
             <p class="muted" style="margin-top: 0.75rem;">
                 Página actual: <strong>{{ messenger_page_name or messenger_page_id or 'Sin seleccionar' }}</strong>
-                {% if messenger_platform %}
-                · Plataforma: <strong>{{ messenger_platform }}</strong>
-                {% endif %}
+            </p>
+        </div>
+    </div>
+
+    <div class="integration-card card">
+        <div class="integration-header">
+            <img
+                class="integration-logo"
+                src="{{ url_for('static', filename='logo-instagram.png') }}"
+                alt="Logo de Instagram"
+            >
+            <div>
+                <h3>Instagram (Conversaciones)</h3>
+                <p class="muted">Configura la cuenta profesional para traer los chats de los últimos 30 días.</p>
+            </div>
+        </div>
+        <div class="integration-body">
+            <p class="muted" style="margin-top: 0;">
+                Paso 1: pega un <strong>token de usuario</strong>. Paso 2: consulta tus páginas. Paso 3: guarda la
+                página de Instagram.
+            </p>
+            <div class="form-row">
+                <label class="muted" for="instagram-user-token">Token de usuario (solo se guarda si lo envías)</label>
+                <input id="instagram-user-token" type="password" placeholder="EAA...">
+            </div>
+            <div class="form-row">
+                <label class="muted" for="instagram-page-select">Página de Meta</label>
+                <select id="instagram-page-select" data-current-page="{{ instagram_page_id or '' }}" disabled>
+                    <option value="">Consulta tus páginas para ver opciones</option>
+                </select>
+                <div style="display: flex; gap: 0.5rem;">
+                    <button id="instagram-page-refresh" class="btn-secondary" type="button">Consultar páginas</button>
+                    <button id="instagram-page-save" class="btn-primary" type="button">Guardar selección</button>
+                </div>
+                <div id="instagram-page-status" class="help" style="margin-top: 0.5rem"></div>
+            </div>
+            <p class="muted" style="margin-top: 0.75rem;">
+                Página actual: <strong>{{ instagram_page_name or instagram_page_id or 'Sin seleccionar' }}</strong>
             </p>
         </div>
     </div>
@@ -439,99 +467,123 @@
 </script>
 <script>
   (function() {
-    const refreshButton = document.getElementById('messenger-page-refresh');
-    const saveButton = document.getElementById('messenger-page-save');
-    const pageSelect = document.getElementById('messenger-page-select');
-    const platformSelect = document.getElementById('messenger-platform-select');
-    const tokenInput = document.getElementById('messenger-user-token');
-    const statusBox = document.getElementById('messenger-page-status');
+    const setupPageIntegration = ({
+      platform,
+      refreshButtonId,
+      saveButtonId,
+      pageSelectId,
+      tokenInputId,
+      statusBoxId
+    }) => {
+      const refreshButton = document.getElementById(refreshButtonId);
+      const saveButton = document.getElementById(saveButtonId);
+      const pageSelect = document.getElementById(pageSelectId);
+      const tokenInput = document.getElementById(tokenInputId);
+      const statusBox = document.getElementById(statusBoxId);
 
-    if (!refreshButton || !saveButton || !pageSelect) return;
+      if (!refreshButton || !saveButton || !pageSelect) return;
 
-    const setStatus = (message, isError) => {
-      if (!statusBox) return;
-      statusBox.textContent = message || '';
-      statusBox.style.color = isError ? '#c0392b' : '#2c3e50';
+      const setStatus = (message, isError) => {
+        if (!statusBox) return;
+        statusBox.textContent = message || '';
+        statusBox.style.color = isError ? '#c0392b' : '#2c3e50';
+      };
+
+      const getToken = () => (tokenInput && tokenInput.value ? tokenInput.value.trim() : '');
+
+      refreshButton.addEventListener('click', async () => {
+        setStatus('Consultando páginas...', false);
+        const payload = { platform };
+        const token = getToken();
+        if (token) {
+          payload.user_access_token = token;
+        }
+
+        try {
+          const response = await fetch('{{ url_for("configuracion.messenger_pages") }}', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+          const data = await response.json();
+          if (!response.ok || !data.ok) {
+            throw new Error(data.error || 'No se pudieron obtener las páginas.');
+          }
+
+          pageSelect.innerHTML = '';
+          const placeholder = document.createElement('option');
+          placeholder.value = '';
+          placeholder.textContent = 'Selecciona una página';
+          pageSelect.appendChild(placeholder);
+
+          const currentPageId = pageSelect.dataset.currentPage || '';
+          (data.pages || []).forEach((page) => {
+            const option = document.createElement('option');
+            option.value = page.id;
+            option.textContent = page.name || page.id;
+            if (currentPageId && page.id === currentPageId) {
+              option.selected = true;
+            }
+            pageSelect.appendChild(option);
+          });
+
+          pageSelect.disabled = false;
+          setStatus('Páginas cargadas. Selecciona una para guardar.', false);
+        } catch (err) {
+          pageSelect.disabled = true;
+          setStatus(err.message || 'No se pudieron obtener las páginas.', true);
+        }
+      });
+
+      saveButton.addEventListener('click', async () => {
+        const selectedPage = pageSelect.value;
+        if (!selectedPage) {
+          setStatus('Selecciona una página antes de guardar.', true);
+          return;
+        }
+        const payload = {
+          page_id: selectedPage,
+          platform
+        };
+        const token = getToken();
+        if (token) {
+          payload.user_access_token = token;
+        }
+
+        setStatus('Guardando selección...', false);
+        try {
+          const response = await fetch('{{ url_for("configuracion.messenger_save_page") }}', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+          const data = await response.json();
+          if (!response.ok || !data.ok) {
+            throw new Error(data.error || 'No se pudo guardar la página.');
+          }
+          setStatus('Página guardada correctamente. El backfill se ejecutará en segundo plano.', false);
+        } catch (err) {
+          setStatus(err.message || 'No se pudo guardar la página.', true);
+        }
+      });
     };
 
-    const getToken = () => (tokenInput && tokenInput.value ? tokenInput.value.trim() : '');
-
-    refreshButton.addEventListener('click', async () => {
-      setStatus('Consultando páginas...', false);
-      const payload = {
-        platform: platformSelect ? platformSelect.value : 'messenger'
-      };
-      const token = getToken();
-      if (token) {
-        payload.user_access_token = token;
-      }
-
-      try {
-        const response = await fetch('{{ url_for("configuracion.messenger_pages") }}', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-        const data = await response.json();
-        if (!response.ok || !data.ok) {
-          throw new Error(data.error || 'No se pudieron obtener las páginas.');
-        }
-
-        pageSelect.innerHTML = '';
-        const placeholder = document.createElement('option');
-        placeholder.value = '';
-        placeholder.textContent = 'Selecciona una página';
-        pageSelect.appendChild(placeholder);
-
-        const currentPageId = pageSelect.dataset.currentPage || '';
-        (data.pages || []).forEach((page) => {
-          const option = document.createElement('option');
-          option.value = page.id;
-          option.textContent = page.name || page.id;
-          if (currentPageId && page.id === currentPageId) {
-            option.selected = true;
-          }
-          pageSelect.appendChild(option);
-        });
-
-        pageSelect.disabled = false;
-        setStatus('Páginas cargadas. Selecciona una para guardar.', false);
-      } catch (err) {
-        pageSelect.disabled = true;
-        setStatus(err.message || 'No se pudieron obtener las páginas.', true);
-      }
+    setupPageIntegration({
+      platform: 'messenger',
+      refreshButtonId: 'messenger-page-refresh',
+      saveButtonId: 'messenger-page-save',
+      pageSelectId: 'messenger-page-select',
+      tokenInputId: 'messenger-user-token',
+      statusBoxId: 'messenger-page-status'
     });
 
-    saveButton.addEventListener('click', async () => {
-      const selectedPage = pageSelect.value;
-      if (!selectedPage) {
-        setStatus('Selecciona una página antes de guardar.', true);
-        return;
-      }
-      const payload = {
-        page_id: selectedPage,
-        platform: platformSelect ? platformSelect.value : 'messenger'
-      };
-      const token = getToken();
-      if (token) {
-        payload.user_access_token = token;
-      }
-
-      setStatus('Guardando selección...', false);
-      try {
-        const response = await fetch('{{ url_for("configuracion.messenger_save_page") }}', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-        const data = await response.json();
-        if (!response.ok || !data.ok) {
-          throw new Error(data.error || 'No se pudo guardar la página.');
-        }
-        setStatus('Página guardada correctamente. El backfill se ejecutará en segundo plano.', false);
-      } catch (err) {
-        setStatus(err.message || 'No se pudo guardar la página.', true);
-      }
+    setupPageIntegration({
+      platform: 'instagram',
+      refreshButtonId: 'instagram-page-refresh',
+      saveButtonId: 'instagram-page-save',
+      pageSelectId: 'instagram-page-select',
+      tokenInputId: 'instagram-user-token',
+      statusBoxId: 'instagram-page-status'
     });
   })();
 </script>
