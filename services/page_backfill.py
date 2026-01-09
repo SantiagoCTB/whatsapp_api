@@ -142,27 +142,38 @@ def fetch_instagram_conversations(access_token: str) -> List[Dict[str, Any]]:
             _log_graph_error("instagram_conversations", response)
             break
 
-        next_params = None
-
         payload = _safe_json(response)
         data = payload.get("data") if isinstance(payload, dict) else None
-        if isinstance(data, list):
-            for entry in data:
-                if not isinstance(entry, dict):
-                    continue
-                conversation_id = entry.get("id")
-                if not conversation_id:
-                    continue
-                conversations.append(
-                    {
-                        "id": conversation_id,
-                        "updated_time": entry.get("updated_time"),
-                        "participant_ids": _extract_participant_ids(entry),
-                    }
-                )
+        if not isinstance(data, list):
+            data = []
 
         paging = payload.get("paging") if isinstance(payload, dict) else None
         next_url = paging.get("next") if isinstance(paging, dict) else None
+        next_params = None
+
+        if not data and not retried_without_fields and next_url is None and next_params is None:
+            logger.info(
+                "Reintentando conversaciones de Instagram sin fields por lista vacía",
+                extra={"status": response.status_code},
+            )
+            next_url = url
+            next_params = {k: v for k, v in params.items() if k != "fields"}
+            retried_without_fields = True
+            continue
+
+        for entry in data:
+            if not isinstance(entry, dict):
+                continue
+            conversation_id = entry.get("id")
+            if not conversation_id:
+                continue
+            conversations.append(
+                {
+                    "id": conversation_id,
+                    "updated_time": entry.get("updated_time"),
+                    "participant_ids": _extract_participant_ids(entry),
+                }
+            )
 
     return conversations
 
