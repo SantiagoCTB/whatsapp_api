@@ -502,7 +502,8 @@ def _mark_message_processed(message_id: str | None) -> bool:
     return False
 
 
-def _handle_messenger_payload(data, summary):
+def _handle_messenger_payload(data, summary, channel="messenger"):
+    tipo_prefix = "cliente_instagram" if channel == "instagram" else "cliente_messenger"
     for entry in data.get("entry", []):
         for event in entry.get("messaging", []) or []:
             handled = False
@@ -598,11 +599,11 @@ def _handle_messenger_payload(data, summary):
                 guardar_mensaje(
                     sender_id,
                     stored_text,
-                    "cliente_messenger",
+                    tipo_prefix,
                     wa_id=message_id,
                     step=step,
                 )
-                if not agent_mode:
+                if channel == "messenger" and not agent_mode:
                     _maybe_send_messenger_disclosure(sender_id, chat_state_row, step)
                 update_chat_state(sender_id, step, estado_update)
                 if agent_mode:
@@ -640,7 +641,7 @@ def _handle_messenger_payload(data, summary):
                     payload = attachment.get("payload") or {}
                     media_url = payload.get("url")
                     tipo_db = (
-                        f"cliente_messenger_{attach_type}" if attach_type else "cliente_messenger"
+                        f"{tipo_prefix}_{attach_type}" if attach_type else tipo_prefix
                     )
                     guardar_mensaje(
                         sender_id,
@@ -650,7 +651,7 @@ def _handle_messenger_payload(data, summary):
                         media_url=media_url,
                         step=step,
                     )
-                if not agent_mode:
+                if channel == "messenger" and not agent_mode:
                     _maybe_send_messenger_disclosure(sender_id, chat_state_row, step)
                 update_chat_state(sender_id, step, estado_update)
                 if agent_mode:
@@ -674,11 +675,11 @@ def _handle_messenger_payload(data, summary):
                 guardar_mensaje(
                     sender_id,
                     effective_text,
-                    "cliente_messenger_postback",
+                    f"{tipo_prefix}_postback",
                     wa_id=postback_id,
                     step=step,
                 )
-                if not agent_mode:
+                if channel == "messenger" and not agent_mode:
                     _maybe_send_messenger_disclosure(sender_id, chat_state_row, step)
                 update_chat_state(sender_id, step, estado_update)
                 if agent_mode:
@@ -1340,9 +1341,16 @@ def webhook():
     }
 
     if data.get("object") == "page":
-        _handle_messenger_payload(data, summary)
+        _handle_messenger_payload(data, summary, channel="messenger")
         logger.info(
             "Returning status=received reason=processed messenger payload summary=%s",
+            summary,
+        )
+        return Response("EVENT_RECEIVED", status=200, mimetype="text/plain")
+    if data.get("object") == "instagram":
+        _handle_messenger_payload(data, summary, channel="instagram")
+        logger.info(
+            "Returning status=received reason=processed instagram payload summary=%s",
             summary,
         )
         return Response("EVENT_RECEIVED", status=200, mimetype="text/plain")
