@@ -84,19 +84,23 @@ def _get_messenger_env():
 def _get_instagram_env():
     env = tenants.get_current_tenant_env()
     token = (env.get("INSTAGRAM_TOKEN") or "").strip()
-    page_id = (env.get("PAGE_ID") or "").strip()
+    tenant = tenants.get_current_tenant()
+    instagram_account_id = ""
+    if tenant and isinstance(tenant.metadata, dict):
+        instagram_account = tenant.metadata.get("instagram_account") or {}
+        instagram_account_id = (instagram_account.get("id") or "").strip()
 
     missing = []
     if not token:
         missing.append("INSTAGRAM_TOKEN")
-    if not page_id:
-        missing.append("PAGE_ID")
+    if not instagram_account_id:
+        missing.append("INSTAGRAM_ACCOUNT_ID")
     if missing:
         raise RuntimeError(
             "Faltan credenciales de Instagram en el tenant actual: " + ", ".join(missing)
         )
 
-    return {"token": token, "page_id": page_id}
+    return {"token": token, "page_id": instagram_account_id}
 
 
 def _get_messenger_messaging_type() -> str:
