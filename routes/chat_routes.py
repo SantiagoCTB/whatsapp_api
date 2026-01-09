@@ -957,17 +957,29 @@ def send_message():
 
     last_client_info = obtener_ultimo_mensaje_cliente_info(numero)
     last_client_tipo = (last_client_info or {}).get("tipo") or ""
-    is_messenger_chat = "messenger" in str(last_client_tipo).lower()
-    if is_messenger_chat:
+    last_client_tipo_lower = str(last_client_tipo).lower()
+    is_messenger_chat = "messenger" in last_client_tipo_lower
+    is_instagram_chat = "instagram" in last_client_tipo_lower
+    if is_messenger_chat or is_instagram_chat:
         last_client_ts = (last_client_info or {}).get("timestamp")
         if not isinstance(last_client_ts, datetime):
+            error_message = (
+                'El usuario de Instagram tiene que haber enviado mensajes a esta cuenta antes de escribirle.'
+                if is_instagram_chat
+                else 'El usuario de Facebook tiene que haber enviado mensajes a esta página antes de escribirle.'
+            )
             return jsonify({
-                'error': 'El usuario de Facebook tiene que haber enviado mensajes a esta página antes de escribirle.'
+                'error': error_message
             }), 400
         elapsed_seconds = (datetime.utcnow() - last_client_ts).total_seconds()
         if elapsed_seconds > 24 * 3600:
+            error_message = (
+                'El usuario de Instagram tiene que haber enviado mensajes a esta cuenta antes de escribirle.'
+                if is_instagram_chat
+                else 'El usuario de Facebook tiene que haber enviado mensajes a esta página antes de escribirle.'
+            )
             return jsonify({
-                'error': 'El usuario de Facebook tiene que haber enviado mensajes a esta página antes de escribirle.'
+                'error': error_message
             }), 400
 
     # Envía por la API y guarda internamente
@@ -1386,7 +1398,7 @@ def send_image():
         return_error=True,
     )
     if not success:
-        return jsonify({'error': error_reason or 'No se pudo enviar la imagen a WhatsApp'}), 502
+        return jsonify({'error': error_reason or 'No se pudo enviar la imagen.'}), 502
     if origen != 'bot':
         row = get_chat_state(numero)
         step = row[0] if row else ''
@@ -1441,7 +1453,7 @@ def send_document():
         return_error=True,
     )
     if not success:
-        return jsonify({'error': error_reason or 'No se pudo enviar el documento a WhatsApp'}), 502
+        return jsonify({'error': error_reason or 'No se pudo enviar el documento.'}), 502
     row = get_chat_state(numero)
     step = row[0] if row else ''
     update_chat_state(numero, step, 'asesor')
@@ -1632,7 +1644,7 @@ def send_audio():
         return_error=True,
     )
     if not success:
-        return jsonify({'error': error_reason or 'No se pudo enviar el audio a WhatsApp'}), 502
+        return jsonify({'error': error_reason or 'No se pudo enviar el audio.'}), 502
 
     caption_text = caption.strip()
     if caption_text:
@@ -1705,7 +1717,7 @@ def send_video():
         return_error=True,
     )
     if not success:
-        return jsonify({'error': error_reason or 'No se pudo enviar el video a WhatsApp'}), 502
+        return jsonify({'error': error_reason or 'No se pudo enviar el video.'}), 502
     if origen != 'bot':
         row = get_chat_state(numero)
         step = row[0] if row else ''
