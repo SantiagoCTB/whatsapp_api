@@ -133,10 +133,11 @@ def fetch_instagram_conversations(access_token: str) -> List[Dict[str, Any]]:
         if not response.ok:
             if not retried_without_fields and next_params and "fields" in next_params:
                 logger.info(
-                    "Reintentando conversaciones de Instagram sin fields",
+                    "Reintentando conversaciones de Instagram con fields=participants",
                     extra={"status": response.status_code},
                 )
                 next_params = {k: v for k, v in next_params.items() if k != "fields"}
+                next_params["fields"] = "participants"
                 retried_without_fields = True
                 continue
             _log_graph_error("instagram_conversations", response)
@@ -153,11 +154,12 @@ def fetch_instagram_conversations(access_token: str) -> List[Dict[str, Any]]:
 
         if not data and not retried_without_fields and next_url is None and next_params is None:
             logger.info(
-                "Reintentando conversaciones de Instagram sin fields por lista vacía",
+                "Reintentando conversaciones de Instagram con fields=participants por lista vacía",
                 extra={"status": response.status_code},
             )
             next_url = url
             next_params = {k: v for k, v in params.items() if k != "fields"}
+            next_params["fields"] = "participants"
             retried_without_fields = True
             continue
 
@@ -172,6 +174,7 @@ def fetch_instagram_conversations(access_token: str) -> List[Dict[str, Any]]:
                     "id": conversation_id,
                     "updated_time": entry.get("updated_time"),
                     "participant_ids": _extract_participant_ids(entry),
+                    "participants": _extract_participants(entry),
                 }
             )
 
@@ -302,7 +305,8 @@ def run_page_backfill(
             return
 
         page_id = str(instagram_user.get("id"))
-        actor_id = page_id
+        instagram_username = instagram_user.get("username")
+        actor_id = None
         conversations = fetch_instagram_conversations(access_token)
         if not conversations:
             logger.info(
@@ -317,12 +321,25 @@ def run_page_backfill(
             if not conversation_id:
                 continue
             participant_ids = conversation.get("participant_ids") or []
+            participants = conversation.get("participants") or []
+            if not actor_id and instagram_username:
+                actor_id = _resolve_actor_id_from_participants(
+                    participants,
+                    instagram_username,
+                )
             messages = fetch_instagram_messages(conversation_id, access_token)
             for message in messages:
                 message_id = message.get("id")
                 if not message_id or message_id in seen_message_ids:
                     continue
                 seen_message_ids.add(message_id)
+                if not actor_id and instagram_username:
+                    from_obj = message.get("from") or {}
+                    if (
+                        isinstance(from_obj, dict)
+                        and from_obj.get("username") == instagram_username
+                    ):
+                        actor_id = str(from_obj.get("id") or "") or None
                 enriched_message = _ensure_instagram_to_field(
                     message,
                     participant_ids=participant_ids,
@@ -335,6 +352,10 @@ def run_page_backfill(
                     platform=platform,
                     page_id=page_id,
                     conversation_id=conversation_id,
+                    participant_ids=participant_ids,
+                    actor_id=actor_id,
+                    instagram_me_id=page_id,
+                    instagram_username=instagram_username,
                 )
         return
 
@@ -419,6 +440,10 @@ def _store_message_detail(
     platform: str,
     page_id: str,
     conversation_id: str,
+    participant_ids: List[str] | None = None,
+    actor_id: str | None = None,
+    instagram_me_id: str | None = None,
+    instagram_username: str | None = None,
 ):
     message_id = detail.get("id")
     if not message_id:
@@ -451,11 +476,33 @@ def _store_message_detail(
         from_id=from_obj.get("id"),
         to_ids=to_ids,
         page_id=page_id,
+        participant_ids=participant_ids or [],
+        actor_id=actor_id,
     )
+    if (platform or "").strip().lower() == "instagram":
+        logger.info(
+            "Backfill de Instagram: detalle de mensaje",
+            extra={
+                "instagram_me_id": instagram_me_id,
+                "instagram_username": instagram_username,
+                "conversation_id": conversation_id,
+                "participant_ids": participant_ids or [],
+                "message_id": message_id,
+                "from_id": from_obj.get("id"),
+                "from_username": from_obj.get("username"),
+                "to_ids": to_ids,
+                "actor_id": actor_id,
+                "numero": numero,
+            },
+        )
+
     if not numero:
         return
 
-    tipo_base = "asesor" if str(from_obj.get("id") or "") == str(page_id) else "cliente"
+    compare_id = actor_id or page_id
+    tipo_base = (
+        "asesor" if str(from_obj.get("id") or "") == str(compare_id) else "cliente"
+    )
     channel = "messenger" if platform == "messenger" else "instagram"
     tipo = f"{tipo_base}_{channel}"
 
@@ -502,6 +549,45 @@ def _extract_participant_ids(entry: Dict[str, Any]) -> List[str]:
     return ids
 
 
+def _extract_participants(entry: Dict[str, Any]) -> List[Dict[str, Any]]:
+    participants = entry.get("participants")
+    if not isinstance(participants, dict):
+        return []
+    data = participants.get("data")
+    if not isinstance(data, list):
+        return []
+    extracted: List[Dict[str, Any]] = []
+    for participant in data:
+        if not isinstance(participant, dict):
+            continue
+        participant_id = participant.get("id")
+        if not participant_id:
+            continue
+        extracted.append(
+            {
+                "id": str(participant_id),
+                "username": participant.get("username"),
+            }
+        )
+    return extracted
+
+
+def _resolve_actor_id_from_participants(
+    participants: List[Dict[str, Any]],
+    instagram_username: str,
+) -> str | None:
+    if not instagram_username:
+        return None
+    for participant in participants:
+        if not isinstance(participant, dict):
+            continue
+        if participant.get("username") == instagram_username:
+            participant_id = participant.get("id")
+            if participant_id:
+                return str(participant_id)
+    return None
+
+
 def _ensure_instagram_to_field(
     message: Dict[str, Any],
     *,
@@ -538,15 +624,25 @@ def _resolve_numero_from_message(
     from_id: str | None,
     to_ids: List[str],
     page_id: str | None,
+    participant_ids: List[str],
+    actor_id: str | None,
 ) -> str | None:
     if from_id:
         from_id = str(from_id)
     page_id = str(page_id) if page_id else None
     normalized_to_ids = [str(item) for item in to_ids if item]
+    normalized_participant_ids = [str(item) for item in participant_ids if item]
+    effective_actor_id = str(actor_id) if actor_id else page_id
 
-    if page_id and from_id == page_id:
+    if not normalized_to_ids and normalized_participant_ids:
+        for candidate in normalized_participant_ids:
+            if not effective_actor_id or candidate != effective_actor_id:
+                return candidate
+        return None
+
+    if effective_actor_id and from_id == effective_actor_id:
         for candidate in normalized_to_ids:
-            if candidate != page_id:
+            if candidate != effective_actor_id:
                 return candidate
         return None
 
@@ -554,7 +650,7 @@ def _resolve_numero_from_message(
         return from_id
 
     for candidate in normalized_to_ids:
-        if candidate != page_id:
+        if not effective_actor_id or candidate != effective_actor_id:
             return candidate
     return None
 
