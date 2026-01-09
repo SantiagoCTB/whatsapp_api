@@ -16,6 +16,7 @@ GRAPH_FACEBOOK_BASE_URL = f"https://graph.facebook.com/{Config.FACEBOOK_GRAPH_AP
 GRAPH_INSTAGRAM_BASIC_BASE_URL = (
     f"https://graph.instagram.com/{Config.FACEBOOK_GRAPH_API_VERSION}"
 )
+GRAPH_INSTAGRAM_USER_BASE_URL = "https://graph.instagram.com"
 GRAPH_INSTAGRAM_MESSAGING_BASE_URL = (
     f"https://graph.instagram.com/{Config.FACEBOOK_GRAPH_API_VERSION}"
 )
@@ -96,8 +97,7 @@ def fetch_conversations(
 
 
 def fetch_instagram_user(access_token: str) -> Dict[str, Any] | None:
-    graph_base_url = _resolve_graph_base_url("instagram", api_type="instagram_basic")
-    url = f"{graph_base_url}/me"
+    url = f"{GRAPH_INSTAGRAM_USER_BASE_URL}/me"
     params = {"fields": "id,username,account_type", "access_token": access_token}
     headers = {"Authorization": f"Bearer {access_token}"}
 
