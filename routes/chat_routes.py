@@ -540,6 +540,15 @@ def _is_ai_enabled(cursor) -> bool:
 
 @chat_bp.route('/')
 def index():
+    oauth_code = (request.args.get("code") or "").strip()
+    if oauth_code:
+        return redirect(
+            url_for(
+                "configuracion.instagram_oauth_callback",
+                code=oauth_code,
+                redirect_uri=request.base_url,
+            )
+        )
     # Autenticación
     if "user" not in session:
         return redirect(url_for("auth.login"))
