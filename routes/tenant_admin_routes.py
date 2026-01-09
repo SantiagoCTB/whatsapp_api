@@ -14,28 +14,36 @@ logger = logging.getLogger(__name__)
 
 def _sync_page_selection_metadata(tenant: tenants.TenantInfo) -> None:
     tenant_env = tenants.get_tenant_env(tenant)
-    page_id = (tenant_env.get("PAGE_ID") or "").strip()
-    platform = (tenant_env.get("PLATFORM") or "").strip().lower()
-
     metadata = dict(tenant.metadata or {})
-    page_selection = metadata.get("page_selection") if isinstance(metadata.get("page_selection"), dict) else {}
-    page_selection = dict(page_selection)
+    raw_selection = metadata.get("page_selection") if isinstance(metadata.get("page_selection"), dict) else {}
 
-    if not page_id:
+    normalized = {}
+    for platform in ("messenger", "instagram"):
+        page_id = (tenant_env.get(f"{platform.upper()}_PAGE_ID") or "").strip()
+        if not page_id:
+            legacy_platform = (tenant_env.get("PLATFORM") or "").strip().lower()
+            if legacy_platform == platform:
+                page_id = (tenant_env.get("PAGE_ID") or "").strip()
+
+        if not page_id:
+            continue
+
+        page_name = None
+        legacy_entry = raw_selection.get(platform) if isinstance(raw_selection, dict) else None
+        if isinstance(legacy_entry, dict) and legacy_entry.get("page_id") == page_id:
+            page_name = legacy_entry.get("page_name")
+        elif raw_selection.get("page_id") == page_id:
+            page_name = raw_selection.get("page_name")
+
+        normalized[platform] = {"page_id": page_id, "page_name": page_name}
+
+    if not normalized:
         if "page_selection" in metadata:
             metadata.pop("page_selection", None)
             tenants.update_tenant_metadata(tenant.tenant_key, metadata)
         return
 
-    if platform not in {"messenger", "instagram"}:
-        platform = page_selection.get("platform") or None
-
-    page_name = page_selection.get("page_name") if page_selection.get("page_id") == page_id else None
-    metadata["page_selection"] = {
-        "page_id": page_id,
-        "page_name": page_name,
-        "platform": platform,
-    }
+    metadata["page_selection"] = normalized
     tenants.update_tenant_metadata(tenant.tenant_key, metadata)
 
 

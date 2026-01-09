@@ -157,6 +157,53 @@ def _resolve_user_token_key(platform: str | None) -> str:
     return "MESSENGER_TOKEN"
 
 
+def _resolve_page_env_key(platform: str, key: str) -> str:
+    normalized = (platform or "").strip().lower()
+    if normalized == "instagram":
+        return f"INSTAGRAM_{key}"
+    return f"MESSENGER_{key}"
+
+
+def _resolve_page_env_value(platform: str, tenant_env: dict) -> str:
+    normalized = (platform or "").strip().lower()
+    page_id = (tenant_env.get(_resolve_page_env_key(normalized, "PAGE_ID")) or "").strip()
+    if page_id:
+        return page_id
+    legacy_platform = (tenant_env.get("PLATFORM") or "").strip().lower()
+    if legacy_platform == normalized:
+        return (tenant_env.get("PAGE_ID") or "").strip()
+    return ""
+
+
+def _normalize_page_selection(metadata: dict | None) -> dict:
+    selection = {}
+    if not isinstance(metadata, dict):
+        return selection
+
+    raw = metadata.get("page_selection")
+    if not isinstance(raw, dict):
+        return selection
+
+    if "messenger" in raw or "instagram" in raw:
+        for platform in ("messenger", "instagram"):
+            entry = raw.get(platform)
+            if isinstance(entry, dict) and entry.get("page_id"):
+                selection[platform] = {
+                    "page_id": entry.get("page_id"),
+                    "page_name": entry.get("page_name"),
+                }
+        return selection
+
+    platform = (raw.get("platform") or "").strip().lower()
+    if platform in {"messenger", "instagram"} and raw.get("page_id"):
+        selection[platform] = {
+            "page_id": raw.get("page_id"),
+            "page_name": raw.get("page_name"),
+        }
+
+    return selection
+
+
 def _normalize_state_key(raw_key: str | None) -> str | None:
     if not raw_key:
         return None
@@ -974,9 +1021,9 @@ def configuracion_signup():
     tenant = _resolve_signup_tenant()
     tenant_key = tenant.tenant_key if tenant else tenants.get_active_tenant_key()
     tenant_env = tenants.get_tenant_env(tenant)
-    page_selection = {}
-    if tenant and isinstance(tenant.metadata, dict):
-        page_selection = tenant.metadata.get("page_selection") or {}
+    page_selection = _normalize_page_selection(tenant.metadata if tenant else None)
+    messenger_page_selection = page_selection.get("messenger") or {}
+    instagram_page_selection = page_selection.get("instagram") or {}
 
     logger.info(
         "Renderizando signup embebido",
@@ -995,9 +1042,10 @@ def configuracion_signup():
         tenant_key=tenant_key,
         tenant_waba_id=tenant_env.get("WABA_ID"),
         tenant_phone_number_id=tenant_env.get("PHONE_NUMBER_ID"),
-        messenger_page_id=tenant_env.get("PAGE_ID"),
-        messenger_platform=tenant_env.get("PLATFORM"),
-        messenger_page_name=page_selection.get("page_name"),
+        messenger_page_id=_resolve_page_env_value("messenger", tenant_env),
+        messenger_page_name=messenger_page_selection.get("page_name"),
+        instagram_page_id=_resolve_page_env_value("instagram", tenant_env),
+        instagram_page_name=instagram_page_selection.get("page_name"),
     )
 
 
@@ -1212,26 +1260,27 @@ def messenger_save_page():
         return {"ok": False, "error": "No se pudo obtener el token de la página."}, 400
 
     env_updates = {key: tenant_env.get(key) for key in tenants.TENANT_ENV_KEYS}
-    env_updates["PAGE_ID"] = page_entry.get("id")
-    env_updates["PAGE_ACCESS_TOKEN"] = page_entry.get("access_token")
+    env_updates[_resolve_page_env_key(platform, "PAGE_ID")] = page_entry.get("id")
+    env_updates[_resolve_page_env_key(platform, "PAGE_ACCESS_TOKEN")] = page_entry.get("access_token")
     env_updates["PLATFORM"] = platform
     if provided_token:
         env_updates[_resolve_user_token_key(platform)] = provided_token
 
     tenants.update_tenant_env(tenant.tenant_key, env_updates)
 
-    metadata_updates = {
-        "page_selection": {
-            "page_id": page_entry.get("id"),
-            "page_name": page_entry.get("name"),
-            "platform": platform,
-        }
+    page_selection = _normalize_page_selection(tenant.metadata if tenant else None)
+    page_selection[platform] = {
+        "page_id": page_entry.get("id"),
+        "page_name": page_entry.get("name"),
     }
-    tenants.update_tenant_metadata(tenant.tenant_key, metadata_updates)
+    tenants.update_tenant_metadata(
+        tenant.tenant_key,
+        {"page_selection": page_selection},
+    )
 
     return {
         "ok": True,
-        "message": "Página de Messenger/Instagram actualizada.",
+        "message": "Página actualizada correctamente.",
         "page": {
             "id": page_entry.get("id"),
             "name": page_entry.get("name"),

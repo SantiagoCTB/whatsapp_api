@@ -50,6 +50,10 @@ TENANT_ENV_KEYS = {
     "PAGE_ID",
     "PAGE_ACCESS_TOKEN",
     "PLATFORM",
+    "MESSENGER_PAGE_ID",
+    "MESSENGER_PAGE_ACCESS_TOKEN",
+    "INSTAGRAM_PAGE_ID",
+    "INSTAGRAM_PAGE_ACCESS_TOKEN",
     "PHONE_NUMBER_ID",
     "LONG_LIVED_TOKEN",
     "WABA_ID",
@@ -95,6 +99,10 @@ def _default_tenant_env(*, include_legacy_credentials: bool = False) -> dict:
         "PAGE_ID": None,
         "PAGE_ACCESS_TOKEN": None,
         "PLATFORM": None,
+        "MESSENGER_PAGE_ID": None,
+        "MESSENGER_PAGE_ACCESS_TOKEN": None,
+        "INSTAGRAM_PAGE_ID": None,
+        "INSTAGRAM_PAGE_ACCESS_TOKEN": None,
         "PHONE_NUMBER_ID": None,
         "LONG_LIVED_TOKEN": None,
         "WABA_ID": None,
@@ -118,6 +126,10 @@ def _default_tenant_env(*, include_legacy_credentials: bool = False) -> dict:
             "PAGE_ID": Config.PAGE_ID,
             "PAGE_ACCESS_TOKEN": Config.PAGE_ACCESS_TOKEN,
             "PLATFORM": Config.PLATFORM,
+            "MESSENGER_PAGE_ID": Config.MESSENGER_PAGE_ID,
+            "MESSENGER_PAGE_ACCESS_TOKEN": Config.MESSENGER_PAGE_ACCESS_TOKEN,
+            "INSTAGRAM_PAGE_ID": Config.INSTAGRAM_PAGE_ID,
+            "INSTAGRAM_PAGE_ACCESS_TOKEN": Config.INSTAGRAM_PAGE_ACCESS_TOKEN,
             "PHONE_NUMBER_ID": Config.PHONE_NUMBER_ID,
         })
 
@@ -315,12 +327,9 @@ def find_tenant_by_page_id(page_id: str | None) -> TenantInfo | None:
         return None
 
     for tenant in list_tenants(force_reload=True):
-        if _tenant_has_env_value(
-            tenant,
-            "PAGE_ID",
-            page_id,
-        ):
-            return tenant
+        for key in ("MESSENGER_PAGE_ID", "INSTAGRAM_PAGE_ID", "PAGE_ID"):
+            if _tenant_has_env_value(tenant, key, page_id):
+                return tenant
 
     return None
 
@@ -400,33 +409,48 @@ def _normalize_platform(value: str | None) -> str | None:
     return None
 
 
-def _should_trigger_page_backfill(previous_env: dict, new_env: dict) -> bool:
-    keys = ("PAGE_ID", "PAGE_ACCESS_TOKEN", "PLATFORM")
-    changed = any(
-        str(previous_env.get(key) or "").strip()
-        != str(new_env.get(key) or "").strip()
-        for key in keys
-    )
+def _resolve_page_credentials(env: dict, platform: str) -> tuple[str, str]:
+    normalized = _normalize_platform(platform)
+    if normalized == "instagram":
+        page_id = (env.get("INSTAGRAM_PAGE_ID") or "").strip()
+        page_token = (env.get("INSTAGRAM_PAGE_ACCESS_TOKEN") or "").strip()
+    else:
+        page_id = (env.get("MESSENGER_PAGE_ID") or "").strip()
+        page_token = (env.get("MESSENGER_PAGE_ACCESS_TOKEN") or "").strip()
+
+    if page_id and page_token:
+        return page_id, page_token
+
+    legacy_platform = _normalize_platform(env.get("PLATFORM"))
+    if legacy_platform != normalized:
+        return page_id, page_token
+
+    page_id = page_id or (env.get("PAGE_ID") or "").strip()
+    page_token = page_token or (env.get("PAGE_ACCESS_TOKEN") or "").strip()
+    return page_id, page_token
+
+
+def _should_trigger_page_backfill(previous_env: dict, new_env: dict, platform: str) -> bool:
+    prev_id, prev_token = _resolve_page_credentials(previous_env, platform)
+    new_id, new_token = _resolve_page_credentials(new_env, platform)
+
+    changed = prev_id != new_id or prev_token != new_token
     if not changed:
         return False
 
-    page_id = (new_env.get("PAGE_ID") or "").strip()
-    page_token = (new_env.get("PAGE_ACCESS_TOKEN") or "").strip()
-    platform = _normalize_platform(new_env.get("PLATFORM"))
-    return bool(page_id and page_token and platform)
+    return bool(new_id and new_token)
 
 
 def _trigger_page_backfill_if_needed(previous_env: dict, tenant: TenantInfo | None):
     if not tenant:
         return
     new_env = get_tenant_env(tenant)
-    if not _should_trigger_page_backfill(previous_env, new_env):
-        return
-
-    page_id = (new_env.get("PAGE_ID") or "").strip()
-    page_token = (new_env.get("PAGE_ACCESS_TOKEN") or "").strip()
-    platform = _normalize_platform(new_env.get("PLATFORM"))
-    if not platform:
+    platforms = ("messenger", "instagram")
+    should_run = any(
+        _should_trigger_page_backfill(previous_env, new_env, platform)
+        for platform in platforms
+    )
+    if not should_run:
         return
 
     try:
@@ -447,13 +471,17 @@ def _trigger_page_backfill_if_needed(previous_env: dict, tenant: TenantInfo | No
         )
         return
 
-    page_backfill.enqueue_page_backfill(
-        tenant_key=tenant.tenant_key,
-        db_settings=tenant.as_db_settings(),
-        page_id=page_id,
-        access_token=page_token,
-        platform=platform,
-    )
+    for platform in platforms:
+        if not _should_trigger_page_backfill(previous_env, new_env, platform):
+            continue
+        page_id, page_token = _resolve_page_credentials(new_env, platform)
+        page_backfill.enqueue_page_backfill(
+            tenant_key=tenant.tenant_key,
+            db_settings=tenant.as_db_settings(),
+            page_id=page_id,
+            access_token=page_token,
+            platform=platform,
+        )
 
 
 def set_current_tenant(tenant: TenantInfo | None):

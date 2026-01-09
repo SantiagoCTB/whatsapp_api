@@ -56,14 +56,20 @@ def _get_runtime_env():
 
 def _get_messenger_env():
     env = tenants.get_current_tenant_env()
-    page_token = (env.get("PAGE_ACCESS_TOKEN") or "").strip()
+    page_token = (
+        (env.get("MESSENGER_PAGE_ACCESS_TOKEN") or "").strip()
+        or (env.get("PAGE_ACCESS_TOKEN") or "").strip()
+    )
     fallback_token = (env.get("MESSENGER_TOKEN") or "").strip()
     token = page_token or fallback_token
-    page_id = (env.get("PAGE_ID") or "").strip()
+    page_id = (
+        (env.get("MESSENGER_PAGE_ID") or "").strip()
+        or (env.get("PAGE_ID") or "").strip()
+    )
 
     missing = []
     if not token:
-        missing.append("PAGE_ACCESS_TOKEN/MESSENGER_TOKEN")
+        missing.append("MESSENGER_PAGE_ACCESS_TOKEN/MESSENGER_TOKEN")
     if not page_id:
         missing.append("PAGE_ID")
     if missing:
