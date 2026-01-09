@@ -129,8 +129,14 @@ def fetch_instagram_conversations(access_token: str) -> List[Dict[str, Any]]:
     conversations: List[Dict[str, Any]] = []
     next_url = url
     next_params = params
+    page_index = 0
     while next_url:
         try:
+            page_index += 1
+            logger.info(
+                "Backfill de Instagram: solicitando conversaciones",
+                extra={"page": page_index},
+            )
             response = requests.get(
                 next_url, params=next_params, headers=headers, timeout=15
             )
@@ -150,6 +156,14 @@ def fetch_instagram_conversations(access_token: str) -> List[Dict[str, Any]]:
         paging = payload.get("paging") if isinstance(payload, dict) else None
         next_url = paging.get("next") if isinstance(paging, dict) else None
         next_params = None
+        logger.info(
+            "Backfill de Instagram: página de conversaciones recibida",
+            extra={
+                "page": page_index,
+                "page_count": len(data),
+                "has_next": bool(next_url),
+            },
+        )
 
         for entry in data:
             if not isinstance(entry, dict):
@@ -182,9 +196,18 @@ def fetch_instagram_messages(
     headers = {"Authorization": f"Bearer {access_token}"}
     next_url = url
     next_params = params
+    page_index = 0
 
     while next_url:
         try:
+            page_index += 1
+            logger.info(
+                "Backfill de Instagram: solicitando mensajes",
+                extra={
+                    "conversation_id": conversation_id,
+                    "page": page_index,
+                },
+            )
             response = requests.get(
                 next_url, params=next_params, headers=headers, timeout=15
             )
@@ -208,6 +231,15 @@ def fetch_instagram_messages(
 
         paging = payload.get("paging") if isinstance(payload, dict) else None
         next_url = paging.get("next") if isinstance(paging, dict) else None
+        logger.info(
+            "Backfill de Instagram: página de mensajes recibida",
+            extra={
+                "conversation_id": conversation_id,
+                "page": page_index,
+                "page_count": len(data or []),
+                "has_next": bool(next_url),
+            },
+        )
 
     return messages
 
@@ -280,8 +312,14 @@ def run_page_backfill(
         "Iniciando backfill de conversaciones",
         extra={"tenant_key": tenant_key, "platform": platform},
     )
+    total_messages = 0
+    stored_messages = 0
 
     if (platform or "").strip().lower() == "instagram":
+        logger.info(
+            "Backfill de Instagram: resolviendo cuenta",
+            extra={"tenant_key": tenant_key},
+        )
         instagram_user = fetch_instagram_user(access_token)
         if not instagram_user:
             logger.info(
@@ -347,6 +385,7 @@ def run_page_backfill(
                 db_settings=db_settings,
             )
             messages = fetch_instagram_messages(conversation_id, access_token)
+            total_messages += len(messages)
             logger.info(
                 "Backfill de Instagram: mensajes obtenidos",
                 extra={
@@ -393,7 +432,7 @@ def run_page_backfill(
                     message,
                     participant_ids=participant_ids,
                 )
-                _store_message_detail(
+                if _store_message_detail(
                     enriched_message,
                     tenant_key=tenant_key,
                     db_settings=db_settings,
@@ -405,7 +444,17 @@ def run_page_backfill(
                     contact_id=contact_id,
                     instagram_me_id=page_id,
                     instagram_username=instagram_username,
-                )
+                ):
+                    stored_messages += 1
+        logger.info(
+            "Backfill de Instagram: finalizado",
+            extra={
+                "tenant_key": tenant_key,
+                "conversation_count": len(conversations),
+                "message_count": total_messages,
+                "stored_count": stored_messages,
+            },
+        )
         return
 
     base_url = _resolve_graph_base_url(platform)
@@ -444,14 +493,25 @@ def run_page_backfill(
             )
             if not detail:
                 continue
-            _store_message_detail(
+            total_messages += 1
+            if _store_message_detail(
                 detail,
                 tenant_key=tenant_key,
                 db_settings=db_settings,
                 platform=platform,
                 page_id=page_id,
                 conversation_id=conversation_id,
-            )
+            ):
+                stored_messages += 1
+    logger.info(
+        "Backfill de conversaciones finalizado",
+        extra={
+            "tenant_key": tenant_key,
+            "platform": platform,
+            "message_count": total_messages,
+            "stored_count": stored_messages,
+        },
+    )
 
 
 def enqueue_page_backfill(
@@ -494,10 +554,10 @@ def _store_message_detail(
     contact_id: str | None = None,
     instagram_me_id: str | None = None,
     instagram_username: str | None = None,
-):
+) -> bool:
     message_id = detail.get("id")
     if not message_id:
-        return
+        return False
 
     from_obj = detail.get("from") or {}
     to_obj = detail.get("to") or {}
@@ -560,7 +620,7 @@ def _store_message_detail(
                     "motivo": motivo,
                 },
             )
-            return
+            return False
         tipo_base = (
             "asesor" if str(from_obj.get("id") or "") == str(self_id) else "cliente"
         )
@@ -577,7 +637,7 @@ def _store_message_detail(
                     "motivo": "sin contact_id",
                 },
             )
-            return
+            return False
     else:
         numero = _resolve_numero_from_message(
             from_id=from_obj.get("id"),
@@ -587,7 +647,7 @@ def _store_message_detail(
             self_id=self_id,
         )
         if not numero:
-            return
+            return False
         tipo_base = (
             "asesor"
             if str(from_obj.get("id") or "") == str(page_id or "")
@@ -606,6 +666,7 @@ def _store_message_detail(
         dedupe_wa_id=True,
         db_settings=db_settings,
     )
+    return True
 
 
 def _extract_to_ids(to_obj: Dict[str, Any]) -> List[str]:
