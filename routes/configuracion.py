@@ -139,6 +139,24 @@ def _fetch_page_accounts(user_token: str):
     return {"ok": True, "pages": pages}
 
 
+def _resolve_page_user_token(platform: str | None, tenant_env: dict, provided_token: str) -> str:
+    normalized = (platform or "").strip().lower()
+    if normalized == "instagram":
+        return (
+            provided_token
+            or (tenant_env.get("INSTAGRAM_TOKEN") or "").strip()
+            or (tenant_env.get("MESSENGER_TOKEN") or "").strip()
+        )
+    return provided_token or (tenant_env.get("MESSENGER_TOKEN") or "").strip()
+
+
+def _resolve_user_token_key(platform: str | None) -> str:
+    normalized = (platform or "").strip().lower()
+    if normalized == "instagram":
+        return "INSTAGRAM_TOKEN"
+    return "MESSENGER_TOKEN"
+
+
 def _normalize_state_key(raw_key: str | None) -> str | None:
     if not raw_key:
         return None
@@ -1136,13 +1154,14 @@ def messenger_pages():
     except Exception:
         return {"ok": False, "error": "Payload inválido"}, 400
 
+    platform = (payload.get("platform") or "").strip().lower() or "messenger"
     provided_token = (payload.get("user_access_token") or "").strip()
     tenant_env = tenants.get_tenant_env(tenant)
-    token = provided_token or (tenant_env.get("MESSENGER_TOKEN") or "").strip()
+    token = _resolve_page_user_token(platform, tenant_env, provided_token)
 
     if provided_token:
         env_updates = {key: tenant_env.get(key) for key in tenants.TENANT_ENV_KEYS}
-        env_updates["MESSENGER_TOKEN"] = provided_token
+        env_updates[_resolve_user_token_key(platform)] = provided_token
         tenants.update_tenant_env(tenant.tenant_key, env_updates)
 
     response = _fetch_page_accounts(token)
@@ -1178,7 +1197,7 @@ def messenger_save_page():
         return {"ok": False, "error": "Selecciona una plataforma válida."}, 400
 
     tenant_env = tenants.get_tenant_env(tenant)
-    token = provided_token or (tenant_env.get("MESSENGER_TOKEN") or "").strip()
+    token = _resolve_page_user_token(platform, tenant_env, provided_token)
     response = _fetch_page_accounts(token)
     if not response.get("ok"):
         return response, 400
@@ -1197,7 +1216,7 @@ def messenger_save_page():
     env_updates["PAGE_ACCESS_TOKEN"] = page_entry.get("access_token")
     env_updates["PLATFORM"] = platform
     if provided_token:
-        env_updates["MESSENGER_TOKEN"] = provided_token
+        env_updates[_resolve_user_token_key(platform)] = provided_token
 
     tenants.update_tenant_env(tenant.tenant_key, env_updates)
 

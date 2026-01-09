@@ -458,7 +458,9 @@
 
     refreshButton.addEventListener('click', async () => {
       setStatus('Consultando páginas...', false);
-      const payload = {};
+      const payload = {
+        platform: platformSelect ? platformSelect.value : 'messenger'
+      };
       const token = getToken();
       if (token) {
         payload.user_access_token = token;
