@@ -1088,6 +1088,12 @@ def get_chat_list():
                 primer_link = "messenger"
             elif "instagram" in primer_tipo_lower:
                 primer_link = "instagram"
+        if not primer_link and last_tipo:
+            last_tipo_lower = str(last_tipo).lower()
+            if "messenger" in last_tipo_lower:
+                primer_link = "messenger"
+            elif "instagram" in last_tipo_lower:
+                primer_link = "instagram"
 
         # Roles asociados al número y nombre/keyword
         c.execute(

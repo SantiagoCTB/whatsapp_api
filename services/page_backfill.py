@@ -109,11 +109,10 @@ def fetch_instagram_user(access_token: str) -> Dict[str, Any] | None:
 
 def fetch_instagram_conversations(access_token: str) -> List[Dict[str, Any]]:
     url = f"{GRAPH_INSTAGRAM_BASE_URL}/me/conversations"
-    params = {"platform": "instagram"}
-    headers = {"Authorization": f"Bearer {access_token}"}
+    params = {"platform": "instagram", "access_token": access_token}
 
     try:
-        response = requests.get(url, params=params, headers=headers, timeout=15)
+        response = requests.get(url, params=params, timeout=15)
     except requests.RequestException as exc:
         logger.warning("Error consultando conversaciones de Instagram: %s", exc)
         return []
