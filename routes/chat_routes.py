@@ -1082,8 +1082,12 @@ def get_chat_list():
         )
         fila = c.fetchone()
         primer_tipo = fila[0] if fila else ""
-        if not primer_link and primer_tipo and "messenger" in str(primer_tipo).lower():
-            primer_link = "messenger"
+        if not primer_link and primer_tipo:
+            primer_tipo_lower = str(primer_tipo).lower()
+            if "messenger" in primer_tipo_lower:
+                primer_link = "messenger"
+            elif "instagram" in primer_tipo_lower:
+                primer_link = "instagram"
 
         # Roles asociados al número y nombre/keyword
         c.execute(

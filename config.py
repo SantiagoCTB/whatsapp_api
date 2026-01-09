@@ -111,6 +111,7 @@ class Config:
     SECRET_KEY = os.getenv('SECRET_KEY')
     META_TOKEN = os.getenv('META_TOKEN')
     MESSENGER_TOKEN = os.getenv('MESSENGER_TOKEN')
+    INSTAGRAM_TOKEN = os.getenv('INSTAGRAM_TOKEN')
     PHONE_NUMBER_ID = os.getenv('PHONE_NUMBER_ID')
     PAGE_ID = os.getenv('PAGE_ID')
     PAGE_ACCESS_TOKEN = os.getenv('PAGE_ACCESS_TOKEN')

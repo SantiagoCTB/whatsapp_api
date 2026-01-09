@@ -46,6 +46,7 @@ _CURRENT_TENANT_ENV = contextvars.ContextVar("current_tenant_env", default=None)
 TENANT_ENV_KEYS = {
     "META_TOKEN",
     "MESSENGER_TOKEN",
+    "INSTAGRAM_TOKEN",
     "PAGE_ID",
     "PAGE_ACCESS_TOKEN",
     "PLATFORM",
@@ -90,6 +91,7 @@ def _default_tenant_env(*, include_legacy_credentials: bool = False) -> dict:
     env = {
         "META_TOKEN": None,
         "MESSENGER_TOKEN": None,
+        "INSTAGRAM_TOKEN": None,
         "PAGE_ID": None,
         "PAGE_ACCESS_TOKEN": None,
         "PLATFORM": None,
@@ -112,6 +114,7 @@ def _default_tenant_env(*, include_legacy_credentials: bool = False) -> dict:
         env.update({
             "META_TOKEN": Config.META_TOKEN,
             "MESSENGER_TOKEN": Config.MESSENGER_TOKEN,
+            "INSTAGRAM_TOKEN": Config.INSTAGRAM_TOKEN,
             "PAGE_ID": Config.PAGE_ID,
             "PAGE_ACCESS_TOKEN": Config.PAGE_ACCESS_TOKEN,
             "PLATFORM": Config.PLATFORM,
