@@ -13,8 +13,13 @@ from services import db
 logger = logging.getLogger(__name__)
 
 GRAPH_FACEBOOK_BASE_URL = f"https://graph.facebook.com/{Config.FACEBOOK_GRAPH_API_VERSION}"
-GRAPH_INSTAGRAM_BASIC_BASE_URL = "https://graph.instagram.com"
-GRAPH_INSTAGRAM_MESSAGING_BASE_URL = f"https://graph.facebook.com/{Config.FACEBOOK_GRAPH_API_VERSION}"
+GRAPH_INSTAGRAM_BASIC_BASE_URL = (
+    f"https://graph.instagram.com/{Config.FACEBOOK_GRAPH_API_VERSION}"
+)
+GRAPH_INSTAGRAM_USER_BASE_URL = "https://graph.instagram.com"
+GRAPH_INSTAGRAM_MESSAGING_BASE_URL = (
+    f"https://graph.instagram.com/{Config.FACEBOOK_GRAPH_API_VERSION}"
+)
 
 
 def _resolve_graph_base_url(platform: str, *, api_type: str | None = None) -> str:
@@ -92,8 +97,7 @@ def fetch_conversations(
 
 
 def fetch_instagram_user(access_token: str) -> Dict[str, Any] | None:
-    graph_base_url = _resolve_graph_base_url("instagram", api_type="instagram_basic")
-    url = f"{graph_base_url}/me"
+    url = f"{GRAPH_INSTAGRAM_USER_BASE_URL}/me"
     params = {"fields": "id,username,account_type", "access_token": access_token}
     headers = {"Authorization": f"Bearer {access_token}"}
 
@@ -114,11 +118,10 @@ def fetch_instagram_user(access_token: str) -> Dict[str, Any] | None:
 
 
 def fetch_instagram_conversations(access_token: str) -> List[Dict[str, Any]]:
-    graph_base_url = _resolve_graph_base_url("instagram", api_type="instagram_messaging")
+    graph_base_url = _resolve_graph_base_url("instagram", api_type="instagram_basic")
     url = f"{graph_base_url}/me/conversations"
     params = {
         "platform": "instagram",
-        "fields": "id,updated_time,participants",
         "access_token": access_token,
     }
     headers = {"Authorization": f"Bearer {access_token}"}
@@ -126,8 +129,6 @@ def fetch_instagram_conversations(access_token: str) -> List[Dict[str, Any]]:
     conversations: List[Dict[str, Any]] = []
     next_url = url
     next_params = params
-    retried_without_fields = False
-
     while next_url:
         try:
             response = requests.get(
@@ -138,15 +139,6 @@ def fetch_instagram_conversations(access_token: str) -> List[Dict[str, Any]]:
             break
 
         if not response.ok:
-            if not retried_without_fields and next_params and "fields" in next_params:
-                logger.info(
-                    "Reintentando conversaciones de Instagram con fields=participants",
-                    extra={"status": response.status_code},
-                )
-                next_params = {k: v for k, v in next_params.items() if k != "fields"}
-                next_params["fields"] = "participants"
-                retried_without_fields = True
-                continue
             _log_graph_error("instagram_conversations", response)
             break
 
@@ -159,17 +151,6 @@ def fetch_instagram_conversations(access_token: str) -> List[Dict[str, Any]]:
         next_url = paging.get("next") if isinstance(paging, dict) else None
         next_params = None
 
-        if not data and not retried_without_fields and next_url is None and next_params is None:
-            logger.info(
-                "Reintentando conversaciones de Instagram con fields=participants por lista vacía",
-                extra={"status": response.status_code},
-            )
-            next_url = url
-            next_params = {k: v for k, v in params.items() if k != "fields"}
-            next_params["fields"] = "participants"
-            retried_without_fields = True
-            continue
-
         for entry in data:
             if not isinstance(entry, dict):
                 continue
@@ -180,8 +161,6 @@ def fetch_instagram_conversations(access_token: str) -> List[Dict[str, Any]]:
                 {
                     "id": conversation_id,
                     "updated_time": entry.get("updated_time"),
-                    "participant_ids": _extract_participant_ids(entry),
-                    "participants": _extract_participants(entry),
                 }
             )
 
@@ -192,6 +171,7 @@ def fetch_instagram_messages(
     conversation_id: str,
     access_token: str,
 ) -> List[Dict[str, Any]]:
+    messages: List[Dict[str, Any]] = []
     graph_base_url = _resolve_graph_base_url("instagram", api_type="instagram_messaging")
     url = f"{graph_base_url}/{conversation_id}/messages"
     params = {
@@ -200,8 +180,6 @@ def fetch_instagram_messages(
         "access_token": access_token,
     }
     headers = {"Authorization": f"Bearer {access_token}"}
-
-    messages: List[Dict[str, Any]] = []
     next_url = url
     next_params = params
 
@@ -314,7 +292,7 @@ def run_page_backfill(
 
         page_id = str(instagram_user.get("id"))
         instagram_username = instagram_user.get("username")
-        actor_id = None
+        actor_id = page_id
         logger.info(
             "Backfill de Instagram: cuenta resuelta",
             extra={
@@ -344,25 +322,9 @@ def run_page_backfill(
             conversation_id = conversation.get("id")
             if not conversation_id:
                 continue
-            participant_ids = conversation.get("participant_ids") or []
-            participants = conversation.get("participants") or []
-            if not actor_id and instagram_username:
-                actor_id = _resolve_actor_id_from_participants(
-                    participants,
-                    instagram_username,
-                )
-                if actor_id:
-                    logger.info(
-                        "Backfill de Instagram: actor_id resuelto desde participants",
-                        extra={
-                            "tenant_key": tenant_key,
-                            "conversation_id": conversation_id,
-                            "actor_id": actor_id,
-                            "instagram_username": instagram_username,
-                        },
-                    )
+            participant_ids: List[str] = []
             self_id = actor_id
-            contact_id = _resolve_contact_id_from_participants(participant_ids, self_id)
+            contact_id = None
             updated_time = conversation.get("updated_time")
             logger.info(
                 "Backfill de Instagram: conversación procesada",
@@ -408,10 +370,6 @@ def run_page_backfill(
                         actor_id = str(from_obj.get("id") or "") or None
                         if actor_id:
                             self_id = actor_id
-                            contact_id = _resolve_contact_id_from_participants(
-                                participant_ids,
-                                self_id,
-                            )
                             logger.info(
                                 "Backfill de Instagram: actor_id resuelto desde mensaje",
                                 extra={
@@ -548,6 +506,13 @@ def _store_message_detail(
 
     to_ids = _extract_to_ids(to_obj)
     to_ids_json = json.dumps(to_ids, ensure_ascii=False)
+    if (platform or "").strip().lower() == "instagram" and not contact_id:
+        contact_id = _resolve_instagram_contact_id(
+            from_id=from_obj.get("id"),
+            to_ids=to_ids,
+            self_id=self_id,
+            instagram_me_id=instagram_me_id,
+        )
 
     db.guardar_page_message(
         tenant_key=tenant_key,
@@ -752,6 +717,34 @@ def _ensure_instagram_to_field(
     enriched = dict(message)
     enriched["to"] = {"data": [{"id": participant_id} for participant_id in fallback_ids]}
     return enriched
+
+
+def _resolve_instagram_contact_id(
+    *,
+    from_id: str | None,
+    to_ids: List[str],
+    self_id: str | None,
+    instagram_me_id: str | None,
+) -> str | None:
+    if from_id:
+        from_id = str(from_id)
+    normalized_to_ids = [str(item) for item in to_ids if item]
+    effective_self = str(self_id or instagram_me_id) if (self_id or instagram_me_id) else None
+
+    if effective_self:
+        if from_id == effective_self:
+            for candidate in normalized_to_ids:
+                if candidate != effective_self:
+                    return candidate
+            return None
+        if from_id and from_id != effective_self:
+            return from_id
+
+    if from_id:
+        return from_id
+    if normalized_to_ids:
+        return normalized_to_ids[0]
+    return None
 
 
 def _resolve_numero_from_message(
