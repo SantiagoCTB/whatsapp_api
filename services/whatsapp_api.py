@@ -80,6 +80,18 @@ def _get_messenger_env():
     return {"token": token, "page_id": page_id}
 
 
+def _get_instagram_env():
+    env = tenants.get_current_tenant_env()
+    token = (env.get("INSTAGRAM_TOKEN") or "").strip()
+
+    if not token:
+        raise RuntimeError(
+            "Faltan credenciales de Instagram en el tenant actual: INSTAGRAM_TOKEN"
+        )
+
+    return {"token": token, "page_id": "me"}
+
+
 def _get_messenger_messaging_type() -> str:
     value = tenants.get_runtime_setting(
         "MESSENGER_MESSAGING_TYPE", default="RESPONSE"
@@ -104,8 +116,11 @@ def _get_messenger_message_tag() -> str | None:
 def _resolve_message_channel(numero: str) -> str:
     last_client_info = obtener_ultimo_mensaje_cliente_info(numero)
     last_tipo = (last_client_info or {}).get("tipo") or ""
-    if "messenger" in str(last_tipo).lower():
+    last_tipo_lower = str(last_tipo).lower()
+    if "messenger" in last_tipo_lower:
         return "messenger"
+    if "instagram" in last_tipo_lower:
+        return "instagram"
     return "whatsapp"
 
 
@@ -118,6 +133,10 @@ def _messenger_window_open(numero: str) -> bool:
         return False
     elapsed_seconds = (datetime.utcnow() - last_ts).total_seconds()
     return elapsed_seconds <= 24 * 3600
+
+
+def _instagram_window_open(numero: str) -> bool:
+    return _messenger_window_open(numero)
 
 
 def _extract_error_details(response: requests.Response) -> Dict[str, Any]:
@@ -392,6 +411,123 @@ def enviar_mensaje(
         tipo_db = tipo
         if "messenger" not in tipo_db:
             tipo_db = f"{tipo_db}_messenger"
+        if tipo_respuesta in {"image", "audio", "video", "document"} and not tipo_db.endswith(
+            f"_{tipo_respuesta}"
+        ):
+            tipo_db = f"{tipo_db}_{tipo_respuesta}"
+
+        guardar_mensaje(
+            numero,
+            mensaje,
+            tipo_db,
+            wa_id=message_id,
+            reply_to_wa_id=reply_to_wa_id,
+            media_id=None,
+            media_url=attachment_url,
+            step=step,
+            regla_id=regla_id,
+        )
+        return _result(True)
+
+    if channel == "instagram":
+        try:
+            runtime = _get_instagram_env()
+        except RuntimeError as exc:
+            logger.error("No se puede enviar mensaje de Instagram: %s", exc)
+            return _result(False, str(exc))
+
+        if not _instagram_window_open(numero):
+            return _result(
+                False,
+                "El usuario de Instagram tiene que haber enviado mensajes a esta cuenta antes de escribirle.",
+            )
+
+        url = f"{GRAPH_BASE_URL}/{runtime['page_id']}/messages"
+        headers = {
+            "Authorization": f"Bearer {runtime['token']}",
+            "Content-Type": "application/json",
+        }
+
+        payload = {
+            "recipient": {"id": numero},
+            "message": {},
+        }
+        if reply_to_wa_id:
+            payload["reply_to"] = {"mid": reply_to_wa_id}
+
+        attachment_type = None
+        attachment_url = None
+        attachments = None
+        if tipo_respuesta == "texto":
+            payload["message"] = {"text": mensaje}
+        elif tipo_respuesta in {"image", "audio", "video", "document"}:
+            attachment_type = "file" if tipo_respuesta == "document" else tipo_respuesta
+            if isinstance(opciones, list) and tipo_respuesta == "image":
+                attachments = []
+                for item in opciones:
+                    if isinstance(item, dict):
+                        url = item.get("link") or item.get("id")
+                    else:
+                        url = item
+                    if not url:
+                        continue
+                    attachments.append({"type": "image", "payload": {"url": url}})
+                if attachments:
+                    payload["message"] = {"attachments": attachments}
+            if "message" not in payload:
+                if isinstance(opciones, dict):
+                    attachment_url = opciones.get("link") or opciones.get("id")
+                else:
+                    attachment_url = opciones
+                if not attachment_url:
+                    return _fail("No se pudo enviar el adjunto a Instagram.")
+                payload["message"] = {
+                    "attachment": {
+                        "type": attachment_type,
+                        "payload": {"url": attachment_url, "is_reusable": True},
+                    }
+                }
+        elif tipo_respuesta in {"lista", "boton", "flow"}:
+            logger.warning(
+                "Tipo no soportado por Instagram; se envía texto de fallback",
+                extra={"numero": numero, "tipo_respuesta": tipo_respuesta},
+            )
+            fallback_text = mensaje or "Por favor responde con texto."
+            payload["message"] = {"text": fallback_text}
+        else:
+            return _fail("Tipo de respuesta no soportado para Instagram.")
+
+        try:
+            resp = requests.post(url, headers=headers, json=payload, timeout=10)
+        except requests.RequestException as exc:
+            logger.error("Error enviando solicitud a Instagram API: %s", exc)
+            return _fail("No se pudo conectar con la API de Instagram.")
+
+        if not resp.ok:
+            error_details = _extract_error_details(resp)
+            logger.error(
+                "Fallo al enviar mensaje a Instagram API",
+                extra={"status_code": resp.status_code, "details": error_details},
+            )
+            friendly_reason = (
+                error_details.get("message")
+                or error_details.get("raw_text")
+                or "Instagram rechazó el mensaje."
+            )
+            return _fail(friendly_reason)
+
+        stop_typing_feedback(numero)
+        try:
+            message_id = resp.json().get("message_id")
+        except Exception:
+            message_id = None
+
+        if attachments and not attachment_url:
+            attachment_url = attachments[0].get("payload", {}).get("url")
+
+        tipo_db = tipo
+        if "instagram" not in tipo_db:
+            tipo_db = f"{tipo_db}_instagram"
         if tipo_respuesta in {"image", "audio", "video", "document"} and not tipo_db.endswith(
             f"_{tipo_respuesta}"
         ):
@@ -950,6 +1086,48 @@ def _post_to_messenger(payload, log_context):
     return True
 
 
+def _post_to_instagram(payload, log_context):
+    try:
+        runtime = _get_instagram_env()
+    except RuntimeError as exc:
+        logger.error("No se puede contactar la API de Instagram: %s", exc)
+        return False
+
+    messages_url = f"{GRAPH_BASE_URL}/{runtime['page_id']}/messages"
+    headers = {
+        "Authorization": f"Bearer {runtime['token']}",
+        "Content-Type": "application/json",
+    }
+
+    try:
+        response = requests.post(messages_url, headers=headers, json=payload, timeout=10)
+    except requests.RequestException as exc:
+        log_extra = {"error": str(exc)}
+        log_extra.update(log_context)
+        logger.error("Error enviando solicitud a Instagram API", extra=log_extra)
+        return False
+
+    log_payload = {
+        "status_code": response.status_code,
+        "response_text": response.text,
+    }
+    log_payload.update(log_context)
+
+    if not response.ok:
+        error_details = _extract_error_details(response)
+        log_payload["error_details"] = error_details
+        reason = error_details.get("message") or error_details.get("raw_text") or response.text
+        logger.error(
+            "Fallo al enviar solicitud a Instagram API: %s",
+            (reason or "sin motivo proporcionado"),
+            extra=log_payload,
+        )
+        return False
+
+    logger.info("Solicitud a Instagram API completada", extra=log_payload)
+    return True
+
+
 def _send_read_and_typing(numero, message_id=None, include_read=True, typing_status="typing"):
     if not numero:
         return False
@@ -984,6 +1162,10 @@ def _send_read_and_typing(numero, message_id=None, include_read=True, typing_sta
             typing_payload,
             {"numero": numero, "message_id": message_id, "action": "typing", "typing_status": sender_action},
         )
+    if channel == "instagram":
+        if not _TYPING_ENABLED:
+            return True
+        return True
 
     if include_read and message_id:
         read_payload = {
