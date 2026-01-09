@@ -21,12 +21,21 @@ GRAPH_INSTAGRAM_MESSAGING_BASE_URL = (
 )
 
 
+def _normalize_platform(value: str | None) -> str:
+    normalized = (value or "").strip().lower()
+    if normalized.startswith("instagram"):
+        return "instagram"
+    if normalized.startswith("messenger") or normalized in {"facebook", "fb"}:
+        return "messenger"
+    return normalized
+
+
 def _resolve_graph_base_url(platform: str, *, api_type: str | None = None) -> str:
     if api_type == "instagram_basic":
         return GRAPH_INSTAGRAM_BASIC_BASE_URL
     if api_type == "instagram_messaging":
         return GRAPH_INSTAGRAM_MESSAGING_BASE_URL
-    normalized = (platform or "").strip().lower()
+    normalized = _normalize_platform(platform)
     if normalized == "instagram":
         return GRAPH_INSTAGRAM_MESSAGING_BASE_URL
     return GRAPH_FACEBOOK_BASE_URL
@@ -261,12 +270,14 @@ def run_page_backfill(
     access_token: str,
     platform: str,
 ):
+    normalized_platform = _normalize_platform(platform)
+    platform_key = normalized_platform or (platform or "")
     logger.info(
         "Iniciando backfill de conversaciones",
-        extra={"tenant_key": tenant_key, "platform": platform},
+        extra={"tenant_key": tenant_key, "platform": platform_key},
     )
 
-    if (platform or "").strip().lower() == "instagram":
+    if normalized_platform == "instagram":
         instagram_user = fetch_instagram_user(access_token)
         if not instagram_user:
             logger.info(
@@ -290,7 +301,7 @@ def run_page_backfill(
         if not conversations:
             logger.info(
                 "No se encontraron conversaciones para backfill",
-                extra={"tenant_key": tenant_key, "platform": platform},
+                extra={"tenant_key": tenant_key, "platform": platform_key},
             )
             return
         logger.info(
@@ -340,7 +351,7 @@ def run_page_backfill(
             )
             db.guardar_conversation(
                 tenant_key=tenant_key,
-                platform=platform,
+                platform=platform_key,
                 conversation_id=conversation_id,
                 self_id=self_id,
                 contact_id=contact_id,
@@ -379,7 +390,7 @@ def run_page_backfill(
                         )
                         db.guardar_conversation(
                             tenant_key=tenant_key,
-                            platform=platform,
+                            platform=platform_key,
                             conversation_id=conversation_id,
                             self_id=self_id,
                             contact_id=contact_id,
@@ -411,7 +422,7 @@ def run_page_backfill(
                             )
                             db.guardar_conversation(
                                 tenant_key=tenant_key,
-                                platform=platform,
+                                platform=platform_key,
                                 conversation_id=conversation_id,
                                 self_id=self_id,
                                 contact_id=contact_id,
@@ -426,7 +437,7 @@ def run_page_backfill(
                     enriched_message,
                     tenant_key=tenant_key,
                     db_settings=db_settings,
-                    platform=platform,
+                    platform=platform_key,
                     page_id=page_id,
                     conversation_id=conversation_id,
                     participant_ids=participant_ids,
@@ -437,17 +448,17 @@ def run_page_backfill(
                 )
         return
 
-    base_url = _resolve_graph_base_url(platform)
+    base_url = _resolve_graph_base_url(platform_key)
     conversations = fetch_conversations(
         page_id,
         access_token,
-        platform,
+        platform_key,
         base_url=base_url,
     )
     if not conversations:
         logger.info(
             "No se encontraron conversaciones para backfill",
-            extra={"tenant_key": tenant_key, "platform": platform},
+            extra={"tenant_key": tenant_key, "platform": platform_key},
         )
         return
 
@@ -477,7 +488,7 @@ def run_page_backfill(
                 detail,
                 tenant_key=tenant_key,
                 db_settings=db_settings,
-                platform=platform,
+                platform=platform_key,
                 page_id=page_id,
                 conversation_id=conversation_id,
             )
@@ -524,6 +535,8 @@ def _store_message_detail(
     instagram_me_id: str | None = None,
     instagram_username: str | None = None,
 ):
+    normalized_platform = _normalize_platform(platform)
+    platform_key = normalized_platform or (platform or "")
     message_id = detail.get("id")
     if not message_id:
         return
@@ -538,7 +551,7 @@ def _store_message_detail(
 
     db.guardar_page_message(
         tenant_key=tenant_key,
-        platform=platform,
+        platform=platform_key,
         page_id=page_id,
         conversation_id=conversation_id,
         message_id=message_id,
@@ -551,7 +564,7 @@ def _store_message_detail(
         db_settings=db_settings,
     )
 
-    if (platform or "").strip().lower() == "instagram":
+    if normalized_platform == "instagram":
         logger.info(
             "Backfill de Instagram: detalle de mensaje",
             extra={
@@ -568,7 +581,7 @@ def _store_message_detail(
             },
         )
 
-    if (platform or "").strip().lower() == "instagram":
+    if normalized_platform == "instagram":
         if not contact_id:
             motivo = "participants vacío" if not (participant_ids or []) else "sin contact_id"
             logger.info(
@@ -615,7 +628,7 @@ def _store_message_detail(
             if str(from_obj.get("id") or "") == str(page_id or "")
             else "cliente"
         )
-    channel = "messenger" if platform == "messenger" else "instagram"
+    channel = "instagram" if normalized_platform == "instagram" else "messenger"
     tipo = f"{tipo_base}_{channel}"
 
     db.guardar_mensaje(
