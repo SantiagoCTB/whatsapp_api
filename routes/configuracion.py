@@ -1404,6 +1404,7 @@ def instagram_save_token():
     env_updates = {key: tenant_env.get(key) for key in tenants.TENANT_ENV_KEYS}
     env_updates["INSTAGRAM_TOKEN"] = user_token
     tenants.update_tenant_env(tenant.tenant_key, env_updates)
+    tenants.trigger_page_backfill_for_platform(tenant, "instagram")
 
     account = response.get("account") or {}
     tenants.update_tenant_metadata(

@@ -488,6 +488,56 @@ def _trigger_page_backfill_if_needed(previous_env: dict, tenant: TenantInfo | No
         )
 
 
+def trigger_page_backfill_for_platform(tenant: TenantInfo | None, platform: str) -> None:
+    if not tenant:
+        return
+    normalized = _normalize_platform(platform)
+    if not normalized:
+        return
+
+    try:
+        ensure_tenant_schema(tenant)
+    except Exception:
+        logger.exception(
+            "No se pudo preparar el esquema del tenant para backfill",
+            extra={"tenant_key": tenant.tenant_key},
+        )
+        return
+
+    try:
+        from services import page_backfill
+    except Exception:
+        logger.exception(
+            "No se pudo importar el módulo de backfill",
+            extra={"tenant_key": tenant.tenant_key},
+        )
+        return
+
+    page_id, page_token = _resolve_page_credentials(get_tenant_env(tenant), normalized)
+    if not page_id or not page_token:
+        logger.info(
+            "Backfill no encolado por credenciales incompletas",
+            extra={"tenant_key": tenant.tenant_key, "platform": normalized},
+        )
+        return
+
+    logger.info(
+        "Encolando backfill de conversaciones (manual)",
+        extra={
+            "tenant_key": tenant.tenant_key,
+            "platform": normalized,
+            "page_id": page_id,
+        },
+    )
+    page_backfill.enqueue_page_backfill(
+        tenant_key=tenant.tenant_key,
+        db_settings=tenant.as_db_settings(),
+        page_id=page_id,
+        access_token=page_token,
+        platform=normalized,
+    )
+
+
 def set_current_tenant(tenant: TenantInfo | None):
     _CURRENT_TENANT.set(tenant)
     if tenant:
