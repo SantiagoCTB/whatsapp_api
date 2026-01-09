@@ -73,6 +73,55 @@ def _resolve_signup_tenant():
         return None
 
 
+def _fetch_instagram_backfill_counts(tenant):
+    if not tenant:
+        return None, None
+
+    try:
+        tenants.ensure_tenant_schema(tenant)
+        conn = get_connection(db_settings=tenant.as_db_settings(), ensure_database=True)
+    except MySQLError:
+        logger.exception(
+            "No se pudo abrir la conexión para el conteo de backfill Instagram",
+            extra={"tenant_key": tenant.tenant_key},
+        )
+        return None, None
+
+    try:
+        c = conn.cursor()
+        c.execute(
+            """
+            SELECT COUNT(DISTINCT conversation_id)
+              FROM page_messages
+             WHERE tenant_key = %s
+               AND platform = %s
+            """,
+            (tenant.tenant_key, "instagram"),
+        )
+        conversation_count = (c.fetchone() or [0])[0] or 0
+
+        c.execute(
+            """
+            SELECT COUNT(*)
+              FROM page_messages
+             WHERE tenant_key = %s
+               AND platform = %s
+            """,
+            (tenant.tenant_key, "instagram"),
+        )
+        message_count = (c.fetchone() or [0])[0] or 0
+    except MySQLError:
+        logger.exception(
+            "No se pudo obtener el conteo de backfill Instagram",
+            extra={"tenant_key": tenant.tenant_key},
+        )
+        return None, None
+    finally:
+        conn.close()
+
+    return conversation_count, message_count
+
+
 def _normalize_input(text):
     """Normaliza una lista separada por comas."""
     return ','.join(t.strip().lower() for t in (text or '').split(',') if t.strip())
@@ -1059,6 +1108,7 @@ def configuracion_signup():
     instagram_account = {}
     if tenant and isinstance(tenant.metadata, dict):
         instagram_account = tenant.metadata.get("instagram_account") or {}
+    instagram_conversation_count, instagram_message_count = _fetch_instagram_backfill_counts(tenant)
 
     logger.info(
         "Renderizando signup embebido",
@@ -1080,6 +1130,9 @@ def configuracion_signup():
         messenger_page_id=_resolve_page_env_value("messenger", tenant_env),
         messenger_page_name=messenger_page_selection.get("page_name"),
         instagram_account_name=instagram_account.get("username") or instagram_account.get("id"),
+        instagram_token_present=bool((tenant_env.get("INSTAGRAM_TOKEN") or "").strip()),
+        instagram_conversation_count=instagram_conversation_count,
+        instagram_message_count=instagram_message_count,
     )
 
 
