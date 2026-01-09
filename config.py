@@ -168,7 +168,10 @@ class Config:
     DEFAULT_TENANT_NAME = os.getenv('DEFAULT_TENANT_NAME')
     FACEBOOK_APP_ID = os.getenv('FACEBOOK_APP_ID')
     SIGNUP_FACEBOOK = os.getenv('SIGNUP_FACEBOOK')
-    SIGNUP_INSTRAGRAM = os.getenv('SIGNUP_INSTRAGRAM')
+    SIGNUP_INSTRAGRAM = os.getenv(
+        'SIGNUP_INSTRAGRAM',
+        'https://www.instagram.com/oauth/authorize?force_reauth=true&client_id=2307196559764999&redirect_uri=https://app.whapco.site/&response_type=code&scope=instagram_business_basic%2Cinstagram_business_manage_messages%2Cinstagram_business_manage_comments%2Cinstagram_business_content_publish%2Cinstagram_business_manage_insights',
+    )
     FACEBOOK_GRAPH_API_VERSION = os.getenv('FACEBOOK_GRAPH_API_VERSION', 'v24.0')
     DEFAULT_ADMIN_PASSWORD_HASH = os.getenv(
         'DEFAULT_ADMIN_PASSWORD_HASH',
