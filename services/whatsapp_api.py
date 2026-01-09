@@ -473,14 +473,14 @@ def enviar_mensaje(
                 if isinstance(opciones, list):
                     for item in opciones:
                         if isinstance(item, dict):
-                            attachment_url = item.get("link") or item.get("id")
+                            attachment_url = item.get("url") or item.get("link") or item.get("id")
                         else:
                             attachment_url = item
                         if attachment_url:
                             break
                 else:
                     if isinstance(opciones, dict):
-                        attachment_url = opciones.get("link") or opciones.get("id")
+                        attachment_url = opciones.get("url") or opciones.get("link") or opciones.get("id")
                     else:
                         attachment_url = opciones
                 if not attachment_url:
@@ -493,7 +493,7 @@ def enviar_mensaje(
                 }
             else:
                 if isinstance(opciones, dict):
-                    attachment_url = opciones.get("link") or opciones.get("id")
+                    attachment_url = opciones.get("url") or opciones.get("link") or opciones.get("id")
                 else:
                     attachment_url = opciones
                 if not attachment_url:
