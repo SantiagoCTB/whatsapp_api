@@ -169,6 +169,14 @@
                 Paso 1: pega un <strong>token de usuario</strong>. Paso 2: guarda el token para consultar las
                 conversaciones.
             </p>
+            <div class="muted" style="margin-bottom: 0.25rem">Diagnóstico rápido</div>
+            <ul id="ig-backfill-health" class="muted" style="margin: 0 0 0.75rem; padding-left: 1rem; line-height: 1.4;">
+                <li data-check="tenant">Tenant resuelto para el backfill</li>
+                <li data-check="token">Token de Instagram guardado</li>
+                <li data-check="account">Cuenta de Instagram identificada</li>
+                <li>Conversaciones encontradas: <strong id="ig-conversation-count">{{ instagram_conversation_count if instagram_conversation_count is not none else '—' }}</strong></li>
+                <li>Chats encontrados: <strong id="ig-message-count">{{ instagram_message_count if instagram_message_count is not none else '—' }}</strong></li>
+            </ul>
             <div class="form-row">
                 <label class="muted" for="instagram-user-token">Token de usuario (solo se guarda si lo envías)</label>
                 <input id="instagram-user-token" type="password" placeholder="EAA...">
@@ -575,6 +583,7 @@
       const saveButton = document.getElementById('instagram-token-save');
       const statusBox = document.getElementById('instagram-token-status');
       const accountLabel = document.getElementById('instagram-account-label');
+      const healthList = document.getElementById('ig-backfill-health');
 
       if (!tokenInput || !saveButton || !statusBox) {
         return;
@@ -584,6 +593,29 @@
         statusBox.textContent = message;
         statusBox.style.color = isError ? '#dc3545' : '#198754';
       };
+
+      const markHealth = (check, ok, detail) => {
+        if (!healthList) return;
+        const item = healthList.querySelector(`[data-check="${check}"]`);
+        if (!item) return;
+        const prefix = ok ? '✅' : '⚠️';
+        item.textContent = `${prefix} ${detail}`;
+        item.style.color = ok ? '#2c3e50' : '#c0392b';
+      };
+
+      const updateHealth = ({ hasToken, hasAccount } = {}) => {
+        const resolvedToken = typeof hasToken === 'boolean'
+          ? hasToken
+          : {{ 'true' if instagram_token_present else 'false' }};
+        const resolvedAccount = typeof hasAccount === 'boolean'
+          ? hasAccount
+          : Boolean('{{ instagram_account_name or '' }}');
+        markHealth('tenant', Boolean('{{ tenant_key or '' }}'), 'Tenant resuelto para el backfill');
+        markHealth('token', resolvedToken, 'Token de Instagram guardado');
+        markHealth('account', resolvedAccount, 'Cuenta de Instagram identificada');
+      };
+
+      updateHealth();
 
       saveButton.addEventListener('click', async () => {
         const token = tokenInput.value.trim();
@@ -609,6 +641,7 @@
           if (accountLabel) {
             accountLabel.textContent = label;
           }
+          updateHealth({ hasToken: true, hasAccount: Boolean(label && label !== 'Sin configurar') });
           setStatus('Token guardado correctamente. El backfill se ejecutará en segundo plano.', false);
         } catch (err) {
           setStatus(err.message || 'No se pudo guardar el token.', true);
