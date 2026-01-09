@@ -601,6 +601,24 @@ def init_db(db_settings: DatabaseSettings | None = None):
     ) ENGINE=InnoDB;
     """)
 
+    # conversaciones de backfill (Messenger/Instagram)
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS page_conversations (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      tenant_key VARCHAR(64),
+      platform VARCHAR(20),
+      conversation_id VARCHAR(255),
+      self_id VARCHAR(255),
+      contact_id VARCHAR(255),
+      updated_time TEXT,
+      inserted_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      UNIQUE KEY uniq_page_conversations (tenant_key, platform, conversation_id),
+      INDEX idx_page_conversations_tenant (tenant_key),
+      INDEX idx_page_conversations_platform (platform)
+    ) ENGINE=InnoDB;
+    """)
+
     # estados de mensajes (callbacks de status)
     c.execute("""
     CREATE TABLE IF NOT EXISTS mensajes_status (
@@ -938,6 +956,43 @@ def guardar_page_message(
     conn.commit()
     conn.close()
     return message_id
+
+
+def guardar_conversation(
+    *,
+    tenant_key,
+    platform,
+    conversation_id,
+    self_id,
+    contact_id,
+    updated_time,
+    db_settings: DatabaseSettings | None = None,
+):
+    if not tenant_key or not conversation_id:
+        return None
+
+    conn = get_connection(ensure_database=True, db_settings=db_settings)
+    c = conn.cursor()
+    c.execute(
+        "INSERT INTO page_conversations "
+        "(tenant_key, platform, conversation_id, self_id, contact_id, updated_time, "
+        "inserted_at, updated_at) "
+        "VALUES (%s, %s, %s, %s, %s, %s, NOW(), NOW()) "
+        "ON DUPLICATE KEY UPDATE self_id=VALUES(self_id), "
+        "contact_id=VALUES(contact_id), updated_time=VALUES(updated_time), "
+        "updated_at=NOW()",
+        (
+            tenant_key,
+            platform,
+            conversation_id,
+            self_id,
+            contact_id,
+            updated_time,
+        ),
+    )
+    conn.commit()
+    conn.close()
+    return conversation_id
 
 
 def guardar_estado_mensaje(
