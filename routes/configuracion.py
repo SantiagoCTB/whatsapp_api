@@ -139,6 +139,39 @@ def _fetch_page_accounts(user_token: str):
     return {"ok": True, "pages": pages}
 
 
+def _fetch_instagram_user(user_token: str):
+    if not user_token:
+        return {"ok": False, "error": "Falta el token de usuario para consultar Instagram."}
+
+    url = f"https://graph.instagram.com/{Config.FACEBOOK_GRAPH_API_VERSION}/me"
+    params = {"fields": "id,username,account_type"}
+    headers = {"Authorization": f"Bearer {user_token}"}
+
+    try:
+        response = requests.get(url, params=params, headers=headers, timeout=15)
+    except requests.RequestException:
+        logger.warning("No se pudo conectar con Graph API para consultar Instagram.")
+        return {"ok": False, "error": "No se pudo conectar con la API de Meta."}
+
+    payload = {}
+    try:
+        payload = response.json()
+    except ValueError:
+        payload = {}
+
+    if response.status_code >= 400:
+        details = payload.get("error") if isinstance(payload, dict) else None
+        return {
+            "ok": False,
+            "error": "No se pudo obtener la cuenta de Instagram.",
+            "details": details,
+        }
+
+    if not isinstance(payload, dict) or not payload.get("id"):
+        return {"ok": False, "error": "No se encontró una cuenta de Instagram asociada."}
+
+    return {"ok": True, "account": payload}
+
 def _resolve_page_user_token(platform: str | None, tenant_env: dict, provided_token: str) -> str:
     normalized = (platform or "").strip().lower()
     if normalized == "instagram":
@@ -1023,7 +1056,9 @@ def configuracion_signup():
     tenant_env = tenants.get_tenant_env(tenant)
     page_selection = _normalize_page_selection(tenant.metadata if tenant else None)
     messenger_page_selection = page_selection.get("messenger") or {}
-    instagram_page_selection = page_selection.get("instagram") or {}
+    instagram_account = {}
+    if tenant and isinstance(tenant.metadata, dict):
+        instagram_account = tenant.metadata.get("instagram_account") or {}
 
     logger.info(
         "Renderizando signup embebido",
@@ -1044,8 +1079,7 @@ def configuracion_signup():
         tenant_phone_number_id=tenant_env.get("PHONE_NUMBER_ID"),
         messenger_page_id=_resolve_page_env_value("messenger", tenant_env),
         messenger_page_name=messenger_page_selection.get("page_name"),
-        instagram_page_id=_resolve_page_env_value("instagram", tenant_env),
-        instagram_page_name=instagram_page_selection.get("page_name"),
+        instagram_account_name=instagram_account.get("username") or instagram_account.get("id"),
     )
 
 
@@ -1203,6 +1237,8 @@ def messenger_pages():
         return {"ok": False, "error": "Payload inválido"}, 400
 
     platform = (payload.get("platform") or "").strip().lower() or "messenger"
+    if platform != "messenger":
+        return {"ok": False, "error": "Solo puedes consultar páginas de Messenger."}, 400
     provided_token = (payload.get("user_access_token") or "").strip()
     tenant_env = tenants.get_tenant_env(tenant)
     token = _resolve_page_user_token(platform, tenant_env, provided_token)
@@ -1241,7 +1277,7 @@ def messenger_save_page():
     if not page_id:
         return {"ok": False, "error": "Selecciona una página válida."}, 400
 
-    if platform not in {"messenger", "instagram"}:
+    if platform != "messenger":
         return {"ok": False, "error": "Selecciona una plataforma válida."}, 400
 
     tenant_env = tenants.get_tenant_env(tenant)
@@ -1286,6 +1322,46 @@ def messenger_save_page():
             "name": page_entry.get("name"),
             "platform": platform,
         },
+    }
+
+
+@config_bp.route('/configuracion/instagram/token', methods=['POST'])
+def instagram_save_token():
+    if not _require_admin():
+        return {"ok": False, "error": "No autorizado"}, 403
+
+    tenant = _resolve_signup_tenant()
+    if not tenant:
+        return {"ok": False, "error": "No se encontró la empresa actual."}, 400
+
+    try:
+        payload = request.get_json(force=True) or {}
+    except Exception:
+        return {"ok": False, "error": "Payload inválido"}, 400
+
+    user_token = (payload.get("user_access_token") or "").strip()
+    if not user_token:
+        return {"ok": False, "error": "Ingresa un token de Instagram válido."}, 400
+
+    response = _fetch_instagram_user(user_token)
+    if not response.get("ok"):
+        return response, 400
+
+    tenant_env = tenants.get_tenant_env(tenant)
+    env_updates = {key: tenant_env.get(key) for key in tenants.TENANT_ENV_KEYS}
+    env_updates["INSTAGRAM_TOKEN"] = user_token
+    tenants.update_tenant_env(tenant.tenant_key, env_updates)
+
+    account = response.get("account") or {}
+    tenants.update_tenant_metadata(
+        tenant.tenant_key,
+        {"instagram_account": account},
+    )
+
+    return {
+        "ok": True,
+        "message": "Token de Instagram actualizado.",
+        "account": account,
     }
 
 @config_bp.route('/configuracion', methods=['GET', 'POST'])

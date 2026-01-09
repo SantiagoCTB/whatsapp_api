@@ -52,8 +52,6 @@ TENANT_ENV_KEYS = {
     "PLATFORM",
     "MESSENGER_PAGE_ID",
     "MESSENGER_PAGE_ACCESS_TOKEN",
-    "INSTAGRAM_PAGE_ID",
-    "INSTAGRAM_PAGE_ACCESS_TOKEN",
     "PHONE_NUMBER_ID",
     "LONG_LIVED_TOKEN",
     "WABA_ID",
@@ -101,8 +99,6 @@ def _default_tenant_env(*, include_legacy_credentials: bool = False) -> dict:
         "PLATFORM": None,
         "MESSENGER_PAGE_ID": None,
         "MESSENGER_PAGE_ACCESS_TOKEN": None,
-        "INSTAGRAM_PAGE_ID": None,
-        "INSTAGRAM_PAGE_ACCESS_TOKEN": None,
         "PHONE_NUMBER_ID": None,
         "LONG_LIVED_TOKEN": None,
         "WABA_ID": None,
@@ -128,8 +124,6 @@ def _default_tenant_env(*, include_legacy_credentials: bool = False) -> dict:
             "PLATFORM": Config.PLATFORM,
             "MESSENGER_PAGE_ID": Config.MESSENGER_PAGE_ID,
             "MESSENGER_PAGE_ACCESS_TOKEN": Config.MESSENGER_PAGE_ACCESS_TOKEN,
-            "INSTAGRAM_PAGE_ID": Config.INSTAGRAM_PAGE_ID,
-            "INSTAGRAM_PAGE_ACCESS_TOKEN": Config.INSTAGRAM_PAGE_ACCESS_TOKEN,
             "PHONE_NUMBER_ID": Config.PHONE_NUMBER_ID,
         })
 
@@ -327,7 +321,7 @@ def find_tenant_by_page_id(page_id: str | None) -> TenantInfo | None:
         return None
 
     for tenant in list_tenants(force_reload=True):
-        for key in ("MESSENGER_PAGE_ID", "INSTAGRAM_PAGE_ID", "PAGE_ID"):
+        for key in ("MESSENGER_PAGE_ID", "PAGE_ID"):
             if _tenant_has_env_value(tenant, key, page_id):
                 return tenant
 
@@ -412,8 +406,9 @@ def _normalize_platform(value: str | None) -> str | None:
 def _resolve_page_credentials(env: dict, platform: str) -> tuple[str, str]:
     normalized = _normalize_platform(platform)
     if normalized == "instagram":
-        page_id = (env.get("INSTAGRAM_PAGE_ID") or "").strip()
-        page_token = (env.get("INSTAGRAM_PAGE_ACCESS_TOKEN") or "").strip()
+        instagram_token = (env.get("INSTAGRAM_TOKEN") or "").strip()
+        page_id = "me" if instagram_token else ""
+        page_token = instagram_token
     else:
         page_id = (env.get("MESSENGER_PAGE_ID") or "").strip()
         page_token = (env.get("MESSENGER_PAGE_ACCESS_TOKEN") or "").strip()
@@ -427,14 +422,6 @@ def _resolve_page_credentials(env: dict, platform: str) -> tuple[str, str]:
 
     page_id = page_id or (env.get("PAGE_ID") or "").strip()
     page_token = page_token or (env.get("PAGE_ACCESS_TOKEN") or "").strip()
-
-    if normalized == "instagram":
-        instagram_token = (env.get("INSTAGRAM_TOKEN") or "").strip()
-        if instagram_token:
-            if not page_id:
-                page_id = "me"
-            if not page_token:
-                page_token = instagram_token
 
     return page_id, page_token
 

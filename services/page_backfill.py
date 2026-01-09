@@ -18,7 +18,7 @@ GRAPH_INSTAGRAM_BASE_URL = f"https://graph.instagram.com/{Config.FACEBOOK_GRAPH_
 
 def _resolve_graph_base_url(platform: str, page_id: str) -> str:
     normalized = (platform or "").strip().lower()
-    if normalized == "instagram" and page_id == "me":
+    if normalized == "instagram":
         return GRAPH_INSTAGRAM_BASE_URL
     return GRAPH_FACEBOOK_BASE_URL
 
@@ -84,6 +84,106 @@ def fetch_conversations(
             }
         )
     return conversations
+
+
+def fetch_instagram_user(access_token: str) -> Dict[str, Any] | None:
+    url = f"{GRAPH_INSTAGRAM_BASE_URL}/me"
+    params = {"fields": "id,username,account_type"}
+    headers = {"Authorization": f"Bearer {access_token}"}
+
+    try:
+        response = requests.get(url, params=params, headers=headers, timeout=15)
+    except requests.RequestException as exc:
+        logger.warning("Error consultando cuenta de Instagram: %s", exc)
+        return None
+
+    if not response.ok:
+        _log_graph_error("instagram_user", response)
+        return None
+
+    payload = _safe_json(response)
+    if not isinstance(payload, dict) or not payload.get("id"):
+        return None
+    return payload
+
+
+def fetch_instagram_conversations(access_token: str) -> List[Dict[str, Any]]:
+    url = f"{GRAPH_INSTAGRAM_BASE_URL}/me/conversations"
+    params = {"platform": "instagram", "access_token": access_token}
+
+    try:
+        response = requests.get(url, params=params, timeout=15)
+    except requests.RequestException as exc:
+        logger.warning("Error consultando conversaciones de Instagram: %s", exc)
+        return []
+
+    if not response.ok:
+        _log_graph_error("instagram_conversations", response)
+        return []
+
+    payload = _safe_json(response)
+    data = payload.get("data") if isinstance(payload, dict) else None
+    if not isinstance(data, list):
+        return []
+
+    conversations: List[Dict[str, Any]] = []
+    for entry in data:
+        if not isinstance(entry, dict):
+            continue
+        conversation_id = entry.get("id")
+        if not conversation_id:
+            continue
+        conversations.append(
+            {
+                "id": conversation_id,
+                "updated_time": entry.get("updated_time"),
+            }
+        )
+    return conversations
+
+
+def fetch_instagram_messages(
+    conversation_id: str,
+    access_token: str,
+) -> List[Dict[str, Any]]:
+    url = f"{GRAPH_INSTAGRAM_BASE_URL}/{conversation_id}/messages"
+    params = {
+        "fields": "id,from,to,message,created_time",
+        "limit": 50,
+    }
+    headers = {"Authorization": f"Bearer {access_token}"}
+
+    messages: List[Dict[str, Any]] = []
+    next_url = url
+    next_params = params
+
+    while next_url:
+        try:
+            response = requests.get(
+                next_url, params=next_params, headers=headers, timeout=15
+            )
+        except requests.RequestException as exc:
+            logger.warning("Error consultando mensajes de Instagram: %s", exc)
+            break
+
+        next_params = None
+        if not response.ok:
+            _log_graph_error(
+                "instagram_messages",
+                response,
+                conversation_id=conversation_id,
+            )
+            break
+
+        payload = _safe_json(response)
+        data = payload.get("data") if isinstance(payload, dict) else None
+        if isinstance(data, list):
+            messages.extend([item for item in data if isinstance(item, dict)])
+
+        paging = payload.get("paging") if isinstance(payload, dict) else None
+        next_url = paging.get("next") if isinstance(paging, dict) else None
+
+    return messages
 
 
 def fetch_conversation_messages(
@@ -154,6 +254,45 @@ def run_page_backfill(
         "Iniciando backfill de conversaciones",
         extra={"tenant_key": tenant_key, "platform": platform},
     )
+
+    if (platform or "").strip().lower() == "instagram":
+        instagram_user = fetch_instagram_user(access_token)
+        if not instagram_user:
+            logger.info(
+                "No se pudo resolver la cuenta de Instagram para backfill",
+                extra={"tenant_key": tenant_key},
+            )
+            return
+
+        page_id = str(instagram_user.get("id"))
+        conversations = fetch_instagram_conversations(access_token)
+        if not conversations:
+            logger.info(
+                "No se encontraron conversaciones para backfill",
+                extra={"tenant_key": tenant_key, "platform": platform},
+            )
+            return
+
+        seen_message_ids = set()
+        for conversation in conversations:
+            conversation_id = conversation.get("id")
+            if not conversation_id:
+                continue
+            messages = fetch_instagram_messages(conversation_id, access_token)
+            for message in messages:
+                message_id = message.get("id")
+                if not message_id or message_id in seen_message_ids:
+                    continue
+                seen_message_ids.add(message_id)
+                _store_message_detail(
+                    message,
+                    tenant_key=tenant_key,
+                    db_settings=db_settings,
+                    platform=platform,
+                    page_id=page_id,
+                    conversation_id=conversation_id,
+                )
+        return
 
     base_url = _resolve_graph_base_url(platform, page_id)
     conversations = fetch_conversations(

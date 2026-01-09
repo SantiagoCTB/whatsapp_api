@@ -166,26 +166,19 @@
         </div>
         <div class="integration-body">
             <p class="muted" style="margin-top: 0;">
-                Paso 1: pega un <strong>token de usuario</strong>. Paso 2: consulta tus páginas. Paso 3: guarda la
-                página de Instagram.
+                Paso 1: pega un <strong>token de usuario</strong>. Paso 2: guarda el token para consultar las
+                conversaciones.
             </p>
             <div class="form-row">
                 <label class="muted" for="instagram-user-token">Token de usuario (solo se guarda si lo envías)</label>
                 <input id="instagram-user-token" type="password" placeholder="EAA...">
-            </div>
-            <div class="form-row">
-                <label class="muted" for="instagram-page-select">Página de Meta</label>
-                <select id="instagram-page-select" data-current-page="{{ instagram_page_id or '' }}" disabled>
-                    <option value="">Consulta tus páginas para ver opciones</option>
-                </select>
-                <div style="display: flex; gap: 0.5rem;">
-                    <button id="instagram-page-refresh" class="btn-secondary" type="button">Consultar páginas</button>
-                    <button id="instagram-page-save" class="btn-primary" type="button">Guardar selección</button>
+                <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
+                    <button id="instagram-token-save" class="btn-primary" type="button">Guardar token</button>
                 </div>
-                <div id="instagram-page-status" class="help" style="margin-top: 0.5rem"></div>
+                <div id="instagram-token-status" class="help" style="margin-top: 0.5rem"></div>
             </div>
             <p class="muted" style="margin-top: 0.75rem;">
-                Página actual: <strong>{{ instagram_page_name or instagram_page_id or 'Sin seleccionar' }}</strong>
+                Cuenta actual: <strong id="instagram-account-label">{{ instagram_account_name or 'Sin configurar' }}</strong>
             </p>
         </div>
     </div>
@@ -577,14 +570,53 @@
       statusBoxId: 'messenger-page-status'
     });
 
-    setupPageIntegration({
-      platform: 'instagram',
-      refreshButtonId: 'instagram-page-refresh',
-      saveButtonId: 'instagram-page-save',
-      pageSelectId: 'instagram-page-select',
-      tokenInputId: 'instagram-user-token',
-      statusBoxId: 'instagram-page-status'
-    });
+    const setupInstagramToken = () => {
+      const tokenInput = document.getElementById('instagram-user-token');
+      const saveButton = document.getElementById('instagram-token-save');
+      const statusBox = document.getElementById('instagram-token-status');
+      const accountLabel = document.getElementById('instagram-account-label');
+
+      if (!tokenInput || !saveButton || !statusBox) {
+        return;
+      }
+
+      const setStatus = (message, isError = false) => {
+        statusBox.textContent = message;
+        statusBox.style.color = isError ? '#dc3545' : '#198754';
+      };
+
+      saveButton.addEventListener('click', async () => {
+        const token = tokenInput.value.trim();
+        if (!token) {
+          setStatus('Ingresa un token de Instagram antes de guardar.', true);
+          return;
+        }
+
+        setStatus('Validando token...', false);
+        try {
+          const response = await fetch('{{ url_for("configuracion.instagram_save_token") }}', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ user_access_token: token })
+          });
+          const data = await response.json();
+          if (!response.ok || !data.ok) {
+            throw new Error(data.error || 'No se pudo guardar el token.');
+          }
+
+          const account = data.account || {};
+          const label = account.username || account.id || 'Sin configurar';
+          if (accountLabel) {
+            accountLabel.textContent = label;
+          }
+          setStatus('Token guardado correctamente. El backfill se ejecutará en segundo plano.', false);
+        } catch (err) {
+          setStatus(err.message || 'No se pudo guardar el token.', true);
+        }
+      });
+    };
+
+    setupInstagramToken();
   })();
 </script>
 {% endblock %}

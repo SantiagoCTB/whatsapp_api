@@ -147,12 +147,6 @@
           <label>MESSENGER_PAGE_ACCESS_TOKEN
             <input name="MESSENGER_PAGE_ACCESS_TOKEN" value="{{ tenant_env.get('MESSENGER_PAGE_ACCESS_TOKEN','') }}" placeholder="token de acceso de la Page" />
           </label>
-          <label>INSTAGRAM_PAGE_ID
-            <input name="INSTAGRAM_PAGE_ID" value="{{ tenant_env.get('INSTAGRAM_PAGE_ID','') }}" placeholder="ID de la Page de Instagram" />
-          </label>
-          <label>INSTAGRAM_PAGE_ACCESS_TOKEN
-            <input name="INSTAGRAM_PAGE_ACCESS_TOKEN" value="{{ tenant_env.get('INSTAGRAM_PAGE_ACCESS_TOKEN','') }}" placeholder="token de acceso de la Page" />
-          </label>
           <label>PAGE_ID
             <input name="PAGE_ID" value="{{ tenant_env.get('PAGE_ID','') }}" placeholder="ID de la Page" />
           </label>
@@ -222,10 +216,9 @@
           <div><strong>Phone number:</strong> {{ tenant_env.get('PHONE_NUMBER_ID') or '—' }}</div>
           <div><strong>Token largo:</strong> {{ tenant_env.get('LONG_LIVED_TOKEN') or tenant_env.get('META_TOKEN') or '—' }}</div>
           <div><strong>Page ID (Messenger):</strong> {{ tenant_env.get('MESSENGER_PAGE_ID') or tenant_env.get('PAGE_ID') or '—' }}</div>
-          <div><strong>Page ID (Instagram):</strong> {{ tenant_env.get('INSTAGRAM_PAGE_ID') or '—' }}</div>
+          <div><strong>Cuenta Instagram:</strong> {{ (selected_tenant.metadata.get('instagram_account', {}).get('username') if selected_tenant.metadata else None) or (selected_tenant.metadata.get('instagram_account', {}).get('id') if selected_tenant.metadata else None) or '—' }}</div>
           <div><strong>Plataforma legacy:</strong> {{ tenant_env.get('PLATFORM') or '—' }}</div>
           <div><strong>Page name (Messenger):</strong> {{ (selected_tenant.metadata.get('page_selection', {}).get('messenger', {}).get('page_name') if selected_tenant.metadata else None) or '—' }}</div>
-          <div><strong>Page name (Instagram):</strong> {{ (selected_tenant.metadata.get('page_selection', {}).get('instagram', {}).get('page_name') if selected_tenant.metadata else None) or '—' }}</div>
           <div><strong>Business info:</strong> {{ (selected_tenant.metadata.get('whatsapp_business') if selected_tenant.metadata else {}) or '—' }}</div>
         </div>
         <p class="help">Usa el Embedded Signup para generar las credenciales directamente desde Meta y guardarlas en este tenant.</p>
