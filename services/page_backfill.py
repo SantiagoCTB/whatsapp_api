@@ -416,6 +416,7 @@ def _store_message_detail(
     from_obj = detail.get("from") or {}
     to_obj = detail.get("to") or {}
     reply_to = detail.get("reply_to") or {}
+    message_text = _extract_message_text(detail)
 
     to_ids = _extract_to_ids(to_obj)
     to_ids_json = json.dumps(to_ids, ensure_ascii=False)
@@ -429,7 +430,7 @@ def _store_message_detail(
         created_time=detail.get("created_time"),
         from_id=from_obj.get("id"),
         to_ids_json=to_ids_json,
-        message=detail.get("message"),
+        message=message_text,
         reply_to_mid=reply_to.get("mid"),
         is_self_reply=reply_to.get("is_self_reply"),
         db_settings=db_settings,
@@ -449,7 +450,7 @@ def _store_message_detail(
 
     db.guardar_mensaje(
         numero,
-        detail.get("message") or "",
+        message_text or "",
         tipo,
         wa_id=message_id,
         reply_to_wa_id=reply_to.get("mid"),
@@ -556,6 +557,27 @@ def _parse_created_time(value: str | None) -> datetime | None:
             return parsed.astimezone(timezone.utc).replace(tzinfo=None)
         except ValueError:
             continue
+    return None
+
+
+def _extract_message_text(detail: Dict[str, Any]) -> str | None:
+    if not isinstance(detail, dict):
+        return None
+    message_value = detail.get("message")
+    if isinstance(message_value, str):
+        return message_value
+    if isinstance(message_value, dict):
+        text_value = message_value.get("text")
+        if isinstance(text_value, str):
+            return text_value
+    text_value = detail.get("text")
+    if isinstance(text_value, str):
+        return text_value
+    if message_value is not None:
+        try:
+            return json.dumps(message_value, ensure_ascii=False)
+        except (TypeError, ValueError):
+            return str(message_value)
     return None
 
 
