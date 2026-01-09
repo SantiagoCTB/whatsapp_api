@@ -351,7 +351,6 @@ def enviar_mensaje(
 
         attachment_type = None
         attachment_url = None
-        attachments = None
         if tipo_respuesta == "texto":
             payload["message"] = {"text": mensaje}
         elif tipo_respuesta in {"image", "audio", "video", "document"}:
@@ -416,8 +415,6 @@ def enviar_mensaje(
         except Exception:
             message_id = None
 
-        if attachments and not attachment_url:
-            attachment_url = attachments[0].get("payload", {}).get("url")
 
         tipo_db = tipo
         if "messenger" not in tipo_db:
@@ -468,37 +465,32 @@ def enviar_mensaje(
 
         attachment_type = None
         attachment_url = None
-        attachments = None
         if tipo_respuesta == "texto":
             payload["message"] = {"text": mensaje}
         elif tipo_respuesta in {"image", "audio", "video", "document"}:
             attachment_type = "file" if tipo_respuesta == "document" else tipo_respuesta
             if tipo_respuesta == "image":
                 if isinstance(opciones, list):
-                    attachments = []
                     for item in opciones:
                         if isinstance(item, dict):
-                            url = item.get("link") or item.get("id")
+                            attachment_url = item.get("link") or item.get("id")
                         else:
-                            url = item
-                        if not url:
-                            continue
-                        attachments.append({"type": "image", "payload": {"url": url}})
-                    if attachments:
-                        payload["message"] = {"attachments": attachments}
-                if "message" not in payload:
+                            attachment_url = item
+                        if attachment_url:
+                            break
+                else:
                     if isinstance(opciones, dict):
                         attachment_url = opciones.get("link") or opciones.get("id")
                     else:
                         attachment_url = opciones
-                    if not attachment_url:
-                        return _fail("No se pudo enviar el adjunto a Instagram.")
-                    payload["message"] = {
-                        "attachments": {
-                            "type": "image",
-                            "payload": {"url": attachment_url},
-                        }
+                if not attachment_url:
+                    return _fail("No se pudo enviar el adjunto a Instagram.")
+                payload["message"] = {
+                    "attachment": {
+                        "type": "image",
+                        "payload": {"url": attachment_url},
                     }
+                }
             else:
                 if isinstance(opciones, dict):
                     attachment_url = opciones.get("link") or opciones.get("id")
@@ -547,8 +539,6 @@ def enviar_mensaje(
         except Exception:
             message_id = None
 
-        if attachments and not attachment_url:
-            attachment_url = attachments[0].get("payload", {}).get("url")
 
         tipo_db = tipo
         if "instagram" not in tipo_db:
