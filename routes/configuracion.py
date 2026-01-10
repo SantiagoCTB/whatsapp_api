@@ -221,6 +221,139 @@ def _fetch_instagram_user(user_token: str):
 
     return {"ok": True, "account": payload}
 
+
+def _exchange_instagram_code_for_token(code: str, redirect_uri: str) -> dict:
+    if not code:
+        return {"ok": False, "error": "Código de autorización vacío."}
+    if not Config.FACEBOOK_APP_ID or not Config.FACEBOOK_APP_SECRET:
+        return {
+            "ok": False,
+            "error": "Falta configurar FACEBOOK_APP_ID o FACEBOOK_APP_SECRET.",
+        }
+
+    payload = {
+        "client_id": Config.FACEBOOK_APP_ID,
+        "client_secret": Config.FACEBOOK_APP_SECRET,
+        "grant_type": "authorization_code",
+        "redirect_uri": redirect_uri,
+        "code": code,
+    }
+
+    try:
+        response = requests.post(
+            "https://api.instagram.com/oauth/access_token",
+            data=payload,
+            timeout=15,
+        )
+    except requests.RequestException:
+        logger.warning("No se pudo conectar al endpoint de Instagram OAuth.")
+        return {"ok": False, "error": "No se pudo conectar con la API de Instagram."}
+
+    try:
+        data = response.json()
+    except ValueError:
+        data = {}
+
+    if response.status_code >= 400:
+        return {
+            "ok": False,
+            "error": "No se pudo intercambiar el código de Instagram.",
+            "details": data,
+        }
+
+    access_token = data.get("access_token")
+    if not access_token:
+        return {"ok": False, "error": "Instagram no devolvió un access_token."}
+
+    try:
+        long_response = requests.get(
+            "https://graph.instagram.com/access_token",
+            params={
+                "grant_type": "ig_exchange_token",
+                "client_secret": Config.FACEBOOK_APP_SECRET,
+                "access_token": access_token,
+            },
+            timeout=15,
+        )
+    except requests.RequestException:
+        logger.warning("No se pudo conectar al endpoint de token largo de Instagram.")
+        return {"ok": True, "access_token": access_token, "is_long_lived": False}
+
+    try:
+        long_data = long_response.json()
+    except ValueError:
+        long_data = {}
+
+    if long_response.status_code >= 400:
+        logger.warning(
+            "No se pudo obtener el token largo de Instagram.",
+            extra={"details": long_data},
+        )
+        return {"ok": True, "access_token": access_token, "is_long_lived": False}
+
+    long_token = long_data.get("access_token") or access_token
+    return {"ok": True, "access_token": long_token, "is_long_lived": True}
+
+
+def _handle_instagram_oauth_code(code: str, redirect_uri: str) -> dict:
+    tenant = _resolve_signup_tenant()
+    if not tenant:
+        return {"ok": False, "error": "No se encontró la empresa actual."}
+
+    token_response = _exchange_instagram_code_for_token(code, redirect_uri)
+    if not token_response.get("ok"):
+        return token_response
+
+    access_token = token_response.get("access_token")
+    if not access_token:
+        return {"ok": False, "error": "No se obtuvo un token de Instagram válido."}
+
+    account_response = _fetch_instagram_user(access_token)
+    if not account_response.get("ok"):
+        return account_response
+
+    account = account_response.get("account") or {}
+    tenant_env = tenants.get_tenant_env(tenant)
+    env_updates = {key: tenant_env.get(key) for key in tenants.TENANT_ENV_KEYS}
+    env_updates["INSTAGRAM_TOKEN"] = access_token
+    tenants.update_tenant_env(tenant.tenant_key, env_updates)
+    tenants.update_tenant_metadata(
+        tenant.tenant_key,
+        {"instagram_account": account},
+    )
+    tenants.trigger_page_backfill_for_platform(tenant, "instagram")
+
+    logger.info(
+        "Token de Instagram actualizado desde OAuth",
+        extra={
+            "tenant_key": tenant.tenant_key,
+            "instagram_account_id": account.get("id"),
+            "instagram_username": account.get("username"),
+            "is_long_lived": token_response.get("is_long_lived"),
+        },
+    )
+    return {"ok": True, "account": account}
+
+
+def _resolve_instagram_redirect_uri(fallback: str) -> str:
+    signup_url = (Config.SIGNUP_INSTRAGRAM or "").strip()
+    if not signup_url:
+        return fallback
+    try:
+        parsed = urlparse(signup_url)
+    except ValueError:
+        return fallback
+    if not parsed.query:
+        return fallback
+    for entry in parsed.query.split("&"):
+        if not entry:
+            continue
+        key, _, value = entry.partition("=")
+        if key == "redirect_uri" and value:
+            return value
+    return fallback
+
+
 def _resolve_page_user_token(platform: str | None, tenant_env: dict, provided_token: str) -> str:
     normalized = (platform or "").strip().lower()
     if normalized == "instagram":
@@ -1100,6 +1233,17 @@ def configuracion_signup():
     if not _require_admin():
         return redirect(url_for("auth.login"))
 
+    oauth_code = (request.args.get("code") or "").strip()
+    if oauth_code:
+        redirect_uri = _resolve_instagram_redirect_uri(request.base_url)
+        result = _handle_instagram_oauth_code(oauth_code, redirect_uri)
+        if not result.get("ok"):
+            logger.warning(
+                "No se pudo procesar el código de Instagram OAuth",
+                extra={"error": result.get("error"), "details": result.get("details")},
+            )
+        return redirect(url_for("configuracion.configuracion_signup"))
+
     tenant = _resolve_signup_tenant()
     tenant_key = tenant.tenant_key if tenant else tenants.get_active_tenant_key()
     tenant_env = tenants.get_tenant_env(tenant)
@@ -1134,6 +1278,25 @@ def configuracion_signup():
         instagram_conversation_count=instagram_conversation_count,
         instagram_message_count=instagram_message_count,
     )
+
+
+@config_bp.route('/configuracion/instagram/callback', methods=['GET'])
+def instagram_oauth_callback():
+    if not _require_admin():
+        return redirect(url_for("auth.login"))
+
+    oauth_code = (request.args.get("code") or "").strip()
+    if not oauth_code:
+        return redirect(url_for("configuracion.configuracion_signup"))
+
+    redirect_uri = _resolve_instagram_redirect_uri(request.base_url)
+    result = _handle_instagram_oauth_code(oauth_code, redirect_uri)
+    if not result.get("ok"):
+        logger.warning(
+            "No se pudo completar el callback de Instagram OAuth",
+            extra={"error": result.get("error"), "details": result.get("details")},
+        )
+    return redirect(url_for("configuracion.configuracion_signup"))
 
 
 @config_bp.route('/configuracion/signup', methods=['POST'])
