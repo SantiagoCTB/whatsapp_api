@@ -23,6 +23,7 @@ from services.db import (
     get_chat_state,
     obtener_historial_chat,
     obtener_ultimo_mensaje_cliente,
+    obtener_ultimo_mensaje_cliente_info,
     update_chat_state,
     delete_chat_state,
 )
@@ -51,6 +52,17 @@ pending_timers     = {}
 cache_lock         = threading.Lock()
 
 MAX_AUTO_STEPS = 25
+
+
+def _resolve_rule_platform(numero: str) -> str:
+    last_client_info = obtener_ultimo_mensaje_cliente_info(numero)
+    last_tipo = (last_client_info or {}).get("tipo") or ""
+    last_tipo_lower = str(last_tipo).lower()
+    if "messenger" in last_tipo_lower:
+        return "messenger"
+    if "instagram" in last_tipo_lower:
+        return "instagram"
+    return "whatsapp"
 
 
 def _media_root():
@@ -609,6 +621,13 @@ def _handle_messenger_payload(data, summary, channel="messenger"):
                 if agent_mode:
                     summary["processed"] += 1
                     handled = True
+                elif quick_reply_payload and handle_option_reply(
+                    sender_id,
+                    quick_reply_payload,
+                    platform=channel,
+                ):
+                    summary["processed"] += 1
+                    handled = True
                 elif normalized_text:
                     current_tenant = tenants.get_current_tenant()
                     tenant_env = dict(tenants.get_current_tenant_env() or {})
@@ -685,6 +704,13 @@ def _handle_messenger_payload(data, summary, channel="messenger"):
                 if agent_mode:
                     summary["processed"] += 1
                     handled = True
+                elif effective_text and handle_option_reply(
+                    sender_id,
+                    effective_text,
+                    platform=channel,
+                ):
+                    summary["processed"] += 1
+                    handled = True
                 elif effective_text:
                     current_tenant = tenants.get_current_tenant()
                     tenant_env = dict(tenants.get_current_tenant_env() or {})
@@ -749,12 +775,14 @@ def _match_selected_step(next_step: str, option_id: str, opciones: str):
     return None
 
 
-def handle_option_reply(numero, option_id):
+def handle_option_reply(numero, option_id, platform: str | None = None):
     if not option_id:
         return False
     current_step = get_current_step(numero)
     if not current_step:
         return False
+    if not platform:
+        platform = _resolve_rule_platform(numero)
 
     def _normalize_option_value(value):
         if not isinstance(value, str):
@@ -782,10 +810,11 @@ def handle_option_reply(numero, option_id):
                      FROM reglas r
                      LEFT JOIN regla_medias m ON r.id = m.regla_id
                      WHERE r.step=%s
+                       AND (r.platform IS NULL OR r.platform = '' OR r.platform = %s)
                      GROUP BY r.step, r.id
                      ORDER BY r.id
                     """,
-                    (step_filter,),
+                    (step_filter, platform),
                 )
             else:
                 c.execute(
@@ -797,10 +826,11 @@ def handle_option_reply(numero, option_id):
                       FROM reglas r
                       LEFT JOIN regla_medias m ON r.id = m.regla_id
                      WHERE LOWER(r.input_text)=LOWER(%s)
+                       AND (r.platform IS NULL OR r.platform = '' OR r.platform = %s)
                      GROUP BY r.step, r.id
                      ORDER BY r.id
                     """,
-                    (option_id,),
+                    (option_id, platform),
                 )
             rows = c.fetchall()
         finally:
@@ -831,22 +861,36 @@ def handle_option_reply(numero, option_id):
         rule = rule_row[1:]
         effective_step = rule_step or current_step
         set_user_step(numero, effective_step)
-        dispatch_rule(numero, rule, step=effective_step, selected_option_id=option_id)
+        dispatch_rule(
+            numero,
+            rule,
+            step=effective_step,
+            selected_option_id=option_id,
+            platform=platform,
+        )
         return True
 
     for row in current_step_rules:
         matched_step = _match_selected_step(row[3] or '', option_id, row[6] or '')
         if matched_step:
-            advance_steps(numero, matched_step)
+            advance_steps(numero, matched_step, platform=platform)
             return True
 
     conn = get_connection(); c = conn.cursor()
-    c.execute("SELECT opciones FROM reglas WHERE step=%s", (current_step,))
+    c.execute(
+        """
+        SELECT opciones
+          FROM reglas
+         WHERE step=%s
+           AND (platform IS NULL OR platform = '' OR platform = %s)
+        """,
+        (current_step, platform),
+    )
     rows = c.fetchall(); conn.close()
     for (opcs,) in rows:
         nxt = _get_step_from_options(opcs or '', option_id)
         if nxt:
-            advance_steps(numero, nxt)
+            advance_steps(numero, nxt, platform=platform)
             return True
     return False
 
@@ -876,10 +920,19 @@ def _resolve_next_step(next_step: str, selected_option_id: str, opciones: str):
     return next_step
 
 
-def dispatch_rule(numero, regla, step=None, visited=None, selected_option_id=None):
+def dispatch_rule(
+    numero,
+    regla,
+    step=None,
+    visited=None,
+    selected_option_id=None,
+    platform: str | None = None,
+):
     """Envía la respuesta definida en una regla y asigna roles si aplica."""
     if visited is None:
         visited = set()
+    if not platform:
+        platform = _resolve_rule_platform(numero)
     (
         regla_id,
         resp,
@@ -907,13 +960,13 @@ def dispatch_rule(numero, regla, step=None, visited=None, selected_option_id=Non
         )
         next_step = _resolve_next_step(next_step_raw, selected_option_id, opts)
         if next_step:
-            advance_steps(numero, next_step, visited=visited)
+            advance_steps(numero, next_step, visited=visited, platform=platform)
         return
 
     media_list = media_urls.split('||') if media_urls else []
     if tipo_resp in {'texto', 'lista', 'boton'} and not (resp or '').strip() and not media_list:
         next_step = _resolve_next_step(next_step_raw, selected_option_id, opts)
-        advance_steps(numero, next_step, visited=visited)
+        advance_steps(numero, next_step, visited=visited, platform=platform)
         return
     if tipo_resp in ['image', 'video', 'audio', 'document'] and media_list:
         enviar_mensaje(
@@ -960,10 +1013,10 @@ def dispatch_rule(numero, regla, step=None, visited=None, selected_option_id=Non
             conn.commit()
         conn.close()
     next_step = _resolve_next_step(next_step_raw, selected_option_id, opts)
-    advance_steps(numero, next_step, visited=visited)
+    advance_steps(numero, next_step, visited=visited, platform=platform)
 
 
-def advance_steps(numero: str, steps_str: str, visited=None):
+def advance_steps(numero: str, steps_str: str, visited=None, platform: str | None = None):
     """Avanza múltiples pasos enviando las reglas comodín correspondientes.
 
     El procesamiento de la lista de pasos ocurre únicamente en memoria; solo
@@ -975,6 +1028,8 @@ def advance_steps(numero: str, steps_str: str, visited=None):
         return
     if visited is None:
         visited = set()
+    if not platform:
+        platform = _resolve_rule_platform(numero)
     for step in steps[:-1]:
         if step in visited:
             logging.warning(
@@ -998,18 +1053,20 @@ def advance_steps(numero: str, steps_str: str, visited=None):
                        r.opciones, r.rol_keyword, r.input_text
                   FROM reglas r
                   LEFT JOIN regla_medias m ON r.id = m.regla_id
-                 WHERE r.step=%s AND r.input_text='*'
+                 WHERE r.step=%s
+                   AND r.input_text='*'
+                   AND (r.platform IS NULL OR r.platform = '' OR r.platform = %s)
                  GROUP BY r.id
                  ORDER BY r.id
                  LIMIT 1
                 """,
-                (step,),
+                (step, platform),
             )
             regla = c.fetchone()
         finally:
             conn.close()
         if regla:
-            dispatch_rule(numero, regla, step, visited=visited)
+            dispatch_rule(numero, regla, step, visited=visited, platform=platform)
     final_step = steps[-1]
     final_step_norm = _normalize_step_name(final_step)
     if final_step_norm in visited and len(steps) > 1:
@@ -1024,6 +1081,7 @@ def advance_steps(numero: str, steps_str: str, visited=None):
             numero,
             text_norm=None,
             visited=visited,
+            platform=platform,
         )
 
 
@@ -1033,6 +1091,7 @@ def process_step_chain(
     numero,
     text_norm=None,
     visited=None,
+    platform: str | None = None,
     *,
     allow_wildcard_with_text=True,
 ):
@@ -1044,6 +1103,8 @@ def process_step_chain(
     """
     if visited is None:
         visited = set()
+    if not platform:
+        platform = _resolve_rule_platform(numero)
     step = get_current_step(numero)
     if not step:
         return
@@ -1061,10 +1122,11 @@ def process_step_chain(
           FROM reglas r
           LEFT JOIN regla_medias m ON r.id = m.regla_id
          WHERE r.step=%s
+           AND (r.platform IS NULL OR r.platform = '' OR r.platform = %s)
          GROUP BY r.id
          ORDER BY r.id
         """,
-        (step,),
+        (step, platform),
     )
     reglas = c.fetchall(); conn.close()
     if not reglas:
@@ -1113,6 +1175,7 @@ def process_step_chain(
 @register_handler('meson_l_medida')
 def handle_medicion(numero, texto):
     step_actual = get_current_step(numero)
+    platform = _resolve_rule_platform(numero)
     conn = get_connection(); c = conn.cursor()
     c.execute(
         """
@@ -1121,10 +1184,12 @@ def handle_medicion(numero, texto):
                r.opciones, r.rol_keyword, r.calculo, r.handler
           FROM reglas r
           LEFT JOIN regla_medias m ON r.id = m.regla_id
-         WHERE r.step=%s AND r.input_text='*'
+         WHERE r.step=%s
+           AND r.input_text='*'
+           AND (r.platform IS NULL OR r.platform = '' OR r.platform = %s)
          GROUP BY r.id
         """,
-        (step_actual,)
+        (step_actual, platform)
     )
     row = c.fetchone(); conn.close()
     if not row:
@@ -1162,13 +1227,18 @@ def handle_medicion(numero, texto):
                 )
                 conn2.commit()
             conn2.close()
-        advance_steps(numero, next_step)
+        advance_steps(numero, next_step, platform=platform)
     except Exception:
         enviar_mensaje(numero, "Por favor ingresa la medida correcta.")
     return True
 
 
-def handle_text_message(numero: str, texto: str, save: bool = True):
+def handle_text_message(
+    numero: str,
+    texto: str,
+    save: bool = True,
+    platform: str | None = None,
+):
     """Procesa un mensaje de texto y avanza los pasos del flujo.
 
     Parameters
@@ -1217,7 +1287,7 @@ def handle_text_message(numero: str, texto: str, save: bool = True):
     if not step_db:
         bootstrapped = True
         set_user_step(numero, Config.INITIAL_STEP)
-        process_step_chain(numero, 'iniciar')
+        process_step_chain(numero, 'iniciar', platform=platform)
         if not text_norm or text_norm == 'iniciar':
             return
 
@@ -1232,6 +1302,7 @@ def handle_text_message(numero: str, texto: str, save: bool = True):
         numero,
         text_norm,
         allow_wildcard_with_text=not bootstrapped,
+        platform=platform,
     )
 
 
@@ -1705,7 +1776,7 @@ def webhook():
                         summary['processed'] += 1
                         continue
                     start_typing_feedback(from_number, wa_id)
-                    if handle_option_reply(from_number, option_id):
+                    if handle_option_reply(from_number, option_id, platform="whatsapp"):
                         continue
                     normalized_text = normalize_text(text)
                     with cache_lock:

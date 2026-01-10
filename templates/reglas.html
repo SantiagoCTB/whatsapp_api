@@ -30,6 +30,14 @@
     <label for="siguiente_step">Siguiente paso (puedes ingresar varios pasos separados por comas):</label>
     <input type="text" id="siguiente_step" name="siguiente_step" placeholder="paso1, paso2">
 
+    <label for="platform">Plataforma:</label>
+    <select name="platform" id="platform" class="form-control">
+        <option value="">Todas</option>
+        <option value="whatsapp">WhatsApp</option>
+        <option value="messenger">Messenger</option>
+        <option value="instagram">Instagram</option>
+    </select>
+
     <label for="tipo">Tipo:</label>
     <select name="tipo" id="tipo" class="form-control">
         <option value="texto">Texto</option>
@@ -41,6 +49,9 @@
         <option value="video">Video</option>
         <option value="audio">Audio</option>
     </select>
+    <p id="instagram-rule-warning" class="alert alert-warning" style="display:none;">
+        Instagram solo acepta reglas de tipo texto o botón.
+    </p>
 
     <label for="media" id="label_media_file" style="display:none;">Subir archivo:</label>
     <input type="file" id="media" name="media[]" multiple style="display:none;">
@@ -200,6 +211,7 @@
             <div class="rule-summary-text">
                 <span><strong>Paso:</strong> {{ regla.step }}</span>
                 <span><strong>Entrada:</strong> {{ regla.input_text }}</span>
+                <span><strong>Plataforma:</strong> {{ regla.platform or 'Todas' }}</span>
                 <span><strong>Tipo:</strong> {{ regla.tipo }}</span>
                 <span><strong>Siguiente:</strong> {{ regla.siguiente_step or '-' }}</span>
             </div>
@@ -209,6 +221,10 @@
                 <div class="rule-field">
                     <dt>Respuesta</dt>
                     <dd>{{ regla.respuesta }}</dd>
+                </div>
+                <div class="rule-field">
+                    <dt>Plataforma</dt>
+                    <dd>{{ regla.platform or 'Todas' }}</dd>
                 </div>
                 <div class="rule-field">
                     <dt>Rol</dt>
@@ -435,7 +451,21 @@ document.getElementById('tipo').addEventListener('change', () => {
     toggleListFields();
     toggleButtonFields();
     toggleFlowFields();
+    toggleInstagramWarning();
 });
+document.getElementById('platform').addEventListener('change', () => {
+    toggleInstagramWarning();
+});
+const instagramTokenPresent = {{ 'true' if instagram_token_present else 'false' }};
+function toggleInstagramWarning() {
+    const tipo = document.getElementById('tipo').value;
+    const platform = document.getElementById('platform').value;
+    const warning = document.getElementById('instagram-rule-warning');
+    if (!warning) return;
+    const platformApplies = platform === '' || platform === 'instagram';
+    const show = instagramTokenPresent && platformApplies && !['texto', 'boton'].includes(tipo);
+    warning.style.display = show ? 'block' : 'none';
+}
 const form = document.getElementById('reglaForm');
 form.addEventListener('submit', prepareOptions);
 window.addEventListener('DOMContentLoaded', () => {
@@ -443,6 +473,7 @@ window.addEventListener('DOMContentLoaded', () => {
     toggleListFields();
     toggleButtonFields();
     toggleFlowFields();
+    toggleInstagramWarning();
 });
 
 function valueOrEmpty(value, joiner = ', ') {
@@ -497,6 +528,7 @@ function cargarRegla(regla) {
     document.getElementById('input_text').value = valueOrEmpty(regla.input_text, ', ');
     document.getElementById('respuesta').value = regla.respuesta || '';
     document.getElementById('siguiente_step').value = valueOrEmpty(regla.siguiente_step);
+    document.getElementById('platform').value = regla.platform || '';
     document.getElementById('tipo').value = regla.tipo || 'texto';
     document.getElementById('media').value = '';
     document.getElementById('media_url').value = valueOrEmpty(regla.media_urls, '\n');

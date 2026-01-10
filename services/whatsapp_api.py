@@ -504,7 +504,69 @@ def enviar_mensaje(
                         "payload": {"url": attachment_url},
                     }
                 }
-        elif tipo_respuesta in {"lista", "boton", "flow"}:
+        elif tipo_respuesta == "boton":
+            try:
+                botones = json.loads(opciones) if opciones else []
+            except Exception:
+                botones = []
+
+            botones_instagram = []
+            for boton in botones:
+                if not isinstance(boton, dict):
+                    continue
+                boton_type = (boton.get("type") or "").strip().lower()
+                reply_obj = boton.get("reply") if isinstance(boton.get("reply"), dict) else {}
+                title = (
+                    boton.get("title")
+                    or reply_obj.get("title")
+                    or boton.get("text")
+                    or boton.get("label")
+                )
+                payload_value = (
+                    boton.get("payload")
+                    or boton.get("PAYLOAD")
+                    or boton.get("id")
+                    or reply_obj.get("id")
+                )
+                url_value = boton.get("url") or boton.get("link")
+
+                if boton_type in {"web_url", "url", "link"} or url_value:
+                    if url_value and title:
+                        botones_instagram.append(
+                            {"type": "web_url", "url": url_value, "title": title}
+                        )
+                    continue
+
+                if boton_type in {"postback", "payload", "reply"} or payload_value:
+                    if payload_value and title:
+                        botones_instagram.append(
+                            {
+                                "type": "postback",
+                                "payload": payload_value,
+                                "title": title,
+                            }
+                        )
+
+            if not botones_instagram:
+                logger.warning(
+                    "Botones vacíos para Instagram; se envía texto de fallback",
+                    extra={"numero": numero, "tipo_respuesta": tipo_respuesta},
+                )
+                fallback_text = mensaje or "Por favor responde con texto."
+                payload["message"] = {"text": fallback_text}
+            else:
+                prompt_text = mensaje or "Selecciona una opción."
+                payload["message"] = {
+                    "attachment": {
+                        "type": "template",
+                        "payload": {
+                            "template_type": "button",
+                            "text": prompt_text,
+                            "buttons": botones_instagram[:3],
+                        },
+                    }
+                }
+        elif tipo_respuesta in {"lista", "flow"}:
             logger.warning(
                 "Tipo no soportado por Instagram; se envía texto de fallback",
                 extra={"numero": numero, "tipo_respuesta": tipo_respuesta},

@@ -126,6 +126,13 @@ def _normalize_input(text):
     """Normaliza una lista separada por comas."""
     return ','.join(t.strip().lower() for t in (text or '').split(',') if t.strip())
 
+
+def _normalize_platform(value):
+    normalized = (value or '').strip().lower()
+    if normalized in {'whatsapp', 'messenger', 'instagram'}:
+        return normalized
+    return None
+
 def _url_ok(url):
     try:
         r = requests.head(url, allow_redirects=True, timeout=5)
@@ -600,6 +607,10 @@ def _reglas_view(template_name):
         if not c.fetchone():
             c.execute("ALTER TABLE reglas ADD COLUMN handler VARCHAR(50) NULL;")
             conn.commit()
+        c.execute("SHOW COLUMNS FROM reglas LIKE 'platform';")
+        if not c.fetchone():
+            c.execute("ALTER TABLE reglas ADD COLUMN platform VARCHAR(20) NULL;")
+            conn.commit()
         c.execute("SHOW COLUMNS FROM reglas LIKE 'media_url';")
         if not c.fetchone():
             c.execute("ALTER TABLE reglas ADD COLUMN media_url TEXT NULL;")
@@ -619,8 +630,8 @@ def _reglas_view(template_name):
                     if not fila:
                         continue
                     # Permitir archivos con columnas opcionales
-                    datos = list(fila) + [None] * 11
-                    step, input_text, respuesta, siguiente_step, tipo, media_url, media_tipo, opciones, rol_keyword, calculo, handler = datos[:11]
+                    datos = list(fila) + [None] * 12
+                    step, input_text, respuesta, siguiente_step, tipo, media_url, media_tipo, opciones, rol_keyword, calculo, handler, platform_raw = datos[:12]
                     url_ok = False
                     detected_type = None
                     if media_url:
@@ -636,10 +647,18 @@ def _reglas_view(template_name):
                     step = (step or '').strip().lower()
                     input_text = _normalize_input(input_text)
                     siguiente_step = _normalize_input(siguiente_step) or None
+                    platform = _normalize_platform(platform_raw)
 
                     c.execute(
-                        "SELECT id FROM reglas WHERE step = %s AND input_text = %s",
-                        (step, input_text)
+                        """
+                        SELECT id FROM reglas
+                         WHERE step = %s AND input_text = %s
+                           AND (
+                               platform = %s
+                               OR (%s IS NULL AND (platform IS NULL OR platform = ''))
+                           )
+                        """,
+                        (step, input_text, platform, platform),
                     )
                     existente = c.fetchone()
                     if existente:
@@ -649,6 +668,7 @@ def _reglas_view(template_name):
                             UPDATE reglas
                                SET respuesta = %s,
                                    siguiente_step = %s,
+                                   platform = %s,
                                    tipo = %s,
                                    media_url = %s,
                                    media_tipo = %s,
@@ -658,7 +678,19 @@ def _reglas_view(template_name):
                                    handler = %s
                              WHERE id = %s
                             """,
-                            (respuesta, siguiente_step, tipo, media_url, media_tipo, opciones, rol_keyword, calculo, handler, regla_id)
+                            (
+                                respuesta,
+                                siguiente_step,
+                                platform,
+                                tipo,
+                                media_url,
+                                media_tipo,
+                                opciones,
+                                rol_keyword,
+                                calculo,
+                                handler,
+                                regla_id,
+                            ),
                         )
                         c.execute("DELETE FROM regla_medias WHERE regla_id=%s", (regla_id,))
                         if media_url and url_ok:
@@ -668,9 +700,22 @@ def _reglas_view(template_name):
                             )
                     else:
                         c.execute(
-                            "INSERT INTO reglas (step, input_text, respuesta, siguiente_step, tipo, media_url, media_tipo, opciones, rol_keyword, calculo, handler) "
-                            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
-                            (step, input_text, respuesta, siguiente_step, tipo, media_url, media_tipo, opciones, rol_keyword, calculo, handler)
+                            "INSERT INTO reglas (step, input_text, respuesta, siguiente_step, platform, tipo, media_url, media_tipo, opciones, rol_keyword, calculo, handler) "
+                            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                            (
+                                step,
+                                input_text,
+                                respuesta,
+                                siguiente_step,
+                                platform,
+                                tipo,
+                                media_url,
+                                media_tipo,
+                                opciones,
+                                rol_keyword,
+                                calculo,
+                                handler,
+                            ),
                         )
                         regla_id = c.lastrowid
                         if media_url and url_ok:
@@ -756,6 +801,7 @@ def _reglas_view(template_name):
                 calculo = request.form.get('calculo')
                 handler = request.form.get('handler')
                 regla_id = request.form.get('regla_id')
+                platform = _normalize_platform(request.form.get('platform'))
 
                 if regla_id:
                     c.execute(
@@ -765,6 +811,7 @@ def _reglas_view(template_name):
                                input_text = %s,
                                respuesta = %s,
                                siguiente_step = %s,
+                               platform = %s,
                                tipo = %s,
                                media_url = %s,
                                media_tipo = %s,
@@ -779,6 +826,7 @@ def _reglas_view(template_name):
                             input_text,
                             respuesta,
                             siguiente_step,
+                            platform,
                             tipo,
                             media_url,
                             media_tipo,
@@ -797,8 +845,15 @@ def _reglas_view(template_name):
                         )
                 else:
                     c.execute(
-                        "SELECT id FROM reglas WHERE step = %s AND input_text = %s",
-                        (step, input_text)
+                        """
+                        SELECT id FROM reglas
+                         WHERE step = %s AND input_text = %s
+                           AND (
+                               platform = %s
+                               OR (%s IS NULL AND (platform IS NULL OR platform = ''))
+                           )
+                        """,
+                        (step, input_text, platform, platform),
                     )
                     existente = c.fetchone()
                     if existente:
@@ -808,6 +863,7 @@ def _reglas_view(template_name):
                             UPDATE reglas
                                SET respuesta = %s,
                                    siguiente_step = %s,
+                                   platform = %s,
                                    tipo = %s,
                                    media_url = %s,
                                    media_tipo = %s,
@@ -820,6 +876,7 @@ def _reglas_view(template_name):
                             (
                                 respuesta,
                                 siguiente_step,
+                                platform,
                                 tipo,
                                 media_url,
                                 media_tipo,
@@ -838,13 +895,14 @@ def _reglas_view(template_name):
                             )
                     else:
                         c.execute(
-                            "INSERT INTO reglas (step, input_text, respuesta, siguiente_step, tipo, media_url, media_tipo, opciones, rol_keyword, calculo, handler) "
-                            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                            "INSERT INTO reglas (step, input_text, respuesta, siguiente_step, platform, tipo, media_url, media_tipo, opciones, rol_keyword, calculo, handler) "
+                            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
                             (
                                 step,
                                 input_text,
                                 respuesta,
                                 siguiente_step,
+                                platform,
                                 tipo,
                                 media_url,
                                 media_tipo,
@@ -865,7 +923,7 @@ def _reglas_view(template_name):
         # Listar todas las reglas
         c.execute(
             """
-            SELECT r.id, r.step, r.input_text, r.respuesta, r.siguiente_step, r.tipo,
+            SELECT r.id, r.step, r.input_text, r.respuesta, r.siguiente_step, r.platform, r.tipo,
                    GROUP_CONCAT(m.media_url SEPARATOR '||') AS media_urls,
                    GROUP_CONCAT(m.media_tipo SEPARATOR '||') AS media_tipos,
                    r.opciones, r.rol_keyword, r.calculo, r.handler
@@ -884,13 +942,14 @@ def _reglas_view(template_name):
                 'input_text': row[2],
                 'respuesta': row[3],
                 'siguiente_step': row[4],
-                'tipo': row[5],
-                'media_urls': (row[6] or '').split('||') if row[6] else [],
-                'media_tipos': (row[7] or '').split('||') if row[7] else [],
-                'opciones': row[8] or '',
-                'rol_keyword': row[9],
-                'calculo': row[10],
-                'handler': row[11],
+                'platform': row[5],
+                'tipo': row[6],
+                'media_urls': (row[7] or '').split('||') if row[7] else [],
+                'media_tipos': (row[8] or '').split('||') if row[8] else [],
+                'opciones': row[9] or '',
+                'rol_keyword': row[10],
+                'calculo': row[11],
+                'handler': row[12],
                 'header': None,
                 'button': None,
                 'footer': None,
@@ -919,11 +978,14 @@ def _reglas_view(template_name):
                             d[key] = value
                     d['flow_options'] = parsed_opts
             reglas.append(d)
+        tenant_env = dict(tenants.get_current_tenant_env() or {})
+        instagram_token_present = bool((tenant_env.get("INSTAGRAM_TOKEN") or "").strip())
         chat_state_definitions = get_chat_state_definitions(include_hidden=True)
         return render_template(
             template_name,
             reglas=reglas,
             chat_state_definitions=chat_state_definitions,
+            instagram_token_present=instagram_token_present,
         )
     finally:
         conn.close()
