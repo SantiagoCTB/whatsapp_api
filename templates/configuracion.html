@@ -31,6 +31,14 @@
     <label for="siguiente_step">Siguiente paso (puedes ingresar varios pasos separados por comas):</label>
     <input type="text" id="siguiente_step" name="siguiente_step" placeholder="paso1, paso2">
 
+    <label for="platform">Plataforma:</label>
+    <select name="platform" id="platform" class="form-control">
+        <option value="">Todas</option>
+        <option value="whatsapp">WhatsApp</option>
+        <option value="messenger">Messenger</option>
+        <option value="instagram">Instagram</option>
+    </select>
+
     <label for="tipo">Tipo:</label>
     <select name="tipo" id="tipo" class="form-control">
         <option value="texto">Texto</option>
@@ -133,6 +141,7 @@
         <th>Input</th>
         <th>Respuesta</th>
         <th>Siguiente paso</th>
+        <th>Plataforma</th>
         <th>Tipo</th>
         <th>Media URL</th>
         <th>Media Tipo</th>
@@ -152,6 +161,7 @@
         <td>{{ regla.input_text }}</td>
         <td>{{ regla.respuesta }}</td>
         <td>{{ regla.siguiente_step or '-' }}</td>
+        <td>{{ regla.platform or 'Todas' }}</td>
         <td>{{ regla.tipo }}</td>
         <td><pre style="white-space: pre-wrap;">{{ regla.media_urls|join('\n') if regla.media_urls else '-' }}</pre></td>
         <td><pre style="white-space: pre-wrap;">{{ regla.media_tipos|join('\n') if regla.media_tipos else '-' }}</pre></td>
@@ -333,12 +343,17 @@ document.getElementById('tipo').addEventListener('change', () => {
     toggleFlowFields();
     toggleInstagramWarning();
 });
+document.getElementById('platform').addEventListener('change', () => {
+    toggleInstagramWarning();
+});
 const instagramTokenPresent = {{ 'true' if instagram_token_present else 'false' }};
 function toggleInstagramWarning() {
     const tipo = document.getElementById('tipo').value;
+    const platform = document.getElementById('platform').value;
     const warning = document.getElementById('instagram-rule-warning');
     if (!warning) return;
-    const show = instagramTokenPresent && !['texto', 'boton'].includes(tipo);
+    const platformApplies = platform === '' || platform === 'instagram';
+    const show = instagramTokenPresent && platformApplies && !['texto', 'boton'].includes(tipo);
     warning.style.display = show ? 'block' : 'none';
 }
 const form = document.getElementById('reglaForm');
@@ -357,6 +372,7 @@ function cargarRegla(regla) {
     document.getElementById('input_text').value = regla.input_text || '';
     document.getElementById('respuesta').value = regla.respuesta || '';
     document.getElementById('siguiente_step').value = regla.siguiente_step || '';
+    document.getElementById('platform').value = regla.platform || '';
     document.getElementById('tipo').value = regla.tipo || 'texto';
     document.getElementById('media').value = '';
     document.getElementById('media_url').value = (regla.media_urls || []).filter(u => u).join(', ');

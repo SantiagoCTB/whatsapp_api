@@ -652,6 +652,7 @@ def init_db(db_settings: DatabaseSettings | None = None):
       input_text TEXT NOT NULL,
       respuesta TEXT NOT NULL,
       siguiente_step TEXT,
+      platform VARCHAR(20) NULL,
       tipo VARCHAR(20) NOT NULL DEFAULT 'texto',
       opciones TEXT,
       rol_keyword VARCHAR(20) NULL,
@@ -662,7 +663,10 @@ def init_db(db_settings: DatabaseSettings | None = None):
     ) ENGINE=InnoDB;
     """)
 
-    # Migración defensiva de columnas calculo, handler y medios
+    # Migración defensiva de columnas platform, calculo, handler y medios
+    c.execute("SHOW COLUMNS FROM reglas LIKE 'platform';")
+    if not c.fetchone():
+        c.execute("ALTER TABLE reglas ADD COLUMN platform VARCHAR(20) NULL;")
     c.execute("SHOW COLUMNS FROM reglas LIKE 'calculo';")
     if not c.fetchone():
         c.execute("ALTER TABLE reglas ADD COLUMN calculo TEXT NULL;")
