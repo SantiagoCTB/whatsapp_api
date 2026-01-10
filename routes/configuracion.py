@@ -334,6 +334,26 @@ def _handle_instagram_oauth_code(code: str, redirect_uri: str) -> dict:
     )
     return {"ok": True, "account": account}
 
+
+def _resolve_instagram_redirect_uri(fallback: str) -> str:
+    signup_url = (Config.SIGNUP_INSTRAGRAM or "").strip()
+    if not signup_url:
+        return fallback
+    try:
+        parsed = urlparse(signup_url)
+    except ValueError:
+        return fallback
+    if not parsed.query:
+        return fallback
+    for entry in parsed.query.split("&"):
+        if not entry:
+            continue
+        key, _, value = entry.partition("=")
+        if key == "redirect_uri" and value:
+            return value
+    return fallback
+
+
 def _resolve_page_user_token(platform: str | None, tenant_env: dict, provided_token: str) -> str:
     normalized = (platform or "").strip().lower()
     if normalized == "instagram":
@@ -1215,7 +1235,8 @@ def configuracion_signup():
 
     oauth_code = (request.args.get("code") or "").strip()
     if oauth_code:
-        result = _handle_instagram_oauth_code(oauth_code, request.base_url)
+        redirect_uri = _resolve_instagram_redirect_uri(request.base_url)
+        result = _handle_instagram_oauth_code(oauth_code, redirect_uri)
         if not result.get("ok"):
             logger.warning(
                 "No se pudo procesar el código de Instagram OAuth",
@@ -1268,7 +1289,7 @@ def instagram_oauth_callback():
     if not oauth_code:
         return redirect(url_for("configuracion.configuracion_signup"))
 
-    redirect_uri = (request.args.get("redirect_uri") or "").strip() or request.base_url
+    redirect_uri = _resolve_instagram_redirect_uri(request.base_url)
     result = _handle_instagram_oauth_code(oauth_code, redirect_uri)
     if not result.get("ok"):
         logger.warning(

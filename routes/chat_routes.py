@@ -546,7 +546,6 @@ def index():
             url_for(
                 "configuracion.instagram_oauth_callback",
                 code=oauth_code,
-                redirect_uri=request.base_url,
             )
         )
     # Autenticación
