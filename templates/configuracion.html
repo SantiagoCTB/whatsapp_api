@@ -42,6 +42,9 @@
         <option value="video">Video</option>
         <option value="audio">Audio</option>
     </select>
+    <p id="instagram-rule-warning" class="alert alert-warning" style="display:none;">
+        Instagram solo acepta reglas de tipo texto o botón.
+    </p>
 
     <label for="media" id="label_media_file" style="display:none;">Subir archivo:</label>
     <input type="file" id="media" name="media" style="display:none;">
@@ -328,7 +331,16 @@ document.getElementById('tipo').addEventListener('change', () => {
     toggleListFields();
     toggleButtonFields();
     toggleFlowFields();
+    toggleInstagramWarning();
 });
+const instagramTokenPresent = {{ 'true' if instagram_token_present else 'false' }};
+function toggleInstagramWarning() {
+    const tipo = document.getElementById('tipo').value;
+    const warning = document.getElementById('instagram-rule-warning');
+    if (!warning) return;
+    const show = instagramTokenPresent && !['texto', 'boton'].includes(tipo);
+    warning.style.display = show ? 'block' : 'none';
+}
 const form = document.getElementById('reglaForm');
 form.addEventListener('submit', prepareOptions);
 window.addEventListener('DOMContentLoaded', () => {
@@ -336,6 +348,7 @@ window.addEventListener('DOMContentLoaded', () => {
     toggleListFields();
     toggleButtonFields();
     toggleFlowFields();
+    toggleInstagramWarning();
 });
 
 function cargarRegla(regla) {
