@@ -229,9 +229,34 @@ def _mask_identifier(value, visible=4):
 def _extract_message_ids(payload):
     ids = []
     for entry in (payload or {}).get('entry', []):
+        for event in entry.get("messaging", []) or []:
+            message = event.get("message") or {}
+            message_id = message.get("mid")
+            if message_id:
+                ids.append(message_id)
+            delivery = event.get("delivery") or {}
+            for mid in delivery.get("mids") or []:
+                ids.append(mid)
+            read_event = event.get("read") or {}
+            for mid in read_event.get("mids") or []:
+                ids.append(mid)
+            reaction_event = event.get("reaction") or {}
+            reaction_mid = reaction_event.get("mid")
+            if reaction_mid:
+                ids.append(reaction_mid)
+            postback = event.get("postback") or {}
+            postback_mid = postback.get("mid")
+            if postback_mid:
+                ids.append(postback_mid)
         for change in entry.get('changes', []):
             for msg in change.get('value', {}).get('messages', []) or []:
                 msg_id = msg.get('id')
+                if msg_id:
+                    ids.append(msg_id)
+            value = change.get("value") or {}
+            message_value = value.get("message")
+            if isinstance(message_value, dict):
+                msg_id = message_value.get("mid")
                 if msg_id:
                     ids.append(msg_id)
             for status in change.get('value', {}).get('statuses', []) or []:
@@ -517,7 +542,27 @@ def _mark_message_processed(message_id: str | None) -> bool:
 def _handle_messenger_payload(data, summary, channel="messenger"):
     tipo_prefix = "cliente_instagram" if channel == "instagram" else "cliente_messenger"
     for entry in data.get("entry", []):
-        for event in entry.get("messaging", []) or []:
+        events = list(entry.get("messaging", []) or [])
+        for change in entry.get("changes", []) or []:
+            if change.get("field") != "messages":
+                continue
+            value = change.get("value") or {}
+            messages = value.get("messages")
+            if isinstance(messages, list) and messages:
+                for message in messages:
+                    if not isinstance(message, dict):
+                        continue
+                    events.append(
+                        {
+                            "sender": value.get("sender"),
+                            "recipient": value.get("recipient"),
+                            "timestamp": value.get("timestamp"),
+                            "message": message,
+                        }
+                    )
+            else:
+                events.append(value)
+        for event in events:
             handled = False
             message = event.get("message") or {}
             sender_id = (event.get("sender") or {}).get("id")
