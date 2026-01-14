@@ -33,6 +33,8 @@ def _extract_phone_number_id(req):
     for entry in payload.get("entry", []):
         for change in entry.get("changes", []):
             value = change.get("value", {}) or {}
+            if not isinstance(value, dict):
+                continue
             metadata = value.get("metadata") or {}
             phone_id = metadata.get("phone_number_id")
             if phone_id:
