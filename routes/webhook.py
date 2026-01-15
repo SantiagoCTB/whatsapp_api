@@ -1370,6 +1370,7 @@ def process_buffered_messages(numero):
             tenant = tenants.get_tenant(tenant_key)
             if tenant:
                 tenants.set_current_tenant(tenant)
+                tenants.set_current_tenant_env(tenants.get_tenant_env(tenant))
                 return
 
         if tenant_env:
