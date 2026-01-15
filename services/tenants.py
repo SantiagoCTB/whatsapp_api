@@ -324,6 +324,24 @@ def find_tenant_by_page_id(page_id: str | None) -> TenantInfo | None:
         for key in ("MESSENGER_PAGE_ID", "PAGE_ID"):
             if _tenant_has_env_value(tenant, key, page_id):
                 return tenant
+        metadata = tenant.metadata or {}
+        if isinstance(metadata, dict):
+            instagram_account = metadata.get("instagram_account") or {}
+            instagram_id = (
+                instagram_account.get("id") if isinstance(instagram_account, dict) else None
+            )
+            if instagram_id and str(instagram_id).strip() == str(page_id).strip():
+                return tenant
+            page_selection = metadata.get("page_selection") or {}
+            if isinstance(page_selection, dict):
+                instagram_selection = page_selection.get("instagram") or {}
+                instagram_page_id = (
+                    instagram_selection.get("page_id")
+                    if isinstance(instagram_selection, dict)
+                    else None
+                )
+                if instagram_page_id and str(instagram_page_id).strip() == str(page_id).strip():
+                    return tenant
 
     return None
 
