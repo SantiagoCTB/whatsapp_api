@@ -12,11 +12,12 @@ GLOBAL_COMMANDS = {}
 def reiniciar_handler(numero, text):
     """Reinicia el flujo para el usuario y envía el mensaje inicial."""
     # Importar aquí para evitar dependencias circulares
-    from routes.webhook import set_user_step, advance_steps
+    from routes.webhook import set_user_step, advance_steps, _resolve_rule_platform
 
     # Aseguramos establecer el paso inicial antes de iniciar el flujo
     set_user_step(numero, Config.INITIAL_STEP)
     enviar_mensaje(numero, "Perfecto, volvamos a empezar.")
+    platform = _resolve_rule_platform(numero)
 
     conn = get_connection(); c = conn.cursor()
     c.execute(
@@ -26,10 +27,14 @@ def reiniciar_handler(numero, text):
                r.opciones, r.rol_keyword
           FROM reglas r
           LEFT JOIN regla_medias m ON r.id = m.regla_id
-         WHERE r.step=%s AND r.input_text=%s
+         WHERE r.step=%s
+           AND r.input_text=%s
+           AND (r.platform IS NULL OR r.platform = '' OR r.platform = %s)
          GROUP BY r.id
+         ORDER BY (r.platform = %s) DESC, r.id
+         LIMIT 1
         """,
-        (Config.INITIAL_STEP, 'iniciar')
+        (Config.INITIAL_STEP, 'iniciar', platform, platform)
     )
     row = c.fetchone(); conn.close()
 
@@ -53,7 +58,7 @@ def reiniciar_handler(numero, text):
                 )
                 conn2.commit()
             conn2.close()
-        advance_steps(numero, next_step)
+        advance_steps(numero, next_step, platform=platform)
 
 
 # Registrar comandos por defecto
