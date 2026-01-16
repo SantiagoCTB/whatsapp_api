@@ -230,7 +230,8 @@ def get_tenant_env(
         if isinstance(raw_env, dict):
             env_overrides = raw_env
 
-    return _merge_env(base_env, env_overrides)
+    env = _merge_env(base_env, env_overrides)
+    return env
 
 
 def set_current_tenant_env(env: dict | None):
