@@ -98,9 +98,19 @@ def _get_instagram_env():
                     instagram_account_id = (
                         instagram_selection.get("page_id") or ""
                     ).strip()
+    if not instagram_account_id:
+        instagram_account_id = (
+            (env.get("INSTAGRAM_ACCOUNT_ID") or "").strip()
+            or (env.get("INSTAGRAM_PAGE_ID") or "").strip()
+        )
     if not token:
         legacy_env = tenants.get_tenant_env(None)
         token = (legacy_env.get("INSTAGRAM_TOKEN") or "").strip()
+        if not instagram_account_id:
+            instagram_account_id = (
+                (legacy_env.get("INSTAGRAM_ACCOUNT_ID") or "").strip()
+                or (legacy_env.get("INSTAGRAM_PAGE_ID") or "").strip()
+            )
 
     missing = []
     if not token:
