@@ -88,7 +88,20 @@ def _get_instagram_env():
     instagram_account_id = ""
     if tenant and isinstance(tenant.metadata, dict):
         instagram_account = tenant.metadata.get("instagram_account") or {}
-        instagram_account_id = (instagram_account.get("id") or "").strip()
+        if isinstance(instagram_account, dict):
+            instagram_account_id = (instagram_account.get("id") or "").strip()
+        if not instagram_account_id:
+            page_selection = tenant.metadata.get("page_selection") or {}
+            if isinstance(page_selection, dict):
+                instagram_selection = page_selection.get("instagram") or {}
+                if isinstance(instagram_selection, dict):
+                    instagram_account_id = (
+                        instagram_selection.get("page_id") or ""
+                    ).strip()
+    if not instagram_account_id:
+        instagram_account_id = (env.get("INSTAGRAM_ACCOUNT_ID") or "").strip()
+    if not instagram_account_id:
+        instagram_account_id = (env.get("INSTAGRAM_PAGE_ID") or "").strip()
 
     missing = []
     if not token:
