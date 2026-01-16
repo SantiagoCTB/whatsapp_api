@@ -323,6 +323,9 @@ def _handle_instagram_oauth_code(code: str, redirect_uri: str) -> dict:
     tenant_env = tenants.get_tenant_env(tenant)
     env_updates = {key: tenant_env.get(key) for key in tenants.TENANT_ENV_KEYS}
     env_updates["INSTAGRAM_TOKEN"] = access_token
+    if account.get("id"):
+        env_updates["INSTAGRAM_ACCOUNT_ID"] = account.get("id")
+        env_updates["INSTAGRAM_PAGE_ID"] = account.get("id")
     tenants.update_tenant_env(tenant.tenant_key, env_updates)
     tenants.update_tenant_metadata(
         tenant.tenant_key,
@@ -1625,13 +1628,15 @@ def instagram_save_token():
     if not response.get("ok"):
         return response, 400
 
+    account = response.get("account") or {}
     tenant_env = tenants.get_tenant_env(tenant)
     env_updates = {key: tenant_env.get(key) for key in tenants.TENANT_ENV_KEYS}
     env_updates["INSTAGRAM_TOKEN"] = user_token
+    if account.get("id"):
+        env_updates["INSTAGRAM_ACCOUNT_ID"] = account.get("id")
+        env_updates["INSTAGRAM_PAGE_ID"] = account.get("id")
     tenants.update_tenant_env(tenant.tenant_key, env_updates)
     tenants.trigger_page_backfill_for_platform(tenant, "instagram")
-
-    account = response.get("account") or {}
     tenants.update_tenant_metadata(
         tenant.tenant_key,
         {"instagram_account": account},
