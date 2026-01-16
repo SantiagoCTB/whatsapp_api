@@ -47,6 +47,8 @@ TENANT_ENV_KEYS = {
     "META_TOKEN",
     "MESSENGER_TOKEN",
     "INSTAGRAM_TOKEN",
+    "INSTAGRAM_ACCOUNT_ID",
+    "INSTAGRAM_PAGE_ID",
     "PAGE_ID",
     "PAGE_ACCESS_TOKEN",
     "PLATFORM",
@@ -94,6 +96,8 @@ def _default_tenant_env(*, include_legacy_credentials: bool = False) -> dict:
         "META_TOKEN": None,
         "MESSENGER_TOKEN": None,
         "INSTAGRAM_TOKEN": None,
+        "INSTAGRAM_ACCOUNT_ID": None,
+        "INSTAGRAM_PAGE_ID": None,
         "PAGE_ID": None,
         "PAGE_ACCESS_TOKEN": None,
         "PLATFORM": None,
@@ -119,6 +123,8 @@ def _default_tenant_env(*, include_legacy_credentials: bool = False) -> dict:
             "META_TOKEN": Config.META_TOKEN,
             "MESSENGER_TOKEN": Config.MESSENGER_TOKEN,
             "INSTAGRAM_TOKEN": Config.INSTAGRAM_TOKEN,
+            "INSTAGRAM_ACCOUNT_ID": os.getenv("INSTAGRAM_ACCOUNT_ID"),
+            "INSTAGRAM_PAGE_ID": os.getenv("INSTAGRAM_PAGE_ID"),
             "PAGE_ID": Config.PAGE_ID,
             "PAGE_ACCESS_TOKEN": Config.PAGE_ACCESS_TOKEN,
             "PLATFORM": Config.PLATFORM,
@@ -230,7 +236,23 @@ def get_tenant_env(
         if isinstance(raw_env, dict):
             env_overrides = raw_env
 
-    return _merge_env(base_env, env_overrides)
+    env = _merge_env(base_env, env_overrides)
+    instagram_account_id = ""
+    if isinstance(metadata, dict):
+        instagram_account = metadata.get("instagram_account") or {}
+        if isinstance(instagram_account, dict):
+            instagram_account_id = (instagram_account.get("id") or "").strip()
+        if not instagram_account_id:
+            page_selection = metadata.get("page_selection") or {}
+            if isinstance(page_selection, dict):
+                instagram_selection = page_selection.get("instagram") or {}
+                if isinstance(instagram_selection, dict):
+                    instagram_account_id = (
+                        instagram_selection.get("page_id") or ""
+                    ).strip()
+    if instagram_account_id:
+        env["INSTAGRAM_ACCOUNT_ID"] = instagram_account_id
+    return env
 
 
 def set_current_tenant_env(env: dict | None):
