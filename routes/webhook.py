@@ -857,9 +857,9 @@ def handle_option_reply(numero, option_id, platform: str | None = None):
                      WHERE r.step=%s
                        AND (r.platform IS NULL OR r.platform = '' OR r.platform = %s)
                      GROUP BY r.step, r.id
-                     ORDER BY r.id
+                     ORDER BY (r.platform = %s) DESC, r.id
                     """,
-                    (step_filter, platform),
+                    (step_filter, platform, platform),
                 )
             else:
                 c.execute(
@@ -868,14 +868,14 @@ def handle_option_reply(numero, option_id, platform: str | None = None):
                            r.id, r.respuesta, r.siguiente_step, r.tipo,
                            GROUP_CONCAT(m.media_url SEPARATOR '||') AS media_urls,
                            r.opciones, r.rol_keyword, r.input_text
-                      FROM reglas r
-                      LEFT JOIN regla_medias m ON r.id = m.regla_id
+                     FROM reglas r
+                     LEFT JOIN regla_medias m ON r.id = m.regla_id
                      WHERE LOWER(r.input_text)=LOWER(%s)
                        AND (r.platform IS NULL OR r.platform = '' OR r.platform = %s)
                      GROUP BY r.step, r.id
-                     ORDER BY r.id
+                     ORDER BY (r.platform = %s) DESC, r.id
                     """,
-                    (option_id, platform),
+                    (option_id, platform, platform),
                 )
             rows = c.fetchall()
         finally:
@@ -928,8 +928,9 @@ def handle_option_reply(numero, option_id, platform: str | None = None):
           FROM reglas
          WHERE step=%s
            AND (platform IS NULL OR platform = '' OR platform = %s)
+         ORDER BY (platform = %s) DESC, id
         """,
-        (current_step, platform),
+        (current_step, platform, platform),
     )
     rows = c.fetchall(); conn.close()
     for (opcs,) in rows:
@@ -1102,10 +1103,10 @@ def advance_steps(numero: str, steps_str: str, visited=None, platform: str | Non
                    AND r.input_text='*'
                    AND (r.platform IS NULL OR r.platform = '' OR r.platform = %s)
                  GROUP BY r.id
-                 ORDER BY r.id
+                 ORDER BY (r.platform = %s) DESC, r.id
                  LIMIT 1
                 """,
-                (step, platform),
+                (step, platform, platform),
             )
             regla = c.fetchone()
         finally:
@@ -1169,9 +1170,9 @@ def process_step_chain(
          WHERE r.step=%s
            AND (r.platform IS NULL OR r.platform = '' OR r.platform = %s)
          GROUP BY r.id
-         ORDER BY r.id
+         ORDER BY (r.platform = %s) DESC, r.id
         """,
-        (step, platform),
+        (step, platform, platform),
     )
     reglas = c.fetchall(); conn.close()
     if not reglas:
@@ -1192,12 +1193,12 @@ def process_step_chain(
     for r in reglas:
         patt = (r[7] or '').strip()
         if patt and patt != '*' and normalize_text(patt) == text_norm:
-            dispatch_rule(numero, r, step, visited=visited)
+            dispatch_rule(numero, r, step, visited=visited, platform=platform)
             return
 
     # Regla comodín
     if comodines and wildcard_allowed:
-        dispatch_rule(numero, comodines[0], step, visited=visited)
+        dispatch_rule(numero, comodines[0], step, visited=visited, platform=platform)
         # No procesar recursivamente otros comodines; esperar nueva entrada
         return
 
@@ -1233,8 +1234,10 @@ def handle_medicion(numero, texto):
            AND r.input_text='*'
            AND (r.platform IS NULL OR r.platform = '' OR r.platform = %s)
          GROUP BY r.id
+         ORDER BY (r.platform = %s) DESC, r.id
+         LIMIT 1
         """,
-        (step_actual, platform)
+        (step_actual, platform, platform)
     )
     row = c.fetchone(); conn.close()
     if not row:
@@ -1370,7 +1373,10 @@ def process_buffered_messages(numero):
             tenant = tenants.get_tenant(tenant_key)
             if tenant:
                 tenants.set_current_tenant(tenant)
-                tenants.set_current_tenant_env(tenants.get_tenant_env(tenant))
+                if tenant_env:
+                    tenants.set_current_tenant_env(tenant_env)
+                else:
+                    tenants.set_current_tenant_env(tenants.get_tenant_env(tenant))
                 return
 
         if tenant_env:
