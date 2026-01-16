@@ -230,7 +230,23 @@ def get_tenant_env(
         if isinstance(raw_env, dict):
             env_overrides = raw_env
 
-    return _merge_env(base_env, env_overrides)
+    env = _merge_env(base_env, env_overrides)
+    instagram_account_id = ""
+    if isinstance(metadata, dict):
+        instagram_account = metadata.get("instagram_account") or {}
+        if isinstance(instagram_account, dict):
+            instagram_account_id = (instagram_account.get("id") or "").strip()
+        if not instagram_account_id:
+            page_selection = metadata.get("page_selection") or {}
+            if isinstance(page_selection, dict):
+                instagram_selection = page_selection.get("instagram") or {}
+                if isinstance(instagram_selection, dict):
+                    instagram_account_id = (
+                        instagram_selection.get("page_id") or ""
+                    ).strip()
+    if instagram_account_id:
+        env["INSTAGRAM_ACCOUNT_ID"] = instagram_account_id
+    return env
 
 
 def set_current_tenant_env(env: dict | None):
