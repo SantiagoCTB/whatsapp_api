@@ -598,8 +598,6 @@ def _handle_messenger_payload(data, summary, channel="messenger"):
         _ensure_tenant_context_for_page(entry_page_id, channel)
         events = list(entry.get("messaging", []) or [])
         for change in entry.get("changes", []) or []:
-            if change.get("field") != "messages":
-                continue
             value = change.get("value") or {}
             messages = value.get("messages")
             if isinstance(messages, list) and messages:
@@ -612,10 +610,16 @@ def _handle_messenger_payload(data, summary, channel="messenger"):
                             "recipient": value.get("recipient"),
                             "timestamp": value.get("timestamp"),
                             "message": message,
+                            "field": change.get("field"),
                         }
                     )
             else:
-                events.append(value)
+                if isinstance(value, dict):
+                    enriched_value = dict(value)
+                    enriched_value["field"] = change.get("field")
+                    events.append(enriched_value)
+                else:
+                    events.append({"value": value, "field": change.get("field")})
         for event in events:
             handled = False
             message = event.get("message") or {}
@@ -1506,8 +1510,8 @@ def webhook():
 
     data = payload
     if not data.get('object'):
-        logger.info("Returning status=no_object reason=missing object field")
-        return jsonify({'status': 'no_object'}), 400
+        logger.info("Returning status=received reason=missing object field")
+        return Response("EVENT_RECEIVED", status=200, mimetype="text/plain")
 
     summary = {
         'processed': 0,
