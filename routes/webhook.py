@@ -1831,9 +1831,16 @@ def webhook():
                     if handle_option_reply(from_number, option_id, platform="whatsapp"):
                         continue
                     normalized_text = normalize_text(text)
+                    current_tenant = tenants.get_current_tenant()
+                    tenant_env = dict(tenants.get_current_tenant_env() or {})
                     with cache_lock:
                         message_buffer.setdefault(from_number, []).append(
-                            {'raw': text, 'normalized': normalized_text}
+                            {
+                                'raw': text,
+                                'normalized': normalized_text,
+                                'tenant_key': current_tenant.tenant_key if current_tenant else None,
+                                'tenant_env': tenant_env,
+                            }
                         )
                         if from_number in pending_timers:
                             pending_timers[from_number].cancel()
