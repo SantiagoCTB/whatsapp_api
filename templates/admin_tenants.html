@@ -141,6 +141,12 @@
           <label>INSTAGRAM_TOKEN
             <input name="INSTAGRAM_TOKEN" value="{{ tenant_env.get('INSTAGRAM_TOKEN','') }}" placeholder="token de Instagram" />
           </label>
+          <label>INSTAGRAM_ACCOUNT_ID
+            <input name="INSTAGRAM_ACCOUNT_ID" value="{{ tenant_env.get('INSTAGRAM_ACCOUNT_ID','') }}" placeholder="ID de cuenta de Instagram" />
+          </label>
+          <label>INSTAGRAM_PAGE_ID
+            <input name="INSTAGRAM_PAGE_ID" value="{{ tenant_env.get('INSTAGRAM_PAGE_ID','') }}" placeholder="ID de página de Instagram" />
+          </label>
           <label>MESSENGER_PAGE_ID
             <input name="MESSENGER_PAGE_ID" value="{{ tenant_env.get('MESSENGER_PAGE_ID','') }}" placeholder="ID de la Page de Messenger" />
           </label>
@@ -216,6 +222,7 @@
           <div><strong>Phone number:</strong> {{ tenant_env.get('PHONE_NUMBER_ID') or '—' }}</div>
           <div><strong>Token largo:</strong> {{ tenant_env.get('LONG_LIVED_TOKEN') or tenant_env.get('META_TOKEN') or '—' }}</div>
           <div><strong>Page ID (Messenger):</strong> {{ tenant_env.get('MESSENGER_PAGE_ID') or tenant_env.get('PAGE_ID') or '—' }}</div>
+          <div><strong>Instagram account ID:</strong> {{ tenant_env.get('INSTAGRAM_ACCOUNT_ID') or tenant_env.get('INSTAGRAM_PAGE_ID') or '—' }}</div>
           <div><strong>Cuenta Instagram:</strong> {{ (selected_tenant.metadata.get('instagram_account', {}).get('username') if selected_tenant.metadata else None) or (selected_tenant.metadata.get('instagram_account', {}).get('id') if selected_tenant.metadata else None) or '—' }}</div>
           <div><strong>Plataforma legacy:</strong> {{ tenant_env.get('PLATFORM') or '—' }}</div>
           <div><strong>Page name (Messenger):</strong> {{ (selected_tenant.metadata.get('page_selection', {}).get('messenger', {}).get('page_name') if selected_tenant.metadata else None) or '—' }}</div>
