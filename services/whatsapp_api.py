@@ -1143,7 +1143,7 @@ def _post_to_messenger(payload, log_context):
         logger.error("No se puede contactar la API de Messenger: %s", exc)
         return False
 
-    messages_url = f"{INSTAGRAM_GRAPH_BASE_URL}/{runtime['page_id']}/messages"
+    messages_url = f"{GRAPH_BASE_URL}/{runtime['page_id']}/messages"
     headers = {
         "Authorization": f"Bearer {runtime['token']}",
         "Content-Type": "application/json",

@@ -506,6 +506,10 @@
         if (token) {
           payload.user_access_token = token;
         }
+        const pageToken = getPageToken();
+        if (pageToken) {
+          payload.page_access_token = pageToken;
+        }
 
         try {
           const response = await fetch('{{ url_for("configuracion.messenger_pages") }}', {

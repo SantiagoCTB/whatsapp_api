@@ -1566,6 +1566,7 @@ def messenger_pages():
     if platform != "messenger":
         return {"ok": False, "error": "Solo puedes consultar páginas de Messenger."}, 400
     provided_token = (payload.get("user_access_token") or "").strip()
+    provided_page_token = (payload.get("page_access_token") or "").strip()
     tenant_env = tenants.get_tenant_env(tenant)
     token = _resolve_page_user_token(platform, tenant_env, provided_token)
 
@@ -1573,6 +1574,16 @@ def messenger_pages():
         env_updates = {key: tenant_env.get(key) for key in tenants.TENANT_ENV_KEYS}
         env_updates[_resolve_user_token_key(platform)] = provided_token
         tenants.update_tenant_env(tenant.tenant_key, env_updates)
+
+    if provided_page_token:
+        response = _fetch_page_from_token(provided_page_token)
+        if not response.get("ok"):
+            return response, 400
+        page = response.get("page") or {}
+        return {
+            "ok": True,
+            "pages": [{"id": page.get("id"), "name": page.get("name")}],
+        }
 
     response = _fetch_page_accounts(token)
     if not response.get("ok"):
