@@ -195,6 +195,50 @@ def _fetch_page_accounts(user_token: str):
     return {"ok": True, "pages": pages}
 
 
+def _fetch_page_from_token(page_token: str):
+    if not page_token:
+        return {"ok": False, "error": "Falta el token de página para continuar."}
+
+    url = f"https://graph.facebook.com/{Config.FACEBOOK_GRAPH_API_VERSION}/me"
+    params = {
+        "fields": "id,name",
+        "access_token": page_token,
+    }
+
+    try:
+        response = requests.get(url, params=params, timeout=15)
+    except requests.RequestException:
+        logger.warning("No se pudo conectar con Graph API para consultar la página.")
+        return {"ok": False, "error": "No se pudo conectar con la API de Meta."}
+
+    payload = {}
+    try:
+        payload = response.json()
+    except ValueError:
+        payload = {}
+
+    if response.status_code >= 400:
+        details = payload.get("error") if isinstance(payload, dict) else None
+        return {
+            "ok": False,
+            "error": "No se pudo validar el token de página.",
+            "details": details,
+        }
+
+    page_id = payload.get("id") if isinstance(payload, dict) else None
+    if not page_id:
+        return {"ok": False, "error": "No se encontró la página asociada al token."}
+
+    return {
+        "ok": True,
+        "page": {
+            "id": page_id,
+            "name": payload.get("name"),
+            "access_token": page_token,
+        },
+    }
+
+
 def _fetch_instagram_user(user_token: str):
     if not user_token:
         return {"ok": False, "error": "Falta el token de usuario para consultar Instagram."}
@@ -1555,24 +1599,37 @@ def messenger_save_page():
     page_id = (payload.get("page_id") or "").strip()
     platform = (payload.get("platform") or "").strip().lower()
     provided_token = (payload.get("user_access_token") or "").strip()
-
-    if not page_id:
-        return {"ok": False, "error": "Selecciona una página válida."}, 400
+    provided_page_token = (payload.get("page_access_token") or "").strip()
 
     if platform != "messenger":
         return {"ok": False, "error": "Selecciona una plataforma válida."}, 400
 
     tenant_env = tenants.get_tenant_env(tenant)
-    token = _resolve_page_user_token(platform, tenant_env, provided_token)
-    response = _fetch_page_accounts(token)
-    if not response.get("ok"):
-        return response, 400
-
     page_entry = None
-    for page in response.get("pages", []):
-        if str(page.get("id")) == page_id:
-            page_entry = page
-            break
+    if provided_page_token:
+        response = _fetch_page_from_token(provided_page_token)
+        if not response.get("ok"):
+            return response, 400
+        page_entry = response.get("page")
+        if not page_entry:
+            return {"ok": False, "error": "No se pudo obtener la página del token."}, 400
+        if page_id and str(page_entry.get("id")) != page_id:
+            return {"ok": False, "error": "El token no corresponde a la página indicada."}, 400
+    else:
+        if not page_id:
+            return {"ok": False, "error": "Selecciona una página válida."}, 400
+        token = _resolve_page_user_token(platform, tenant_env, provided_token)
+        response = _fetch_page_accounts(token)
+        if not response.get("ok"):
+            return response, 400
+
+        for page in response.get("pages", []):
+            if str(page.get("id")) == page_id:
+                page_entry = page
+                break
+
+        if not page_entry or not page_entry.get("access_token"):
+            return {"ok": False, "error": "No se pudo obtener el token de la página."}, 400
 
     if not page_entry or not page_entry.get("access_token"):
         return {"ok": False, "error": "No se pudo obtener el token de la página."}, 400
