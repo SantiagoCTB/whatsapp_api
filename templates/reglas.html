@@ -77,8 +77,15 @@
     <label for="list_footer" class="list-field" style="display:none;">Pie de página (opcional):</label>
     <input type="text" id="list_footer" name="list_footer" class="list-field" style="display:none;">
 
-    <label for="button_options" class="button-field" style="display:none;">Opciones del botón (JSON):</label>
-    <textarea id="button_options" name="button_options" class="button-field" style="display:none;" rows="4" cols="60" placeholder='[{"type":"reply","title":"Opción","id":"1"}]'></textarea>
+    <div id="button_builder" class="button-field" style="display:none;">
+        <label>Opciones del botón:</label>
+        <div id="button_builder_list" class="builder-list"></div>
+        <button type="button" class="btn-secondary" id="add_button_option">Agregar botón</button>
+        <p id="button-platform-hint" class="helper-text" style="display:none;">
+            Los botones de enlace solo están disponibles en Instagram/Messenger.
+        </p>
+    </div>
+    <textarea id="button_options" name="button_options" class="button-field" style="display:none;"></textarea>
     <div id="instagram-button-help" class="alert alert-info" style="display:none;">
         <strong>Instagram:</strong> usa un arreglo JSON con hasta 3 botones. Puedes enviar botones de respuesta
         (<code>type: "postback"</code> con <code>title</code> y <code>payload</code>) o botones de enlace
@@ -89,8 +96,12 @@
 ]</pre>
     </div>
 
-    <label for="sections" class="list-field" style="display:none;">Secciones (formato JSON):</label><br>
-    <textarea id="sections" name="sections" class="list-field" style="display:none;" rows="6" cols="60" placeholder='[{"title":"Rápido","rows":[{"id":"express","title":"Express","description":"1 día"}]}]'></textarea>
+    <div id="list_builder" class="list-field" style="display:none;">
+        <label>Secciones de la lista:</label>
+        <div id="sections_builder" class="builder-list"></div>
+        <button type="button" class="btn-secondary" id="add_list_section">Agregar sección</button>
+    </div>
+    <textarea id="sections" name="sections" class="list-field" style="display:none;"></textarea>
 
     <div id="flow_fields" class="flow-field" style="display:none;">
         <h4>Configuración de Flow</h4>
@@ -369,6 +380,218 @@ function toggleInstagramButtonHelp() {
     help.style.display = platform === 'instagram' && tipo === 'boton' ? 'block' : 'none';
 }
 
+function allowUrlButtons() {
+    const platform = document.getElementById('platform').value;
+    return platform === 'instagram' || platform === 'messenger';
+}
+
+function syncButtonTypeOptions() {
+    const allowUrl = allowUrlButtons();
+    document.querySelectorAll('.button-type').forEach(select => {
+        const urlOption = select.querySelector('option[value="web_url"]');
+        if (urlOption) {
+            urlOption.disabled = !allowUrl;
+        }
+        if (!allowUrl && select.value === 'web_url') {
+            select.value = 'reply';
+            updateButtonRowVisibility(select.closest('.builder-row'));
+        }
+    });
+    const hint = document.getElementById('button-platform-hint');
+    if (hint) {
+        hint.style.display = allowUrl ? 'none' : 'block';
+    }
+}
+
+function updateButtonRowVisibility(row) {
+    if (!row) return;
+    const type = row.querySelector('.button-type')?.value || 'reply';
+    const urlField = row.querySelector('.button-url-field');
+    const payloadField = row.querySelector('.button-payload-field');
+    if (type === 'web_url') {
+        if (urlField) urlField.style.display = 'block';
+        if (payloadField) payloadField.style.display = 'none';
+    } else {
+        if (urlField) urlField.style.display = 'none';
+        if (payloadField) payloadField.style.display = 'block';
+    }
+}
+
+function createButtonRow(data = {}) {
+    const row = document.createElement('div');
+    row.className = 'builder-row';
+    row.innerHTML = `
+        <div class="builder-field">
+            <label>Tipo</label>
+            <select class="button-type">
+                <option value="reply">Respuesta</option>
+                <option value="web_url">Enlace (URL)</option>
+            </select>
+        </div>
+        <div class="builder-field">
+            <label>Título</label>
+            <input type="text" class="button-title" placeholder="Texto del botón">
+        </div>
+        <div class="builder-field button-payload-field">
+            <label>ID / Payload</label>
+            <input type="text" class="button-payload" placeholder="identificador">
+        </div>
+        <div class="builder-field button-url-field" style="display:none;">
+            <label>URL</label>
+            <input type="url" class="button-url" placeholder="https://...">
+        </div>
+        <div class="builder-field">
+            <label>Próximo paso (opcional)</label>
+            <input type="text" class="button-step" placeholder="siguiente paso">
+        </div>
+        <div class="builder-actions">
+            <button type="button" class="btn-secondary button-remove">Quitar</button>
+        </div>
+    `;
+    row.querySelector('.button-type').value = data.type || 'reply';
+    row.querySelector('.button-title').value = data.title || '';
+    row.querySelector('.button-payload').value = data.payload || '';
+    row.querySelector('.button-url').value = data.url || '';
+    row.querySelector('.button-step').value = data.step || '';
+    row.querySelector('.button-type').addEventListener('change', () => updateButtonRowVisibility(row));
+    row.querySelector('.button-remove').addEventListener('click', () => row.remove());
+    updateButtonRowVisibility(row);
+    return row;
+}
+
+function addButtonOption(data = {}) {
+    const list = document.getElementById('button_builder_list');
+    if (!list) return;
+    list.appendChild(createButtonRow(data));
+    syncButtonTypeOptions();
+}
+
+function createListRow(data = {}) {
+    const row = document.createElement('div');
+    row.className = 'builder-row';
+    row.innerHTML = `
+        <div class="builder-field">
+            <label>ID</label>
+            <input type="text" class="row-id" placeholder="id_opcion">
+        </div>
+        <div class="builder-field">
+            <label>Título</label>
+            <input type="text" class="row-title" placeholder="Texto principal">
+        </div>
+        <div class="builder-field">
+            <label>Descripción</label>
+            <input type="text" class="row-description" placeholder="Opcional">
+        </div>
+        <div class="builder-field">
+            <label>Próximo paso (opcional)</label>
+            <input type="text" class="row-step" placeholder="siguiente paso">
+        </div>
+        <div class="builder-actions">
+            <button type="button" class="btn-secondary row-remove">Quitar</button>
+        </div>
+    `;
+    row.querySelector('.row-id').value = data.id || '';
+    row.querySelector('.row-title').value = data.title || '';
+    row.querySelector('.row-description').value = data.description || '';
+    row.querySelector('.row-step').value = data.step || '';
+    row.querySelector('.row-remove').addEventListener('click', () => row.remove());
+    return row;
+}
+
+function createListSection(data = {}) {
+    const section = document.createElement('div');
+    section.className = 'builder-section';
+    section.innerHTML = `
+        <div class="builder-section-header">
+            <div class="builder-field">
+                <label>Título de sección</label>
+                <input type="text" class="section-title" placeholder="Sección">
+            </div>
+            <div class="builder-actions">
+                <button type="button" class="btn-secondary add-row">Agregar fila</button>
+                <button type="button" class="btn-secondary remove-section">Quitar sección</button>
+            </div>
+        </div>
+        <div class="section-rows"></div>
+    `;
+    section.querySelector('.section-title').value = data.title || '';
+    const rowsContainer = section.querySelector('.section-rows');
+    const rows = Array.isArray(data.rows) ? data.rows : [];
+    if (rows.length) {
+        rows.forEach(row => rowsContainer.appendChild(createListRow(row)));
+    } else {
+        rowsContainer.appendChild(createListRow());
+    }
+    section.querySelector('.add-row').addEventListener('click', () => {
+        rowsContainer.appendChild(createListRow());
+    });
+    section.querySelector('.remove-section').addEventListener('click', () => section.remove());
+    return section;
+}
+
+function addListSection(data = {}) {
+    const list = document.getElementById('sections_builder');
+    if (!list) return;
+    list.appendChild(createListSection(data));
+}
+
+function collectButtons() {
+    const rows = Array.from(document.querySelectorAll('#button_builder_list .builder-row'));
+    const buttons = [];
+    rows.forEach(row => {
+        const type = row.querySelector('.button-type')?.value || 'reply';
+        const title = row.querySelector('.button-title')?.value.trim();
+        const payload = row.querySelector('.button-payload')?.value.trim();
+        const url = row.querySelector('.button-url')?.value.trim();
+        const step = row.querySelector('.button-step')?.value.trim();
+        if (type === 'web_url') {
+            if (!title && !url) return;
+            if (!title || !url) {
+                throw new Error('Todos los botones de enlace deben tener título y URL.');
+            }
+            const button = { type: 'web_url', title, url };
+            if (step) button.step = step;
+            buttons.push(button);
+        } else {
+            if (!title && !payload) return;
+            if (!title || !payload) {
+                throw new Error('Todos los botones de respuesta deben tener título e ID.');
+            }
+            const button = { type: 'reply', reply: { id: payload, title } };
+            if (step) button.step = step;
+            buttons.push(button);
+        }
+    });
+    const replies = buttons.filter(button => button.type === 'reply' || button.reply);
+    const links = buttons.filter(button => button.type === 'web_url');
+    return [...replies, ...links];
+}
+
+function collectSections() {
+    const sections = [];
+    document.querySelectorAll('#sections_builder .builder-section').forEach(section => {
+        const title = section.querySelector('.section-title')?.value.trim();
+        const rows = [];
+        section.querySelectorAll('.section-rows .builder-row').forEach(row => {
+            const id = row.querySelector('.row-id')?.value.trim();
+            const rowTitle = row.querySelector('.row-title')?.value.trim();
+            const description = row.querySelector('.row-description')?.value.trim();
+            const step = row.querySelector('.row-step')?.value.trim();
+            if (!id && !rowTitle && !description && !step) return;
+            if (!id || !rowTitle) {
+                throw new Error('Todas las filas deben tener ID y título.');
+            }
+            const rowData = { id, title: rowTitle };
+            if (description) rowData.description = description;
+            if (step) rowData.step = step;
+            rows.push(rowData);
+        });
+        if (!title && rows.length === 0) return;
+        sections.push({ title: title || 'Sección', rows });
+    });
+    return sections;
+}
+
 function prepareOptions(e) {
     const tipo = document.getElementById('tipo').value;
     const opcionesInput = document.getElementById('opciones');
@@ -430,35 +653,39 @@ function prepareOptions(e) {
         const header = document.getElementById('list_header').value;
         const button = document.getElementById('list_button').value;
         const footer = document.getElementById('list_footer').value;
-        const sectionsText = document.getElementById('sections').value;
-        let sections;
+        let sections = [];
         try {
-            sections = JSON.parse(sectionsText || '[]');
+            sections = collectSections();
         } catch (err) {
-            sections = [];
+            alert(err.message || 'Hay un error en las secciones de la lista.');
+            e.preventDefault();
+            return;
         }
-
         const invalid = !Array.isArray(sections) || sections.length === 0 || sections.some(sec => !sec.rows || sec.rows.length === 0);
         if (invalid) {
             alert('Debes definir al menos una sección con una o más filas.');
             e.preventDefault();
             return;
         }
-
+        document.getElementById('sections').value = JSON.stringify(sections);
         const opts = {header, button, footer, sections};
         opcionesInput.value = JSON.stringify(opts);
     } else if (tipo === 'boton') {
-        const text = document.getElementById('button_options').value.trim();
-        if (text) {
-            try {
-                JSON.parse(text);
-            } catch (err) {
-                alert('El JSON de opciones de botón no es válido');
-                e.preventDefault();
-                return;
-            }
+        let botones = [];
+        try {
+            botones = collectButtons();
+        } catch (err) {
+            alert(err.message || 'Hay un error en los botones.');
+            e.preventDefault();
+            return;
         }
-        opcionesInput.value = text;
+        if (!botones.length) {
+            alert('Debes agregar al menos un botón.');
+            e.preventDefault();
+            return;
+        }
+        document.getElementById('button_options').value = JSON.stringify(botones);
+        opcionesInput.value = JSON.stringify(botones);
     } else {
         opcionesInput.value = '';
     }
@@ -470,10 +697,12 @@ document.getElementById('tipo').addEventListener('change', () => {
     toggleFlowFields();
     toggleInstagramWarning();
     toggleInstagramButtonHelp();
+    syncButtonTypeOptions();
 });
 document.getElementById('platform').addEventListener('change', () => {
     toggleInstagramWarning();
     toggleInstagramButtonHelp();
+    syncButtonTypeOptions();
 });
 const instagramTokenPresent = {{ 'true' if instagram_token_present else 'false' }};
 function toggleInstagramWarning() {
@@ -494,6 +723,21 @@ window.addEventListener('DOMContentLoaded', () => {
     toggleFlowFields();
     toggleInstagramWarning();
     toggleInstagramButtonHelp();
+    syncButtonTypeOptions();
+    const addButton = document.getElementById('add_button_option');
+    if (addButton) {
+        addButton.addEventListener('click', () => addButtonOption());
+    }
+    const addSection = document.getElementById('add_list_section');
+    if (addSection) {
+        addSection.addEventListener('click', () => addListSection());
+    }
+    if (document.getElementById('button_builder_list')?.children.length === 0) {
+        addButtonOption();
+    }
+    if (document.getElementById('sections_builder')?.children.length === 0) {
+        addListSection();
+    }
 });
 
 function valueOrEmpty(value, joiner = ', ') {
@@ -575,18 +819,56 @@ function cargarRegla(regla) {
     document.getElementById('flow_footer').value = '';
     const opcionesParsed = parseOptions(regla.opciones);
     if (regla.tipo === 'lista') {
+        document.getElementById('sections_builder').innerHTML = '';
         if (opcionesParsed && typeof opcionesParsed === 'object') {
             document.getElementById('list_header').value = opcionesParsed.header || '';
             document.getElementById('list_button').value = opcionesParsed.button || '';
             document.getElementById('list_footer').value = opcionesParsed.footer || '';
-            document.getElementById('sections').value = toPrettyJson(opcionesParsed.sections || []);
+            const sections = Array.isArray(opcionesParsed.sections) ? opcionesParsed.sections : [];
+            if (sections.length) {
+                sections.forEach(section => addListSection({
+                    title: section.title || '',
+                    rows: Array.isArray(section.rows) ? section.rows : [],
+                }));
+            } else {
+                addListSection();
+            }
+            document.getElementById('sections').value = JSON.stringify(sections);
             document.getElementById('opciones').value = JSON.stringify(opcionesParsed);
         } else {
+            addListSection();
             document.getElementById('sections').value = toPrettyJson(opcionesParsed || '');
             document.getElementById('opciones').value = opcionesParsed || '';
         }
     } else if (regla.tipo === 'boton') {
-        document.getElementById('button_options').value = toPrettyJson(opcionesParsed || '');
+        document.getElementById('button_builder_list').innerHTML = '';
+        const botones = Array.isArray(opcionesParsed) ? opcionesParsed : [];
+        if (botones.length) {
+            botones.forEach(option => {
+                const type = (option.type || '').toLowerCase();
+                const reply = option.reply || {};
+                const isUrl = type === 'web_url' || option.url || option.link;
+                if (isUrl) {
+                    addButtonOption({
+                        type: 'web_url',
+                        title: option.title || option.text || '',
+                        url: option.url || option.link || '',
+                        step: option.step || option.next_step || '',
+                    });
+                } else {
+                    addButtonOption({
+                        type: 'reply',
+                        title: option.title || option.text || reply.title || '',
+                        payload: option.payload || option.id || reply.id || '',
+                        step: option.step || option.next_step || '',
+                    });
+                }
+            });
+        } else {
+            addButtonOption();
+        }
+        const normalized = botones.length ? botones : [];
+        document.getElementById('button_options').value = toPrettyJson(normalized);
         document.getElementById('opciones').value = typeof opcionesParsed === 'object' ? JSON.stringify(opcionesParsed) : (opcionesParsed || '');
     } else if (regla.tipo === 'flow') {
         document.getElementById('opciones').value = typeof opcionesParsed === 'object' ? JSON.stringify(opcionesParsed) : (opcionesParsed || '');
@@ -612,6 +894,7 @@ function cargarRegla(regla) {
     toggleButtonFields();
     toggleFlowFields();
     toggleInstagramButtonHelp();
+    syncButtonTypeOptions();
 }
 
 function cargarEstadoChat(estado) {
