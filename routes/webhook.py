@@ -87,11 +87,30 @@ def _tenant_has_channel_credentials(env: dict, channel: str) -> bool:
     return True
 
 
+def _resolve_channel_page_id(env: dict, channel: str) -> str:
+    if channel == "instagram":
+        return (
+            (env.get("INSTAGRAM_ACCOUNT_ID") or "").strip()
+            or (env.get("INSTAGRAM_PAGE_ID") or "").strip()
+        )
+    if channel == "messenger":
+        return (
+            (env.get("MESSENGER_PAGE_ID") or "").strip()
+            or (env.get("PAGE_ID") or "").strip()
+        )
+    return ""
+
+
 def _ensure_tenant_context_for_page(page_id: str | None, channel: str) -> None:
     if not page_id:
         return
     current_env = tenants.get_current_tenant_env() or {}
-    if _tenant_has_channel_credentials(current_env, channel):
+    current_page_id = _resolve_channel_page_id(current_env, channel)
+    if (
+        _tenant_has_channel_credentials(current_env, channel)
+        and current_page_id
+        and str(current_page_id).strip() == str(page_id).strip()
+    ):
         return
     tenant = tenants.find_tenant_by_page_id(page_id)
     if tenant:
