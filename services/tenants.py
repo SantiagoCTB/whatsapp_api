@@ -331,6 +331,9 @@ def find_tenant_by_page_id(page_id: str | None) -> TenantInfo | None:
         for key in ("MESSENGER_PAGE_ID", "PAGE_ID"):
             if _tenant_has_env_value(tenant, key, page_id):
                 return tenant
+        for key in ("INSTAGRAM_ACCOUNT_ID", "INSTAGRAM_PAGE_ID"):
+            if _tenant_has_env_value(tenant, key, page_id):
+                return tenant
         metadata = tenant.metadata or {}
         if isinstance(metadata, dict):
             instagram_account = metadata.get("instagram_account") or {}

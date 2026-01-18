@@ -52,6 +52,27 @@ def _extract_page_id(req):
         page_id = entry.get("id")
         if page_id:
             return str(page_id)
+
+        messaging_events = entry.get("messaging") or []
+        for event in messaging_events:
+            if not isinstance(event, dict):
+                continue
+            recipient = event.get("recipient") or {}
+            recipient_id = recipient.get("id")
+            if recipient_id:
+                return str(recipient_id)
+
+        for change in entry.get("changes", []) or []:
+            value = change.get("value") or {}
+            if not isinstance(value, dict):
+                continue
+            for candidate in (
+                value.get("page_id"),
+                value.get("id"),
+                (value.get("recipient") or {}).get("id"),
+            ):
+                if candidate:
+                    return str(candidate)
     return None
 
 def _ensure_media_root():
