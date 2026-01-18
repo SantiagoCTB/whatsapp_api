@@ -83,10 +83,16 @@ def _get_messenger_env():
 
 def _get_instagram_env():
     env = tenants.get_current_tenant_env()
-    token = (env.get("INSTAGRAM_TOKEN") or "").strip()
     tenant = tenants.get_current_tenant()
-    instagram_account_id = ""
-    if tenant and isinstance(tenant.metadata, dict):
+    if tenant:
+        tenant_env = tenants.get_tenant_env(tenant)
+        env = {**tenant_env, **(env or {})}
+    token = (env.get("INSTAGRAM_TOKEN") or "").strip()
+    instagram_account_id = (
+        (env.get("INSTAGRAM_ACCOUNT_ID") or "").strip()
+        or (env.get("INSTAGRAM_PAGE_ID") or "").strip()
+    )
+    if not instagram_account_id and tenant and isinstance(tenant.metadata, dict):
         instagram_account = tenant.metadata.get("instagram_account") or {}
         if isinstance(instagram_account, dict):
             instagram_account_id = (instagram_account.get("id") or "").strip()
@@ -98,19 +104,6 @@ def _get_instagram_env():
                     instagram_account_id = (
                         instagram_selection.get("page_id") or ""
                     ).strip()
-    if not instagram_account_id:
-        instagram_account_id = (
-            (env.get("INSTAGRAM_ACCOUNT_ID") or "").strip()
-            or (env.get("INSTAGRAM_PAGE_ID") or "").strip()
-        )
-    if not token:
-        legacy_env = tenants.get_tenant_env(None)
-        token = (legacy_env.get("INSTAGRAM_TOKEN") or "").strip()
-        if not instagram_account_id:
-            instagram_account_id = (
-                (legacy_env.get("INSTAGRAM_ACCOUNT_ID") or "").strip()
-                or (legacy_env.get("INSTAGRAM_PAGE_ID") or "").strip()
-            )
 
     missing = []
     if not token:
