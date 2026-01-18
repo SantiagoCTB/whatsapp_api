@@ -128,12 +128,16 @@
         </div>
         <div class="integration-body">
             <p class="muted" style="margin-top: 0;">
-                Paso 1: pega un <strong>token de usuario</strong>. Paso 2: consulta tus páginas. Paso 3: guarda la
-                página de Messenger.
+                Opción A: pega un <strong>token de usuario</strong>, consulta tus páginas y guarda la selección.
+                Opción B: pega un <strong>token de página</strong> para guardar la integración directamente.
             </p>
             <div class="form-row">
                 <label class="muted" for="messenger-user-token">Token de usuario (solo se guarda si lo envías)</label>
                 <input id="messenger-user-token" type="password" placeholder="EAA...">
+            </div>
+            <div class="form-row">
+                <label class="muted" for="messenger-page-token">Token de página (opcional)</label>
+                <input id="messenger-page-token" type="password" placeholder="EAAB...">
             </div>
             <div class="form-row">
                 <label class="muted" for="messenger-page-select">Página de Meta</label>
@@ -474,12 +478,14 @@
       saveButtonId,
       pageSelectId,
       tokenInputId,
+      pageTokenInputId,
       statusBoxId
     }) => {
       const refreshButton = document.getElementById(refreshButtonId);
       const saveButton = document.getElementById(saveButtonId);
       const pageSelect = document.getElementById(pageSelectId);
       const tokenInput = document.getElementById(tokenInputId);
+      const pageTokenInput = pageTokenInputId ? document.getElementById(pageTokenInputId) : null;
       const statusBox = document.getElementById(statusBoxId);
 
       if (!refreshButton || !saveButton || !pageSelect) return;
@@ -491,6 +497,7 @@
       };
 
       const getToken = () => (tokenInput && tokenInput.value ? tokenInput.value.trim() : '');
+      const getPageToken = () => (pageTokenInput && pageTokenInput.value ? pageTokenInput.value.trim() : '');
 
       refreshButton.addEventListener('click', async () => {
         setStatus('Consultando páginas...', false);
@@ -498,6 +505,10 @@
         const token = getToken();
         if (token) {
           payload.user_access_token = token;
+        }
+        const pageToken = getPageToken();
+        if (pageToken) {
+          payload.page_access_token = pageToken;
         }
 
         try {
@@ -538,17 +549,23 @@
 
       saveButton.addEventListener('click', async () => {
         const selectedPage = pageSelect.value;
-        if (!selectedPage) {
-          setStatus('Selecciona una página antes de guardar.', true);
+        const pageToken = getPageToken();
+        if (!selectedPage && !pageToken) {
+          setStatus('Selecciona una página o pega un token de página.', true);
           return;
         }
         const payload = {
-          page_id: selectedPage,
           platform
         };
+        if (selectedPage) {
+          payload.page_id = selectedPage;
+        }
         const token = getToken();
         if (token) {
           payload.user_access_token = token;
+        }
+        if (pageToken) {
+          payload.page_access_token = pageToken;
         }
 
         setStatus('Guardando selección...', false);
@@ -575,6 +592,7 @@
       saveButtonId: 'messenger-page-save',
       pageSelectId: 'messenger-page-select',
       tokenInputId: 'messenger-user-token',
+      pageTokenInputId: 'messenger-page-token',
       statusBoxId: 'messenger-page-status'
     });
 
