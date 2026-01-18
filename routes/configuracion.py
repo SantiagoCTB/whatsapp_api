@@ -200,7 +200,7 @@ def _fetch_instagram_user(user_token: str):
         return {"ok": False, "error": "Falta el token de usuario para consultar Instagram."}
 
     url = f"https://graph.instagram.com/{Config.FACEBOOK_GRAPH_API_VERSION}/me"
-    params = {"fields": "id,username,account_type"}
+    params = {"fields": "user_id,id,username,account_type"}
     headers = {"Authorization": f"Bearer {user_token}"}
 
     try:
@@ -325,7 +325,8 @@ def _handle_instagram_oauth_code(code: str, redirect_uri: str) -> dict:
     env_updates["INSTAGRAM_TOKEN"] = access_token
     if account.get("id"):
         env_updates["INSTAGRAM_ACCOUNT_ID"] = account.get("id")
-        env_updates["INSTAGRAM_PAGE_ID"] = account.get("id")
+    if account.get("user_id") or account.get("id"):
+        env_updates["INSTAGRAM_PAGE_ID"] = account.get("user_id") or account.get("id")
     tenants.update_tenant_env(tenant.tenant_key, env_updates)
     tenants.update_tenant_metadata(
         tenant.tenant_key,
@@ -1634,7 +1635,8 @@ def instagram_save_token():
     env_updates["INSTAGRAM_TOKEN"] = user_token
     if account.get("id"):
         env_updates["INSTAGRAM_ACCOUNT_ID"] = account.get("id")
-        env_updates["INSTAGRAM_PAGE_ID"] = account.get("id")
+    if account.get("user_id") or account.get("id"):
+        env_updates["INSTAGRAM_PAGE_ID"] = account.get("user_id") or account.get("id")
     tenants.update_tenant_env(tenant.tenant_key, env_updates)
     tenants.trigger_page_backfill_for_platform(tenant, "instagram")
     tenants.update_tenant_metadata(

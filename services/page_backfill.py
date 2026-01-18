@@ -98,7 +98,10 @@ def fetch_conversations(
 
 def fetch_instagram_user(access_token: str) -> Dict[str, Any] | None:
     url = f"{GRAPH_INSTAGRAM_USER_BASE_URL}/me"
-    params = {"fields": "id,username,account_type", "access_token": access_token}
+    params = {
+        "fields": "user_id,id,username,account_type",
+        "access_token": access_token,
+    }
     headers = {"Authorization": f"Bearer {access_token}"}
 
     try:
@@ -328,7 +331,7 @@ def run_page_backfill(
             )
             return
 
-        page_id = str(instagram_user.get("id"))
+        page_id = str(instagram_user.get("user_id") or instagram_user.get("id"))
         instagram_username = instagram_user.get("username")
         actor_id = page_id
         logger.info(
