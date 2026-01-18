@@ -65,6 +65,39 @@ def _resolve_rule_platform(numero: str) -> str:
     return "whatsapp"
 
 
+def _tenant_has_channel_credentials(env: dict, channel: str) -> bool:
+    if channel == "instagram":
+        token = (env.get("INSTAGRAM_TOKEN") or "").strip()
+        account_id = (
+            (env.get("INSTAGRAM_ACCOUNT_ID") or "").strip()
+            or (env.get("INSTAGRAM_PAGE_ID") or "").strip()
+        )
+        return bool(token and account_id)
+    if channel == "messenger":
+        token = (
+            (env.get("MESSENGER_PAGE_ACCESS_TOKEN") or "").strip()
+            or (env.get("PAGE_ACCESS_TOKEN") or "").strip()
+            or (env.get("MESSENGER_TOKEN") or "").strip()
+        )
+        page_id = (
+            (env.get("MESSENGER_PAGE_ID") or "").strip()
+            or (env.get("PAGE_ID") or "").strip()
+        )
+        return bool(token and page_id)
+    return True
+
+
+def _ensure_tenant_context_for_page(page_id: str | None, channel: str) -> None:
+    if not page_id:
+        return
+    current_env = tenants.get_current_tenant_env() or {}
+    if _tenant_has_channel_credentials(current_env, channel):
+        return
+    tenant = tenants.find_tenant_by_page_id(page_id)
+    if tenant:
+        tenants.set_current_tenant(tenant)
+
+
 def _media_root():
     return tenants.get_media_root()
 
@@ -542,6 +575,8 @@ def _mark_message_processed(message_id: str | None) -> bool:
 def _handle_messenger_payload(data, summary, channel="messenger"):
     tipo_prefix = "cliente_instagram" if channel == "instagram" else "cliente_messenger"
     for entry in data.get("entry", []):
+        entry_page_id = entry.get("id")
+        _ensure_tenant_context_for_page(entry_page_id, channel)
         events = list(entry.get("messaging", []) or [])
         for change in entry.get("changes", []) or []:
             if change.get("field") != "messages":
@@ -569,12 +604,13 @@ def _handle_messenger_payload(data, summary, channel="messenger"):
             if not sender_id:
                 summary["unsupported"] += 1
                 continue
+            recipient_id = (event.get("recipient") or {}).get("id")
+            _ensure_tenant_context_for_page(recipient_id, channel)
 
             delivery = event.get("delivery") or {}
             if delivery:
                 mids = delivery.get("mids") or []
                 timestamp = _coerce_messenger_timestamp(delivery.get("watermark"))
-                recipient_id = (event.get("recipient") or {}).get("id")
                 for mid in mids:
                     guardar_estado_mensaje(
                         mid,
@@ -592,7 +628,6 @@ def _handle_messenger_payload(data, summary, channel="messenger"):
                 if read_event.get("mid"):
                     mids.append(read_event.get("mid"))
                 timestamp = _coerce_messenger_timestamp(read_event.get("watermark"))
-                recipient_id = (event.get("recipient") or {}).get("id")
                 for mid in mids:
                     guardar_estado_mensaje(
                         mid,
@@ -608,7 +643,6 @@ def _handle_messenger_payload(data, summary, channel="messenger"):
             if reaction_event:
                 reaction_mid = reaction_event.get("mid")
                 if reaction_mid:
-                    recipient_id = (event.get("recipient") or {}).get("id")
                     guardar_estado_mensaje(
                         reaction_mid,
                         "reaction",
