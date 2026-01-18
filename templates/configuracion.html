@@ -80,6 +80,15 @@
 
     <label for="button_options" class="button-field" style="display:none;">Opciones del botón (JSON):</label>
     <textarea id="button_options" name="button_options" class="button-field" style="display:none;" rows="4" cols="60" placeholder='[{"type":"reply","title":"Opción","id":"1"}]'></textarea>
+    <div id="instagram-button-help" class="alert alert-info" style="display:none;">
+        <strong>Instagram:</strong> usa un arreglo JSON con hasta 3 botones. Puedes enviar botones de respuesta
+        (<code>type: "postback"</code> con <code>title</code> y <code>payload</code>) o botones de enlace
+        (<code>type: "web_url"</code> con <code>title</code> y <code>url</code>).
+        <pre style="white-space: pre-wrap;">[
+  {"type": "postback", "title": "Ver catálogo", "payload": "catalogo"},
+  {"type": "web_url", "title": "Ir al sitio", "url": "https://tusitio.com"}
+]</pre>
+    </div>
 
     <label for="sections" class="list-field" style="display:none;">Secciones (formato JSON):</label><br>
     <textarea id="sections" name="sections" class="list-field" style="display:none;" rows="6" cols="60" placeholder='[{"title":"Rápido","rows":[{"id":"express","title":"Express","description":"1 día"}]}]'></textarea>
@@ -242,6 +251,14 @@ function toggleFlowFields() {
     });
 }
 
+function toggleInstagramButtonHelp() {
+    const tipo = document.getElementById('tipo').value;
+    const platform = document.getElementById('platform').value;
+    const help = document.getElementById('instagram-button-help');
+    if (!help) return;
+    help.style.display = platform === 'instagram' && tipo === 'boton' ? 'block' : 'none';
+}
+
 function prepareOptions(e) {
     const tipo = document.getElementById('tipo').value;
     const opcionesInput = document.getElementById('opciones');
@@ -342,9 +359,11 @@ document.getElementById('tipo').addEventListener('change', () => {
     toggleButtonFields();
     toggleFlowFields();
     toggleInstagramWarning();
+    toggleInstagramButtonHelp();
 });
 document.getElementById('platform').addEventListener('change', () => {
     toggleInstagramWarning();
+    toggleInstagramButtonHelp();
 });
 const instagramTokenPresent = {{ 'true' if instagram_token_present else 'false' }};
 function toggleInstagramWarning() {
@@ -364,6 +383,7 @@ window.addEventListener('DOMContentLoaded', () => {
     toggleButtonFields();
     toggleFlowFields();
     toggleInstagramWarning();
+    toggleInstagramButtonHelp();
 });
 
 function cargarRegla(regla) {
@@ -434,6 +454,7 @@ function cargarRegla(regla) {
     toggleListFields();
     toggleButtonFields();
     toggleFlowFields();
+    toggleInstagramButtonHelp();
 }
 </script>
 {% endblock %}
