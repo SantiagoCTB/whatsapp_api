@@ -1547,6 +1547,61 @@
       border-top: 1px solid rgba(0, 0, 0, 0.08);
     }
 
+    .builder-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .builder-row,
+    .builder-section {
+      border: 1px solid #e2e2e2;
+      border-radius: 8px;
+      padding: 12px;
+      background: #fafafa;
+    }
+
+    .builder-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 12px;
+      align-items: end;
+    }
+
+    .builder-section-header {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .builder-field {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .builder-actions {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .section-rows {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .helper-text {
+      font-size: 0.9rem;
+      color: #6b7280;
+      margin-top: 6px;
+    }
+
 @media (min-width: 769px) {
   body.chat {
     overflow: hidden;
