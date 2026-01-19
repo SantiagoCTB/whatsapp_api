@@ -1286,6 +1286,11 @@ def advance_steps(numero: str, steps_str: str, visited=None, platform: str | Non
             conn.close()
         if regla:
             dispatch_rule(numero, regla, step, visited=visited, platform=platform)
+        else:
+            # No hay regla comodín; respetar el orden y detener el avance
+            # para esperar la respuesta del usuario en este paso.
+            set_user_step(numero, step)
+            return
     final_step = steps[-1]
     final_step_norm = _normalize_step_name(final_step)
     if final_step_norm in visited and len(steps) > 1:
