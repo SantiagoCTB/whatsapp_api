@@ -704,6 +704,33 @@ def _botones_categoria_column(c, conn):
 
     return "b.categoria" if has_categoria else "NULL AS categoria"
 
+
+def _selected_user_ids(form, cursor, default_to_session=True):
+    user_ids = []
+    for value in form.getlist("user_ids"):
+        if str(value).isdigit():
+            user_ids.append(int(value))
+
+    if not user_ids and default_to_session:
+        username = session.get("user")
+        if username:
+            cursor.execute("SELECT id FROM usuarios WHERE username = %s", (username,))
+            row = cursor.fetchone()
+            if row:
+                user_ids = [row[0]]
+
+    return user_ids
+
+
+def _assign_boton_users(cursor, boton_id, user_ids):
+    if not user_ids:
+        return
+    for user_id in user_ids:
+        cursor.execute(
+            "INSERT IGNORE INTO boton_usuarios (boton_id, user_id) VALUES (%s, %s)",
+            (boton_id, user_id),
+        )
+
 def _reglas_view(template_name):
     """Renderiza las vistas de reglas.
     El comodín '*' en `input_text` avanza al siguiente paso sin validar
@@ -1877,6 +1904,7 @@ def botones():
         opciones_expr = _botones_opciones_column(c, conn)
         categoria_expr = _botones_categoria_column(c, conn)
         if request.method == 'POST':
+            selected_users = _selected_user_ids(request.form, c)
             # Importar botones desde Excel
             if 'archivo' in request.files and request.files['archivo']:
                 archivo = request.files['archivo']
@@ -1915,6 +1943,7 @@ def botones():
                                 "INSERT INTO boton_medias (boton_id, media_url, media_tipo) VALUES (%s, %s, %s)",
                                 (boton_id, url, mime)
                             )
+                        _assign_boton_users(c, boton_id, selected_users)
                 conn.commit()
             elif request.form.get('regla_id'):
                 regla_id = request.form.get('regla_id')
@@ -1967,6 +1996,7 @@ def botones():
                             "INSERT INTO boton_medias (boton_id, media_url, media_tipo) VALUES (%s, %s, %s)",
                             (boton_id, url, mime)
                         )
+                    _assign_boton_users(c, boton_id, selected_users)
                     conn.commit()
             # Agregar botón manual
             elif 'mensaje' in request.form:
@@ -2004,14 +2034,19 @@ def botones():
                             "INSERT INTO boton_medias (boton_id, media_url, media_tipo) VALUES (%s, %s, %s)",
                             (boton_id, url, mime)
                         )
+                    _assign_boton_users(c, boton_id, selected_users)
                     conn.commit()
 
         c.execute(
             f"""
             SELECT b.id, b.mensaje, b.tipo, b.nombre, {opciones_expr}, {categoria_expr},
+                   GROUP_CONCAT(DISTINCT u.id ORDER BY u.username SEPARATOR '||') AS user_ids,
+                   GROUP_CONCAT(DISTINCT u.username ORDER BY u.username SEPARATOR '||') AS usernames,
                    GROUP_CONCAT(m.media_url SEPARATOR '||') AS media_urls,
                    GROUP_CONCAT(m.media_tipo SEPARATOR '||') AS media_tipos
               FROM botones b
+              LEFT JOIN boton_usuarios bu ON b.id = bu.boton_id
+              LEFT JOIN usuarios u ON bu.user_id = u.id
               LEFT JOIN boton_medias m ON b.id = m.boton_id
              GROUP BY b.id
              ORDER BY b.id
@@ -2019,8 +2054,10 @@ def botones():
         )
         botones = []
         for row in c.fetchall():
-            media_urls = row[6].split('||') if row[6] else []
-            media_tipos = row[7].split('||') if row[7] else []
+            user_ids = [int(uid) for uid in row[6].split('||')] if row[6] else []
+            usernames = row[7].split('||') if row[7] else []
+            media_urls = row[8].split('||') if row[8] else []
+            media_tipos = row[9].split('||') if row[9] else []
             if media_urls:
                 items = []
                 for idx, url in enumerate(media_urls):
@@ -2037,6 +2074,8 @@ def botones():
                 'nombre': row[3],
                 'opciones': row[4] or '',
                 'categoria': row[5],
+                'user_ids': user_ids,
+                'usernames': usernames,
                 'media_urls': media_urls,
                 'media_tipos': media_tipos,
                 'media_urls_display': media_urls_display,
@@ -2063,7 +2102,9 @@ def botones():
                 'media_urls': row[5] or '',
                 'media_tipos': row[6] or '',
             })
-        return render_template('botones.html', botones=botones, reglas=reglas)
+        c.execute("SELECT id, username FROM usuarios ORDER BY username")
+        usuarios = [{'id': row[0], 'username': row[1]} for row in c.fetchall()]
+        return render_template('botones.html', botones=botones, reglas=reglas, usuarios=usuarios)
     finally:
         conn.close()
 
@@ -2081,11 +2122,36 @@ def eliminar_boton(boton_id):
     finally:
         conn.close()
 
-@config_bp.route('/get_botones')
-def get_botones():
+@config_bp.route('/botones/<int:boton_id>/usuarios', methods=['POST'])
+def actualizar_boton_usuarios(boton_id):
+    if not _require_admin():
+        return redirect(url_for("auth.login"))
+
     conn = get_connection()
     c = conn.cursor()
     try:
+        user_ids = _selected_user_ids(request.form, c, default_to_session=False)
+        c.execute("DELETE FROM boton_usuarios WHERE boton_id = %s", (boton_id,))
+        if user_ids:
+            _assign_boton_users(c, boton_id, user_ids)
+        conn.commit()
+        return redirect(url_for('configuracion.botones'))
+    finally:
+        conn.close()
+
+@config_bp.route('/get_botones')
+def get_botones():
+    if "user" not in session:
+        return jsonify([]), 401
+
+    conn = get_connection()
+    c = conn.cursor()
+    try:
+        c.execute("SELECT id FROM usuarios WHERE username = %s", (session.get("user"),))
+        user_row = c.fetchone()
+        if not user_row:
+            return jsonify([])
+        user_id = user_row[0]
         opciones_expr = _botones_opciones_column(c, conn)
         categoria_expr = _botones_categoria_column(c, conn)
         c.execute(
@@ -2094,10 +2160,13 @@ def get_botones():
                    GROUP_CONCAT(m.media_url SEPARATOR '||') AS media_urls,
                    GROUP_CONCAT(m.media_tipo SEPARATOR '||') AS media_tipos
               FROM botones b
+              INNER JOIN boton_usuarios bu ON b.id = bu.boton_id
               LEFT JOIN boton_medias m ON b.id = m.boton_id
+             WHERE bu.user_id = %s
              GROUP BY b.id
              ORDER BY b.id
-            """
+            """,
+            (user_id,)
         )
         rows = c.fetchall()
         return jsonify([
