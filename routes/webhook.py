@@ -52,6 +52,7 @@ pending_timers     = {}
 cache_lock         = threading.Lock()
 
 MAX_AUTO_STEPS = 25
+PLATFORM_AGNOSTIC_RULES = {"ia_chat"}
 
 
 def _resolve_rule_platform(numero: str) -> str:
@@ -257,6 +258,27 @@ RELEVANT_HEADERS = (
 
 def _normalize_step_name(step):
     return (step or '').strip().lower()
+
+
+def _is_platform_agnostic_rule(
+    *, step: str | None = None, input_text: str | None = None
+) -> bool:
+    for value in (step, input_text):
+        if _normalize_step_name(value) in PLATFORM_AGNOSTIC_RULES:
+            return True
+    return False
+
+
+def _platform_filter_sql(
+    platform: str,
+    *,
+    step: str | None = None,
+    input_text: str | None = None,
+    column: str = "r.platform",
+) -> tuple[str, tuple]:
+    if _is_platform_agnostic_rule(step=step, input_text=input_text):
+        return "1=1", ()
+    return f"({column} IS NULL OR {column} = '' OR {column} = %s)", (platform,)
 
 
 def _is_ia_step(step: str | None) -> bool:
@@ -902,6 +924,11 @@ def handle_option_reply(numero, option_id, platform: str | None = None):
     def _fetch_rules(step_filter=None):
         conn = get_connection(); c = conn.cursor()
         try:
+            filter_sql, filter_params = _platform_filter_sql(
+                platform,
+                step=step_filter,
+                input_text=option_id if step_filter is None else None,
+            )
             if step_filter is not None:
                 c.execute(
                     """
@@ -912,11 +939,11 @@ def handle_option_reply(numero, option_id, platform: str | None = None):
                      FROM reglas r
                      LEFT JOIN regla_medias m ON r.id = m.regla_id
                      WHERE r.step=%s
-                       AND (r.platform IS NULL OR r.platform = '' OR r.platform = %s)
+                       AND {filter_sql}
                      GROUP BY r.step, r.id
                      ORDER BY (r.platform = %s) DESC, r.id
                     """,
-                    (step_filter, platform, platform),
+                    (step_filter, *filter_params, platform),
                 )
             else:
                 c.execute(
@@ -928,11 +955,11 @@ def handle_option_reply(numero, option_id, platform: str | None = None):
                      FROM reglas r
                      LEFT JOIN regla_medias m ON r.id = m.regla_id
                      WHERE LOWER(r.input_text)=LOWER(%s)
-                       AND (r.platform IS NULL OR r.platform = '' OR r.platform = %s)
+                       AND {filter_sql}
                      GROUP BY r.step, r.id
                      ORDER BY (r.platform = %s) DESC, r.id
                     """,
-                    (option_id, platform, platform),
+                    (option_id, *filter_params, platform),
                 )
             rows = c.fetchall()
         finally:
@@ -979,15 +1006,16 @@ def handle_option_reply(numero, option_id, platform: str | None = None):
             return True
 
     conn = get_connection(); c = conn.cursor()
+    filter_sql, filter_params = _platform_filter_sql(platform, step=current_step)
     c.execute(
-        """
-        SELECT opciones
-          FROM reglas
-         WHERE step=%s
-           AND (platform IS NULL OR platform = '' OR platform = %s)
-         ORDER BY (platform = %s) DESC, id
+        f"""
+        SELECT r.opciones
+          FROM reglas r
+         WHERE r.step=%s
+           AND {filter_sql}
+         ORDER BY (r.platform = %s) DESC, r.id
         """,
-        (current_step, platform, platform),
+        (current_step, *filter_params, platform),
     )
     rows = c.fetchall(); conn.close()
     for (opcs,) in rows:
@@ -1149,8 +1177,9 @@ def advance_steps(numero: str, steps_str: str, visited=None, platform: str | Non
         visited.add(step)
         conn = get_connection(); c = conn.cursor()
         try:
+            filter_sql, filter_params = _platform_filter_sql(platform, step=step)
             c.execute(
-                """
+                f"""
                 SELECT r.id, r.respuesta, r.siguiente_step, r.tipo,
                        GROUP_CONCAT(m.media_url SEPARATOR '||') AS media_urls,
                        r.opciones, r.rol_keyword, r.input_text
@@ -1158,12 +1187,12 @@ def advance_steps(numero: str, steps_str: str, visited=None, platform: str | Non
                   LEFT JOIN regla_medias m ON r.id = m.regla_id
                  WHERE r.step=%s
                    AND r.input_text='*'
-                   AND (r.platform IS NULL OR r.platform = '' OR r.platform = %s)
+                   AND {filter_sql}
                  GROUP BY r.id
                  ORDER BY (r.platform = %s) DESC, r.id
                  LIMIT 1
                 """,
-                (step, platform, platform),
+                (step, *filter_params, platform),
             )
             regla = c.fetchone()
         finally:
@@ -1216,20 +1245,21 @@ def process_step_chain(
         visited.add(step_norm)
 
     conn = get_connection(); c = conn.cursor()
+    filter_sql, filter_params = _platform_filter_sql(platform, step=step)
     # Ordenar reglas para evaluar primero las de menor ID (o prioridad).
     c.execute(
-        """
+        f"""
         SELECT r.id, r.respuesta, r.siguiente_step, r.tipo,
                GROUP_CONCAT(m.media_url SEPARATOR '||') AS media_urls,
                r.opciones, r.rol_keyword, r.input_text
           FROM reglas r
           LEFT JOIN regla_medias m ON r.id = m.regla_id
          WHERE r.step=%s
-           AND (r.platform IS NULL OR r.platform = '' OR r.platform = %s)
+           AND {filter_sql}
          GROUP BY r.id
          ORDER BY (r.platform = %s) DESC, r.id
         """,
-        (step, platform, platform),
+        (step, *filter_params, platform),
     )
     reglas = c.fetchall(); conn.close()
     if not reglas:
@@ -1280,8 +1310,9 @@ def handle_medicion(numero, texto):
     step_actual = get_current_step(numero)
     platform = _resolve_rule_platform(numero)
     conn = get_connection(); c = conn.cursor()
+    filter_sql, filter_params = _platform_filter_sql(platform, step=step_actual)
     c.execute(
-        """
+        f"""
         SELECT r.respuesta, r.siguiente_step, r.tipo,
                GROUP_CONCAT(m.media_url SEPARATOR '||') AS media_urls,
                r.opciones, r.rol_keyword, r.calculo, r.handler
@@ -1289,12 +1320,12 @@ def handle_medicion(numero, texto):
           LEFT JOIN regla_medias m ON r.id = m.regla_id
          WHERE r.step=%s
            AND r.input_text='*'
-           AND (r.platform IS NULL OR r.platform = '' OR r.platform = %s)
+           AND {filter_sql}
          GROUP BY r.id
          ORDER BY (r.platform = %s) DESC, r.id
          LIMIT 1
         """,
-        (step_actual, platform, platform)
+        (step_actual, *filter_params, platform)
     )
     row = c.fetchone(); conn.close()
     if not row:
