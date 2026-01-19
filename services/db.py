@@ -749,6 +749,17 @@ def init_db(db_settings: DatabaseSettings | None = None):
     ) ENGINE=InnoDB;
     """)
 
+    # boton_usuarios: asigna botones rápidos a usuarios
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS boton_usuarios (
+      boton_id INT NOT NULL,
+      user_id INT NOT NULL,
+      PRIMARY KEY (boton_id, user_id),
+      FOREIGN KEY (boton_id) REFERENCES botones(id) ON DELETE CASCADE,
+      FOREIGN KEY (user_id) REFERENCES usuarios(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB;
+    """)
+
     # Migración defensiva: copiar datos desde botones.media_url si existen
     c.execute("SELECT id, media_url FROM botones WHERE media_url IS NOT NULL")
     for bid, url in c.fetchall() or []:
@@ -762,6 +773,22 @@ def init_db(db_settings: DatabaseSettings | None = None):
             """,
             (bid, url, bid, url),
         )
+
+    # Migración: asignar botones existentes a todos los usuarios si no hay relaciones
+    c.execute("SELECT COUNT(*) FROM boton_usuarios")
+    row = c.fetchone()
+    existing_relations = row[0] if row else 0
+    if existing_relations == 0:
+        c.execute("SELECT id FROM botones")
+        boton_ids = [row[0] for row in c.fetchall() or []]
+        c.execute("SELECT id FROM usuarios")
+        user_ids = [row[0] for row in c.fetchall() or []]
+        for boton_id in boton_ids:
+            for user_id in user_ids:
+                c.execute(
+                    "INSERT IGNORE INTO boton_usuarios (boton_id, user_id) VALUES (%s, %s)",
+                    (boton_id, user_id),
+                )
 
     # alias
     c.execute("""
