@@ -147,6 +147,44 @@ def test_dispatch_rule_invokes_ai_only_for_ia_rule(monkeypatch, patch_dependenci
     assert ai_calls[0][0][0] == '5215551234'
 
 
+def test_dispatch_rule_invokes_ai_for_wildcard_in_ia_step(monkeypatch, patch_dependencies):
+    responses = {'ia_chat': []}
+    monkeypatch.setattr(
+        webhook_module,
+        'get_connection',
+        lambda: DummyConnection(responses),
+    )
+    monkeypatch.setattr(webhook_module, 'advance_steps', lambda *_, **__: None)
+    monkeypatch.setattr(
+        webhook_module,
+        'obtener_ultimo_mensaje_cliente',
+        lambda *_: 'mensaje cliente',
+    )
+
+    ai_calls = []
+    monkeypatch.setattr(
+        webhook_module,
+        '_reply_with_ai',
+        lambda *args, **kwargs: ai_calls.append((args, kwargs)),
+    )
+
+    regla = (
+        88,
+        'prompt del sistema',
+        'ia',
+        'texto',
+        None,
+        None,
+        None,
+        '*',
+    )
+
+    webhook_module.dispatch_rule('5215551234', regla, step='ia_chat')
+
+    assert len(ai_calls) == 1
+    assert ai_calls[0][0][0] == '5215551234'
+
+
 def test_dispatch_rule_skips_ai_for_non_ia_rules(monkeypatch, patch_dependencies):
     responses = {'ia': []}
     monkeypatch.setattr(
