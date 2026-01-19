@@ -395,7 +395,94 @@ def enviar_mensaje(
                         "payload": {"url": attachment_url, "is_reusable": True},
                     }
                 }
-        elif tipo_respuesta in {"lista", "boton", "flow"}:
+        elif tipo_respuesta == "boton":
+            try:
+                botones = json.loads(opciones) if opciones else []
+            except Exception:
+                botones = []
+
+            botones_messenger = []
+            for boton in botones:
+                if not isinstance(boton, dict):
+                    continue
+                btn_clean = {k: v for k, v in boton.items() if k not in {"step", "next_step"}}
+                boton_type = (btn_clean.get("type") or "").strip().lower()
+                reply_obj = btn_clean.get("reply") if isinstance(btn_clean.get("reply"), dict) else {}
+                title = (
+                    btn_clean.get("title")
+                    or reply_obj.get("title")
+                    or btn_clean.get("text")
+                    or btn_clean.get("label")
+                )
+                payload_value = (
+                    btn_clean.get("payload")
+                    or btn_clean.get("PAYLOAD")
+                    or btn_clean.get("id")
+                    or reply_obj.get("id")
+                )
+                url_value = btn_clean.get("url") or btn_clean.get("link")
+                phone_value = btn_clean.get("phone_number") or btn_clean.get("phone")
+
+                if boton_type in {"web_url", "url", "link"} or url_value:
+                    if url_value and title:
+                        botones_messenger.append(
+                            {"type": "web_url", "url": url_value, "title": title}
+                        )
+                    continue
+
+                if boton_type in {"postback", "payload", "reply"} or payload_value:
+                    if payload_value and title:
+                        botones_messenger.append(
+                            {"type": "postback", "payload": payload_value, "title": title}
+                        )
+                    continue
+
+                if boton_type in {"phone_number", "call", "phone"}:
+                    phone_number = phone_value or payload_value
+                    if phone_number and title:
+                        botones_messenger.append(
+                            {"type": "phone_number", "payload": phone_number, "title": title}
+                        )
+                    continue
+
+                if boton_type == "account_link":
+                    if url_value:
+                        botones_messenger.append({"type": "account_link", "url": url_value})
+                    continue
+
+                if boton_type == "account_unlink":
+                    botones_messenger.append({"type": "account_unlink"})
+                    continue
+
+                if boton_type == "game_play":
+                    if title:
+                        button = {"type": "game_play", "title": title}
+                        if payload_value:
+                            button["payload"] = payload_value
+                        if isinstance(btn_clean.get("game_metadata"), dict):
+                            button["game_metadata"] = btn_clean["game_metadata"]
+                        botones_messenger.append(button)
+
+            if not botones_messenger:
+                logger.warning(
+                    "Botones vacíos para Messenger; se envía texto de fallback",
+                    extra={"numero": numero, "tipo_respuesta": tipo_respuesta},
+                )
+                fallback_text = mensaje or "Por favor responde con texto."
+                payload["message"] = {"text": fallback_text}
+            else:
+                prompt_text = mensaje or "Selecciona una opción."
+                payload["message"] = {
+                    "attachment": {
+                        "type": "template",
+                        "payload": {
+                            "template_type": "button",
+                            "text": prompt_text,
+                            "buttons": botones_messenger[:3],
+                        },
+                    }
+                }
+        elif tipo_respuesta in {"lista", "flow"}:
             logger.warning(
                 "Tipo no soportado por Messenger; se envía texto de fallback",
                 extra={"numero": numero, "tipo_respuesta": tipo_respuesta},
