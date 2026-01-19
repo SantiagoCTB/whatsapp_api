@@ -82,7 +82,7 @@
         <div id="button_builder_list" class="builder-list"></div>
         <button type="button" class="btn-secondary" id="add_button_option">Agregar botón</button>
         <p id="button-platform-hint" class="helper-text" style="display:none;">
-            Los botones de enlace solo están disponibles en Instagram/Messenger.
+            En WhatsApp solo se permiten botones de respuesta.
         </p>
     </div>
     <textarea id="button_options" name="button_options" class="button-field" style="display:none;"></textarea>
@@ -93,6 +93,19 @@
         <pre class="rule-pre">[
   {"type": "postback", "title": "Ver catálogo", "payload": "catalogo"},
   {"type": "web_url", "title": "Ir al sitio", "url": "https://tusitio.com"}
+]</pre>
+    </div>
+    <div id="messenger-button-help" class="alert alert-info" style="display:none;">
+        <strong>Messenger:</strong> usa hasta 3 botones. Tipos soportados: <code>postback</code>,
+        <code>web_url</code>, <code>phone_number</code>, <code>account_link</code>,
+        <code>account_unlink</code> y <code>game_play</code>.
+        <pre class="rule-pre">[
+  {"type": "postback", "title": "Ver catálogo", "payload": "catalogo"},
+  {"type": "web_url", "title": "Ir al sitio", "url": "https://tusitio.com"},
+  {"type": "phone_number", "title": "Llamar", "phone_number": "+15105559999"},
+  {"type": "account_link", "url": "https://tusitio.com/login"},
+  {"type": "account_unlink"},
+  {"type": "game_play", "title": "Jugar", "payload": "{\"level\":1}"}
 ]</pre>
     </div>
 
@@ -380,26 +393,37 @@ function toggleInstagramButtonHelp() {
     help.style.display = platform === 'instagram' && tipo === 'boton' ? 'block' : 'none';
 }
 
-function allowUrlButtons() {
+function toggleMessengerButtonHelp() {
+    const tipo = document.getElementById('tipo').value;
     const platform = document.getElementById('platform').value;
-    return platform === 'instagram' || platform === 'messenger';
+    const help = document.getElementById('messenger-button-help');
+    if (!help) return;
+    help.style.display = platform === 'messenger' && tipo === 'boton' ? 'block' : 'none';
 }
 
 function syncButtonTypeOptions() {
-    const allowUrl = allowUrlButtons();
-    document.querySelectorAll('.button-type').forEach(select => {
-        const urlOption = select.querySelector('option[value="web_url"]');
-        if (urlOption) {
-            urlOption.disabled = !allowUrl;
+    const platform = document.getElementById('platform').value;
+    const allowedTypes = (() => {
+        if (platform === 'messenger') {
+            return ['postback', 'web_url', 'phone_number', 'account_link', 'account_unlink', 'game_play'];
         }
-        if (!allowUrl && select.value === 'web_url') {
-            select.value = 'reply';
+        if (platform === 'instagram') {
+            return ['postback', 'web_url'];
+        }
+        return ['reply'];
+    })();
+    document.querySelectorAll('.button-type').forEach(select => {
+        select.querySelectorAll('option').forEach(option => {
+            option.disabled = !allowedTypes.includes(option.value);
+        });
+        if (!allowedTypes.includes(select.value)) {
+            select.value = allowedTypes[0] || 'reply';
             updateButtonRowVisibility(select.closest('.builder-row'));
         }
     });
     const hint = document.getElementById('button-platform-hint');
     if (hint) {
-        hint.style.display = allowUrl ? 'none' : 'block';
+        hint.style.display = platform === '' || platform === 'whatsapp' ? 'block' : 'none';
     }
 }
 
@@ -408,13 +432,21 @@ function updateButtonRowVisibility(row) {
     const type = row.querySelector('.button-type')?.value || 'reply';
     const urlField = row.querySelector('.button-url-field');
     const payloadField = row.querySelector('.button-payload-field');
-    if (type === 'web_url') {
-        if (urlField) urlField.style.display = 'block';
-        if (payloadField) payloadField.style.display = 'none';
-    } else {
-        if (urlField) urlField.style.display = 'none';
-        if (payloadField) payloadField.style.display = 'block';
-    }
+    const phoneField = row.querySelector('.button-phone-field');
+    const metadataField = row.querySelector('.button-metadata-field');
+    const titleField = row.querySelector('.button-title-field');
+
+    const showUrl = type === 'web_url' || type === 'account_link';
+    const showPayload = type === 'reply' || type === 'postback' || type === 'game_play';
+    const showPhone = type === 'phone_number';
+    const showMetadata = type === 'game_play';
+    const showTitle = !['account_link', 'account_unlink'].includes(type);
+
+    if (urlField) urlField.style.display = showUrl ? 'block' : 'none';
+    if (payloadField) payloadField.style.display = showPayload ? 'block' : 'none';
+    if (phoneField) phoneField.style.display = showPhone ? 'block' : 'none';
+    if (metadataField) metadataField.style.display = showMetadata ? 'block' : 'none';
+    if (titleField) titleField.style.display = showTitle ? 'block' : 'none';
 }
 
 function createButtonRow(data = {}) {
@@ -425,10 +457,15 @@ function createButtonRow(data = {}) {
             <label>Tipo</label>
             <select class="button-type">
                 <option value="reply">Respuesta</option>
+                <option value="postback">Postback</option>
                 <option value="web_url">Enlace (URL)</option>
+                <option value="phone_number">Llamar</option>
+                <option value="account_link">Iniciar sesión</option>
+                <option value="account_unlink">Cerrar sesión</option>
+                <option value="game_play">Jugar</option>
             </select>
         </div>
-        <div class="builder-field">
+        <div class="builder-field button-title-field">
             <label>Título</label>
             <input type="text" class="button-title" placeholder="Texto del botón">
         </div>
@@ -439,6 +476,14 @@ function createButtonRow(data = {}) {
         <div class="builder-field button-url-field" style="display:none;">
             <label>URL</label>
             <input type="url" class="button-url" placeholder="https://...">
+        </div>
+        <div class="builder-field button-phone-field" style="display:none;">
+            <label>Teléfono</label>
+            <input type="text" class="button-phone" placeholder="+15105559999">
+        </div>
+        <div class="builder-field button-metadata-field" style="display:none;">
+            <label>Game metadata (JSON opcional)</label>
+            <input type="text" class="button-metadata" placeholder='{"player_id":"123"}'>
         </div>
         <div class="builder-field">
             <label>Próximo paso (opcional)</label>
@@ -452,6 +497,8 @@ function createButtonRow(data = {}) {
     row.querySelector('.button-title').value = data.title || '';
     row.querySelector('.button-payload').value = data.payload || '';
     row.querySelector('.button-url').value = data.url || '';
+    row.querySelector('.button-phone').value = data.phone_number || data.phone || '';
+    row.querySelector('.button-metadata').value = data.game_metadata || '';
     row.querySelector('.button-step').value = data.step || '';
     row.querySelector('.button-type').addEventListener('change', () => updateButtonRowVisibility(row));
     row.querySelector('.button-remove').addEventListener('click', () => row.remove());
@@ -543,6 +590,8 @@ function collectButtons() {
         const title = row.querySelector('.button-title')?.value.trim();
         const payload = row.querySelector('.button-payload')?.value.trim();
         const url = row.querySelector('.button-url')?.value.trim();
+        const phoneNumber = row.querySelector('.button-phone')?.value.trim();
+        const metadataRaw = row.querySelector('.button-metadata')?.value.trim();
         const step = row.querySelector('.button-step')?.value.trim();
         if (type === 'web_url') {
             if (!title && !url) return;
@@ -550,6 +599,48 @@ function collectButtons() {
                 throw new Error('Todos los botones de enlace deben tener título y URL.');
             }
             const button = { type: 'web_url', title, url };
+            if (step) button.step = step;
+            buttons.push(button);
+        } else if (type === 'postback') {
+            if (!title && !payload) return;
+            if (!title || !payload) {
+                throw new Error('Todos los botones postback deben tener título e ID.');
+            }
+            const button = { type: 'postback', title, payload };
+            if (step) button.step = step;
+            buttons.push(button);
+        } else if (type === 'phone_number') {
+            if (!title && !phoneNumber) return;
+            if (!title || !phoneNumber) {
+                throw new Error('Todos los botones de llamada deben tener título y teléfono.');
+            }
+            const button = { type: 'phone_number', title, phone_number: phoneNumber };
+            if (step) button.step = step;
+            buttons.push(button);
+        } else if (type === 'account_link') {
+            if (!url) {
+                throw new Error('Los botones de inicio de sesión requieren URL.');
+            }
+            const button = { type: 'account_link', url };
+            if (step) button.step = step;
+            buttons.push(button);
+        } else if (type === 'account_unlink') {
+            const button = { type: 'account_unlink' };
+            if (step) button.step = step;
+            buttons.push(button);
+        } else if (type === 'game_play') {
+            if (!title) {
+                throw new Error('Los botones de juego requieren título.');
+            }
+            const button = { type: 'game_play', title };
+            if (payload) button.payload = payload;
+            if (metadataRaw) {
+                try {
+                    button.game_metadata = JSON.parse(metadataRaw);
+                } catch (err) {
+                    throw new Error('El JSON de game_metadata no es válido.');
+                }
+            }
             if (step) button.step = step;
             buttons.push(button);
         } else {
@@ -562,9 +653,7 @@ function collectButtons() {
             buttons.push(button);
         }
     });
-    const replies = buttons.filter(button => button.type === 'reply' || button.reply);
-    const links = buttons.filter(button => button.type === 'web_url');
-    return [...replies, ...links];
+    return buttons;
 }
 
 function collectSections() {
@@ -697,11 +786,13 @@ document.getElementById('tipo').addEventListener('change', () => {
     toggleFlowFields();
     toggleInstagramWarning();
     toggleInstagramButtonHelp();
+    toggleMessengerButtonHelp();
     syncButtonTypeOptions();
 });
 document.getElementById('platform').addEventListener('change', () => {
     toggleInstagramWarning();
     toggleInstagramButtonHelp();
+    toggleMessengerButtonHelp();
     syncButtonTypeOptions();
 });
 const instagramTokenPresent = {{ 'true' if instagram_token_present else 'false' }};
@@ -723,6 +814,7 @@ window.addEventListener('DOMContentLoaded', () => {
     toggleFlowFields();
     toggleInstagramWarning();
     toggleInstagramButtonHelp();
+    toggleMessengerButtonHelp();
     syncButtonTypeOptions();
     const addButton = document.getElementById('add_button_option');
     if (addButton) {
@@ -855,6 +947,39 @@ function cargarRegla(regla) {
                         url: option.url || option.link || '',
                         step: option.step || option.next_step || '',
                     });
+                } else if (type === 'postback') {
+                    addButtonOption({
+                        type: 'postback',
+                        title: option.title || option.text || '',
+                        payload: option.payload || option.id || '',
+                        step: option.step || option.next_step || '',
+                    });
+                } else if (type === 'phone_number') {
+                    addButtonOption({
+                        type: 'phone_number',
+                        title: option.title || option.text || '',
+                        phone_number: option.phone_number || option.payload || '',
+                        step: option.step || option.next_step || '',
+                    });
+                } else if (type === 'account_link') {
+                    addButtonOption({
+                        type: 'account_link',
+                        url: option.url || option.link || '',
+                        step: option.step || option.next_step || '',
+                    });
+                } else if (type === 'account_unlink') {
+                    addButtonOption({
+                        type: 'account_unlink',
+                        step: option.step || option.next_step || '',
+                    });
+                } else if (type === 'game_play') {
+                    addButtonOption({
+                        type: 'game_play',
+                        title: option.title || option.text || '',
+                        payload: option.payload || '',
+                        game_metadata: option.game_metadata ? JSON.stringify(option.game_metadata) : '',
+                        step: option.step || option.next_step || '',
+                    });
                 } else {
                     addButtonOption({
                         type: 'reply',
@@ -894,6 +1019,7 @@ function cargarRegla(regla) {
     toggleButtonFields();
     toggleFlowFields();
     toggleInstagramButtonHelp();
+    toggleMessengerButtonHelp();
     syncButtonTypeOptions();
 }
 
