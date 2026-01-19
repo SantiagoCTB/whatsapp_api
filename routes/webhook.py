@@ -511,17 +511,26 @@ def _page_keywords_for_match(page) -> set[str]:
     return set(selected)
 
 
-def _should_send_catalog_images(response: str, pages) -> bool:
+def _matched_catalog_pages(response: str, pages):
     if not response or not pages:
-        return False
+        return []
     response_tokens = set(normalize_text(response).split())
     if not response_tokens:
-        return False
+        return []
+    matched = []
     for page in pages:
         for keyword in _page_keywords_for_match(page):
             if keyword in response_tokens:
-                return True
-    return False
+                matched.append(page)
+                break
+    return matched
+
+
+def _combine_system_prompts(*prompts: str | None) -> str | None:
+    cleaned = [prompt.strip() for prompt in prompts if prompt and prompt.strip()]
+    if not cleaned:
+        return None
+    return "\n\n".join(cleaned)
 
 
 def _get_ia_system_prompt() -> str | None:
@@ -618,13 +627,14 @@ def _reply_with_ai(
         return False
 
     enviar_mensaje(numero, response, tipo="bot", step=message_step)
-    if not _should_send_catalog_images(response, pages):
+    matched_pages = _matched_catalog_pages(response, pages)
+    if not matched_pages:
         logger.info(
             "Respuesta IA sin referencias claras a producto; se omiten imágenes",
             extra={"numero": numero},
         )
         return True
-    for page in pages:
+    for page in matched_pages:
         if not page.image_filename:
             continue
 
@@ -1170,10 +1180,13 @@ def dispatch_rule(
     if _is_ia_trigger(input_text) or (
         (input_text or '').strip() == '*' and _is_ia_step(current_step)
     ):
+        system_prompt = resp
+        if _normalize_step_name(current_step) == 'ia_chat':
+            system_prompt = _combine_system_prompts(_get_ia_system_prompt(), resp)
         _reply_with_ai(
             numero,
             obtener_ultimo_mensaje_cliente(numero),
-            system_prompt=resp,
+            system_prompt=system_prompt,
             set_step=False,
             history_step=None,
             message_step=current_step,
