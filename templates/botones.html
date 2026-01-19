@@ -111,6 +111,10 @@
                     <option value="{{ u.id }}" {% if u.id in b.user_ids %}selected{% endif %}>{{ u.username }}</option>
                     {% endfor %}
                 </select>
+                <label class="helper-text">
+                    <input type="checkbox" name="clear_users" value="1">
+                    Quitar todos los usuarios
+                </label>
                 <button class="btn-secondary" type="submit">Actualizar</button>
             </form>
             {% if b.usernames %}

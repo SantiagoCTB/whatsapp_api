@@ -706,6 +706,8 @@ def _botones_categoria_column(c, conn):
 
 
 def _selected_user_ids(form, cursor, default_to_session=True):
+    if form.get("clear_users") == "1":
+        return []
     user_ids = []
     for value in form.getlist("user_ids"):
         if str(value).isdigit():
