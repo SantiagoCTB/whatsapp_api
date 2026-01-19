@@ -1630,6 +1630,59 @@
       margin-top: 6px;
     }
 
+    .user-selector {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+
+    .user-selector__controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .user-selector__buttons {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .user-selector__search {
+      flex: 1;
+      min-width: 180px;
+    }
+
+    .user-selector__count {
+      margin-top: 0;
+    }
+
+    .user-selector__list {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 6px 12px;
+      padding: 10px;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      background: #fafafa;
+      max-height: 220px;
+      overflow-y: auto;
+    }
+
+    .user-selector__item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.95rem;
+    }
+
+    .user-selector__item.is-hidden {
+      display: none;
+    }
+
 @media (min-width: 769px) {
   body.chat {
     overflow: hidden;

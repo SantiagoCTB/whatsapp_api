@@ -35,12 +35,25 @@
     <label for="categoria_regla">Categoría (opcional):</label>
     <input type="text" name="categoria" id="categoria_regla" placeholder="Área o grupo">
 
-    <label for="usuarios_regla">Usuarios con acceso:</label>
-    <select name="user_ids" id="usuarios_regla" multiple>
-        {% for u in usuarios %}
-        <option value="{{ u.id }}">{{ u.username }}</option>
-        {% endfor %}
-    </select>
+    <label>Usuarios con acceso:</label>
+    <div class="user-selector" data-user-selector>
+        <div class="user-selector__controls">
+            <input type="text" class="user-selector__search" placeholder="Buscar usuario" data-user-search>
+            <div class="user-selector__buttons">
+                <button type="button" class="btn-secondary user-selector__action" data-action="select-all">Seleccionar visibles</button>
+                <button type="button" class="btn-secondary user-selector__action" data-action="clear">Limpiar</button>
+            </div>
+            <span class="helper-text user-selector__count" data-user-count>0 seleccionados</span>
+        </div>
+        <div class="user-selector__list">
+            {% for u in usuarios %}
+            <label class="user-selector__item">
+                <input type="checkbox" name="user_ids" value="{{ u.id }}">
+                <span>{{ u.username }}</span>
+            </label>
+            {% endfor %}
+        </div>
+    </div>
     <p class="helper-text">Si no seleccionas ninguno, se asignará a tu usuario.</p>
 
     <button type="submit" class="btn-primary">Agregar botón desde regla</button>
@@ -72,12 +85,25 @@
     <label for="media_url" id="label_media_url" style="display:none;">URLs de archivos (separadas por comas o saltos de línea):</label>
     <textarea id="media_url" name="media_url" style="display:none;" placeholder="URL1, URL2&#10;URL3"></textarea>
 
-    <label for="usuarios_manual">Usuarios con acceso:</label>
-    <select name="user_ids" id="usuarios_manual" multiple>
-        {% for u in usuarios %}
-        <option value="{{ u.id }}">{{ u.username }}</option>
-        {% endfor %}
-    </select>
+    <label>Usuarios con acceso:</label>
+    <div class="user-selector" data-user-selector>
+        <div class="user-selector__controls">
+            <input type="text" class="user-selector__search" placeholder="Buscar usuario" data-user-search>
+            <div class="user-selector__buttons">
+                <button type="button" class="btn-secondary user-selector__action" data-action="select-all">Seleccionar visibles</button>
+                <button type="button" class="btn-secondary user-selector__action" data-action="clear">Limpiar</button>
+            </div>
+            <span class="helper-text user-selector__count" data-user-count>0 seleccionados</span>
+        </div>
+        <div class="user-selector__list">
+            {% for u in usuarios %}
+            <label class="user-selector__item">
+                <input type="checkbox" name="user_ids" value="{{ u.id }}">
+                <span>{{ u.username }}</span>
+            </label>
+            {% endfor %}
+        </div>
+    </div>
     <p class="helper-text">Si no seleccionas ninguno, se asignará a tu usuario.</p>
 
     <button type="submit" class="btn-primary">Agregar botón</button>
@@ -86,12 +112,25 @@
 <form method="POST" enctype="multipart/form-data">
     <label for="archivo">Importar botones desde Excel:</label>
     <input type="file" name="archivo" accept=".xlsx" required>
-    <label for="usuarios_import">Usuarios con acceso:</label>
-    <select name="user_ids" id="usuarios_import" multiple>
-        {% for u in usuarios %}
-        <option value="{{ u.id }}">{{ u.username }}</option>
-        {% endfor %}
-    </select>
+    <label>Usuarios con acceso:</label>
+    <div class="user-selector" data-user-selector>
+        <div class="user-selector__controls">
+            <input type="text" class="user-selector__search" placeholder="Buscar usuario" data-user-search>
+            <div class="user-selector__buttons">
+                <button type="button" class="btn-secondary user-selector__action" data-action="select-all">Seleccionar visibles</button>
+                <button type="button" class="btn-secondary user-selector__action" data-action="clear">Limpiar</button>
+            </div>
+            <span class="helper-text user-selector__count" data-user-count>0 seleccionados</span>
+        </div>
+        <div class="user-selector__list">
+            {% for u in usuarios %}
+            <label class="user-selector__item">
+                <input type="checkbox" name="user_ids" value="{{ u.id }}">
+                <span>{{ u.username }}</span>
+            </label>
+            {% endfor %}
+        </div>
+    </div>
     <p class="helper-text">Si no seleccionas ninguno, se asignará a tu usuario.</p>
     <button type="submit" class="btn-primary">Importar</button>
 </form>
@@ -106,15 +145,25 @@
         <td>{{ b.categoria|default('') }}</td>
         <td>
             <form method="POST" action="{{ url_for('configuracion.actualizar_boton_usuarios', boton_id=b.id) }}">
-                <select name="user_ids" multiple>
-                    {% for u in usuarios %}
-                    <option value="{{ u.id }}" {% if u.id in b.user_ids %}selected{% endif %}>{{ u.username }}</option>
-                    {% endfor %}
-                </select>
-                <label class="helper-text">
-                    <input type="checkbox" name="clear_users" value="1">
-                    Quitar todos los usuarios
-                </label>
+                <div class="user-selector" data-user-selector>
+                    <div class="user-selector__controls">
+                        <input type="text" class="user-selector__search" placeholder="Buscar usuario" data-user-search>
+                        <div class="user-selector__buttons">
+                            <button type="button" class="btn-secondary user-selector__action" data-action="select-all">Seleccionar visibles</button>
+                            <button type="button" class="btn-secondary user-selector__action" data-action="clear">Limpiar</button>
+                        </div>
+                        <span class="helper-text user-selector__count" data-user-count>0 seleccionados</span>
+                    </div>
+                    <div class="user-selector__list">
+                        {% for u in usuarios %}
+                        <label class="user-selector__item">
+                            <input type="checkbox" name="user_ids" value="{{ u.id }}" {% if u.id in b.user_ids %}checked{% endif %}>
+                            <span>{{ u.username }}</span>
+                        </label>
+                        {% endfor %}
+                    </div>
+                </div>
+                <p class="helper-text">Si no seleccionas ninguno, el botón quedará sin usuarios asignados.</p>
                 <button class="btn-secondary" type="submit">Actualizar</button>
             </form>
             {% if b.usernames %}
@@ -215,5 +264,64 @@ reglaSelect && reglaSelect.addEventListener('change', (event) => {
 if (reglaSelect) {
     mostrarDetalleRegla(reglaSelect.value);
 }
+
+function initUserSelector(container) {
+    const searchInput = container.querySelector('[data-user-search]');
+    const countEl = container.querySelector('[data-user-count]');
+    const items = Array.from(container.querySelectorAll('.user-selector__item'));
+    const checkboxes = Array.from(container.querySelectorAll('input[type="checkbox"][name="user_ids"]'));
+    const actions = container.querySelectorAll('[data-action]');
+
+    const updateCount = () => {
+        const selected = checkboxes.filter((checkbox) => checkbox.checked).length;
+        if (countEl) {
+            countEl.textContent = `${selected} seleccionados`;
+        }
+    };
+
+    const applyFilter = () => {
+        const term = (searchInput?.value || '').trim().toLowerCase();
+        items.forEach((item) => {
+            const labelText = item.textContent.trim().toLowerCase();
+            const matches = !term || labelText.includes(term);
+            item.classList.toggle('is-hidden', !matches);
+        });
+    };
+
+    actions.forEach((button) => {
+        button.addEventListener('click', () => {
+            const action = button.dataset.action;
+            if (action === 'select-all') {
+                checkboxes.forEach((checkbox) => {
+                    const item = checkbox.closest('.user-selector__item');
+                    if (!item || !item.classList.contains('is-hidden')) {
+                        checkbox.checked = true;
+                    }
+                });
+            }
+            if (action === 'clear') {
+                checkboxes.forEach((checkbox) => {
+                    checkbox.checked = false;
+                });
+            }
+            updateCount();
+        });
+    });
+
+    checkboxes.forEach((checkbox) => {
+        checkbox.addEventListener('change', updateCount);
+    });
+
+    if (searchInput) {
+        searchInput.addEventListener('input', applyFilter);
+    }
+
+    applyFilter();
+    updateCount();
+}
+
+document.querySelectorAll('[data-user-selector]').forEach((selector) => {
+    initUserSelector(selector);
+});
 </script>
 {% endblock %}
