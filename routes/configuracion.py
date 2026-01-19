@@ -2131,10 +2131,10 @@ def actualizar_boton_usuarios(boton_id):
     c = conn.cursor()
     try:
         user_ids = _selected_user_ids(request.form, c, default_to_session=False)
+        c.execute("DELETE FROM boton_usuarios WHERE boton_id = %s", (boton_id,))
         if user_ids:
-            c.execute("DELETE FROM boton_usuarios WHERE boton_id = %s", (boton_id,))
             _assign_boton_users(c, boton_id, user_ids)
-            conn.commit()
+        conn.commit()
         return redirect(url_for('configuracion.botones'))
     finally:
         conn.close()
