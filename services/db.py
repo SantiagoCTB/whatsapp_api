@@ -1449,6 +1449,18 @@ def search_catalog_pages(
 
     rows_cache: list[tuple[str | None, list[tuple]]] = []
 
+    def _select_evenly(items: list[dict], limit: int) -> list[dict]:
+        if limit <= 0 or len(items) <= limit:
+            return items
+        step = len(items) / limit
+        selected: list[dict] = []
+        for idx in range(limit):
+            pick = int(idx * step)
+            if pick >= len(items):
+                pick = len(items) - 1
+            selected.append(items[pick])
+        return selected
+
     def _fetch_rows(target_tenant: str | None):
         conn = get_connection()
         try:
@@ -1484,7 +1496,7 @@ def search_catalog_pages(
                 "Catálogo IA: sin coincidencias exactas, usando páginas sugeridas",
                 extra={"tenant": candidate, "tokens": tokens, "rows": len(rows)},
             )
-            return [
+            items = [
                 {
                     "pdf_filename": pdf_filename,
                     "page_number": page_number,
@@ -1494,8 +1506,9 @@ def search_catalog_pages(
                     "score": 0,
                     "tenant_key": candidate,
                 }
-                for pdf_filename, page_number, text_content, keywords, image_filename in rows[:limit]
+                for pdf_filename, page_number, text_content, keywords, image_filename in rows
             ]
+            return _select_evenly(items, limit)
         return []
 
     if not tokens:
@@ -1544,8 +1557,8 @@ def search_catalog_pages(
                         "tokens": tokens,
                     },
                 )
-            scored.sort(key=lambda item: (-item["score"], item["page_number"]))
-            return scored[:limit]
+            scored.sort(key=lambda item: item["page_number"])
+            return _select_evenly(scored, limit)
 
         logger.debug(
             "Catálogo IA sin coincidencias",
