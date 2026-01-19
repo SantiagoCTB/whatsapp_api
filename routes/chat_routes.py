@@ -664,7 +664,7 @@ def get_chat(numero):
             return jsonify({'error': 'No autorizado'}), 403
     if _table_exists(c, 'flow_responses'):
         c.execute("""
-          SELECT m.mensaje, m.tipo, m.media_url, m.timestamp,
+          SELECT m.mensaje, m.tipo, m.media_url, m.opciones, m.timestamp,
                  m.link_url, m.link_title, m.link_body, m.link_thumb,
                  m.wa_id, m.reply_to_wa_id,
                  r.id AS reply_id,
@@ -678,7 +678,7 @@ def get_chat(numero):
         """, (numero,))
     else:
         c.execute("""
-          SELECT m.mensaje, m.tipo, m.media_url, m.timestamp,
+          SELECT m.mensaje, m.tipo, m.media_url, m.opciones, m.timestamp,
                  m.link_url, m.link_title, m.link_body, m.link_thumb,
                  m.wa_id, m.reply_to_wa_id,
                  r.id AS reply_id,
@@ -699,10 +699,10 @@ def get_chat(numero):
     for row in mensajes:
         row = list(row)
         row[2] = sanitize_media_url(row[2])  # media_url
-        row[3] = _to_bogota_iso(row[3])
-        row[4] = sanitize_media_url(row[4])  # link_url
-        row[7] = sanitize_media_url(row[7])  # link_thumb
-        row[13] = sanitize_media_url(row[13])  # reply_media_url
+        row[4] = _to_bogota_iso(row[4])
+        row[5] = sanitize_media_url(row[5])  # link_url
+        row[8] = sanitize_media_url(row[8])  # link_thumb
+        row[14] = sanitize_media_url(row[14])  # reply_media_url
         mensaje_txt = row[0] or ''
         tipo_msg = row[1] or ''
         segments = _extract_flow_segments(mensaje_txt) if tipo_msg.startswith('cliente') else []
