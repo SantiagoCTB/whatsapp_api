@@ -627,7 +627,11 @@ def _reply_with_ai(
         return False
 
     enviar_mensaje(numero, response, tipo="bot", step=message_step)
-    matched_pages = _matched_catalog_pages(response, pages)
+    message_step_norm = _normalize_step_name(message_step)
+    media_pages = pages
+    if message_step_norm == "ia_chat":
+        media_pages = find_relevant_pages(response, limit=2)
+    matched_pages = _matched_catalog_pages(response, media_pages)
     if not matched_pages:
         logger.info(
             "Respuesta IA sin referencias claras a producto; se omiten imágenes",
