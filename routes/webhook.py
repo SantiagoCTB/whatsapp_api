@@ -1198,9 +1198,7 @@ def dispatch_rule(
     if _is_ia_trigger(input_text) or (
         (input_text or '').strip() == '*' and _is_ia_step(current_step)
     ):
-        system_prompt = resp
-        if _normalize_step_name(current_step) == 'ia_chat':
-            system_prompt = _combine_system_prompts(_get_ia_system_prompt(), resp)
+        system_prompt = _combine_system_prompts(_get_ia_system_prompt(), resp)
         _reply_with_ai(
             numero,
             obtener_ultimo_mensaje_cliente(numero),
