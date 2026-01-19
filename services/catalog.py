@@ -154,6 +154,12 @@ def _perform_ocr_from_image(path: str) -> str:
         return ""
 
 
+def extract_text_from_image(path: str) -> str:
+    """Extrae texto OCR desde una imagen del usuario si hay soporte disponible."""
+
+    return _perform_ocr_from_image(path)
+
+
 def _page_zoom_matrix(page: "fitz.Page", max_dim: int = 3000) -> "fitz.Matrix":
     """Calcula una matriz de zoom que evita imágenes gigantes.
 
