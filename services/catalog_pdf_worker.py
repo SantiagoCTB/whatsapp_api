@@ -4,15 +4,25 @@ from __future__ import annotations
 
 import logging
 import threading
+from dataclasses import dataclass
+from threading import Event
 from datetime import datetime
 
 from services import db, tenants
-from services.catalog import ingest_catalog_pdf
+from services.catalog import CatalogIngestCancelled, ingest_catalog_pdf
 
 logger = logging.getLogger(__name__)
 
 _lock = threading.Lock()
-_running_keys: set[str] = set()
+
+
+@dataclass
+class CatalogIngestTask:
+    stop_event: Event
+    config_id: int
+
+
+_running_tasks: dict[str, CatalogIngestTask] = {}
 
 
 def _update_ingest_status(
@@ -63,15 +73,18 @@ def enqueue_catalog_pdf_ingest(
 ) -> bool:
     """Lanza la ingesta del PDF en un hilo de fondo.
 
-    Devuelve ``True`` si se encoló correctamente; ``False`` si ya había un
-    proceso en ejecución para el mismo tenant.
+    Si ya existía un proceso para el tenant, se cancela el anterior y se
+    inicia la nueva ingesta.
     """
 
     key = _normalize_key(tenant)
+    stop_event = Event()
+    task = CatalogIngestTask(stop_event=stop_event, config_id=config_id)
     with _lock:
-        if key in _running_keys:
-            return False
-        _running_keys.add(key)
+        previous = _running_tasks.get(key)
+        if previous:
+            previous.stop_event.set()
+        _running_tasks[key] = task
 
     def _runner() -> None:
         try:
@@ -88,13 +101,22 @@ def enqueue_catalog_pdf_ingest(
                 finished_at=None,
                 error=None,
             )
-            ingest_catalog_pdf(pdf_path, stored_name)
+            ingest_catalog_pdf(pdf_path, stored_name, stop_event=stop_event)
             _update_ingest_status(
                 config_id,
                 state="succeeded",
                 started_at=started_at,
                 finished_at=datetime.utcnow(),
                 error=None,
+            )
+        except CatalogIngestCancelled as exc:
+            logger.info("Ingesta de catálogo cancelada", extra={"reason": str(exc)})
+            _update_ingest_status(
+                config_id,
+                state="cancelled",
+                started_at=None,
+                finished_at=datetime.utcnow(),
+                error=str(exc),
             )
         except Exception as exc:  # pragma: no cover - depende del runtime
             logger.exception("Error al indexar catálogo PDF", exc_info=exc)
@@ -108,7 +130,9 @@ def enqueue_catalog_pdf_ingest(
         finally:
             tenants.clear_current_tenant()
             with _lock:
-                _running_keys.discard(key)
+                current = _running_tasks.get(key)
+                if current is task:
+                    _running_tasks.pop(key, None)
 
     thread = threading.Thread(
         target=_runner, name=f"catalog-pdf-{key}", daemon=True
@@ -122,4 +146,4 @@ def is_catalog_pdf_ingest_running(tenant: tenants.TenantInfo | None) -> bool:
 
     key = _normalize_key(tenant)
     with _lock:
-        return key in _running_keys
+        return key in _running_tasks

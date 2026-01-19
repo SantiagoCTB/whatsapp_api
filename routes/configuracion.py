@@ -1211,16 +1211,6 @@ def configuracion_ia():
             if pdf_file and pdf_file.filename and catalog_url:
                 error_message = 'Sube un PDF o indica una URL, pero no ambas opciones.'
 
-            if (
-                not error_message
-                and (pdf_file and pdf_file.filename or catalog_url)
-                and ia_config
-                and ia_config.get("pdf_ingest_state") == "running"
-            ):
-                error_message = (
-                    "Ya hay un catálogo en proceso. Espera a que termine antes de cargar otro."
-                )
-
             if pdf_file and pdf_file.filename and not error_message:
                 filename = secure_filename(pdf_file.filename)
                 mime = (pdf_file.mimetype or '').lower()
@@ -1390,7 +1380,12 @@ def configuracion_ia():
                 else:
                     status_message = 'Configuración de IA actualizada correctamente.'
 
-                if new_pdf and old_pdf_path and os.path.exists(old_pdf_path):
+                if (
+                    new_pdf
+                    and old_pdf_path
+                    and os.path.exists(old_pdf_path)
+                    and old_pdf_path != path
+                ):
                     try:
                         os.remove(old_pdf_path)
                     except OSError:
