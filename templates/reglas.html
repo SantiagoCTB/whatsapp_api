@@ -653,9 +653,7 @@ function collectButtons() {
             buttons.push(button);
         }
     });
-    const replies = buttons.filter(button => button.type === 'reply' || button.reply);
-    const links = buttons.filter(button => button.type === 'web_url');
-    return [...replies, ...links];
+    return buttons;
 }
 
 function collectSections() {
