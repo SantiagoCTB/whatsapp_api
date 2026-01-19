@@ -1320,13 +1320,14 @@ def process_step_chain(
     recibió texto del usuario, pero tras la primera ejecución el flujo se
     detiene y espera una nueva entrada.
     """
+    handled = False
     if visited is None:
         visited = set()
     if not platform:
         platform = _resolve_rule_platform(numero)
     step = get_current_step(numero)
     if not step:
-        return
+        return handled
     step_norm = _normalize_step_name(step)
     if step_norm:
         visited.add(step_norm)
@@ -1350,7 +1351,7 @@ def process_step_chain(
     )
     reglas = c.fetchall(); conn.close()
     if not reglas:
-        return
+        return handled
 
     comodines = [r for r in reglas if (r[7] or '').strip() == '*']
     specific_rules = [r for r in reglas if (r[7] or '').strip() not in ('', '*')]
@@ -1361,33 +1362,36 @@ def process_step_chain(
 
     # No avanzar si no hay texto del usuario, salvo que existan comodines
     if text_norm is None and not comodines:
-        return
+        return handled
 
     # Coincidencia exacta
     for r in reglas:
         patt = (r[7] or '').strip()
         if patt and patt != '*' and normalize_text(patt) == text_norm:
             dispatch_rule(numero, r, step, visited=visited, platform=platform)
-            return
+            handled = True
+            return handled
 
     # Regla comodín
     if comodines and wildcard_allowed:
         dispatch_rule(numero, comodines[0], step, visited=visited, platform=platform)
         # No procesar recursivamente otros comodines; esperar nueva entrada
-        return
+        handled = True
+        return handled
 
     if text_norm is None:
-        return
+        return handled
 
     if specific_rules and not wildcard_allowed:
         # Se recibió texto pero no hay coincidencias y se decidió no ejecutar
         # comodines. Esto ocurre, por ejemplo, en el primer mensaje del
         # usuario tras iniciar el flujo, donde se espera que el bot ya haya
         # enviado las instrucciones y aguarde una nueva respuesta válida.
-        return
+        return handled
 
     logging.warning("Fallback en step '%s' para entrada '%s'", step, text_norm)
     update_chat_state(numero, get_current_step(numero), 'sin_regla')
+    return handled
 
 
 @register_handler('barra_medida')
@@ -1518,6 +1522,14 @@ def handle_text_message(
         return
 
     if _is_ia_step(get_current_step(numero)) and not bootstrapped:
+        handled = process_step_chain(
+            numero,
+            text_norm,
+            allow_wildcard_with_text=True,
+            platform=platform,
+        )
+        if handled:
+            return
         _reply_with_ai(numero, texto)
         return
 
