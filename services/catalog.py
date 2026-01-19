@@ -111,6 +111,34 @@ def _prepare_image_for_ocr(img: "Image.Image") -> "Image.Image":
     return prepared
 
 
+def _ensure_min_height(img: "Image.Image", min_height: int) -> "Image.Image":
+    """Escala la imagen si es muy pequeña para mejorar la lectura OCR."""
+
+    if min_height <= 0:
+        return img
+
+    width, height = img.size
+    if height >= min_height:
+        return img
+
+    scale = min_height / max(height, 1)
+    target_width = max(int(width * scale), 1)
+    return img.resize((target_width, min_height), resample=Image.LANCZOS)
+
+
+def _build_tesseract_config() -> str:
+    """Construye la configuración de Tesseract desde variables de entorno."""
+
+    parts = []
+    psm = str(Config.OCR_PSM).strip()
+    if psm:
+        parts.append(f"--psm {psm}")
+    oem = str(Config.OCR_OEM).strip()
+    if oem:
+        parts.append(f"--oem {oem}")
+    return " ".join(parts)
+
+
 def _perform_ocr(pix: "fitz.Pixmap") -> str:
     """Ejecuta OCR sobre la imagen de la página si pytesseract está disponible."""
 
@@ -124,7 +152,12 @@ def _perform_ocr(pix: "fitz.Pixmap") -> str:
         mode = "RGB" if pix.n < 4 else "RGBA"
         img = Image.frombytes(mode, (pix.width, pix.height), pix.samples)
         prepared = _prepare_image_for_ocr(img)
-        text = pytesseract.image_to_string(prepared, lang="spa+eng")
+        prepared = _ensure_min_height(prepared, Config.OCR_MIN_HEIGHT)
+        text = pytesseract.image_to_string(
+            prepared,
+            lang=Config.OCR_LANG,
+            config=_build_tesseract_config(),
+        )
         return _sanitize_text(text)
     except Exception as exc:  # pragma: no cover - depende del runtime
         logger.warning("Fallo al ejecutar OCR de catálogo", exc_info=exc)
@@ -147,7 +180,12 @@ def _perform_ocr_from_image(path: str) -> str:
     try:
         with Image.open(path) as img:
             prepared = _prepare_image_for_ocr(img)
-            text = pytesseract.image_to_string(prepared, lang="spa+eng")
+            prepared = _ensure_min_height(prepared, Config.OCR_MIN_HEIGHT)
+            text = pytesseract.image_to_string(
+                prepared,
+                lang=Config.OCR_LANG,
+                config=_build_tesseract_config(),
+            )
             return _sanitize_text(text)
     except Exception as exc:  # pragma: no cover - depende del runtime
         logger.warning("Fallo al ejecutar OCR de imagen de catálogo", exc_info=exc)
@@ -217,7 +255,7 @@ def ingest_catalog_pdf(
             if not text:
                 text = _sanitize_text(page.get_text("blocks") or "")
 
-            zoom_matrix = _page_zoom_matrix(page)
+            zoom_matrix = _page_zoom_matrix(page, max_dim=Config.OCR_MAX_DIM)
             pix = page.get_pixmap(matrix=zoom_matrix, alpha=False)
             image_name = f"{base_name}_p{number}.png"
             image_path = os.path.join(pages_dir, image_name)

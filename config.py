@@ -194,3 +194,8 @@ class Config:
         'yes',
         'on',
     }
+    OCR_LANG = os.getenv('OCR_LANG', 'spa+eng')
+    OCR_PSM = os.getenv('OCR_PSM', '6')
+    OCR_OEM = os.getenv('OCR_OEM', '3')
+    OCR_MAX_DIM = int(os.getenv('OCR_MAX_DIM', 3000))
+    OCR_MIN_HEIGHT = int(os.getenv('OCR_MIN_HEIGHT', 1200))
