@@ -7,6 +7,7 @@ import logging
 import os
 import re
 from dataclasses import dataclass
+from threading import Event
 from pathlib import Path
 from typing import List
 
@@ -46,6 +47,10 @@ class CatalogPage:
     image_filename: str
     keywords: list[str] | None = None
     pdf_filename: str | None = None
+
+
+class CatalogIngestCancelled(Exception):
+    """Señala que la ingesta del catálogo fue cancelada."""
 
 
 def _media_root() -> str:
@@ -167,7 +172,9 @@ def _page_zoom_matrix(page: "fitz.Page", max_dim: int = 3000) -> "fitz.Matrix":
     return fitz.Matrix(scale, scale)
 
 
-def ingest_catalog_pdf(pdf_path: str, stored_pdf_name: str) -> list[CatalogPage]:
+def ingest_catalog_pdf(
+    pdf_path: str, stored_pdf_name: str, *, stop_event: Event | None = None
+) -> list[CatalogPage]:
     """Procesa el PDF y devuelve una lista de páginas con texto e imagen.
 
     - Extrae el texto de cada página usando PyMuPDF (que puede realizar OCR
@@ -187,11 +194,18 @@ def ingest_catalog_pdf(pdf_path: str, stored_pdf_name: str) -> list[CatalogPage]
 
     logger.info("Procesando catálogo PDF para IA", extra={"pdf": pdf_path})
 
+    if stop_event and stop_event.is_set():
+        raise CatalogIngestCancelled("Cancelado antes de abrir el PDF.")
+
     doc = fitz.open(pdf_path)
     page_counter = {"total": 0}
 
     def _page_iterator():
+        if stop_event and stop_event.is_set():
+            raise CatalogIngestCancelled("Cancelado antes de procesar páginas.")
         for page in doc:
+            if stop_event and stop_event.is_set():
+                raise CatalogIngestCancelled("Cancelado durante la ingesta del catálogo.")
             number = page.number + 1
             text = _sanitize_text(page.get_text("text") or "")
             if not text:
