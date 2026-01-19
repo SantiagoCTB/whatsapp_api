@@ -2,6 +2,7 @@ import os
 import logging
 import threading
 import json
+from urllib.parse import urlparse
 import unicodedata
 from datetime import datetime
 from flask import (
@@ -38,7 +39,7 @@ from services.job_queue import enqueue_transcription
 from services.normalize_text import normalize_text
 from services.global_commands import handle_global_command
 from services.ia_client import generate_response
-from services.catalog import find_relevant_pages
+from services.catalog import extract_text_from_image, find_relevant_pages
 
 webhook_bp = Blueprint('webhook', __name__)
 logger = logging.getLogger(__name__)
@@ -121,6 +122,19 @@ def _ensure_tenant_context_for_page(page_id: str | None, channel: str) -> None:
 
 def _media_root():
     return tenants.get_media_root()
+
+
+def _local_media_path_from_url(media_url: str | None) -> str | None:
+    if not media_url:
+        return None
+    try:
+        parsed = urlparse(media_url)
+    except Exception:
+        return None
+    filename = os.path.basename(parsed.path or "")
+    if not filename:
+        return None
+    return os.path.join(_media_root(), filename)
 
 
 def _build_public_url(path: str) -> str | None:
@@ -1902,6 +1916,32 @@ def webhook():
                         start_typing_feedback(from_number, wa_id)
                     logging.info("Imagen recibida: %s", media_id)
                     if agent_mode:
+                        summary['processed'] += 1
+                        continue
+                    if _normalize_step_name(step) == "ia_chat":
+                        local_path = _local_media_path_from_url(media_url)
+                        image_text = extract_text_from_image(local_path) if local_path else ""
+                        if image_text:
+                            prompt = (
+                                "El usuario envió una imagen. "
+                                "Texto detectado en la imagen:\n"
+                                f"{image_text}"
+                            )
+                            _reply_with_ai(
+                                from_number,
+                                prompt,
+                                set_step=False,
+                                history_step=None,
+                                message_step=step,
+                            )
+                        else:
+                            enviar_mensaje(
+                                from_number,
+                                "No pude leer claramente el contenido de la imagen. "
+                                "¿Puedes describir el producto o dar más detalles?",
+                                tipo="bot",
+                                step=step,
+                            )
                         summary['processed'] += 1
                         continue
                     handle_text_message(from_number, "", save=False)
