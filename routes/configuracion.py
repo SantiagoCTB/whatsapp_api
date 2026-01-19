@@ -503,6 +503,7 @@ def _ensure_ia_config_table(cursor):
             id INT AUTO_INCREMENT PRIMARY KEY,
             model_name VARCHAR(100) NOT NULL DEFAULT 'o4-mini',
             model_token TEXT NULL,
+            system_prompt TEXT NULL,
             enabled TINYINT(1) NOT NULL DEFAULT 1,
             pdf_filename VARCHAR(255) NULL,
             pdf_original_name VARCHAR(255) NULL,
@@ -524,6 +525,13 @@ def _ensure_ia_config_table(cursor):
     if not has_enabled:
         cursor.execute(
             "ALTER TABLE ia_config ADD COLUMN enabled TINYINT(1) NOT NULL DEFAULT 1 AFTER model_token;"
+        )
+
+    cursor.execute("SHOW COLUMNS FROM ia_config LIKE 'system_prompt';")
+    has_system_prompt = cursor.fetchone() is not None
+    if not has_system_prompt:
+        cursor.execute(
+            "ALTER TABLE ia_config ADD COLUMN system_prompt TEXT NULL AFTER model_token;"
         )
 
     cursor.execute("SHOW COLUMNS FROM ia_config LIKE 'pdf_source_url';")
@@ -566,7 +574,7 @@ def _get_ia_config(cursor):
     try:
         cursor.execute(
             """
-            SELECT id, model_name, model_token, enabled, pdf_filename, pdf_original_name,
+            SELECT id, model_name, model_token, enabled, system_prompt, pdf_filename, pdf_original_name,
                    pdf_mime, pdf_size, pdf_uploaded_at, pdf_source_url,
                    pdf_ingest_state, pdf_ingest_started_at, pdf_ingest_finished_at,
                    pdf_ingest_error
@@ -601,17 +609,35 @@ def _get_ia_config(cursor):
             row.insert(3, 1)
         while len(row) < 10:
             row.append(None)
-        while len(row) < 14:
+        while len(row) < 15:
             row.append(None)
         row = tuple(row)
-    elif len(row) < 14:
-        row = tuple(list(row) + [None] * (14 - len(row)))
+    elif len(row) == 13:
+        row = list(row)
+        row.insert(3, 1)
+        row.insert(4, None)
+        while len(row) < 15:
+            row.append(None)
+        row = tuple(row)
+    elif len(row) == 14:
+        row = list(row)
+        if isinstance(row[3], str):
+            row.insert(3, 1)
+            row.insert(4, None)
+        else:
+            row.insert(4, None)
+        while len(row) < 15:
+            row.append(None)
+        row = tuple(row)
+    elif len(row) < 15:
+        row = tuple(list(row) + [None] * (15 - len(row)))
 
     keys = [
         "id",
         "model_name",
         "model_token",
         "enabled",
+        "system_prompt",
         "pdf_filename",
         "pdf_original_name",
         "pdf_mime",
@@ -1196,6 +1222,7 @@ def configuracion_ia():
             ia_model = (request.form.get('ia_model') or 'o4-mini').strip() or 'o4-mini'
             ia_token = (request.form.get('ia_token') or '').strip()
             ia_enabled = 1 if request.form.get('ia_enabled') in {'on', '1', 'true', 't'} else 0
+            system_prompt = (request.form.get('system_prompt') or '').strip() or None
             catalog_url = (request.form.get('catalogo_url') or '').strip()
             pdf_file = request.files.get('catalogo_pdf')
             pdf_dir = _media_root()
@@ -1309,6 +1336,7 @@ def configuracion_ia():
                         UPDATE ia_config
                            SET model_name = %s,
                                model_token = %s,
+                               system_prompt = %s,
                                enabled = %s,
                                pdf_filename = %s,
                                pdf_original_name = %s,
@@ -1325,6 +1353,7 @@ def configuracion_ia():
                         (
                             ia_model,
                             ia_token,
+                            system_prompt,
                             ia_enabled,
                             new_pdf['stored_name'] if new_pdf else ia_config.get('pdf_filename'),
                             new_pdf['original_name'] if new_pdf else ia_config.get('pdf_original_name'),
@@ -1343,14 +1372,15 @@ def configuracion_ia():
                     c.execute(
                         """
                         INSERT INTO ia_config
-                            (model_name, model_token, enabled, pdf_filename, pdf_original_name, pdf_mime, pdf_size,
-                             pdf_uploaded_at, pdf_source_url, pdf_ingest_state, pdf_ingest_started_at,
-                             pdf_ingest_finished_at, pdf_ingest_error)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                            (model_name, model_token, system_prompt, enabled, pdf_filename, pdf_original_name,
+                             pdf_mime, pdf_size, pdf_uploaded_at, pdf_source_url, pdf_ingest_state,
+                             pdf_ingest_started_at, pdf_ingest_finished_at, pdf_ingest_error)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                         """,
                         (
                             ia_model,
                             ia_token,
+                            system_prompt,
                             ia_enabled,
                             new_pdf['stored_name'] if new_pdf else None,
                             new_pdf['original_name'] if new_pdf else None,

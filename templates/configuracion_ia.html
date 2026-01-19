@@ -57,6 +57,11 @@
         <label for="ia_token">Token del modelo</label>
         <input type="text" id="ia_token" name="ia_token" value="{{ ia_config.model_token or '' if ia_config else '' }}" required>
     </div>
+    <div class="form-row">
+        <label for="system_prompt">Prompt de respuesta</label>
+        <textarea id="system_prompt" name="system_prompt" rows="5" placeholder="Describe el tono, formato y límites de la respuesta de la IA.">{{ ia_config.system_prompt or '' if ia_config else '' }}</textarea>
+        <small>Se usará como mensaje de sistema para definir el estilo de respuesta de la IA.</small>
+    </div>
     <div class="form-row checkbox-row">
         <label for="ia_enabled" class="checkbox-label">
             <input type="checkbox" id="ia_enabled" name="ia_enabled" value="1" {% if ia_config is none or ia_config.enabled %}checked{% endif %}>

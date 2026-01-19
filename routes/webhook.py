@@ -488,6 +488,29 @@ def _catalog_context_for_prompt(prompt: str):
     return "\n".join(context_lines), pages
 
 
+def _get_ia_system_prompt() -> str | None:
+    conn = get_connection()
+    c = conn.cursor()
+    try:
+        c.execute(
+            """
+            SELECT system_prompt
+              FROM ia_config
+          ORDER BY id DESC
+             LIMIT 1
+            """
+        )
+        row = c.fetchone()
+    except Exception:
+        return None
+    finally:
+        conn.close()
+    if not row:
+        return None
+    prompt = (row[0] or "").strip()
+    return prompt or None
+
+
 def _reply_with_ai(
     numero: str,
     user_text: str | None,
@@ -503,6 +526,9 @@ def _reply_with_ai(
     if not prompt:
         logger.info("Sin texto para enviar a la IA", extra={"numero": numero})
         return False
+
+    if system_prompt is None:
+        system_prompt = _get_ia_system_prompt()
 
     if set_step:
         set_user_step(numero, "ia")
