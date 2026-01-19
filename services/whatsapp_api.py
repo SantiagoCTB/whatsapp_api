@@ -343,7 +343,7 @@ def enviar_mensaje(
                 "El usuario de Facebook tiene que haber enviado mensajes a esta página antes de escribirle.",
             )
 
-        url = f"{INSTAGRAM_GRAPH_BASE_URL}/{runtime['page_id']}/messages"
+        url = f"{GRAPH_BASE_URL}/{runtime['page_id']}/messages"
         headers = {
             "Authorization": f"Bearer {runtime['token']}",
             "Content-Type": "application/json",
