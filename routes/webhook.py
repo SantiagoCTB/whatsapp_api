@@ -1318,6 +1318,7 @@ def process_step_chain(
     platform: str | None = None,
     *,
     allow_wildcard_with_text=True,
+    allow_wildcard_when_no_specific=True,
 ):
     """Procesa el step actual una sola vez.
 
@@ -1362,7 +1363,9 @@ def process_step_chain(
     specific_rules = [r for r in reglas if (r[7] or '').strip() not in ('', '*')]
 
     wildcard_allowed = (
-        text_norm is None or allow_wildcard_with_text or not specific_rules
+        text_norm is None
+        or allow_wildcard_with_text
+        or (allow_wildcard_when_no_specific and not specific_rules)
     )
 
     # No avanzar si no hay texto del usuario, salvo que existan comodines
@@ -1530,7 +1533,8 @@ def handle_text_message(
         handled = process_step_chain(
             numero,
             text_norm,
-            allow_wildcard_with_text=True,
+            allow_wildcard_with_text=False,
+            allow_wildcard_when_no_specific=False,
             platform=platform,
         )
         if handled:
