@@ -293,7 +293,7 @@ def _platform_filter_sql(
 def _is_ia_step(step: str | None) -> bool:
     if _is_ia_trigger(step):
         return True
-    return _normalize_step_name(step) == 'ia'
+    return _normalize_step_name(step) in {'ia', 'ia_chat'}
 
 
 def _ia_history_limit() -> int:
@@ -1167,7 +1167,9 @@ def dispatch_rule(
     if current_step_norm:
         visited.add(current_step_norm)
 
-    if _is_ia_trigger(input_text):
+    if _is_ia_trigger(input_text) or (
+        (input_text or '').strip() == '*' and _is_ia_step(current_step)
+    ):
         _reply_with_ai(
             numero,
             obtener_ultimo_mensaje_cliente(numero),
@@ -1533,8 +1535,8 @@ def handle_text_message(
         handled = process_step_chain(
             numero,
             text_norm,
-            allow_wildcard_with_text=False,
-            allow_wildcard_when_no_specific=False,
+            allow_wildcard_with_text=True,
+            allow_wildcard_when_no_specific=True,
             platform=platform,
         )
         if handled:
