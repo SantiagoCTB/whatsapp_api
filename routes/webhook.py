@@ -488,6 +488,42 @@ def _catalog_context_for_prompt(prompt: str):
     return "\n".join(context_lines), pages
 
 
+def _page_keywords_for_match(page) -> set[str]:
+    keywords = page.keywords if isinstance(page.keywords, list) else []
+    normalized_keywords = {
+        normalize_text(keyword)
+        for keyword in keywords
+        if isinstance(keyword, str) and keyword.strip()
+    }
+    if normalized_keywords:
+        return {kw for kw in normalized_keywords if len(kw) > 2}
+
+    tokens = normalize_text(page.text_content or "").split()
+    selected: list[str] = []
+    for token in tokens:
+        if len(token) <= 3:
+            continue
+        if token in selected:
+            continue
+        selected.append(token)
+        if len(selected) >= 20:
+            break
+    return set(selected)
+
+
+def _should_send_catalog_images(response: str, pages) -> bool:
+    if not response or not pages:
+        return False
+    response_tokens = set(normalize_text(response).split())
+    if not response_tokens:
+        return False
+    for page in pages:
+        for keyword in _page_keywords_for_match(page):
+            if keyword in response_tokens:
+                return True
+    return False
+
+
 def _get_ia_system_prompt() -> str | None:
     conn = get_connection()
     c = conn.cursor()
@@ -582,6 +618,12 @@ def _reply_with_ai(
         return False
 
     enviar_mensaje(numero, response, tipo="bot", step=message_step)
+    if not _should_send_catalog_images(response, pages):
+        logger.info(
+            "Respuesta IA sin referencias claras a producto; se omiten imágenes",
+            extra={"numero": numero},
+        )
+        return True
     for page in pages:
         if not page.image_filename:
             continue
