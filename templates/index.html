@@ -346,6 +346,37 @@
         }
         return audioEl;
       }
+
+      function parseMessageOptions(rawOptions) {
+        if (!rawOptions) return [];
+        let parsed = rawOptions;
+        if (typeof rawOptions === 'string') {
+          const trimmed = rawOptions.trim();
+          if (!trimmed) return [];
+          try {
+            parsed = JSON.parse(trimmed);
+          } catch (err) {
+            return [];
+          }
+        }
+        if (!Array.isArray(parsed)) return [];
+        const options = [];
+        parsed.forEach(option => {
+          if (!option || typeof option !== 'object') return;
+          const reply = option.reply && typeof option.reply === 'object' ? option.reply : {};
+          const title = option.title || option.text || option.label || reply.title;
+          const url = option.url || option.link;
+          const payload = option.payload || option.PAYLOAD || option.id || reply.id || option.phone_number || option.phone;
+          const type = option.type || '';
+          if (title) {
+            const detail = url || payload ? `${type ? `${type}: ` : ''}${url || payload}` : type;
+            options.push({ label: title, detail });
+          } else if (url || payload) {
+            options.push({ label: String(url || payload), detail: type });
+          }
+        });
+        return options;
+      }
       const sendBtn = document.getElementById('sendBtn');
       const messageInput = document.getElementById('messageInput');
       const inputArea = document.querySelector('.inputArea');
@@ -1722,7 +1753,7 @@
             lastCount = 0;
             let newestIncoming = lastIncomingWaId;
             for (let i=0; i<total; i++){
-              const [txt, tipo, url, ts, linkUrl, linkTitle, linkBody, linkThumb,
+              const [txt, tipo, url, opciones, ts, linkUrl, linkTitle, linkBody, linkThumb,
                      waId, replyWaId, replyId, replyText, replyTipo, replyUrl,
                      flowName, flowJson, flowSegments] = msgs[i];
               const mediaUrl = normalizeMediaUrl(url);
@@ -1796,6 +1827,28 @@
                 div.appendChild(p);
               }
 
+              const optionsSource = opciones || (typeof url === 'string' && url.trim().startsWith('[') ? url : null);
+              const parsedOptions = parseMessageOptions(optionsSource);
+              if (parsedOptions.length) {
+                const optionsWrap = document.createElement('div');
+                optionsWrap.className = 'message-options';
+                const titleEl = document.createElement('div');
+                titleEl.className = 'message-options__title';
+                titleEl.textContent = 'Opciones enviadas:';
+                optionsWrap.appendChild(titleEl);
+                const listEl = document.createElement('div');
+                listEl.className = 'message-options__list';
+                parsedOptions.forEach(option => {
+                  const chip = document.createElement('span');
+                  chip.className = 'message-options__item';
+                  chip.textContent = option.label;
+                  if (option.detail) chip.title = option.detail;
+                  listEl.appendChild(chip);
+                });
+                optionsWrap.appendChild(listEl);
+                div.appendChild(optionsWrap);
+              }
+
               const flowCard = createFlowCard(flowName, flowJson);
               if (flowCard) {
                 div.appendChild(flowCard);
@@ -1855,7 +1908,7 @@
         if (!Array.isArray(msgs) || msgs.length === 0) return '0';
         const first = msgs[0] || [];
         const last = msgs[msgs.length - 1] || [];
-        return `${msgs.length}|${first[8] || ''}|${last[8] || ''}|${last[3] || ''}`;
+        return `${msgs.length}|${first[9] || ''}|${last[9] || ''}|${last[4] || ''}`;
       }
 
       // Botones rápidos

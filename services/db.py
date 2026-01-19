@@ -527,6 +527,7 @@ def init_db(db_settings: DatabaseSettings | None = None):
       media_id   VARCHAR(255),
       media_url  TEXT,
       mime_type  TEXT,
+      opciones   TEXT,
       link_url   TEXT,
       link_title TEXT,
       link_body  TEXT,
@@ -550,6 +551,10 @@ def init_db(db_settings: DatabaseSettings | None = None):
     c.execute("SHOW COLUMNS FROM mensajes LIKE 'link_thumb';")
     if not c.fetchone():
         c.execute("ALTER TABLE mensajes ADD COLUMN link_thumb TEXT NULL;")
+
+    c.execute("SHOW COLUMNS FROM mensajes LIKE 'opciones';")
+    if not c.fetchone():
+        c.execute("ALTER TABLE mensajes ADD COLUMN opciones TEXT NULL;")
 
     # Migración defensiva de columnas wa_id y reply_to_wa_id
     c.execute("SHOW COLUMNS FROM mensajes LIKE 'wa_id';")
@@ -846,6 +851,7 @@ def guardar_mensaje(
     media_id=None,
     media_url=None,
     mime_type=None,
+    opciones=None,
     link_url=None,
     link_title=None,
     link_body=None,
@@ -860,9 +866,10 @@ def guardar_mensaje(
 
     Admite campos opcionales para los identificadores de WhatsApp
     (``wa_id`` y ``reply_to_wa_id``), para medios (``media_id``, ``media_url``,
-    ``mime_type``) y, sólo para mensajes de tipo ``referral``, datos de enlaces
-    (``link_url``, ``link_title``, ``link_body``, ``link_thumb``). También puede
-    registrar el ``step`` del flujo y el ``regla_id`` que originó el mensaje.
+    ``mime_type``), para opciones JSON (``opciones``) y, sólo para mensajes de
+    tipo ``referral``, datos de enlaces (``link_url``, ``link_title``,
+    ``link_body``, ``link_thumb``). También puede registrar el ``step`` del
+    flujo y el ``regla_id`` que originó el mensaje.
     """
     if tipo and str(tipo).startswith('cliente'):
         unhide_chat(numero)
@@ -885,9 +892,9 @@ def guardar_mensaje(
         timestamp_value = (timestamp,)
     c.execute(
         "INSERT INTO mensajes "
-        "(numero, mensaje, tipo, wa_id, reply_to_wa_id, media_id, media_url, mime_type, "
+        "(numero, mensaje, tipo, wa_id, reply_to_wa_id, media_id, media_url, mime_type, opciones, "
         "link_url, link_title, link_body, link_thumb, step, regla_id, timestamp) "
-        f"VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,{timestamp_placeholder})",
+        f"VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,{timestamp_placeholder})",
         (
             numero,
             mensaje,
@@ -897,6 +904,7 @@ def guardar_mensaje(
             media_id,
             media_url,
             mime_type,
+            opciones,
             link_url,
             link_title,
             link_body,

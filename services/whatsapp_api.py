@@ -320,6 +320,17 @@ def enviar_mensaje(
     *,
     return_error=False,
 ):
+    def _serialize_opciones(raw_opciones):
+        if raw_opciones is None:
+            return None
+        if isinstance(raw_opciones, str):
+            value = raw_opciones.strip()
+            return value or None
+        try:
+            return json.dumps(raw_opciones, ensure_ascii=False)
+        except (TypeError, ValueError):
+            return None
+
     def _result(success, reason=None):
         if return_error:
             return success, reason
@@ -534,6 +545,7 @@ def enviar_mensaje(
             reply_to_wa_id=reply_to_wa_id,
             media_id=None,
             media_url=attachment_url,
+            opciones=_serialize_opciones(opciones) if tipo_respuesta == "boton" else None,
             step=step,
             regla_id=regla_id,
         )
@@ -720,6 +732,7 @@ def enviar_mensaje(
             reply_to_wa_id=reply_to_wa_id,
             media_id=None,
             media_url=attachment_url,
+            opciones=_serialize_opciones(opciones) if tipo_respuesta == "boton" else None,
             step=step,
             regla_id=regla_id,
         )
@@ -1165,7 +1178,7 @@ def enviar_mensaje(
         else:
             media_url_db = audio_obj.get("link")
     else:
-        media_url_db = opciones
+        media_url_db = opciones if tipo_respuesta != 'boton' else None
 
     guardar_mensaje(
         numero,
@@ -1175,6 +1188,7 @@ def enviar_mensaje(
         reply_to_wa_id=reply_to_wa_id,
         media_id=None,
         media_url=media_url_db,
+        opciones=_serialize_opciones(opciones) if tipo_respuesta == "boton" else None,
         step=step,
         regla_id=regla_id,
     )
