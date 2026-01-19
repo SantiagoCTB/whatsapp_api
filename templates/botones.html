@@ -35,6 +35,14 @@
     <label for="categoria_regla">Categoría (opcional):</label>
     <input type="text" name="categoria" id="categoria_regla" placeholder="Área o grupo">
 
+    <label for="usuarios_regla">Usuarios con acceso:</label>
+    <select name="user_ids" id="usuarios_regla" multiple>
+        {% for u in usuarios %}
+        <option value="{{ u.id }}">{{ u.username }}</option>
+        {% endfor %}
+    </select>
+    <p class="helper-text">Si no seleccionas ninguno, se asignará a tu usuario.</p>
+
     <button type="submit" class="btn-primary">Agregar botón desde regla</button>
 </form>
 
@@ -64,23 +72,55 @@
     <label for="media_url" id="label_media_url" style="display:none;">URLs de archivos (separadas por comas o saltos de línea):</label>
     <textarea id="media_url" name="media_url" style="display:none;" placeholder="URL1, URL2&#10;URL3"></textarea>
 
+    <label for="usuarios_manual">Usuarios con acceso:</label>
+    <select name="user_ids" id="usuarios_manual" multiple>
+        {% for u in usuarios %}
+        <option value="{{ u.id }}">{{ u.username }}</option>
+        {% endfor %}
+    </select>
+    <p class="helper-text">Si no seleccionas ninguno, se asignará a tu usuario.</p>
+
     <button type="submit" class="btn-primary">Agregar botón</button>
 </form>
 
 <form method="POST" enctype="multipart/form-data">
     <label for="archivo">Importar botones desde Excel:</label>
     <input type="file" name="archivo" accept=".xlsx" required>
+    <label for="usuarios_import">Usuarios con acceso:</label>
+    <select name="user_ids" id="usuarios_import" multiple>
+        {% for u in usuarios %}
+        <option value="{{ u.id }}">{{ u.username }}</option>
+        {% endfor %}
+    </select>
+    <p class="helper-text">Si no seleccionas ninguno, se asignará a tu usuario.</p>
     <button type="submit" class="btn-primary">Importar</button>
 </form>
 
 <h3>Botones actuales</h3>
 <table class="fixed-table">
-    <tr><th>ID</th><th>Nombre</th><th>Categoría</th><th>Tipo</th><th>Mensaje</th><th>Adjuntos / Opciones</th><th>Acción</th></tr>
+    <tr><th>ID</th><th>Nombre</th><th>Categoría</th><th>Usuarios</th><th>Tipo</th><th>Mensaje</th><th>Adjuntos / Opciones</th><th>Acción</th></tr>
     {% for b in botones %}
     <tr>
         <td>{{ b.id }}</td>
         <td>{{ b.nombre|default('') }}</td>
         <td>{{ b.categoria|default('') }}</td>
+        <td>
+            <form method="POST" action="{{ url_for('configuracion.actualizar_boton_usuarios', boton_id=b.id) }}">
+                <select name="user_ids" multiple>
+                    {% for u in usuarios %}
+                    <option value="{{ u.id }}" {% if u.id in b.user_ids %}selected{% endif %}>{{ u.username }}</option>
+                    {% endfor %}
+                </select>
+                <label class="helper-text">
+                    <input type="checkbox" name="clear_users" value="1">
+                    Quitar todos los usuarios
+                </label>
+                <button class="btn-secondary" type="submit">Actualizar</button>
+            </form>
+            {% if b.usernames %}
+                <div class="helper-text">{{ b.usernames | join(', ') }}</div>
+            {% endif %}
+        </td>
         <td>{{ b.tipo }}</td>
         <td style="white-space: pre-line;">{{ b.mensaje }}</td>
         <td style="word-break: break-all;">
