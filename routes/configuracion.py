@@ -20,7 +20,7 @@ else:  # pragma: no cover - fallback cuando falta el conector
 
 from config import Config
 from services import tenants
-from services.catalog import ingest_catalog_pdf
+from services.catalog_pdf_worker import enqueue_catalog_pdf_ingest
 from services.whatsapp_api import list_phone_numbers
 from services.db import get_connection, get_chat_state_definitions
 
@@ -510,6 +510,10 @@ def _ensure_ia_config_table(cursor):
             pdf_size BIGINT NULL,
             pdf_uploaded_at DATETIME NULL,
             pdf_source_url TEXT NULL,
+            pdf_ingest_state VARCHAR(20) NULL,
+            pdf_ingest_started_at DATETIME NULL,
+            pdf_ingest_finished_at DATETIME NULL,
+            pdf_ingest_error TEXT NULL,
             created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
         ) ENGINE=InnoDB;
         """
@@ -529,13 +533,43 @@ def _ensure_ia_config_table(cursor):
             "ALTER TABLE ia_config ADD COLUMN pdf_source_url TEXT NULL AFTER pdf_uploaded_at;"
         )
 
+    cursor.execute("SHOW COLUMNS FROM ia_config LIKE 'pdf_ingest_state';")
+    has_ingest_state = cursor.fetchone() is not None
+    if not has_ingest_state:
+        cursor.execute(
+            "ALTER TABLE ia_config ADD COLUMN pdf_ingest_state VARCHAR(20) NULL AFTER pdf_source_url;"
+        )
+
+    cursor.execute("SHOW COLUMNS FROM ia_config LIKE 'pdf_ingest_started_at';")
+    has_ingest_started = cursor.fetchone() is not None
+    if not has_ingest_started:
+        cursor.execute(
+            "ALTER TABLE ia_config ADD COLUMN pdf_ingest_started_at DATETIME NULL AFTER pdf_ingest_state;"
+        )
+
+    cursor.execute("SHOW COLUMNS FROM ia_config LIKE 'pdf_ingest_finished_at';")
+    has_ingest_finished = cursor.fetchone() is not None
+    if not has_ingest_finished:
+        cursor.execute(
+            "ALTER TABLE ia_config ADD COLUMN pdf_ingest_finished_at DATETIME NULL AFTER pdf_ingest_started_at;"
+        )
+
+    cursor.execute("SHOW COLUMNS FROM ia_config LIKE 'pdf_ingest_error';")
+    has_ingest_error = cursor.fetchone() is not None
+    if not has_ingest_error:
+        cursor.execute(
+            "ALTER TABLE ia_config ADD COLUMN pdf_ingest_error TEXT NULL AFTER pdf_ingest_finished_at;"
+        )
+
 
 def _get_ia_config(cursor):
     try:
         cursor.execute(
             """
             SELECT id, model_name, model_token, enabled, pdf_filename, pdf_original_name,
-                   pdf_mime, pdf_size, pdf_uploaded_at, pdf_source_url
+                   pdf_mime, pdf_size, pdf_uploaded_at, pdf_source_url,
+                   pdf_ingest_state, pdf_ingest_started_at, pdf_ingest_finished_at,
+                   pdf_ingest_error
               FROM ia_config
           ORDER BY id DESC
              LIMIT 1
@@ -546,7 +580,9 @@ def _get_ia_config(cursor):
         cursor.execute(
             """
             SELECT id, model_name, model_token, pdf_filename, pdf_original_name,
-                   pdf_mime, pdf_size, pdf_uploaded_at, pdf_source_url
+                   pdf_mime, pdf_size, pdf_uploaded_at, pdf_source_url,
+                   pdf_ingest_state, pdf_ingest_started_at, pdf_ingest_finished_at,
+                   pdf_ingest_error
               FROM ia_config
           ORDER BY id DESC
              LIMIT 1
@@ -559,10 +595,17 @@ def _get_ia_config(cursor):
 
     row = rows[0]
 
-    if len(row) == 8:
-        row = (*row[:3], 1, *row[3:], None)
-    elif len(row) == 9:
-        row = (*row, None)
+    if len(row) in {8, 9}:
+        row = list(row)
+        if len(row) == 8 or (len(row) == 9 and isinstance(row[3], str)):
+            row.insert(3, 1)
+        while len(row) < 10:
+            row.append(None)
+        while len(row) < 14:
+            row.append(None)
+        row = tuple(row)
+    elif len(row) < 14:
+        row = tuple(list(row) + [None] * (14 - len(row)))
 
     keys = [
         "id",
@@ -575,6 +618,10 @@ def _get_ia_config(cursor):
         "pdf_size",
         "pdf_uploaded_at",
         "pdf_source_url",
+        "pdf_ingest_state",
+        "pdf_ingest_started_at",
+        "pdf_ingest_finished_at",
+        "pdf_ingest_error",
     ]
 
     return {key: value for key, value in zip(keys, row)}
@@ -1157,13 +1204,22 @@ def configuracion_ia():
 
             new_pdf = None
             old_pdf_path = None
-            ingest_error = None
 
             if not ia_token:
                 error_message = 'El token del modelo es obligatorio.'
 
             if pdf_file and pdf_file.filename and catalog_url:
                 error_message = 'Sube un PDF o indica una URL, pero no ambas opciones.'
+
+            if (
+                not error_message
+                and (pdf_file and pdf_file.filename or catalog_url)
+                and ia_config
+                and ia_config.get("pdf_ingest_state") == "running"
+            ):
+                error_message = (
+                    "Ya hay un catálogo en proceso. Espera a que termine antes de cargar otro."
+                )
 
             if pdf_file and pdf_file.filename and not error_message:
                 filename = secure_filename(pdf_file.filename)
@@ -1191,16 +1247,6 @@ def configuracion_ia():
                             if os.path.exists(legacy_path):
                                 old_pdf_path = legacy_path
 
-                    try:
-                        ingest_catalog_pdf(path, stored_name)
-                    except Exception as exc:  # pragma: no cover - depende de libs externas
-                        logger.exception("Error al indexar catálogo PDF", exc_info=exc)
-                        ingest_error = 'No se pudo procesar el catálogo PDF. Verifica que el archivo no esté dañado.'
-                        try:
-                            os.remove(path)
-                        except OSError:
-                            pass
-                        new_pdf = None
 
             elif catalog_url and not error_message:
                 ok, mime = _url_ok(catalog_url)
@@ -1241,16 +1287,6 @@ def configuracion_ia():
                                             if os.path.exists(legacy_path):
                                                 old_pdf_path = legacy_path
 
-                                    try:
-                                        ingest_catalog_pdf(path, stored_name)
-                                    except Exception as exc:  # pragma: no cover - depende de libs externas
-                                        logger.exception("Error al indexar catálogo PDF", exc_info=exc)
-                                        ingest_error = 'No se pudo procesar el catálogo PDF. Verifica que el archivo no esté dañado.'
-                                        try:
-                                            os.remove(path)
-                                        except OSError:
-                                            pass
-                                        new_pdf = None
                     except requests.RequestException:
                         error_message = 'No se pudo descargar el catálogo desde la URL proporcionada.'
                     if error_message and os.path.exists(path):
@@ -1259,10 +1295,24 @@ def configuracion_ia():
                         except OSError:
                             pass
 
-            if not error_message and ingest_error:
-                error_message = ingest_error
-
             if not error_message:
+                ingest_state = ia_config.get("pdf_ingest_state") if ia_config else None
+                ingest_started_at = (
+                    ia_config.get("pdf_ingest_started_at") if ia_config else None
+                )
+                ingest_finished_at = (
+                    ia_config.get("pdf_ingest_finished_at") if ia_config else None
+                )
+                ingest_error_detail = (
+                    ia_config.get("pdf_ingest_error") if ia_config else None
+                )
+
+                if new_pdf:
+                    ingest_state = "running"
+                    ingest_started_at = datetime.utcnow()
+                    ingest_finished_at = None
+                    ingest_error_detail = None
+
                 if ia_config:
                     c.execute(
                         """
@@ -1275,7 +1325,11 @@ def configuracion_ia():
                                pdf_mime = %s,
                                pdf_size = %s,
                                pdf_uploaded_at = %s,
-                               pdf_source_url = %s
+                               pdf_source_url = %s,
+                               pdf_ingest_state = %s,
+                               pdf_ingest_started_at = %s,
+                               pdf_ingest_finished_at = %s,
+                               pdf_ingest_error = %s
                          WHERE id = %s
                         """,
                         (
@@ -1288,6 +1342,10 @@ def configuracion_ia():
                             new_pdf['size'] if new_pdf else ia_config.get('pdf_size'),
                             datetime.utcnow() if new_pdf else ia_config.get('pdf_uploaded_at'),
                             new_pdf['source_url'] if new_pdf else ia_config.get('pdf_source_url'),
+                            ingest_state,
+                            ingest_started_at,
+                            ingest_finished_at,
+                            ingest_error_detail,
                             ia_config['id'],
                         ),
                     )
@@ -1295,8 +1353,10 @@ def configuracion_ia():
                     c.execute(
                         """
                         INSERT INTO ia_config
-                            (model_name, model_token, enabled, pdf_filename, pdf_original_name, pdf_mime, pdf_size, pdf_uploaded_at, pdf_source_url)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                            (model_name, model_token, enabled, pdf_filename, pdf_original_name, pdf_mime, pdf_size,
+                             pdf_uploaded_at, pdf_source_url, pdf_ingest_state, pdf_ingest_started_at,
+                             pdf_ingest_finished_at, pdf_ingest_error)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                         """,
                         (
                             ia_model,
@@ -1308,6 +1368,10 @@ def configuracion_ia():
                             new_pdf['size'] if new_pdf else None,
                             datetime.utcnow() if new_pdf else None,
                             new_pdf['source_url'] if new_pdf else None,
+                            ingest_state,
+                            ingest_started_at,
+                            ingest_finished_at,
+                            ingest_error_detail,
                         ),
                     )
 
@@ -1319,13 +1383,42 @@ def configuracion_ia():
                         'static',
                         filename=tenants.get_uploads_url_path(ia_config['pdf_filename'])
                     )
-                status_message = 'Configuración de IA actualizada correctamente.'
+                if new_pdf:
+                    status_message = (
+                        "Catálogo guardado. Se está procesando en segundo plano."
+                    )
+                else:
+                    status_message = 'Configuración de IA actualizada correctamente.'
 
                 if new_pdf and old_pdf_path and os.path.exists(old_pdf_path):
                     try:
                         os.remove(old_pdf_path)
                     except OSError:
                         pass
+
+                if new_pdf and ia_config:
+                    tenant = tenants.get_current_tenant()
+                    if not enqueue_catalog_pdf_ingest(
+                        config_id=ia_config["id"],
+                        pdf_path=path,
+                        stored_name=new_pdf["stored_name"],
+                        tenant=tenant,
+                    ):
+                        error_message = (
+                            "No se pudo iniciar el procesamiento del catálogo porque ya hay uno en curso."
+                        )
+                        status_message = None
+                        c.execute(
+                            """
+                            UPDATE ia_config
+                               SET pdf_ingest_state = %s,
+                                   pdf_ingest_error = %s
+                             WHERE id = %s
+                            """,
+                            ("failed", error_message, ia_config["id"]),
+                        )
+                        conn.commit()
+                        ia_config = _get_ia_config(c)
 
         return render_template(
             'configuracion_ia.html',
