@@ -15,13 +15,37 @@
     <a class="tab-link" href="{{ url_for('configuracion.configuracion_signup') }}">Integraciones</a>
 </div>
 
-<p>Administra el token del modelo <strong>o4-mini</strong> y sube el catálogo en PDF o indica una URL desde donde descargarlo. Cada página del PDF se indexará con OCR y se guardará como imagen para poder adjuntarla en las respuestas.</p>
+<p>Administra el token del modelo <strong>o4-mini</strong> y sube el catálogo en PDF o indica una URL desde donde descargarlo. Cada página del PDF se indexará con OCR y se guardará como imagen para poder adjuntarla en las respuestas. El procesamiento se ejecuta en segundo plano.</p>
 
 {% if status_message %}
 <div class="alert success">{{ status_message }}</div>
 {% endif %}
 {% if error_message %}
 <div class="alert error">{{ error_message }}</div>
+{% endif %}
+{% if ia_config and ia_config.pdf_ingest_state %}
+    {% if ia_config.pdf_ingest_state == 'running' %}
+    <div class="alert success">
+        El catálogo se está procesando en segundo plano.
+        {% if ia_config.pdf_ingest_started_at %}
+        <small>Inicio: {{ ia_config.pdf_ingest_started_at }}</small>
+        {% endif %}
+    </div>
+    {% elif ia_config.pdf_ingest_state == 'succeeded' %}
+    <div class="alert success">
+        El catálogo terminó de procesarse.
+        {% if ia_config.pdf_ingest_finished_at %}
+        <small>Finalizado: {{ ia_config.pdf_ingest_finished_at }}</small>
+        {% endif %}
+    </div>
+    {% elif ia_config.pdf_ingest_state == 'failed' %}
+    <div class="alert error">
+        Hubo un problema al procesar el catálogo.
+        {% if ia_config.pdf_ingest_error %}
+        <small>{{ ia_config.pdf_ingest_error }}</small>
+        {% endif %}
+    </div>
+    {% endif %}
 {% endif %}
 
 <form class="card" method="POST" enctype="multipart/form-data">

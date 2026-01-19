@@ -1341,6 +1341,8 @@ def replace_catalog_pages(
             )
         else:
             c.execute("DELETE FROM ia_catalog_pages WHERE tenant_key IS NULL")
+        conn.commit()
+
         if media_root:
             pages_dir = os.path.join(media_root, "ia_pages")
             if os.path.isdir(pages_dir):
@@ -1379,6 +1381,7 @@ def replace_catalog_pages(
                     """,
                     buffer,
                 )
+                conn.commit()
                 buffer.clear()
 
         if buffer:
@@ -1390,7 +1393,7 @@ def replace_catalog_pages(
                 """,
                 buffer,
             )
-        conn.commit()
+            conn.commit()
     finally:
         conn.close()
 
