@@ -53,6 +53,7 @@ cache_lock         = threading.Lock()
 
 MAX_AUTO_STEPS = 25
 PLATFORM_AGNOSTIC_RULES = {"ia_chat"}
+IA_TRIGGER_ALIASES = {"ia", "iachat"}
 
 
 def _resolve_rule_platform(numero: str) -> str:
@@ -260,6 +261,14 @@ def _normalize_step_name(step):
     return (step or '').strip().lower()
 
 
+def _is_ia_trigger(value: str | None) -> bool:
+    if not value:
+        return False
+    normalized = normalize_text(value)
+    canonical = normalized.replace(" ", "")
+    return canonical in IA_TRIGGER_ALIASES
+
+
 def _is_platform_agnostic_rule(
     *, step: str | None = None, input_text: str | None = None
 ) -> bool:
@@ -282,6 +291,8 @@ def _platform_filter_sql(
 
 
 def _is_ia_step(step: str | None) -> bool:
+    if _is_ia_trigger(step):
+        return True
     return _normalize_step_name(step) == 'ia'
 
 
@@ -530,6 +541,15 @@ def _reply_with_ai(
             "- Si no hay coincidencias claras, pide más detalles al usuario sin inventar datos."
         )
 
+    logger.info(
+        "Preparando solicitud a IA",
+        extra={
+            "numero": numero,
+            "history_length": len(history or []),
+            "catalog_pages": len(pages),
+            "prompt_length": len(prompt_for_model or ""),
+        },
+    )
     response = generate_response(history, prompt_for_model, system_message=system_prompt)
     if not response:
         logger.warning("La IA no devolvió respuesta", extra={"numero": numero})
@@ -1079,8 +1099,7 @@ def dispatch_rule(
     if current_step_norm:
         visited.add(current_step_norm)
 
-    rule_input_norm = normalize_text(input_text or "") if input_text else ""
-    if rule_input_norm == "ia":
+    if _is_ia_trigger(input_text):
         _reply_with_ai(
             numero,
             obtener_ultimo_mensaje_cliente(numero),

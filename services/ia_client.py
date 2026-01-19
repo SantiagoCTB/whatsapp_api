@@ -89,6 +89,15 @@ def generate_response(
         logger.info("No hay mensajes para enviar al modelo de IA")
         return ""
 
+    logger.debug(
+        "Enviando solicitud al modelo IA",
+        extra={
+            "model": model,
+            "message_count": len(messages),
+            "user_length": len(user_message or ""),
+        },
+    )
+
     try:
         completion = client.chat.completions.create(model=model, messages=messages)
     except Exception as exc:  # pragma: no cover - depende de la API externa
@@ -96,4 +105,10 @@ def generate_response(
         return ""
 
     choice = completion.choices[0].message if completion and completion.choices else None
-    return (choice.content or "").strip() if choice else ""
+    if not choice:
+        logger.warning("La respuesta del modelo no incluyó opciones")
+        return ""
+    content = (choice.content or "").strip()
+    if not content:
+        logger.warning("La respuesta del modelo llegó vacía")
+    return content
