@@ -1927,12 +1927,14 @@ def webhook():
                     if agent_mode:
                         summary['processed'] += 1
                         continue
-                    if _normalize_step_name(step) == "ia_chat":
+                    if _is_ia_step(step):
                         local_path = _local_media_path_from_url(media_url)
                         image_text = extract_text_from_image(local_path) if local_path else ""
                         if image_text:
                             prompt = (
                                 "El usuario envió una imagen. "
+                                "Lee el contenido como se procesa el catálogo y "
+                                "busca coincidencias con el catálogo para responder.\n"
                                 "Texto detectado en la imagen:\n"
                                 f"{image_text}"
                             )
