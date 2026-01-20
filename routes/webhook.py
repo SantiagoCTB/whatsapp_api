@@ -20,6 +20,7 @@ from services.db import (
     get_connection,
     guardar_mensaje,
     guardar_estado_mensaje,
+    update_mensaje_texto,
     guardar_flow_response,
     get_chat_state,
     obtener_historial_chat,
@@ -1910,7 +1911,7 @@ def webhook():
                     media_id  = msg['image']['id']
                     media_url = get_media_url(media_id)
                     step = get_current_step(from_number)
-                    guardar_mensaje(
+                    db_id = guardar_mensaje(
                         from_number,
                         "",
                         'cliente_image',
@@ -1946,6 +1947,7 @@ def webhook():
                             local_path = _local_media_path_from_url(media_url)
                         image_text = extract_text_from_image(local_path) if local_path else ""
                         if image_text:
+                            update_mensaje_texto(db_id, image_text)
                             prompt = (
                                 "El usuario envió una imagen. "
                                 "Lee el contenido como se procesa el catálogo y "
