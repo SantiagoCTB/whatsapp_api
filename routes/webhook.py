@@ -140,6 +140,15 @@ def _local_media_path_from_url(media_url: str | None) -> str | None:
     return os.path.join(_media_root(), filename)
 
 
+def _ocr_text_from_media_url(media_url: str | None) -> str:
+    if not media_url:
+        return ""
+    local_path = _local_media_path_from_url(media_url)
+    if not local_path or not os.path.exists(local_path):
+        return ""
+    return extract_text_from_image(local_path)
+
+
 def _build_public_url(path: str) -> str | None:
     clean_path = path.lstrip("/")
     if has_request_context():
@@ -610,11 +619,22 @@ def _reply_with_ai_image(
     if not message_step:
         message_step = "ia" if set_step else get_current_step(numero)
 
-    prompt = (prompt_prefix or "").strip() or (
+    base_prompt = (prompt_prefix or "").strip() or (
         "El usuario envió una imagen. "
         "Lee el contenido como se procesa el catálogo y "
         "busca coincidencias con el catálogo para responder."
     )
+    ocr_text = _ocr_text_from_media_url(image_url)
+    if ocr_text:
+        prompt = "\n".join(
+            [
+                base_prompt,
+                "Texto detectado en la imagen:\n"
+                f"{ocr_text}",
+            ]
+        )
+    else:
+        prompt = base_prompt
 
     response = generate_response_with_image(history, prompt, image_url, system_message=_get_ia_system_prompt())
     if not response:
