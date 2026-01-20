@@ -1655,6 +1655,8 @@ def handle_text_message(
         guardar_mensaje(numero, texto, 'cliente', step=step_db)
 
     text_norm = normalize_text(texto or "")
+    if not text_norm:
+        text_norm = None
 
     if not step_db:
         bootstrapped = True
