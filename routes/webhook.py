@@ -41,6 +41,7 @@ from services.normalize_text import normalize_text
 from services.global_commands import handle_global_command
 from services.ia_client import generate_response
 from services.catalog import extract_text_from_image, find_relevant_pages
+from services.ia_client import generate_response_with_image
 
 webhook_bp = Blueprint('webhook', __name__)
 logger = logging.getLogger(__name__)
@@ -580,6 +581,17 @@ def _get_ia_system_prompt() -> str | None:
         return None
     prompt = (row[0] or "").strip()
     return prompt or None
+
+
+def _describe_image_for_catalog(image_url: str) -> str:
+    prompt = (
+        "El usuario envió una imagen. "
+        "Describe brevemente el producto o contenido visible y aporta palabras clave "
+        "útiles para buscar en el catálogo. "
+        "Responde solo con texto en español, sin formato."
+    )
+    response = generate_response_with_image(None, prompt, image_url)
+    return (response or "").strip()
 
 
 def _reply_with_ai(
@@ -1963,13 +1975,36 @@ def webhook():
                                 message_step=step,
                             )
                         else:
-                            enviar_mensaje(
-                                from_number,
-                                "No pude leer claramente el contenido de la imagen. "
-                                "¿Puedes describir el producto o dar más detalles?",
-                                tipo="bot",
-                                step=step,
-                            )
+                            if _normalize_step_name(step) == "ia_chat":
+                                image_url = _normalize_media_url(media_url)
+                                description = (
+                                    _describe_image_for_catalog(image_url) if image_url else ""
+                                )
+                                if description:
+                                    update_mensaje_texto(db_id, description)
+                                    _reply_with_ai(
+                                        from_number,
+                                        description,
+                                        set_step=False,
+                                        history_step=None,
+                                        message_step=step,
+                                    )
+                                else:
+                                    enviar_mensaje(
+                                        from_number,
+                                        "No pude leer claramente el contenido de la imagen. "
+                                        "¿Puedes describir el producto o dar más detalles?",
+                                        tipo="bot",
+                                        step=step,
+                                    )
+                            else:
+                                enviar_mensaje(
+                                    from_number,
+                                    "No pude leer claramente el contenido de la imagen. "
+                                    "¿Puedes describir el producto o dar más detalles?",
+                                    tipo="bot",
+                                    step=step,
+                                )
                         summary['processed'] += 1
                         continue
                     handle_text_message(from_number, "", save=False)
