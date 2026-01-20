@@ -1280,13 +1280,28 @@ def obtener_mensajes_por_numero(numero):
     return rows  # lista de tuplas (mensaje, tipo, timestamp)
 
 
-def obtener_historial_chat(numero, limit: int = 30, step: str | None = None):
+def obtener_historial_chat(
+    numero,
+    limit: int = 30,
+    step: str | None = None,
+    anchor_step: str | None = None,
+):
     """Obtiene los mensajes más recientes de un chat para alimentar la IA."""
 
     conn = get_connection()
     c = conn.cursor()
     query = "SELECT mensaje, tipo FROM mensajes WHERE numero = %s"
     params: list = [numero]
+    if anchor_step:
+        c.execute(
+            "SELECT MAX(timestamp) FROM mensajes WHERE numero = %s AND step = %s",
+            (numero, anchor_step),
+        )
+        anchor_row = c.fetchone()
+        anchor_ts = anchor_row[0] if anchor_row else None
+        if anchor_ts:
+            query += " AND timestamp >= %s"
+            params.append(anchor_ts)
     if step:
         query += " AND step = %s"
         params.append(step)
