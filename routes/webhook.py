@@ -599,7 +599,7 @@ def _reply_with_ai_image(
     media_url: str,
     prompt_prefix: str | None = None,
     set_step: bool = True,
-    history_step: str | None = "ia",
+    history_step: str | None = None,
     message_step: str | None = None,
 ) -> bool:
     image_url = _normalize_media_url(media_url)
@@ -612,9 +612,18 @@ def _reply_with_ai_image(
         update_chat_state(numero, "ia", "ia_activa")
 
     if history_step:
-        history = obtener_historial_chat(numero, limit=_ia_history_limit(), step=history_step)
+        history = obtener_historial_chat(
+            numero,
+            limit=_ia_history_limit(),
+            step=history_step,
+            anchor_step="menu_principal",
+        )
     else:
-        history = obtener_historial_chat(numero, limit=_ia_history_limit())
+        history = obtener_historial_chat(
+            numero,
+            limit=_ia_history_limit(),
+            anchor_step="menu_principal",
+        )
 
     if not message_step:
         message_step = "ia" if set_step else get_current_step(numero)
@@ -692,7 +701,7 @@ def _reply_with_ai(
     *,
     system_prompt: str | None = None,
     set_step: bool = True,
-    history_step: str | None = "ia",
+    history_step: str | None = None,
     message_step: str | None = None,
     allow_empty_catalog: bool = False,
 ) -> bool:
@@ -721,9 +730,18 @@ def _reply_with_ai(
         update_chat_state(numero, "ia", "ia_activa")
 
     if history_step:
-        history = obtener_historial_chat(numero, limit=_ia_history_limit(), step=history_step)
+        history = obtener_historial_chat(
+            numero,
+            limit=_ia_history_limit(),
+            step=history_step,
+            anchor_step="menu_principal",
+        )
     else:
-        history = obtener_historial_chat(numero, limit=_ia_history_limit())
+        history = obtener_historial_chat(
+            numero,
+            limit=_ia_history_limit(),
+            anchor_step="menu_principal",
+        )
 
     if not message_step:
         message_step = "ia" if set_step else get_current_step(numero)
