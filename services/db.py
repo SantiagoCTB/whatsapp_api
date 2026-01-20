@@ -1500,13 +1500,27 @@ def search_catalog_pages(
     def _select_evenly(items: list[dict], limit: int) -> list[dict]:
         if limit <= 0 or len(items) <= limit:
             return items
-        step = len(items) / limit
+        last_index = len(items) - 1
+        if limit == 1:
+            return [items[0]]
+        step = last_index / (limit - 1)
         selected: list[dict] = []
+        used: set[int] = set()
         for idx in range(limit):
-            pick = int(idx * step)
-            if pick >= len(items):
-                pick = len(items) - 1
+            pick = int(round(idx * step))
+            pick = min(max(pick, 0), last_index)
+            if pick in used:
+                continue
             selected.append(items[pick])
+            used.add(pick)
+        if len(selected) < limit:
+            for pick in range(last_index, -1, -1):
+                if pick in used:
+                    continue
+                selected.append(items[pick])
+                used.add(pick)
+                if len(selected) >= limit:
+                    break
         return selected
 
     def _fetch_rows(target_tenant: str | None):
