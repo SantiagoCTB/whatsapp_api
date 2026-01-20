@@ -1958,53 +1958,48 @@ def webhook():
                             )
                             local_path = _local_media_path_from_url(media_url)
                         image_text = extract_text_from_image(local_path) if local_path else ""
+                        image_description = ""
+                        if _normalize_step_name(step) == "ia_chat":
+                            image_url = _normalize_media_url(media_url)
+                            image_description = (
+                                _describe_image_for_catalog(image_url) if image_url else ""
+                            )
+
+                        prompt_parts = []
                         if image_text:
-                            update_mensaje_texto(db_id, image_text)
-                            prompt = (
-                                "El usuario envió una imagen. "
-                                "Lee el contenido como se procesa el catálogo y "
-                                "busca coincidencias con el catálogo para responder.\n"
+                            prompt_parts.append(
                                 "Texto detectado en la imagen:\n"
                                 f"{image_text}"
                             )
+                        if image_description:
+                            prompt_parts.append(
+                                "Descripción de la imagen:\n"
+                                f"{image_description}"
+                            )
+
+                        if prompt_parts:
+                            combined_prompt = (
+                                "El usuario envió una imagen. "
+                                "Lee el contenido como se procesa el catálogo y "
+                                "busca coincidencias con el catálogo para responder.\n"
+                                f"{chr(10).join(prompt_parts)}"
+                            )
+                            update_mensaje_texto(db_id, "\n\n".join(prompt_parts))
                             _reply_with_ai(
                                 from_number,
-                                prompt,
+                                combined_prompt,
                                 set_step=False,
                                 history_step=None,
                                 message_step=step,
                             )
                         else:
-                            if _normalize_step_name(step) == "ia_chat":
-                                image_url = _normalize_media_url(media_url)
-                                description = (
-                                    _describe_image_for_catalog(image_url) if image_url else ""
-                                )
-                                if description:
-                                    update_mensaje_texto(db_id, description)
-                                    _reply_with_ai(
-                                        from_number,
-                                        description,
-                                        set_step=False,
-                                        history_step=None,
-                                        message_step=step,
-                                    )
-                                else:
-                                    enviar_mensaje(
-                                        from_number,
-                                        "No pude leer claramente el contenido de la imagen. "
-                                        "¿Puedes describir el producto o dar más detalles?",
-                                        tipo="bot",
-                                        step=step,
-                                    )
-                            else:
-                                enviar_mensaje(
-                                    from_number,
-                                    "No pude leer claramente el contenido de la imagen. "
-                                    "¿Puedes describir el producto o dar más detalles?",
-                                    tipo="bot",
-                                    step=step,
-                                )
+                            enviar_mensaje(
+                                from_number,
+                                "No pude leer claramente el contenido de la imagen. "
+                                "¿Puedes describir el producto o dar más detalles?",
+                                tipo="bot",
+                                step=step,
+                            )
                         summary['processed'] += 1
                         continue
                     handle_text_message(from_number, "", save=False)
