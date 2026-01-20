@@ -531,12 +531,23 @@ def _matched_catalog_pages(response: str, pages):
     response_tokens = set(normalize_text(response).split())
     if not response_tokens:
         return []
+
     matched = []
     for page in pages:
-        for keyword in _page_keywords_for_match(page):
-            if keyword in response_tokens:
-                matched.append(page)
-                break
+        keywords = _page_keywords_for_match(page)
+        if not keywords:
+            continue
+
+        matches = [keyword for keyword in keywords if keyword in response_tokens]
+        if not matches:
+            continue
+
+        required_matches = 2
+        if len(keywords) <= 2:
+            required_matches = 1 if any(len(keyword) >= 6 for keyword in keywords) else 2
+
+        if len(matches) >= required_matches:
+            matched.append(page)
     return matched
 
 
