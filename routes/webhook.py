@@ -674,6 +674,7 @@ def _reply_with_ai(
     set_step: bool = True,
     history_step: str | None = "ia",
     message_step: str | None = None,
+    allow_empty_catalog: bool = False,
 ) -> bool:
     """Envía el mensaje al modelo de IA y responde al usuario."""
 
@@ -707,7 +708,7 @@ def _reply_with_ai(
     if not message_step:
         message_step = "ia" if set_step else get_current_step(numero)
     catalog_context, pages = _catalog_context_for_prompt(prompt)
-    if not catalog_context:
+    if not catalog_context and not allow_empty_catalog:
         logger.warning(
             "Sin contexto de portafolio para la IA; se solicitará más información",
             extra={"numero": numero},
@@ -730,6 +731,14 @@ def _reply_with_ai(
             "- Evita mencionar el origen del contenido o detalles internos.\n"
             "- No incluyas enlaces ni imágenes en formato markdown/HTML.\n"
             "- Si no hay coincidencias claras, pide más detalles al usuario sin inventar datos."
+        )
+    elif allow_empty_catalog:
+        prompt_for_model = (
+            f"{prompt}\n\n"
+            "Instrucciones para la respuesta:\n"
+            "- Responde únicamente con datos disponibles en este contexto.\n"
+            "- Si la información es insuficiente, pide más detalles al usuario sin inventar datos.\n"
+            "- No menciones procesos internos ni el origen del contenido."
         )
 
     logger.info(
@@ -2070,6 +2079,7 @@ def webhook():
                                 set_step=False,
                                 history_step=None,
                                 message_step=step,
+                                allow_empty_catalog=True,
                             )
                         else:
                             enviar_mensaje(
