@@ -68,6 +68,26 @@ def build_messages(
     return messages
 
 
+def build_messages_with_image(
+    history: Iterable[Mapping[str, str]] | None,
+    user_message: str | None,
+    image_url: str,
+    *,
+    system_message: str | None = None,
+):
+    """Construye el payload de mensajes para la API del modelo con una imagen."""
+
+    messages = build_messages(history, None, system_message=system_message)
+    content: list[dict[str, str | dict[str, str]]] = []
+    if user_message:
+        content.append({"type": "text", "text": user_message})
+    if image_url:
+        content.append({"type": "image_url", "image_url": {"url": image_url}})
+    if content:
+        messages.append({"role": "user", "content": content})
+    return messages
+
+
 def generate_response(
     history: Iterable[Mapping[str, str]] | None,
     user_message: str,
@@ -111,4 +131,53 @@ def generate_response(
     content = (choice.content or "").strip()
     if not content:
         logger.warning("La respuesta del modelo llegó vacía")
+    return content
+
+
+def generate_response_with_image(
+    history: Iterable[Mapping[str, str]] | None,
+    user_message: str,
+    image_url: str,
+    *,
+    system_message: str | None = None,
+) -> str:
+    """Genera una respuesta usando el modelo configurado con una imagen."""
+
+    try:
+        api_key = _get_api_key()
+    except RuntimeError as exc:  # pragma: no cover - depende del entorno
+        logger.warning(str(exc))
+        return ""
+
+    model = _get_model() or "o4-mini"
+    client = OpenAI(api_key=api_key)
+    messages = build_messages_with_image(
+        history, user_message, image_url, system_message=system_message
+    )
+    if not messages:
+        logger.info("No hay mensajes para enviar al modelo de IA con imagen")
+        return ""
+
+    logger.debug(
+        "Enviando solicitud multimodal al modelo IA",
+        extra={
+            "model": model,
+            "message_count": len(messages),
+            "user_length": len(user_message or ""),
+        },
+    )
+
+    try:
+        completion = client.chat.completions.create(model=model, messages=messages)
+    except Exception as exc:  # pragma: no cover - depende de la API externa
+        logger.exception("No se pudo obtener respuesta del modelo con imagen", exc_info=exc)
+        return ""
+
+    choice = completion.choices[0].message if completion and completion.choices else None
+    if not choice:
+        logger.warning("La respuesta del modelo multimodal no incluyó opciones")
+        return ""
+    content = (choice.content or "").strip()
+    if not content:
+        logger.warning("La respuesta multimodal llegó vacía")
     return content
