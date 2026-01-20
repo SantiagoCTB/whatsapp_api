@@ -26,6 +26,7 @@ from services.db import (
     obtener_historial_chat,
     obtener_ultimo_mensaje_cliente,
     obtener_ultimo_mensaje_cliente_info,
+    obtener_ultimo_mensaje_cliente_media_info,
     update_chat_state,
     delete_chat_state,
 )
@@ -594,6 +595,88 @@ def _describe_image_for_catalog(image_url: str) -> str:
     return (response or "").strip()
 
 
+def _reply_with_ai_image(
+    numero: str,
+    *,
+    media_url: str,
+    prompt_prefix: str | None = None,
+    set_step: bool = True,
+    history_step: str | None = "ia",
+    message_step: str | None = None,
+) -> bool:
+    image_url = _normalize_media_url(media_url)
+    if not image_url:
+        logger.info("Sin URL de imagen para enviar a la IA", extra={"numero": numero})
+        return False
+
+    if set_step:
+        set_user_step(numero, "ia")
+        update_chat_state(numero, "ia", "ia_activa")
+
+    if history_step:
+        history = obtener_historial_chat(numero, limit=_ia_history_limit(), step=history_step)
+    else:
+        history = obtener_historial_chat(numero, limit=_ia_history_limit())
+
+    if not message_step:
+        message_step = "ia" if set_step else get_current_step(numero)
+
+    prompt = (prompt_prefix or "").strip() or (
+        "El usuario envió una imagen. "
+        "Lee el contenido como se procesa el catálogo y "
+        "busca coincidencias con el catálogo para responder."
+    )
+
+    response = generate_response_with_image(history, prompt, image_url, system_message=_get_ia_system_prompt())
+    if not response:
+        logger.warning("La IA no devolvió respuesta con imagen", extra={"numero": numero})
+        return False
+
+    enviar_mensaje(numero, response, tipo="bot", step=message_step)
+    message_step_norm = _normalize_step_name(message_step)
+    media_pages = None
+    if message_step_norm == "ia_chat":
+        media_pages = find_relevant_pages(response, limit=2)
+    matched_pages = _matched_catalog_pages(response, media_pages or [])
+    if not matched_pages:
+        logger.info(
+            "Respuesta IA sin referencias claras a producto; se omiten imágenes",
+            extra={"numero": numero},
+        )
+        return True
+    for page in matched_pages:
+        if not page.image_filename:
+            continue
+
+        image_path = os.path.join(_media_root(), 'ia_pages', page.image_filename)
+        if not os.path.exists(image_path):
+            continue
+
+        image_path = tenants.get_uploads_url_path(f"ia_pages/{page.image_filename}")
+        if has_request_context():
+            image_url = url_for(
+                'static',
+                filename=image_path,
+                _external=True,
+                _scheme=_preferred_url_scheme(),
+            )
+        else:
+            image_url = _build_public_url(f"static/{image_path}")
+        if not image_url:
+            continue
+        caption = "Vista del producto"
+
+        enviar_mensaje(
+            numero,
+            caption,
+            tipo="bot",
+            tipo_respuesta="image",
+            opciones=image_url,
+            step=message_step,
+        )
+    return True
+
+
 def _reply_with_ai(
     numero: str,
     user_text: str | None,
@@ -606,6 +689,16 @@ def _reply_with_ai(
     """Envía el mensaje al modelo de IA y responde al usuario."""
 
     prompt = (user_text or "").strip() or obtener_ultimo_mensaje_cliente(numero)
+    if not prompt:
+        last_media = obtener_ultimo_mensaje_cliente_media_info(numero)
+        if last_media and last_media.get("media_url") and _is_ia_step(message_step or get_current_step(numero)):
+            return _reply_with_ai_image(
+                numero,
+                media_url=last_media["media_url"],
+                set_step=set_step,
+                history_step=history_step,
+                message_step=message_step,
+            )
     if not prompt:
         logger.info("Sin texto para enviar a la IA", extra={"numero": numero})
         return False
@@ -1923,9 +2016,11 @@ def webhook():
                     media_id  = msg['image']['id']
                     media_url = get_media_url(media_id)
                     step = get_current_step(from_number)
+                    caption = (msg.get("image") or {}).get("caption") or ""
+                    caption = caption.strip()
                     db_id = guardar_mensaje(
                         from_number,
-                        "",
+                        caption,
                         'cliente_image',
                         wa_id=wa_id,
                         reply_to_wa_id=reply_to_id,
@@ -1966,6 +2061,11 @@ def webhook():
                             )
 
                         prompt_parts = []
+                        if caption:
+                            prompt_parts.append(
+                                "Texto adjunto del usuario:\n"
+                                f"{caption}"
+                            )
                         if image_text:
                             prompt_parts.append(
                                 "Texto detectado en la imagen:\n"
