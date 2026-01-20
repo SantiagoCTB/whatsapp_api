@@ -584,17 +584,6 @@ def _get_ia_system_prompt() -> str | None:
     return prompt or None
 
 
-def _describe_image_for_catalog(image_url: str) -> str:
-    prompt = (
-        "El usuario envió una imagen. "
-        "Describe brevemente el producto o contenido visible y aporta palabras clave "
-        "útiles para buscar en el catálogo. "
-        "Responde solo con texto en español, sin formato."
-    )
-    response = generate_response_with_image(None, prompt, image_url)
-    return (response or "").strip()
-
-
 def _reply_with_ai_image(
     numero: str,
     *,
@@ -2053,12 +2042,6 @@ def webhook():
                             )
                             local_path = _local_media_path_from_url(media_url)
                         image_text = extract_text_from_image(local_path) if local_path else ""
-                        image_description = ""
-                        if _normalize_step_name(step) == "ia_chat":
-                            image_url = _normalize_media_url(media_url)
-                            image_description = (
-                                _describe_image_for_catalog(image_url) if image_url else ""
-                            )
 
                         prompt_parts = []
                         if caption:
@@ -2071,12 +2054,6 @@ def webhook():
                                 "Texto detectado en la imagen:\n"
                                 f"{image_text}"
                             )
-                        if image_description:
-                            prompt_parts.append(
-                                "Descripción de la imagen:\n"
-                                f"{image_description}"
-                            )
-
                         if prompt_parts:
                             combined_prompt = (
                                 "El usuario envió una imagen. "
