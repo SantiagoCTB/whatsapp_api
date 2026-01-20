@@ -1349,6 +1349,37 @@ def obtener_ultimo_mensaje_cliente_info(numero):
     return {"tipo": row[0], "timestamp": row[1]}
 
 
+def obtener_ultimo_mensaje_cliente_media_info(numero):
+    """Retorna el último mensaje del cliente que tenga media asociada."""
+
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute(
+        """
+        SELECT id, tipo, media_id, media_url, mime_type, timestamp
+          FROM mensajes
+         WHERE numero = %s
+           AND (tipo = 'cliente' OR tipo LIKE 'cliente_%')
+           AND (media_id IS NOT NULL OR media_url IS NOT NULL)
+         ORDER BY timestamp DESC
+         LIMIT 1
+        """,
+        (numero,),
+    )
+    row = c.fetchone()
+    conn.close()
+    if not row:
+        return None
+    return {
+        "id": row[0],
+        "tipo": row[1],
+        "media_id": row[2],
+        "media_url": row[3],
+        "mime_type": row[4],
+        "timestamp": row[5],
+    }
+
+
 def replace_catalog_pages(
     pdf_filename: str, pages, *, media_root: str | None = None, batch_size: int = 100
 ):
