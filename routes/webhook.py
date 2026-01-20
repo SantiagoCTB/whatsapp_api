@@ -584,17 +584,6 @@ def _get_ia_system_prompt() -> str | None:
     return prompt or None
 
 
-def _describe_image_for_catalog(image_url: str) -> str:
-    prompt = (
-        "El usuario envió una imagen. "
-        "Describe brevemente el producto o contenido visible y aporta palabras clave "
-        "útiles para buscar en el catálogo. "
-        "Responde solo con texto en español, sin formato."
-    )
-    response = generate_response_with_image(None, prompt, image_url)
-    return (response or "").strip()
-
-
 def _reply_with_ai_image(
     numero: str,
     *,
@@ -685,6 +674,7 @@ def _reply_with_ai(
     set_step: bool = True,
     history_step: str | None = "ia",
     message_step: str | None = None,
+    allow_empty_catalog: bool = False,
 ) -> bool:
     """Envía el mensaje al modelo de IA y responde al usuario."""
 
@@ -718,7 +708,7 @@ def _reply_with_ai(
     if not message_step:
         message_step = "ia" if set_step else get_current_step(numero)
     catalog_context, pages = _catalog_context_for_prompt(prompt)
-    if not catalog_context:
+    if not catalog_context and not allow_empty_catalog:
         logger.warning(
             "Sin contexto de portafolio para la IA; se solicitará más información",
             extra={"numero": numero},
@@ -741,6 +731,14 @@ def _reply_with_ai(
             "- Evita mencionar el origen del contenido o detalles internos.\n"
             "- No incluyas enlaces ni imágenes en formato markdown/HTML.\n"
             "- Si no hay coincidencias claras, pide más detalles al usuario sin inventar datos."
+        )
+    elif allow_empty_catalog:
+        prompt_for_model = (
+            f"{prompt}\n\n"
+            "Instrucciones para la respuesta:\n"
+            "- Responde únicamente con datos disponibles en este contexto.\n"
+            "- Si la información es insuficiente, pide más detalles al usuario sin inventar datos.\n"
+            "- No menciones procesos internos ni el origen del contenido."
         )
 
     logger.info(
@@ -1666,6 +1664,8 @@ def handle_text_message(
         guardar_mensaje(numero, texto, 'cliente', step=step_db)
 
     text_norm = normalize_text(texto or "")
+    if not text_norm:
+        text_norm = None
 
     if not step_db:
         bootstrapped = True
@@ -2053,12 +2053,6 @@ def webhook():
                             )
                             local_path = _local_media_path_from_url(media_url)
                         image_text = extract_text_from_image(local_path) if local_path else ""
-                        image_description = ""
-                        if _normalize_step_name(step) == "ia_chat":
-                            image_url = _normalize_media_url(media_url)
-                            image_description = (
-                                _describe_image_for_catalog(image_url) if image_url else ""
-                            )
 
                         prompt_parts = []
                         if caption:
@@ -2071,12 +2065,6 @@ def webhook():
                                 "Texto detectado en la imagen:\n"
                                 f"{image_text}"
                             )
-                        if image_description:
-                            prompt_parts.append(
-                                "Descripción de la imagen:\n"
-                                f"{image_description}"
-                            )
-
                         if prompt_parts:
                             combined_prompt = (
                                 "El usuario envió una imagen. "
@@ -2091,6 +2079,7 @@ def webhook():
                                 set_step=False,
                                 history_step=None,
                                 message_step=step,
+                                allow_empty_catalog=True,
                             )
                         else:
                             enviar_mensaje(
