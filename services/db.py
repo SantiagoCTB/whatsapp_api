@@ -1314,6 +1314,8 @@ def obtener_ultimo_mensaje_cliente(numero):
           FROM mensajes
          WHERE numero = %s
            AND (tipo = 'cliente' OR tipo LIKE 'cliente_%')
+           AND mensaje IS NOT NULL
+           AND mensaje <> ''
          ORDER BY timestamp DESC
          LIMIT 1
         """,
