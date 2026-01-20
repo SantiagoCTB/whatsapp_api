@@ -1928,7 +1928,22 @@ def webhook():
                         summary['processed'] += 1
                         continue
                     if _is_ia_step(step):
-                        local_path = _local_media_path_from_url(media_url)
+                        local_path = None
+                        try:
+                            mime_raw = msg['image'].get('mime_type', 'image/jpeg')
+                            mime_clean = mime_raw.split(';')[0].strip()
+                            ext = mime_clean.split('/')[-1] or "jpg"
+                            image_bytes = download_audio(media_id)
+                            filename = f"{media_id}.{ext}"
+                            local_path = os.path.join(_media_root(), filename)
+                            with open(local_path, 'wb') as f:
+                                f.write(image_bytes)
+                        except Exception:
+                            logger.exception(
+                                "No se pudo descargar la imagen para OCR",
+                                extra={"numero": from_number, "media_id": media_id},
+                            )
+                            local_path = _local_media_path_from_url(media_url)
                         image_text = extract_text_from_image(local_path) if local_path else ""
                         if image_text:
                             prompt = (
