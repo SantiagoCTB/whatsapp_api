@@ -117,7 +117,7 @@ def _extract_json_payload(text: str) -> dict | None:
 
 
 def _split_pdf_by_size(
-    pdf_path: str, *, max_bytes: int, output_dir: str
+    pdf_path: str, *, max_bytes: int, output_dir: str, max_pages: int = 5
 ) -> list[tuple[str, int, int]]:
     doc = fitz.open(pdf_path)
     chunks: list[tuple[str, int, int]] = []
@@ -131,7 +131,10 @@ def _split_pdf_by_size(
                 current_start = page_index + 1
             current_doc.insert_pdf(doc, from_page=page_index, to_page=page_index)
             current_doc.save(check_path)
-            if os.path.getsize(check_path) <= max_bytes:
+            if (
+                os.path.getsize(check_path) <= max_bytes
+                and (max_pages <= 0 or current_doc.page_count <= max_pages)
+            ):
                 continue
 
             if current_doc.page_count == 1:
@@ -152,7 +155,10 @@ def _split_pdf_by_size(
             current_start = page_index + 1
             current_doc.insert_pdf(doc, from_page=page_index, to_page=page_index)
             current_doc.save(check_path)
-            if os.path.getsize(check_path) > max_bytes:
+            if (
+                os.path.getsize(check_path) > max_bytes
+                or (max_pages > 0 and current_doc.page_count > max_pages)
+            ):
                 raise ValueError(
                     f"La página {page_index + 1} excede el tamaño máximo permitido."
                 )
