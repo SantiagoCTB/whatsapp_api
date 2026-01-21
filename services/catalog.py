@@ -296,6 +296,36 @@ def _extract_keywords(text: str, *, max_keywords: int = 20) -> list[str]:
     return [token for token, _ in sorted_tokens[:max_keywords]]
 
 
+def _fix_ocr_confusions(text: str) -> str:
+    """Corrige errores comunes de OCR en textos de catálogos."""
+
+    if not text:
+        return ""
+
+    letter_pattern = re.compile(r"[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]")
+    parts = re.split(r"(\s+)", text)
+    fixed_parts: list[str] = []
+
+    for part in parts:
+        if part.isspace() or "1" not in part:
+            fixed_parts.append(part)
+            continue
+
+        letters = letter_pattern.findall(part)
+        if len(letters) < 2:
+            fixed_parts.append(part)
+            continue
+
+        part_without_ones = part.replace("1", "")
+        if re.search(r"\d", part_without_ones):
+            fixed_parts.append(part)
+            continue
+
+        fixed_parts.append(part.replace("1", "I"))
+
+    return "".join(fixed_parts)
+
+
 def _prepare_image_for_ocr(img: "Image.Image") -> "Image.Image":
     """Normaliza la imagen para mejorar el OCR con Tesseract."""
 
@@ -352,6 +382,7 @@ def _perform_ocr(pix: "fitz.Pixmap") -> str:
             lang=Config.OCR_LANG,
             config=_build_tesseract_config(),
         )
+        text = _fix_ocr_confusions(text)
         return _sanitize_text(text)
     except Exception as exc:  # pragma: no cover - depende del runtime
         logger.warning("Fallo al ejecutar OCR de catálogo", exc_info=exc)
@@ -380,6 +411,7 @@ def _perform_ocr_from_image(path: str) -> str:
                 lang=Config.OCR_LANG,
                 config=_build_tesseract_config(),
             )
+            text = _fix_ocr_confusions(text)
             return _sanitize_text(text)
     except Exception as exc:  # pragma: no cover - depende del runtime
         logger.warning("Fallo al ejecutar OCR de imagen de catálogo", exc_info=exc)
