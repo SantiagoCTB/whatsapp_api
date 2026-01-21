@@ -232,6 +232,57 @@
       font-size: 0.95rem;
     }
 
+    @media (max-width: 768px) {
+      header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 16px;
+      }
+
+      nav {
+        width: 100%;
+        flex-wrap: wrap;
+        justify-content: flex-start;
+      }
+
+      nav .btn {
+        flex: 1 1 calc(50% - 12px);
+        text-align: center;
+      }
+
+      .hero {
+        grid-template-columns: 1fr;
+        margin-bottom: 48px;
+      }
+
+      .hero h1 {
+        font-size: clamp(28px, 8vw, 40px);
+      }
+
+      .pill {
+        font-size: 0.9rem;
+      }
+
+      .steps {
+        padding: 16px;
+      }
+    }
+
+    @media (max-width: 520px) {
+      nav .btn {
+        flex: 1 1 100%;
+      }
+
+      .hero .btn {
+        width: 100%;
+        text-align: center;
+      }
+
+      .clients-section {
+        padding: 20px;
+      }
+    }
+
     .cookie-banner {
       position: fixed;
       left: clamp(16px, 4vw, 48px);
