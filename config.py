@@ -135,6 +135,13 @@ class Config:
     )
     IA_API_TOKEN = os.getenv('IA_API_TOKEN')
     IA_MODEL = os.getenv('IA_MODEL', 'o4-mini')
+    IA_CATALOG_USE_OPENAI = os.getenv('IA_CATALOG_USE_OPENAI', 'true').strip().lower() in {
+        '1',
+        'true',
+        'yes',
+        'on',
+    }
+    IA_CATALOG_MAX_FILE_MB = int(os.getenv('IA_CATALOG_MAX_FILE_MB', 50))
     IA_SYSTEM_MESSAGE = os.getenv(
         'IA_SYSTEM_MESSAGE',
         (

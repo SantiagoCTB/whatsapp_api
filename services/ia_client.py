@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import importlib.util
+import os
 from typing import Iterable, Mapping
+
+import requests
 
 from config import Config
 from services import tenants
@@ -34,8 +38,110 @@ def _get_api_key() -> str:
     return token
 
 
+def get_api_key() -> str:
+    return _get_api_key()
+
+
 def _get_model() -> str:
     return tenants.get_runtime_setting("IA_MODEL", default=Config.IA_MODEL)
+
+
+def _extract_response_text(payload: dict) -> str:
+    output = payload.get("output") if isinstance(payload, dict) else None
+    if not isinstance(output, list):
+        return ""
+    parts: list[str] = []
+    for item in output:
+        if not isinstance(item, dict):
+            continue
+        for content in item.get("content", []) or []:
+            if not isinstance(content, dict):
+                continue
+            text = content.get("text")
+            if isinstance(text, str) and text.strip():
+                parts.append(text.strip())
+    return "\n".join(parts).strip()
+
+
+def upload_file(file_path: str, *, purpose: str = "user_data") -> str | None:
+    """Sube un archivo a OpenAI y devuelve el file_id."""
+
+    try:
+        api_key = _get_api_key()
+    except RuntimeError as exc:  # pragma: no cover - depende del entorno
+        logger.warning(str(exc))
+        return None
+
+    url = "https://api.openai.com/v1/files"
+    headers = {"Authorization": f"Bearer {api_key}"}
+    data = {"purpose": purpose}
+
+    try:
+        with open(file_path, "rb") as handle:
+            files = {"file": (os.path.basename(file_path), handle)}
+            resp = requests.post(url, headers=headers, data=data, files=files, timeout=120)
+    except Exception as exc:  # pragma: no cover - depende del entorno
+        logger.exception("No se pudo subir el archivo a OpenAI", exc_info=exc)
+        return None
+
+    if not resp.ok:
+        logger.warning(
+            "OpenAI rechazó el archivo",
+            extra={"status": resp.status_code, "body": resp.text[:300]},
+        )
+        return None
+
+    payload = resp.json()
+    return payload.get("id")
+
+
+def create_response_with_file(
+    file_id: str,
+    prompt: str,
+    *,
+    model: str | None = None,
+) -> str:
+    """Envía un prompt con un archivo adjunto y devuelve el texto generado."""
+
+    try:
+        api_key = _get_api_key()
+    except RuntimeError as exc:  # pragma: no cover - depende del entorno
+        logger.warning(str(exc))
+        return ""
+
+    url = "https://api.openai.com/v1/responses"
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+    body = {
+        "model": model or _get_model() or "o4-mini",
+        "input": [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "input_file", "file_id": file_id},
+                    {"type": "input_text", "text": prompt},
+                ],
+            }
+        ],
+    }
+
+    try:
+        resp = requests.post(url, headers=headers, data=json.dumps(body), timeout=180)
+    except Exception as exc:  # pragma: no cover - depende del entorno
+        logger.exception("No se pudo obtener respuesta del modelo", exc_info=exc)
+        return ""
+
+    if not resp.ok:
+        logger.warning(
+            "OpenAI no pudo procesar el archivo",
+            extra={"status": resp.status_code, "body": resp.text[:300]},
+        )
+        return ""
+
+    payload = resp.json()
+    return _extract_response_text(payload)
 
 
 def build_messages(
