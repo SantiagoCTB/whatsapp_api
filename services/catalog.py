@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import logging
 import os
 import re
+import tempfile
 from dataclasses import dataclass
 from threading import Event
 from pathlib import Path
@@ -35,6 +37,7 @@ else:  # pragma: no cover - dependencia opcional en tests
 
 from config import Config
 from services import tenants
+from services import ia_client
 from services.db import replace_catalog_pages, search_catalog_pages
 
 logger = logging.getLogger(__name__)
@@ -67,6 +70,191 @@ def _sanitize_text(text: str) -> str:
     text = (text or "").strip()
     text = re.sub(r"\s+", " ", text)
     return text
+
+
+def _coerce_bool(value) -> bool:
+    if isinstance(value, bool):
+        return value
+    return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _catalog_use_openai() -> bool:
+    return _coerce_bool(
+        tenants.get_runtime_setting(
+            "IA_CATALOG_USE_OPENAI",
+            default=Config.IA_CATALOG_USE_OPENAI,
+        )
+    )
+
+
+def _catalog_max_bytes() -> int:
+    raw = tenants.get_runtime_setting(
+        "IA_CATALOG_MAX_FILE_MB",
+        default=Config.IA_CATALOG_MAX_FILE_MB,
+    )
+    try:
+        mb = int(raw)
+    except (TypeError, ValueError):
+        mb = Config.IA_CATALOG_MAX_FILE_MB
+    return max(mb, 1) * 1024 * 1024
+
+
+def _extract_json_payload(text: str) -> dict | None:
+    if not text:
+        return None
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        pass
+
+    match = re.search(r"\{.*\}", text, re.DOTALL)
+    if not match:
+        return None
+    try:
+        return json.loads(match.group(0))
+    except json.JSONDecodeError:
+        return None
+
+
+def _split_pdf_by_size(
+    pdf_path: str, *, max_bytes: int, output_dir: str
+) -> list[tuple[str, int, int]]:
+    doc = fitz.open(pdf_path)
+    chunks: list[tuple[str, int, int]] = []
+    current_doc = fitz.open()
+    current_start = 1
+    check_path = os.path.join(output_dir, "__check.pdf")
+
+    try:
+        for page_index in range(doc.page_count):
+            if current_doc.page_count == 0:
+                current_start = page_index + 1
+            current_doc.insert_pdf(doc, from_page=page_index, to_page=page_index)
+            current_doc.save(check_path)
+            if os.path.getsize(check_path) <= max_bytes:
+                continue
+
+            if current_doc.page_count == 1:
+                raise ValueError(
+                    f"La página {page_index + 1} excede el tamaño máximo permitido."
+                )
+
+            current_doc.delete_page(current_doc.page_count - 1)
+            chunk_path = os.path.join(
+                output_dir, f"catalog_part_{len(chunks) + 1}.pdf"
+            )
+            current_doc.save(chunk_path)
+            chunks.append(
+                (chunk_path, current_start, current_start + current_doc.page_count - 1)
+            )
+            current_doc.close()
+            current_doc = fitz.open()
+            current_start = page_index + 1
+            current_doc.insert_pdf(doc, from_page=page_index, to_page=page_index)
+            current_doc.save(check_path)
+            if os.path.getsize(check_path) > max_bytes:
+                raise ValueError(
+                    f"La página {page_index + 1} excede el tamaño máximo permitido."
+                )
+
+        if current_doc.page_count:
+            chunk_path = os.path.join(
+                output_dir, f"catalog_part_{len(chunks) + 1}.pdf"
+            )
+            current_doc.save(chunk_path)
+            chunks.append(
+                (chunk_path, current_start, current_start + current_doc.page_count - 1)
+            )
+    finally:
+        current_doc.close()
+        doc.close()
+        if os.path.exists(check_path):
+            os.remove(check_path)
+
+    return chunks
+
+
+def _prompt_for_catalog_range(start_page: int, end_page: int) -> str:
+    return (
+        "Devuelve un JSON válido con este formato exacto: "
+        '{"pages":[{"page":1,"content":"..."}]}.\n'
+        "El archivo adjunto corresponde a las páginas "
+        f"{start_page}-{end_page} del catálogo original. "
+        "Incluye toda la información disponible en cada página, "
+        "sin omitir tablas o listados. "
+        "Si una página no tiene contenido legible, deja su content vacío. "
+        "Usa los números de página originales."
+    )
+
+
+def _ingest_catalog_with_openai(pdf_path: str) -> dict[int, str]:
+    if fitz is None:
+        return {}
+    if not _catalog_use_openai():
+        return {}
+
+    try:
+        ia_client.get_api_key()
+    except RuntimeError:
+        return {}
+
+    max_bytes = _catalog_max_bytes()
+    text_by_page: dict[int, str] = {}
+
+    with tempfile.TemporaryDirectory(prefix="catalog_chunks_") as temp_dir:
+        try:
+            chunks = _split_pdf_by_size(pdf_path, max_bytes=max_bytes, output_dir=temp_dir)
+        except Exception as exc:
+            logger.warning("No se pudo dividir el PDF para OpenAI", exc_info=exc)
+            return {}
+
+        for chunk_path, start_page, end_page in chunks:
+            file_id = ia_client.upload_file(chunk_path, purpose="user_data")
+            if not file_id:
+                logger.warning(
+                    "No se pudo subir un chunk del catálogo",
+                    extra={"pdf": pdf_path, "range": f"{start_page}-{end_page}"},
+                )
+                continue
+            prompt = _prompt_for_catalog_range(start_page, end_page)
+            response_text = ia_client.create_response_with_file(file_id, prompt)
+            if not response_text:
+                logger.warning(
+                    "Respuesta vacía para chunk del catálogo",
+                    extra={"range": f"{start_page}-{end_page}"},
+                )
+                continue
+
+            payload = _extract_json_payload(response_text)
+            if not payload:
+                logger.warning(
+                    "Respuesta de catálogo sin JSON válido",
+                    extra={"range": f"{start_page}-{end_page}"},
+                )
+                continue
+
+            pages = payload.get("pages") if isinstance(payload, dict) else None
+            if not isinstance(pages, list):
+                logger.warning(
+                    "Respuesta de catálogo sin lista de páginas",
+                    extra={"range": f"{start_page}-{end_page}"},
+                )
+                continue
+
+            for page_entry in pages:
+                if not isinstance(page_entry, dict):
+                    continue
+                page_number = page_entry.get("page")
+                content = page_entry.get("content")
+                if not isinstance(page_number, int):
+                    continue
+                if not isinstance(content, str):
+                    content = ""
+                if page_number < start_page or page_number > end_page:
+                    continue
+                text_by_page[page_number] = _sanitize_text(content)
+
+    return text_by_page
 
 
 def _extract_keywords(text: str, *, max_keywords: int = 20) -> list[str]:
@@ -238,6 +426,15 @@ def ingest_catalog_pdf(
 
     logger.info("Procesando catálogo PDF para IA", extra={"pdf": pdf_path})
 
+    openai_pages: dict[int, str] = {}
+    if _catalog_use_openai():
+        openai_pages = _ingest_catalog_with_openai(pdf_path)
+        if openai_pages:
+            logger.info(
+                "Texto del catálogo obtenido vía OpenAI",
+                extra={"pages": len(openai_pages)},
+            )
+
     if stop_event and stop_event.is_set():
         raise CatalogIngestCancelled("Cancelado antes de abrir el PDF.")
 
@@ -251,7 +448,9 @@ def ingest_catalog_pdf(
             if stop_event and stop_event.is_set():
                 raise CatalogIngestCancelled("Cancelado durante la ingesta del catálogo.")
             number = page.number + 1
-            text = _sanitize_text(page.get_text("text") or "")
+            text = openai_pages.get(number, "")
+            if not text:
+                text = _sanitize_text(page.get_text("text") or "")
             if not text:
                 text = _sanitize_text(page.get_text("blocks") or "")
 

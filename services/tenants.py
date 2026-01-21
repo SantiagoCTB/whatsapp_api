@@ -67,6 +67,8 @@ TENANT_ENV_KEYS = {
     "IA_MODEL",
     "IA_SYSTEM_MESSAGE",
     "IA_HISTORY_LIMIT",
+    "IA_CATALOG_USE_OPENAI",
+    "IA_CATALOG_MAX_FILE_MB",
 }
 
 
@@ -116,6 +118,8 @@ def _default_tenant_env(*, include_legacy_credentials: bool = False) -> dict:
         "IA_MODEL": Config.IA_MODEL,
         "IA_SYSTEM_MESSAGE": Config.IA_SYSTEM_MESSAGE,
         "IA_HISTORY_LIMIT": Config.IA_HISTORY_LIMIT,
+        "IA_CATALOG_USE_OPENAI": Config.IA_CATALOG_USE_OPENAI,
+        "IA_CATALOG_MAX_FILE_MB": Config.IA_CATALOG_MAX_FILE_MB,
     }
 
     if include_legacy_credentials:
