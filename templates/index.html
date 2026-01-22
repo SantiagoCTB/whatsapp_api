@@ -410,13 +410,18 @@
       const imagePreviewThumb = document.getElementById('imagePreviewThumb');
       let autocorrectTimeout = null;
       let autocorrectController = null;
-      function scheduleAutocorrect() {
+      let lastAutocorrectedText = '';
+      function scheduleAutocorrect(delayOverride) {
         if (!messageInput || !autocorrectEnabled) return;
+        const currentText = messageInput.value;
+        if (!currentText || !currentText.trim()) return;
+        if (currentText === lastAutocorrectedText) return;
         if (autocorrectTimeout) clearTimeout(autocorrectTimeout);
+        const delay = typeof delayOverride === 'number' ? delayOverride : 800;
         autocorrectTimeout = setTimeout(() => {
           autocorrectTimeout = null;
           runAutocorrect();
-        }, 600);
+        }, delay);
       }
       async function runAutocorrect() {
         if (!messageInput || !autocorrectEnabled) return;
@@ -442,6 +447,7 @@
             messageInput.value = correctedText;
             messageInput.setSelectionRange(correctedText.length, correctedText.length);
           }
+          lastAutocorrectedText = messageInput.value;
         } catch (err) {
           if (err.name !== 'AbortError') {
             console.error('Error autocorrigiendo el texto', err);
@@ -2154,7 +2160,10 @@
           typingSignalTimeout = null;
           triggerTypingSignal();
         }, 300);
-        scheduleAutocorrect();
+        const currentValue = messageInput.value || '';
+        if (!currentValue.trim()) return;
+        const endsWithBoundary = /[\\s.,;:!?)]$/.test(currentValue);
+        scheduleAutocorrect(endsWithBoundary ? 150 : 1000);
       });
 
       messageInput.addEventListener('keydown', function(e) {
