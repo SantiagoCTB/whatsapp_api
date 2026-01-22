@@ -284,13 +284,18 @@ def _ingest_catalog_with_openai(pdf_path: str) -> dict[int, str]:
                     continue
                 page_number = page_entry.get("page")
                 content = page_entry.get("content")
+                if isinstance(page_number, str) and page_number.isdigit():
+                    page_number = int(page_number)
                 if not isinstance(page_number, int):
                     continue
                 if not isinstance(content, str):
                     content = ""
-                if page_number < 1 or page_number > chunk_page_count:
+                if 1 <= page_number <= chunk_page_count:
+                    original_page = start_page + page_number - 1
+                elif start_page <= page_number <= end_page:
+                    original_page = page_number
+                else:
                     continue
-                original_page = start_page + page_number - 1
                 text_by_page[original_page] = _sanitize_text(content)
 
     return text_by_page
