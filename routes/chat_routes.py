@@ -25,6 +25,7 @@ from services.whatsapp_api import (
     trigger_typing_indicator,
     is_typing_feedback_active,
     subir_media,
+    _resolve_message_channel,
 )
 from routes.webhook import clear_chat_runtime_state, notify_session_closed
 from services.db import (
@@ -228,6 +229,51 @@ def _convert_audio_to_mp3(src_path: str):
     converted, error_output = _try_convert(mp3_cmd, dest_mp3_path)
     if converted:
         return dest_mp3_path, None
+
+    detail = f" Detalle: {error_output}" if error_output else ""
+    return None, f"No se pudo convertir el audio a un formato compatible.{detail}"
+
+
+def _convert_audio_to_m4a(src_path: str):
+    if not shutil.which("ffmpeg"):
+        return None, "No se encontró ffmpeg para convertir el audio."
+
+    original_name, _ = os.path.splitext(os.path.basename(src_path))
+    dest_m4a_name = f"{uuid.uuid4().hex}_{original_name}.m4a"
+    dest_m4a_path = os.path.join(_media_root(), dest_m4a_name)
+
+    def _try_convert(cmd, destination):
+        result = subprocess.run(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        if result.returncode != 0 or not os.path.exists(destination):
+            error_output = (result.stderr or result.stdout or "").strip()
+            return False, error_output
+        return True, None
+
+    m4a_cmd = [
+        "ffmpeg",
+        "-y",
+        "-i",
+        src_path,
+        "-vn",
+        "-c:a",
+        "aac",
+        "-b:a",
+        "128k",
+        "-ac",
+        "1",
+        "-ar",
+        "44100",
+        dest_m4a_path,
+    ]
+
+    converted, error_output = _try_convert(m4a_cmd, dest_m4a_path)
+    if converted:
+        return dest_m4a_path, None
 
     detail = f" Detalle: {error_output}" if error_output else ""
     return None, f"No se pudo convertir el audio a un formato compatible.{detail}"
@@ -1493,6 +1539,9 @@ def send_audio():
     caption = request.form.get('caption','')
     audio   = request.files.get('audio')
     origen  = request.form.get('origen', 'asesor')
+    channel = _resolve_message_channel(numero) if numero else "whatsapp"
+    is_instagram = channel == "instagram"
+    is_whatsapp = channel == "whatsapp"
 
     rol = session.get('rol')
     if rol != 'admin':
@@ -1581,21 +1630,39 @@ def send_audio():
 
     conversion_error = None
     media_id = None
+    instagram_supported_exts = {".aac", ".m4a", ".wav", ".mp4"}
 
-    converted_path, conversion_error = _convert_audio_to_mp3(path)
-    if converted_path:
-        logger.info(
-            "Audio convertido a mp3",
-            extra={"numero": numero, "converted_path": converted_path},
-        )
-        path = converted_path
-        unique = os.path.basename(converted_path)
-        ext = '.mp3'
-        mime_type = 'audio/mpeg'
+    if is_instagram and ext not in instagram_supported_exts:
+        converted_path, conversion_error = _convert_audio_to_m4a(path)
+        if converted_path:
+            logger.info(
+                "Audio convertido a m4a para Instagram",
+                extra={"numero": numero, "converted_path": converted_path},
+            )
+            path = converted_path
+            unique = os.path.basename(converted_path)
+            ext = ".m4a"
+            mime_type = "audio/mp4"
+    elif is_whatsapp:
+        converted_path, conversion_error = _convert_audio_to_mp3(path)
+        if converted_path:
+            logger.info(
+                "Audio convertido a mp3",
+                extra={"numero": numero, "converted_path": converted_path},
+            )
+            path = converted_path
+            unique = os.path.basename(converted_path)
+            ext = ".mp3"
+            mime_type = "audio/mpeg"
+
     if conversion_error:
         logger.warning(
-            "Conversión de audio a mp3 con advertencias",
-            extra={"numero": numero, "conversion_error": conversion_error},
+            "Conversión de audio con advertencias",
+            extra={
+                "numero": numero,
+                "conversion_error": conversion_error,
+                "channel": channel,
+            },
         )
         try:
             os.remove(path)
@@ -1621,28 +1688,42 @@ def send_audio():
         _external=True,
         _scheme=_preferred_url_scheme(),
     )
-    audio_urls = {"audio_mp3_url": audio_url}
-    preferred_audio_url = _select_audio_variant(audio_urls)
+    if ext == ".mp3":
+        audio_urls = {"audio_mp3_url": audio_url}
+    elif ext == ".m4a":
+        audio_urls = {"audio_m4a_url": audio_url}
+    elif ext == ".ogg":
+        audio_urls = {"audio_ogg_url": audio_url}
+    else:
+        audio_urls = {"audio_url": audio_url}
 
-    try:
-        media_id = subir_media(path)
+    preferred_audio_url = audio_url if is_instagram else _select_audio_variant(audio_urls)
+
+    if is_whatsapp:
+        try:
+            media_id = subir_media(path)
+            logger.info(
+                "Audio subido a WhatsApp",
+                extra={"numero": numero, "media_id": media_id, "path": path},
+            )
+        except Exception as exc:
+            logger.exception(
+                "Fallo al subir audio a WhatsApp",
+                extra={"numero": numero, "path": path, "error": str(exc)},
+            )
+            return jsonify({'error': 'No se pudo subir el audio a WhatsApp.'}), 502
+
+        if not media_id:
+            logger.warning(
+                "Audio sin media_id tras subida",
+                extra={"numero": numero, "path": path},
+            )
+            return jsonify({'error': 'No se pudo obtener el media_id del audio.'}), 502
+    else:
         logger.info(
-            "Audio subido a WhatsApp",
-            extra={"numero": numero, "media_id": media_id, "path": path},
+            "Omitiendo subida a WhatsApp para audio",
+            extra={"numero": numero, "channel": channel, "path": path},
         )
-    except Exception as exc:
-        logger.exception(
-            "Fallo al subir audio a WhatsApp",
-            extra={"numero": numero, "path": path, "error": str(exc)},
-        )
-        return jsonify({'error': 'No se pudo subir el audio a WhatsApp.'}), 502
-
-    if not media_id:
-        logger.warning(
-            "Audio sin media_id tras subida",
-            extra={"numero": numero, "path": path},
-        )
-        return jsonify({'error': 'No se pudo obtener el media_id del audio.'}), 502
 
     # Envía el audio por la API
     tipo_envio = 'bot_audio' if origen == 'bot' else 'asesor'
@@ -1651,7 +1732,7 @@ def send_audio():
     audio_payload = {"id": media_id, "link": preferred_audio_url, "voice": True}
 
     logger.info(
-        "Enviando audio por WhatsApp",
+        "Enviando audio por canal",
         extra={
             "numero": numero,
             "tipo_envio": tipo_envio,
@@ -1659,6 +1740,7 @@ def send_audio():
             "audio_url": preferred_audio_url,
             "audio_urls": audio_urls,
             "caption_in_payload": bool(media_caption),
+            "channel": channel,
         },
     )
 
