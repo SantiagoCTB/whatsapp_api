@@ -28,6 +28,10 @@
           <input type="checkbox" id="notificationSoundToggle" checked>
           <span>Sonido de notificaciones</span>
         </label>
+        <label class="settings-toggle">
+          <input type="checkbox" id="autocorrectToggle">
+          <span>Autocorrección al escribir</span>
+        </label>
       </div>
       <input id="buscador" type="text" placeholder="Buscar número…">
       <ul id="chatList"></ul>
@@ -57,7 +61,7 @@
         <img id="imagePreviewThumb" alt="Imagen lista para enviar" />
         <button type="button" id="clearImageDraft" aria-label="Quitar imagen">×</button>
       </div>
-      <input id="messageInput" type="text" placeholder="Escribe un mensaje…">
+      <input id="messageInput" type="text" placeholder="Escribe un mensaje…" spellcheck="true" autocorrect="on" autocapitalize="sentences">
       <button id="sendBtn">Enviar</button>
       <input id="imageInput" type="file" accept="image/*" style="display:none;">
       <input id="audioInput" type="file" accept="audio/*" style="display:none;">
@@ -170,6 +174,28 @@
               console.warn('No se pudo pausar el sonido de notificaciones', pauseErr);
             }
             notificationAudio.currentTime = 0;
+          }
+        });
+      }
+      const autocorrectToggle = document.getElementById('autocorrectToggle');
+      const AUTOCORRECT_PREF_KEY = 'chatAutocorrectEnabled';
+      let autocorrectEnabled = false;
+      try {
+        const storedAutocorrect = localStorage.getItem(AUTOCORRECT_PREF_KEY);
+        if (storedAutocorrect === 'true') {
+          autocorrectEnabled = true;
+        }
+      } catch (err) {
+        console.warn('No se pudo leer la preferencia de autocorrección', err);
+      }
+      if (autocorrectToggle) {
+        autocorrectToggle.checked = autocorrectEnabled;
+        autocorrectToggle.addEventListener('change', () => {
+          autocorrectEnabled = autocorrectToggle.checked;
+          try {
+            localStorage.setItem(AUTOCORRECT_PREF_KEY, autocorrectEnabled ? 'true' : 'false');
+          } catch (err) {
+            console.warn('No se pudo guardar la preferencia de autocorrección', err);
           }
         });
       }
@@ -382,6 +408,52 @@
       const inputArea = document.querySelector('.inputArea');
       const imagePreviewChip = document.getElementById('imagePreviewChip');
       const imagePreviewThumb = document.getElementById('imagePreviewThumb');
+      let autocorrectTimeout = null;
+      let autocorrectController = null;
+      let lastAutocorrectedText = '';
+      function scheduleAutocorrect(delayOverride) {
+        if (!messageInput || !autocorrectEnabled) return;
+        const currentText = messageInput.value;
+        if (!currentText || !currentText.trim()) return;
+        if (currentText === lastAutocorrectedText) return;
+        if (autocorrectTimeout) clearTimeout(autocorrectTimeout);
+        const delay = typeof delayOverride === 'number' ? delayOverride : 800;
+        autocorrectTimeout = setTimeout(() => {
+          autocorrectTimeout = null;
+          runAutocorrect();
+        }, delay);
+      }
+      async function runAutocorrect() {
+        if (!messageInput || !autocorrectEnabled) return;
+        const originalText = messageInput.value;
+        if (!originalText || !originalText.trim()) return;
+        if (autocorrectController) {
+          autocorrectController.abort();
+        }
+        autocorrectController = new AbortController();
+        try {
+          const response = await fetch('/autocorrect', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text: originalText }),
+            signal: autocorrectController.signal
+          });
+          if (!response.ok) return;
+          const data = await response.json();
+          const correctedText = data?.text;
+          if (!correctedText || typeof correctedText !== 'string') return;
+          if (messageInput.value !== originalText) return;
+          if (correctedText !== originalText) {
+            messageInput.value = correctedText;
+            messageInput.setSelectionRange(correctedText.length, correctedText.length);
+          }
+          lastAutocorrectedText = messageInput.value;
+        } catch (err) {
+          if (err.name !== 'AbortError') {
+            console.error('Error autocorrigiendo el texto', err);
+          }
+        }
+      }
       const clearImageDraftBtn = document.getElementById('clearImageDraft');
       if (imagePreviewChip) {
         imagePreviewChip.hidden = true;
@@ -2088,6 +2160,10 @@
           typingSignalTimeout = null;
           triggerTypingSignal();
         }, 300);
+        const currentValue = messageInput.value || '';
+        if (!currentValue.trim()) return;
+        const endsWithBoundary = /[\\s.,;:!?)]$/.test(currentValue);
+        scheduleAutocorrect(endsWithBoundary ? 150 : 1000);
       });
 
       messageInput.addEventListener('keydown', function(e) {
