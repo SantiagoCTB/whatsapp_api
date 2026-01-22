@@ -69,6 +69,7 @@ TENANT_ENV_KEYS = {
     "IA_HISTORY_LIMIT",
     "IA_CATALOG_USE_OPENAI",
     "IA_CATALOG_MAX_FILE_MB",
+    "IA_CATALOG_REQUEST_DELAY_SECONDS",
 }
 
 
@@ -120,6 +121,7 @@ def _default_tenant_env(*, include_legacy_credentials: bool = False) -> dict:
         "IA_HISTORY_LIMIT": Config.IA_HISTORY_LIMIT,
         "IA_CATALOG_USE_OPENAI": Config.IA_CATALOG_USE_OPENAI,
         "IA_CATALOG_MAX_FILE_MB": Config.IA_CATALOG_MAX_FILE_MB,
+        "IA_CATALOG_REQUEST_DELAY_SECONDS": Config.IA_CATALOG_REQUEST_DELAY_SECONDS,
     }
 
     if include_legacy_credentials:

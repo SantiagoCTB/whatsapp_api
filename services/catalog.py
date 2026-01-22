@@ -8,6 +8,7 @@ import logging
 import os
 import re
 import tempfile
+import time
 from dataclasses import dataclass
 from threading import Event
 from pathlib import Path
@@ -103,6 +104,23 @@ def _catalog_max_bytes() -> int:
     except (TypeError, ValueError):
         mb = Config.IA_CATALOG_MAX_FILE_MB
     return max(mb, 1) * 1024 * 1024
+
+
+def _catalog_request_delay_seconds() -> float:
+    raw = tenants.get_runtime_setting(
+        "IA_CATALOG_REQUEST_DELAY_SECONDS",
+        default=Config.IA_CATALOG_REQUEST_DELAY_SECONDS,
+    )
+    try:
+        delay = float(raw)
+    except (TypeError, ValueError):
+        delay = Config.IA_CATALOG_REQUEST_DELAY_SECONDS
+    return max(delay, 0.0)
+
+
+def _sleep_catalog_delay(delay_seconds: float) -> None:
+    if delay_seconds > 0:
+        time.sleep(delay_seconds)
 
 
 def _extract_json_payload(text: str) -> dict | None:
@@ -210,6 +228,8 @@ def _ingest_catalog_with_openai(pdf_path: str) -> dict[int, str]:
     max_bytes = _catalog_max_bytes()
     text_by_page: dict[int, str] = {}
 
+    delay_seconds = _catalog_request_delay_seconds()
+
     with tempfile.TemporaryDirectory(prefix="catalog_chunks_") as temp_dir:
         try:
             chunks = _split_pdf_by_size(pdf_path, max_bytes=max_bytes, output_dir=temp_dir)
@@ -219,6 +239,7 @@ def _ingest_catalog_with_openai(pdf_path: str) -> dict[int, str]:
 
         for chunk_path, start_page, end_page in chunks:
             file_id = ia_client.upload_file(chunk_path, purpose="user_data")
+            _sleep_catalog_delay(delay_seconds)
             if not file_id:
                 logger.warning(
                     "No se pudo subir un chunk del catálogo",
@@ -227,6 +248,7 @@ def _ingest_catalog_with_openai(pdf_path: str) -> dict[int, str]:
                 continue
             prompt = _prompt_for_catalog_range(start_page, end_page)
             response_text = ia_client.create_response_with_file(file_id, prompt)
+            _sleep_catalog_delay(delay_seconds)
             if not response_text:
                 logger.warning(
                     "Respuesta vacía para chunk del catálogo",
