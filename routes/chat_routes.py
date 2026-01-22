@@ -855,9 +855,9 @@ def autocorrect():
         return jsonify({'error': 'No autorizado'}), 401
 
     data = request.get_json(silent=True) or {}
-    text = (data.get('text') or '').strip()
-    if not text:
-        return jsonify({'text': text})
+    original_text = data.get('text') or ''
+    if not original_text.strip():
+        return jsonify({'text': original_text})
 
     tool_url = tenants.get_runtime_setting(
         "LANGUAGETOOL_URL", default=Config.LANGUAGETOOL_URL
@@ -866,22 +866,24 @@ def autocorrect():
         "LANGUAGETOOL_LANGUAGE", default=Config.LANGUAGETOOL_LANGUAGE
     )
     if not tool_url:
-        return jsonify({'text': text, 'disabled': True})
+        return jsonify({'text': original_text, 'disabled': True})
 
     try:
         response = requests.post(
             tool_url,
-            data={'language': language or 'es', 'text': text},
+            data={'language': language or 'es', 'text': original_text},
             timeout=4,
         )
         response.raise_for_status()
         payload = response.json()
     except requests.RequestException as exc:
         logger.warning("Error consultando LanguageTool: %s", exc)
-        return jsonify({'text': text, 'error': 'Servicio no disponible'}), 502
+        return jsonify({'text': original_text, 'error': 'Servicio no disponible'}), 502
 
     matches = payload.get('matches') if isinstance(payload, dict) else []
-    corrected = _apply_autocorrections(text, matches if isinstance(matches, list) else [])
+    corrected = _apply_autocorrections(
+        original_text, matches if isinstance(matches, list) else []
+    )
     return jsonify({'text': corrected})
 
 
