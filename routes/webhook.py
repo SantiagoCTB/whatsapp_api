@@ -576,7 +576,7 @@ def _get_ia_system_prompt() -> str | None:
     try:
         c.execute(
             """
-            SELECT system_prompt
+            SELECT system_prompt, business_description
               FROM ia_config
           ORDER BY id DESC
              LIMIT 1
@@ -589,8 +589,11 @@ def _get_ia_system_prompt() -> str | None:
         conn.close()
     if not row:
         return None
-    prompt = (row[0] or "").strip()
-    return prompt or None
+    system_prompt = (row[0] or "").strip()
+    business_description = (row[1] or "").strip()
+    if business_description:
+        business_description = f"Contexto del negocio:\n{business_description}"
+    return _combine_system_prompts(system_prompt, business_description)
 
 
 def _reply_with_ai_image(
