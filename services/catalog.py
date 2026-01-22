@@ -182,14 +182,16 @@ def _split_pdf_by_size(
 
 def _prompt_for_catalog_range(start_page: int, end_page: int) -> str:
     return (
-        "Devuelve un JSON válido con este formato exacto: "
-        '{"pages":[{"page":1,"content":"..."}]}.\n'
-        "El archivo adjunto corresponde a las páginas "
-        f"{start_page}-{end_page} del catálogo original. "
-        "Incluye toda la información disponible en cada página, "
-        "sin omitir tablas o listados. "
-        "Si una página no tiene contenido legible, deja su content vacío. "
-        "Usa los números de página originales."
+        f"Extrae el texto de las páginas {start_page} a {end_page} del archivo.\n"
+        "NO corrijas errores.\n"
+        "NO interpretes contenido.\n"
+        "Vas a corregir únicamente valores que sean SKUs/códigos.\n"
+        "Reglas permitidas SOLO en SKUs:\n"
+        "- Si después de la última letra alfabética del SKU hay un '1', reemplaza ese '1' por 'I'.\n"
+        "- Aplica sustituciones SOLO en SKUs y solo si mantienen el patrón esperado.\n"
+        "Devuelve exactamente lo detectado por página.\n"
+        "Formato JSON:\n"
+        '{"pages":[{"page":1,"content":"..."}]}'
     )
 
 
@@ -393,13 +395,11 @@ def _perform_ocr(pix: "fitz.Pixmap") -> str:
         img = Image.frombytes(mode, (pix.width, pix.height), pix.samples)
         prepared = _prepare_image_for_ocr(img)
         prepared = _ensure_min_height(prepared, Config.OCR_MIN_HEIGHT)
-        text = pytesseract.image_to_string(
+        return pytesseract.image_to_string(
             prepared,
             lang=Config.OCR_LANG,
             config=_build_tesseract_config(),
         )
-        text = _fix_ocr_confusions(text)
-        return _sanitize_text(text)
     except Exception as exc:  # pragma: no cover - depende del runtime
         logger.warning("Fallo al ejecutar OCR de catálogo", exc_info=exc)
         return ""
@@ -422,13 +422,11 @@ def _perform_ocr_from_image(path: str) -> str:
         with Image.open(path) as img:
             prepared = _prepare_image_for_ocr(img)
             prepared = _ensure_min_height(prepared, Config.OCR_MIN_HEIGHT)
-            text = pytesseract.image_to_string(
+            return pytesseract.image_to_string(
                 prepared,
                 lang=Config.OCR_LANG,
                 config=_build_tesseract_config(),
             )
-            text = _fix_ocr_confusions(text)
-            return _sanitize_text(text)
     except Exception as exc:  # pragma: no cover - depende del runtime
         logger.warning("Fallo al ejecutar OCR de imagen de catálogo", exc_info=exc)
         return ""
@@ -504,9 +502,9 @@ def ingest_catalog_pdf(
             number = page.number + 1
             text = openai_pages.get(number, "")
             if not text:
-                text = _sanitize_text(page.get_text("text") or "")
+                text = page.get_text("text") or ""
             if not text:
-                text = _sanitize_text(page.get_text("blocks") or "")
+                text = page.get_text("blocks") or ""
 
             zoom_matrix = _page_zoom_matrix(page, max_dim=Config.OCR_MAX_DIM)
             pix = page.get_pixmap(matrix=zoom_matrix, alpha=False)
