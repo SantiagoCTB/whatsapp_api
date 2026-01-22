@@ -27,6 +27,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const applyFilters = document.getElementById('apply-filters');
   const rolInput = document.getElementById('filtroRol');
   const numeroInput = document.getElementById('filtroNumero');
+  const textoInput = document.getElementById('filtroTexto');
   const clearFilters = document.getElementById('clear-filters');
   const tipoCliente = document.getElementById('tipoCliente');
   const tipoBot = document.getElementById('tipoBot');
@@ -54,6 +55,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (limitInput) limitInput.value = '10';
       if (rolInput) rolInput.selectedIndex = 0;
       if (numeroInput) numeroInput.selectedIndex = 0;
+      if (textoInput) textoInput.value = '';
       [tipoCliente, tipoBot, tipoAsesor].forEach(cb => {
         if (cb) cb.checked = true;
       });
@@ -101,31 +103,34 @@ document.addEventListener('DOMContentLoaded', () => {
       params.append('rol', rolId);
     }
     if (numeroInput && numeroInput.value) params.append('numero', numeroInput.value);
-  const tipos = [];
-  if (tipoCliente && tipoCliente.checked) tipos.push('cliente');
-  if (tipoBot && tipoBot.checked) tipos.push('bot');
-  if (tipoAsesor && tipoAsesor.checked) tipos.push('asesor');
-  if (tipos.length && tipos.length < 3) params.append('tipos', tipos.join(','));
-  const q = params.toString();
-  return q ? `?${q}` : '';
-}
+    if (textoInput && textoInput.value.trim()) {
+      params.append('texto', textoInput.value.trim());
+    }
+    const tipos = [];
+    if (tipoCliente && tipoCliente.checked) tipos.push('cliente');
+    if (tipoBot && tipoBot.checked) tipos.push('bot');
+    if (tipoAsesor && tipoAsesor.checked) tipos.push('asesor');
+    if (tipos.length && tipos.length < 3) params.append('tipos', tipos.join(','));
+    const q = params.toString();
+    return q ? `?${q}` : '';
+  }
 
-function showCardMessage(elemId, message) {
-  const elem = document.getElementById(elemId);
-  const card = elem ? elem.closest('.card') : null;
-  if (!card) return;
-  let msgElem = card.querySelector('.card-message');
-  if (!message) {
-    if (msgElem) msgElem.remove();
-    return;
+  function showCardMessage(elemId, message) {
+    const elem = document.getElementById(elemId);
+    const card = elem ? elem.closest('.card') : null;
+    if (!card) return;
+    let msgElem = card.querySelector('.card-message');
+    if (!message) {
+      if (msgElem) msgElem.remove();
+      return;
+    }
+    if (!msgElem) {
+      msgElem = document.createElement('p');
+      msgElem.className = 'card-message';
+      card.appendChild(msgElem);
+    }
+    msgElem.textContent = message;
   }
-  if (!msgElem) {
-    msgElem = document.createElement('p');
-    msgElem.className = 'card-message';
-    card.appendChild(msgElem);
-  }
-  msgElem.textContent = message;
-}
 
   function cargarNumerosSinAsesor(query) {
     fetch(`/datos_numeros_sin_asesor${query}`)
@@ -759,4 +764,3 @@ function showCardMessage(elemId, message) {
   cargarDatos();
   setInterval(cargarDatos, REFRESH_INTERVAL);
 });
-

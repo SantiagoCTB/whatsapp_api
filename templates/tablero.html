@@ -27,6 +27,8 @@
     <select id="filtroNumero">
         <option value="">Todos</option>
     </select>
+    <label for="filtroTexto">Texto en chats:</label>
+    <input type="text" id="filtroTexto" placeholder="Buscar palabras en mensajes">
     <div class="message-type">
         <span>Tipo:</span>
         <label><input type="checkbox" id="tipoCliente" value="cliente" checked> Cliente</label>
@@ -229,4 +231,3 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="{{ url_for('static', filename='tablero.js') }}"></script>
 {% endblock %}
-
