@@ -143,6 +143,8 @@ class Config:
     }
     IA_CATALOG_MAX_FILE_MB = int(os.getenv('IA_CATALOG_MAX_FILE_MB', 50))
     IA_CATALOG_REQUEST_DELAY_SECONDS = float(os.getenv('IA_CATALOG_REQUEST_DELAY_SECONDS', 1.0))
+    LANGUAGETOOL_URL = os.getenv('LANGUAGETOOL_URL', 'https://api.languagetool.org/v2/check')
+    LANGUAGETOOL_LANGUAGE = os.getenv('LANGUAGETOOL_LANGUAGE', 'es')
     IA_SYSTEM_MESSAGE = os.getenv(
         'IA_SYSTEM_MESSAGE',
         (
