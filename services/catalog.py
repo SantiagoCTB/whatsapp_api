@@ -72,6 +72,12 @@ def _sanitize_text(text: str) -> str:
     return text
 
 
+def _normalize_catalog_text(text: str) -> str:
+    """Normaliza y corrige posibles errores de OCR en textos del catálogo."""
+
+    return _fix_ocr_confusions(_sanitize_text(text))
+
+
 def _coerce_bool(value) -> bool:
     if isinstance(value, bool):
         return value
@@ -510,6 +516,8 @@ def ingest_catalog_pdf(
 
             if not text:
                 text = _perform_ocr(pix)
+            if text:
+                text = _normalize_catalog_text(text)
 
             keywords = _extract_keywords(text)
 
