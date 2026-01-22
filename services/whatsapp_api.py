@@ -385,7 +385,7 @@ def enviar_mensaje(
                 attachments = []
                 for item in opciones:
                     if isinstance(item, dict):
-                        url = item.get("link") or item.get("id")
+                        url = item.get("url") or item.get("link") or item.get("id")
                     else:
                         url = item
                     if not url:
@@ -394,18 +394,32 @@ def enviar_mensaje(
                 if attachments:
                     payload["message"] = {"attachments": attachments}
             if "message" not in payload:
+                attachment_id = None
                 if isinstance(opciones, dict):
-                    attachment_url = opciones.get("link") or opciones.get("id")
+                    attachment_url = opciones.get("url") or opciones.get("link")
+                    attachment_id = (
+                        opciones.get("attachment_id")
+                        or opciones.get("attachmentId")
+                        or (opciones.get("id") if not attachment_url else None)
+                    )
                 else:
                     attachment_url = opciones
-                if not attachment_url:
+                if not attachment_url and not attachment_id:
                     return _fail("No se pudo enviar el adjunto a Messenger.")
-                payload["message"] = {
-                    "attachment": {
-                        "type": attachment_type,
-                        "payload": {"url": attachment_url, "is_reusable": True},
+                if attachment_id and not attachment_url:
+                    payload["message"] = {
+                        "attachment": {
+                            "type": attachment_type,
+                            "payload": {"attachment_id": attachment_id},
+                        }
                     }
-                }
+                else:
+                    payload["message"] = {
+                        "attachment": {
+                            "type": attachment_type,
+                            "payload": {"url": attachment_url, "is_reusable": True},
+                        }
+                    }
         elif tipo_respuesta == "boton":
             try:
                 botones = json.loads(opciones) if opciones else []

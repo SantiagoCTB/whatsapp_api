@@ -2,6 +2,7 @@ import importlib.util
 import json
 import logging
 import mimetypes
+import posixpath
 import os
 import shutil
 import subprocess
@@ -149,14 +150,28 @@ def serve_media(filename: str):
     """
 
     normalized = os.path.normpath(filename).lstrip("/\\")
-    target_path = os.path.realpath(os.path.join(_media_root(), normalized))
-    base_root = os.path.realpath(_media_root())
+    default_root = os.path.realpath(_media_root())
+    target_path = os.path.realpath(os.path.join(default_root, normalized))
 
-    if not target_path.startswith(base_root):
+    if not target_path.startswith(default_root):
         return jsonify({'error': 'Ruta no permitida'}), 403
 
     if not os.path.exists(target_path):
-        return jsonify({'error': 'Archivo no encontrado'}), 404
+        alt_parts = normalized.split(os.sep, 1)
+        if len(alt_parts) > 1:
+            candidate_key, candidate_rel = alt_parts
+            candidate_root = os.path.realpath(
+                tenants.get_media_root(tenant_key=candidate_key)
+            )
+            candidate_path = os.path.realpath(
+                os.path.join(candidate_root, candidate_rel)
+            )
+            if candidate_path.startswith(candidate_root) and os.path.exists(candidate_path):
+                target_path = candidate_path
+            else:
+                return jsonify({'error': 'Archivo no encontrado'}), 404
+        else:
+            return jsonify({'error': 'Archivo no encontrado'}), 404
 
     guessed, _ = mimetypes.guess_type(target_path)
     ext = os.path.splitext(target_path)[1].lower()
@@ -1595,6 +1610,10 @@ def send_audio():
             extra={"numero": numero, "path": path, "unique": unique},
         )
         return jsonify({'error': 'No se pudo generar la URL del audio.'}), 500
+
+    tenant_key = tenants.get_active_tenant_key()
+    if tenant_key:
+        media_filename = posixpath.join(tenant_key, media_filename)
 
     audio_url = url_for(
         'chat.serve_media',
