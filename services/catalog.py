@@ -204,9 +204,15 @@ def _split_pdf_by_size(
     return chunks
 
 
-def _prompt_for_catalog_range(start_page: int, end_page: int) -> str:
+def _prompt_for_catalog_range(
+    start_page: int,
+    end_page: int,
+    chunk_page_count: int,
+) -> str:
     return (
-        f"Extrae el texto de las páginas {start_page} a {end_page} del archivo.\n"
+        f"El archivo adjunto contiene {chunk_page_count} páginas consecutivas del catálogo.\n"
+        f"Corresponden a las páginas {start_page} a {end_page} del catálogo original.\n"
+        "Extrae el texto de cada página del archivo adjunto.\n"
         "Corrige errores ortográficos detectados.\n"
         "Devuelve exactamente lo detectado por página.\n"
         "Formato JSON:\n"
@@ -246,7 +252,8 @@ def _ingest_catalog_with_openai(pdf_path: str) -> dict[int, str]:
                     extra={"pdf": pdf_path, "range": f"{start_page}-{end_page}"},
                 )
                 continue
-            prompt = _prompt_for_catalog_range(start_page, end_page)
+            chunk_page_count = end_page - start_page + 1
+            prompt = _prompt_for_catalog_range(start_page, end_page, chunk_page_count)
             response_text = ia_client.create_response_with_file(file_id, prompt)
             _sleep_catalog_delay(delay_seconds)
             if not response_text:
@@ -281,9 +288,10 @@ def _ingest_catalog_with_openai(pdf_path: str) -> dict[int, str]:
                     continue
                 if not isinstance(content, str):
                     content = ""
-                if page_number < start_page or page_number > end_page:
+                if page_number < 1 or page_number > chunk_page_count:
                     continue
-                text_by_page[page_number] = _sanitize_text(content)
+                original_page = start_page + page_number - 1
+                text_by_page[original_page] = _sanitize_text(content)
 
     return text_by_page
 
