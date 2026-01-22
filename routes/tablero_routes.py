@@ -9,7 +9,7 @@ from services.db import get_connection
 tablero_bp = Blueprint('tablero', __name__)
 
 
-def _apply_filters(cur, rol, numero):
+def _apply_filters(cur, rol, numero, texto=None):
     """Valida rol y número y genera joins/condiciones para las consultas."""
     joins = []
     conditions = []
@@ -29,6 +29,10 @@ def _apply_filters(cur, rol, numero):
         joins.append("JOIN chat_roles AS cr ON m.numero = cr.numero")
         conditions.append("cr.role_id = %s")
         params.append(rol)
+
+    if texto:
+        conditions.append("LOWER(m.mensaje) LIKE %s")
+        params.append(f"%{texto.lower()}%")
 
     return " ".join(joins), conditions, params
 
@@ -83,11 +87,12 @@ def datos_tablero():
     end = request.args.get('end')
     rol = request.args.get('rol', type=int)
     numero = request.args.get('numero')
+    texto = request.args.get('texto')
 
     conn = get_connection()
     cur = conn.cursor()
     try:
-        joins, filter_conditions, filter_params = _apply_filters(cur, rol, numero)
+        joins, filter_conditions, filter_params = _apply_filters(cur, rol, numero, texto)
     except ValueError as e:
         conn.close()
         msg = 'Rol' if str(e) == 'rol' else 'Número'
@@ -130,12 +135,13 @@ def datos_tipos_diarios():
     end = request.args.get('end')
     rol = request.args.get('rol', type=int)
     numero = request.args.get('numero')
+    texto = request.args.get('texto')
 
     conn = get_connection()
     cur = conn.cursor()
 
     try:
-        joins, filter_conditions, filter_params = _apply_filters(cur, rol, numero)
+        joins, filter_conditions, filter_params = _apply_filters(cur, rol, numero, texto)
     except ValueError as e:
         conn.close()
         msg = 'Rol' if str(e) == 'rol' else 'Número'
@@ -200,12 +206,13 @@ def datos_palabras():
     end = request.args.get('end')
     rol = request.args.get('rol', type=int)
     numero = request.args.get('numero')
+    texto = request.args.get('texto')
 
     conn = get_connection()
     cur = conn.cursor()
 
     try:
-        joins, filter_conditions, filter_params = _apply_filters(cur, rol, numero)
+        joins, filter_conditions, filter_params = _apply_filters(cur, rol, numero, texto)
     except ValueError as e:
         conn.close()
         msg = 'Rol' if str(e) == 'rol' else 'Número'
@@ -250,6 +257,7 @@ def datos_roles():
     end = request.args.get('end')
     rol = request.args.get('rol', type=int)
     numero = request.args.get('numero')
+    texto = request.args.get('texto')
 
     conn = get_connection()
     cur = conn.cursor()
@@ -284,6 +292,9 @@ def datos_roles():
     if rol:
         query += " AND cr.role_id = %s"
         params.append(rol)
+    if texto:
+        query += " AND LOWER(m.mensaje) LIKE %s"
+        params.append(f"%{texto.lower()}%")
     query += " GROUP BY rol"
     cur.execute(query, params)
     rows = cur.fetchall()
@@ -305,12 +316,13 @@ def datos_top_numeros():
     end = request.args.get('end')
     rol = request.args.get('rol', type=int)
     numero = request.args.get('numero')
+    texto = request.args.get('texto')
 
     conn = get_connection()
     cur = conn.cursor()
 
     try:
-        joins, filter_conditions, filter_params = _apply_filters(cur, rol, numero)
+        joins, filter_conditions, filter_params = _apply_filters(cur, rol, numero, texto)
     except ValueError as e:
         conn.close()
         msg = 'Rol' if str(e) == 'rol' else 'Número'
@@ -354,12 +366,13 @@ def datos_mensajes_diarios():
     end = request.args.get('end')
     rol = request.args.get('rol', type=int)
     numero = request.args.get('numero')
+    texto = request.args.get('texto')
 
     conn = get_connection()
     cur = conn.cursor()
 
     try:
-        joins, filter_conditions, filter_params = _apply_filters(cur, rol, numero)
+        joins, filter_conditions, filter_params = _apply_filters(cur, rol, numero, texto)
     except ValueError as e:
         conn.close()
         msg = 'Rol' if str(e) == 'rol' else 'Número'
@@ -402,12 +415,13 @@ def datos_mensajes_semana():
     end = request.args.get('end')
     rol = request.args.get('rol', type=int)
     numero = request.args.get('numero')
+    texto = request.args.get('texto')
 
     conn = get_connection()
     cur = conn.cursor()
 
     try:
-        joins, filter_conditions, filter_params = _apply_filters(cur, rol, numero)
+        joins, filter_conditions, filter_params = _apply_filters(cur, rol, numero, texto)
     except ValueError as e:
         conn.close()
         msg = 'Rol' if str(e) == 'rol' else 'Número'
@@ -461,12 +475,13 @@ def datos_mensajes_hora():
     end = request.args.get('end')
     rol = request.args.get('rol', type=int)
     numero = request.args.get('numero')
+    texto = request.args.get('texto')
 
     conn = get_connection()
     cur = conn.cursor()
 
     try:
-        joins, filter_conditions, filter_params = _apply_filters(cur, rol, numero)
+        joins, filter_conditions, filter_params = _apply_filters(cur, rol, numero, texto)
     except ValueError as e:
         conn.close()
         msg = 'Rol' if str(e) == 'rol' else 'Número'
@@ -509,12 +524,13 @@ def datos_tipos():
     end = request.args.get('end')
     rol = request.args.get('rol', type=int)
     numero = request.args.get('numero')
+    texto = request.args.get('texto')
 
     conn = get_connection()
     cur = conn.cursor()
 
     try:
-        joins, filter_conditions, filter_params = _apply_filters(cur, rol, numero)
+        joins, filter_conditions, filter_params = _apply_filters(cur, rol, numero, texto)
     except ValueError as e:
         conn.close()
         msg = 'Rol' if str(e) == 'rol' else 'Número'
@@ -568,12 +584,13 @@ def datos_numeros_sin_asesor():
     end = request.args.get('end')
     rol = request.args.get('rol', type=int)
     numero = request.args.get('numero')
+    texto = request.args.get('texto')
 
     conn = get_connection()
     cur = conn.cursor()
 
     try:
-        joins, filter_conditions, filter_params = _apply_filters(cur, rol, numero)
+        joins, filter_conditions, filter_params = _apply_filters(cur, rol, numero, texto)
     except ValueError as e:
         conn.close()
         msg = 'Rol' if str(e) == 'rol' else 'Número'
@@ -612,12 +629,13 @@ def datos_sin_asesor():
     end = request.args.get('end')
     rol = request.args.get('rol', type=int)
     numero = request.args.get('numero')
+    texto = request.args.get('texto')
 
     conn = get_connection()
     cur = conn.cursor()
 
     try:
-        joins, filter_conditions, filter_params = _apply_filters(cur, rol, numero)
+        joins, filter_conditions, filter_params = _apply_filters(cur, rol, numero, texto)
     except ValueError as e:
         conn.close()
         msg = 'Rol' if str(e) == 'rol' else 'Número'
@@ -654,12 +672,13 @@ def datos_totales():
     end = request.args.get('end')
     rol = request.args.get('rol', type=int)
     numero = request.args.get('numero')
+    texto = request.args.get('texto')
 
     conn = get_connection()
     cur = conn.cursor()
 
     try:
-        joins, filter_conditions, filter_params = _apply_filters(cur, rol, numero)
+        joins, filter_conditions, filter_params = _apply_filters(cur, rol, numero, texto)
     except ValueError as e:
         conn.close()
         msg = 'Rol' if str(e) == 'rol' else 'Número'
