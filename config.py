@@ -142,6 +142,7 @@ class Config:
         'on',
     }
     IA_CATALOG_MAX_FILE_MB = int(os.getenv('IA_CATALOG_MAX_FILE_MB', 50))
+    IA_CATALOG_REQUEST_DELAY_SECONDS = float(os.getenv('IA_CATALOG_REQUEST_DELAY_SECONDS', 1.0))
     IA_SYSTEM_MESSAGE = os.getenv(
         'IA_SYSTEM_MESSAGE',
         (
