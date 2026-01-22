@@ -189,12 +189,7 @@ def _split_pdf_by_size(
 def _prompt_for_catalog_range(start_page: int, end_page: int) -> str:
     return (
         f"Extrae el texto de las páginas {start_page} a {end_page} del archivo.\n"
-        "NO corrijas errores.\n"
-        "NO interpretes contenido.\n"
-        "Vas a corregir únicamente valores que sean SKUs/códigos.\n"
-        "Reglas permitidas SOLO en SKUs:\n"
-        "- Si después de la última letra alfabética del SKU hay un '1', reemplaza ese '1' por 'I'.\n"
-        "- Aplica sustituciones SOLO en SKUs y solo si mantienen el patrón esperado.\n"
+        "Corrige errores ortográficos detectados.\n"
         "Devuelve exactamente lo detectado por página.\n"
         "Formato JSON:\n"
         '{"pages":[{"page":1,"content":"..."}]}'
