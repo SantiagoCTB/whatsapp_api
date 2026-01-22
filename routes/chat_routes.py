@@ -10,6 +10,7 @@ import uuid
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
+import requests
 from flask import Blueprint, jsonify, redirect, render_template, request, send_file, session, url_for
 from werkzeug.utils import secure_filename
 
@@ -140,6 +141,39 @@ def _rule_is_invalid(rule, cursor) -> bool:
             return True
 
     return False
+
+
+def _apply_autocorrections(text: str, matches: list[dict]) -> str:
+    if not matches:
+        return text
+
+    replacements = []
+    for match in matches:
+        if not isinstance(match, dict):
+            continue
+        offset = match.get("offset")
+        length = match.get("length")
+        options = match.get("replacements") or []
+        if (
+            not isinstance(offset, int)
+            or not isinstance(length, int)
+            or not options
+            or not isinstance(options, list)
+        ):
+            continue
+        first = options[0] if options else None
+        value = first.get("value") if isinstance(first, dict) else None
+        if not value or not isinstance(value, str):
+            continue
+        replacements.append((offset, length, value))
+
+    if not replacements:
+        return text
+
+    corrected = text
+    for offset, length, value in sorted(replacements, key=lambda item: item[0], reverse=True):
+        corrected = corrected[:offset] + value + corrected[offset + length :]
+    return corrected
 
 
 @chat_bp.route('/media/<path:filename>')
@@ -813,6 +847,44 @@ def typing_signal():
         return jsonify({'error': 'No se pudo enviar el indicador'}), 502
 
     return jsonify({'status': 'ok'}), 200
+
+
+@chat_bp.route('/autocorrect', methods=['POST'])
+def autocorrect():
+    if "user" not in session:
+        return jsonify({'error': 'No autorizado'}), 401
+
+    data = request.get_json(silent=True) or {}
+    original_text = data.get('text') or ''
+    if not original_text.strip():
+        return jsonify({'text': original_text})
+
+    tool_url = tenants.get_runtime_setting(
+        "LANGUAGETOOL_URL", default=Config.LANGUAGETOOL_URL
+    )
+    language = tenants.get_runtime_setting(
+        "LANGUAGETOOL_LANGUAGE", default=Config.LANGUAGETOOL_LANGUAGE
+    )
+    if not tool_url:
+        return jsonify({'text': original_text, 'disabled': True})
+
+    try:
+        response = requests.post(
+            tool_url,
+            data={'language': language or 'es', 'text': original_text},
+            timeout=4,
+        )
+        response.raise_for_status()
+        payload = response.json()
+    except requests.RequestException as exc:
+        logger.warning("Error consultando LanguageTool: %s", exc)
+        return jsonify({'text': original_text, 'error': 'Servicio no disponible'}), 502
+
+    matches = payload.get('matches') if isinstance(payload, dict) else []
+    corrected = _apply_autocorrections(
+        original_text, matches if isinstance(matches, list) else []
+    )
+    return jsonify({'text': corrected})
 
 
 @chat_bp.route('/respuestas')
