@@ -193,8 +193,8 @@ def _prompt_for_catalog_range(start_page: int, end_page: int) -> str:
         "NO interpretes contenido.\n"
         "Vas a corregir únicamente valores que sean SKUs/códigos.\n"
         "Reglas permitidas SOLO en SKUs:\n"
-        "- Si el SKU coincide con ^[A-Z]{2}1\\d{3}$, reemplaza el '1' por 'I'.\n"
-        "- Aplica sustituciones SOLO si mantienen el patrón esperado de SKU.\n"
+        "- Si después de la última letra alfabética del SKU hay un '1', reemplaza ese '1' por 'I'.\n"
+        "- Aplica sustituciones SOLO en SKUs y solo si mantienen el patrón esperado.\n"
         "Devuelve exactamente lo detectado por página.\n"
         "Formato JSON:\n"
         '{"pages":[{"page":1,"content":"..."}]}'
