@@ -227,6 +227,7 @@
       const chatListEl = document.getElementById('chatList');
       const chatBoxEl  = document.getElementById('chatBox');
       const chatWindowEl = document.querySelector('.chatWindow');
+      const buscadorInput = document.getElementById('buscador');
       const botoneraEl = document.getElementById('botonera');
       const replyPreviewEl = document.getElementById('replyPreview');
       const typingIndicatorEl = document.createElement('div');
@@ -261,6 +262,15 @@
       chatStateDefinitions.forEach(def => {
         if (def && def.key) {
           chatStateDefinitionMap.set(def.key, def);
+        }
+      });
+      const roleNameByKeyword = new Map();
+      availableRoles.forEach(roleEntry => {
+        if (!Array.isArray(roleEntry)) return;
+        const roleName = roleEntry[1];
+        const roleKeyword = roleEntry[2];
+        if (roleKeyword) {
+          roleNameByKeyword.set(roleKeyword, roleName || roleKeyword);
         }
       });
       const bogotaFormatter = new Intl.DateTimeFormat('es-CO', {
@@ -1503,6 +1513,50 @@
         });
       }
 
+      function normalizeChatFilterValue(value) {
+        if (!value) return '';
+        return value
+          .toString()
+          .toLowerCase()
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .trim();
+      }
+
+      function buildChatFilterValue(chatData) {
+        const parts = [
+          chatData.numero,
+          chatData.alias,
+          chatData.estado_label,
+          chatData.estado,
+          chatData.last_message
+        ];
+        if (Array.isArray(chatData.roles_kw)) {
+          chatData.roles_kw.forEach(roleKeyword => {
+            if (!roleKeyword) return;
+            parts.push(roleKeyword);
+            const roleName = roleNameByKeyword.get(roleKeyword);
+            if (roleName) {
+              parts.push(roleName);
+            }
+            const badge = getRoleBadge(roleKeyword);
+            if (badge) {
+              parts.push(badge);
+            }
+          });
+        }
+        return normalizeChatFilterValue(parts.filter(Boolean).join(' '));
+      }
+
+      function applyChatFilter() {
+        if (!chatListEl) return;
+        const query = normalizeChatFilterValue(buscadorInput ? buscadorInput.value : '');
+        chatListEl.querySelectorAll('li').forEach(li => {
+          const haystack = li.dataset.filterValue || normalizeChatFilterValue(li.textContent);
+          li.style.display = !query || haystack.includes(query) ? '' : 'none';
+        });
+      }
+
       function renderChatList(data) {
         const getTimestamp = ts => ts ? new Date(ts).getTime() : 0;
         data.sort((a, b) => getTimestamp(b.last_timestamp) - getTimestamp(a.last_timestamp));
@@ -1610,8 +1664,10 @@
             openChatContextMenu({ pageX: touch.pageX, pageY: touch.pageY }, c);
           });
 
+          li.dataset.filterValue = buildChatFilterValue(c);
           chatListEl.appendChild(li);
         });
+        applyChatFilter();
       }
 
       function fetchChatList(allowRetry = true) {
@@ -2584,12 +2640,9 @@
       updateSendButtons();
 
       // Filtrar chats
-      document.getElementById('buscador').addEventListener('input', function(){
-        const v = this.value.toLowerCase();
-        chatListEl.querySelectorAll('li').forEach(li => {
-          li.style.display = li.textContent.toLowerCase().includes(v) ? '' : 'none';
-        });
-      });
+      if (buscadorInput) {
+        buscadorInput.addEventListener('input', applyChatFilter);
+      }
 
       // Inicializa
       setupSocket();
