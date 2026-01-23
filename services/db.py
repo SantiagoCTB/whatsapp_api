@@ -166,6 +166,28 @@ def _seed_chat_state_definitions(cursor):
         )
 
 
+def _ensure_numero_column_length(cursor, table: str, length: int = 64) -> None:
+    cursor.execute(
+        """
+        SELECT CHARACTER_MAXIMUM_LENGTH
+          FROM information_schema.COLUMNS
+         WHERE TABLE_SCHEMA = DATABASE()
+           AND TABLE_NAME = %s
+           AND COLUMN_NAME = 'numero'
+        """,
+        (table,),
+    )
+    row = cursor.fetchone()
+    if not row:
+        return
+    max_length = row[0]
+    if max_length is None or max_length >= length:
+        return
+    cursor.execute(
+        f"ALTER TABLE {table} MODIFY COLUMN numero VARCHAR({length})"
+    )
+
+
 @dataclass(frozen=True)
 class DatabaseSettings:
     host: str
@@ -807,6 +829,7 @@ def init_db(db_settings: DatabaseSettings | None = None):
       nombre VARCHAR(100)
     ) ENGINE=InnoDB;
     """)
+    _ensure_numero_column_length(c, "alias")
 
     # hidden_chats: números ocultos sólo para la vista web
     c.execute("""
@@ -814,6 +837,7 @@ def init_db(db_settings: DatabaseSettings | None = None):
       numero VARCHAR(20) PRIMARY KEY
     ) ENGINE=InnoDB;
     """)
+    _ensure_numero_column_length(c, "hidden_chats")
 
     # chat_roles: relaciona cada número de chat con uno o varios roles
     c.execute("""
@@ -824,6 +848,7 @@ def init_db(db_settings: DatabaseSettings | None = None):
       FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE CASCADE
     ) ENGINE=InnoDB;
     """)
+    _ensure_numero_column_length(c, "chat_roles")
 
     # role_assignment_state: mantiene el último usuario asignado por rol
     c.execute("""
@@ -847,6 +872,7 @@ def init_db(db_settings: DatabaseSettings | None = None):
       FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE CASCADE
     ) ENGINE=InnoDB;
     """)
+    _ensure_numero_column_length(c, "chat_assignments")
 
     # chat_state: almacena el paso actual y última actividad por número
     c.execute("""
@@ -857,6 +883,7 @@ def init_db(db_settings: DatabaseSettings | None = None):
       last_activity DATETIME
     ) ENGINE=InnoDB;
     """)
+    _ensure_numero_column_length(c, "chat_state")
 
     # Migración defensiva de la columna estado
     c.execute("SHOW COLUMNS FROM chat_state LIKE 'estado';")
