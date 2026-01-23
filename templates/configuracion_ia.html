@@ -67,6 +67,96 @@
         <textarea id="business_description" name="business_description" rows="4" placeholder="Describe qué hace tu negocio, productos o servicios, y el tipo de cliente al que atiendes.">{{ ia_config.business_description or '' if ia_config else '' }}</textarea>
         <small>Se añade como contexto para mejorar la detección del catálogo y las respuestas en ia_chat.</small>
     </div>
+    <div class="form-row">
+        <label>Mensajes de seguimiento</label>
+        <div class="followup-section">
+            <div class="followup-item">
+                <span class="followup-index">1</span>
+                <div class="followup-body">
+                    <textarea name="followup_message_1" rows="2" placeholder="Mensaje de seguimiento 1">{{ ia_config.followup_message_1 or '' if ia_config else '' }}</textarea>
+                    <div class="followup-media">
+                        <select name="followup_media_tipo_1">
+                            <option value="" {% if not ia_config or not ia_config.followup_media_tipo_1 %}selected{% endif %}>Sin media</option>
+                            <option value="image" {% if ia_config and ia_config.followup_media_tipo_1 == 'image' %}selected{% endif %}>Imagen</option>
+                            <option value="video" {% if ia_config and ia_config.followup_media_tipo_1 == 'video' %}selected{% endif %}>Video</option>
+                            <option value="audio" {% if ia_config and ia_config.followup_media_tipo_1 == 'audio' %}selected{% endif %}>Audio</option>
+                            <option value="document" {% if ia_config and ia_config.followup_media_tipo_1 == 'document' %}selected{% endif %}>Documento</option>
+                        </select>
+                        <input
+                            type="text"
+                            name="followup_media_url_1"
+                            placeholder="URL del archivo"
+                            value="{{ ia_config.followup_media_url_1 or '' if ia_config else '' }}"
+                        >
+                    </div>
+                </div>
+            </div>
+            <div class="followup-item">
+                <span class="followup-index">2</span>
+                <div class="followup-body">
+                    <textarea name="followup_message_2" rows="2" placeholder="Mensaje de seguimiento 2">{{ ia_config.followup_message_2 or '' if ia_config else '' }}</textarea>
+                    <div class="followup-media">
+                        <select name="followup_media_tipo_2">
+                            <option value="" {% if not ia_config or not ia_config.followup_media_tipo_2 %}selected{% endif %}>Sin media</option>
+                            <option value="image" {% if ia_config and ia_config.followup_media_tipo_2 == 'image' %}selected{% endif %}>Imagen</option>
+                            <option value="video" {% if ia_config and ia_config.followup_media_tipo_2 == 'video' %}selected{% endif %}>Video</option>
+                            <option value="audio" {% if ia_config and ia_config.followup_media_tipo_2 == 'audio' %}selected{% endif %}>Audio</option>
+                            <option value="document" {% if ia_config and ia_config.followup_media_tipo_2 == 'document' %}selected{% endif %}>Documento</option>
+                        </select>
+                        <input
+                            type="text"
+                            name="followup_media_url_2"
+                            placeholder="URL del archivo"
+                            value="{{ ia_config.followup_media_url_2 or '' if ia_config else '' }}"
+                        >
+                    </div>
+                </div>
+            </div>
+            <div class="followup-item">
+                <span class="followup-index">3</span>
+                <div class="followup-body">
+                    <textarea name="followup_message_3" rows="2" placeholder="Mensaje de seguimiento 3">{{ ia_config.followup_message_3 or '' if ia_config else '' }}</textarea>
+                    <div class="followup-media">
+                        <select name="followup_media_tipo_3">
+                            <option value="" {% if not ia_config or not ia_config.followup_media_tipo_3 %}selected{% endif %}>Sin media</option>
+                            <option value="image" {% if ia_config and ia_config.followup_media_tipo_3 == 'image' %}selected{% endif %}>Imagen</option>
+                            <option value="video" {% if ia_config and ia_config.followup_media_tipo_3 == 'video' %}selected{% endif %}>Video</option>
+                            <option value="audio" {% if ia_config and ia_config.followup_media_tipo_3 == 'audio' %}selected{% endif %}>Audio</option>
+                            <option value="document" {% if ia_config and ia_config.followup_media_tipo_3 == 'document' %}selected{% endif %}>Documento</option>
+                        </select>
+                        <input
+                            type="text"
+                            name="followup_media_url_3"
+                            placeholder="URL del archivo"
+                            value="{{ ia_config.followup_media_url_3 or '' if ia_config else '' }}"
+                        >
+                    </div>
+                </div>
+            </div>
+            <div class="followup-interval">
+                <label for="followup_interval_minutes">Espaciado entre mensajes (minutos)</label>
+                <div class="followup-range">
+                    <input
+                        type="range"
+                        id="followup_interval_slider"
+                        min="0"
+                        max="120"
+                        step="1"
+                        value="{{ ia_config.followup_interval_minutes if ia_config and ia_config.followup_interval_minutes is not none else 10 }}"
+                    >
+                    <input
+                        type="number"
+                        id="followup_interval_minutes"
+                        name="followup_interval_minutes"
+                        min="0"
+                        step="1"
+                        value="{{ ia_config.followup_interval_minutes if ia_config and ia_config.followup_interval_minutes is not none else 10 }}"
+                    >
+                </div>
+            </div>
+            <small>Se enviarán automáticamente si la regla <strong>ia_chat</strong> está activa y el cliente no responde.</small>
+        </div>
+    </div>
     <div class="form-row checkbox-row">
         <label for="ia_enabled" class="checkbox-label">
             <input type="checkbox" id="ia_enabled" name="ia_enabled" value="1" {% if ia_config is none or ia_config.enabled %}checked{% endif %}>
@@ -107,4 +197,19 @@
 
     <button type="submit" class="btn-primary">Guardar configuración</button>
 </form>
+<script>
+    const followupSlider = document.getElementById('followup_interval_slider');
+    const followupInput = document.getElementById('followup_interval_minutes');
+    if (followupSlider && followupInput) {
+        const syncFollowupValue = (value) => {
+            followupSlider.value = value;
+            followupInput.value = value;
+        };
+        followupSlider.addEventListener('input', () => syncFollowupValue(followupSlider.value));
+        followupInput.addEventListener('input', () => {
+            const value = followupInput.value === '' ? 0 : followupInput.value;
+            syncFollowupValue(value);
+        });
+    }
+</script>
 {% endblock %}

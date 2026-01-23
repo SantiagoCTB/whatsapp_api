@@ -505,6 +505,16 @@ def _ensure_ia_config_table(cursor):
             model_token TEXT NULL,
             system_prompt TEXT NULL,
             business_description TEXT NULL,
+            followup_message_1 TEXT NULL,
+            followup_message_2 TEXT NULL,
+            followup_message_3 TEXT NULL,
+            followup_media_url_1 TEXT NULL,
+            followup_media_url_2 TEXT NULL,
+            followup_media_url_3 TEXT NULL,
+            followup_media_tipo_1 VARCHAR(20) NULL,
+            followup_media_tipo_2 VARCHAR(20) NULL,
+            followup_media_tipo_3 VARCHAR(20) NULL,
+            followup_interval_minutes INT NULL,
             enabled TINYINT(1) NOT NULL DEFAULT 1,
             pdf_filename VARCHAR(255) NULL,
             pdf_original_name VARCHAR(255) NULL,
@@ -540,6 +550,76 @@ def _ensure_ia_config_table(cursor):
     if not has_business_description:
         cursor.execute(
             "ALTER TABLE ia_config ADD COLUMN business_description TEXT NULL AFTER system_prompt;"
+        )
+
+    cursor.execute("SHOW COLUMNS FROM ia_config LIKE 'followup_message_1';")
+    has_followup_message_1 = cursor.fetchone() is not None
+    if not has_followup_message_1:
+        cursor.execute(
+            "ALTER TABLE ia_config ADD COLUMN followup_message_1 TEXT NULL AFTER business_description;"
+        )
+
+    cursor.execute("SHOW COLUMNS FROM ia_config LIKE 'followup_message_2';")
+    has_followup_message_2 = cursor.fetchone() is not None
+    if not has_followup_message_2:
+        cursor.execute(
+            "ALTER TABLE ia_config ADD COLUMN followup_message_2 TEXT NULL AFTER followup_message_1;"
+        )
+
+    cursor.execute("SHOW COLUMNS FROM ia_config LIKE 'followup_message_3';")
+    has_followup_message_3 = cursor.fetchone() is not None
+    if not has_followup_message_3:
+        cursor.execute(
+            "ALTER TABLE ia_config ADD COLUMN followup_message_3 TEXT NULL AFTER followup_message_2;"
+        )
+
+    cursor.execute("SHOW COLUMNS FROM ia_config LIKE 'followup_interval_minutes';")
+    has_followup_interval = cursor.fetchone() is not None
+    if not has_followup_interval:
+        cursor.execute(
+            "ALTER TABLE ia_config ADD COLUMN followup_interval_minutes INT NULL AFTER followup_message_3;"
+        )
+
+    cursor.execute("SHOW COLUMNS FROM ia_config LIKE 'followup_media_url_1';")
+    has_followup_media_url_1 = cursor.fetchone() is not None
+    if not has_followup_media_url_1:
+        cursor.execute(
+            "ALTER TABLE ia_config ADD COLUMN followup_media_url_1 TEXT NULL AFTER followup_interval_minutes;"
+        )
+
+    cursor.execute("SHOW COLUMNS FROM ia_config LIKE 'followup_media_url_2';")
+    has_followup_media_url_2 = cursor.fetchone() is not None
+    if not has_followup_media_url_2:
+        cursor.execute(
+            "ALTER TABLE ia_config ADD COLUMN followup_media_url_2 TEXT NULL AFTER followup_media_url_1;"
+        )
+
+    cursor.execute("SHOW COLUMNS FROM ia_config LIKE 'followup_media_url_3';")
+    has_followup_media_url_3 = cursor.fetchone() is not None
+    if not has_followup_media_url_3:
+        cursor.execute(
+            "ALTER TABLE ia_config ADD COLUMN followup_media_url_3 TEXT NULL AFTER followup_media_url_2;"
+        )
+
+    cursor.execute("SHOW COLUMNS FROM ia_config LIKE 'followup_media_tipo_1';")
+    has_followup_media_tipo_1 = cursor.fetchone() is not None
+    if not has_followup_media_tipo_1:
+        cursor.execute(
+            "ALTER TABLE ia_config ADD COLUMN followup_media_tipo_1 VARCHAR(20) NULL AFTER followup_media_url_3;"
+        )
+
+    cursor.execute("SHOW COLUMNS FROM ia_config LIKE 'followup_media_tipo_2';")
+    has_followup_media_tipo_2 = cursor.fetchone() is not None
+    if not has_followup_media_tipo_2:
+        cursor.execute(
+            "ALTER TABLE ia_config ADD COLUMN followup_media_tipo_2 VARCHAR(20) NULL AFTER followup_media_tipo_1;"
+        )
+
+    cursor.execute("SHOW COLUMNS FROM ia_config LIKE 'followup_media_tipo_3';")
+    has_followup_media_tipo_3 = cursor.fetchone() is not None
+    if not has_followup_media_tipo_3:
+        cursor.execute(
+            "ALTER TABLE ia_config ADD COLUMN followup_media_tipo_3 VARCHAR(20) NULL AFTER followup_media_tipo_2;"
         )
 
     cursor.execute("SHOW COLUMNS FROM ia_config LIKE 'pdf_source_url';")
@@ -579,73 +659,6 @@ def _ensure_ia_config_table(cursor):
 
 
 def _get_ia_config(cursor):
-    try:
-        cursor.execute(
-            """
-            SELECT id, model_name, model_token, enabled, system_prompt, business_description,
-                   pdf_filename, pdf_original_name, pdf_mime, pdf_size, pdf_uploaded_at,
-                   pdf_source_url,
-                   pdf_ingest_state, pdf_ingest_started_at, pdf_ingest_finished_at,
-                   pdf_ingest_error
-              FROM ia_config
-          ORDER BY id DESC
-             LIMIT 1
-            """
-        )
-        rows = cursor.fetchall()
-    except Exception:
-        cursor.execute(
-            """
-            SELECT id, model_name, model_token, pdf_filename, pdf_original_name,
-                   pdf_mime, pdf_size, pdf_uploaded_at, pdf_source_url,
-                   pdf_ingest_state, pdf_ingest_started_at, pdf_ingest_finished_at,
-                   pdf_ingest_error
-              FROM ia_config
-          ORDER BY id DESC
-             LIMIT 1
-            """
-        )
-        rows = cursor.fetchall()
-
-    if not rows:
-        return None
-
-    row = rows[0]
-
-    if len(row) in {8, 9}:
-        row = list(row)
-        if len(row) == 8 or (len(row) == 9 and isinstance(row[3], str)):
-            row.insert(3, 1)
-        while len(row) < 10:
-            row.append(None)
-        while len(row) < 15:
-            row.append(None)
-        row = tuple(row)
-    elif len(row) == 13:
-        row = list(row)
-        row.insert(3, 1)
-        row.insert(4, None)
-        while len(row) < 15:
-            row.append(None)
-        row = tuple(row)
-    elif len(row) == 14:
-        row = list(row)
-        if isinstance(row[3], str):
-            row.insert(3, 1)
-            row.insert(4, None)
-        else:
-            row.insert(4, None)
-        while len(row) < 15:
-            row.append(None)
-        row = tuple(row)
-
-    if len(row) == 15:
-        row = list(row)
-        row.insert(5, None)
-        row = tuple(row)
-    elif len(row) < 16:
-        row = tuple(list(row) + [None] * (16 - len(row)))
-
     keys = [
         "id",
         "model_name",
@@ -653,6 +666,16 @@ def _get_ia_config(cursor):
         "enabled",
         "system_prompt",
         "business_description",
+        "followup_message_1",
+        "followup_message_2",
+        "followup_message_3",
+        "followup_interval_minutes",
+        "followup_media_url_1",
+        "followup_media_url_2",
+        "followup_media_url_3",
+        "followup_media_tipo_1",
+        "followup_media_tipo_2",
+        "followup_media_tipo_3",
         "pdf_filename",
         "pdf_original_name",
         "pdf_mime",
@@ -665,7 +688,101 @@ def _get_ia_config(cursor):
         "pdf_ingest_error",
     ]
 
-    return {key: value for key, value in zip(keys, row)}
+    queries = [
+        (
+            """
+            SELECT id, model_name, model_token, enabled, system_prompt, business_description,
+                   followup_message_1, followup_message_2, followup_message_3, followup_interval_minutes,
+                   followup_media_url_1, followup_media_url_2, followup_media_url_3,
+                   followup_media_tipo_1, followup_media_tipo_2, followup_media_tipo_3,
+                   pdf_filename, pdf_original_name, pdf_mime, pdf_size, pdf_uploaded_at,
+                   pdf_source_url, pdf_ingest_state, pdf_ingest_started_at, pdf_ingest_finished_at,
+                   pdf_ingest_error
+              FROM ia_config
+          ORDER BY id DESC
+             LIMIT 1
+            """,
+            keys,
+        ),
+        (
+            """
+            SELECT id, model_name, model_token, enabled, system_prompt, business_description,
+                   pdf_filename, pdf_original_name, pdf_mime, pdf_size, pdf_uploaded_at,
+                   pdf_source_url, pdf_ingest_state, pdf_ingest_started_at, pdf_ingest_finished_at,
+                   pdf_ingest_error
+              FROM ia_config
+          ORDER BY id DESC
+             LIMIT 1
+            """,
+            [
+                "id",
+                "model_name",
+                "model_token",
+                "enabled",
+                "system_prompt",
+                "business_description",
+                "pdf_filename",
+                "pdf_original_name",
+                "pdf_mime",
+                "pdf_size",
+                "pdf_uploaded_at",
+                "pdf_source_url",
+                "pdf_ingest_state",
+                "pdf_ingest_started_at",
+                "pdf_ingest_finished_at",
+                "pdf_ingest_error",
+            ],
+        ),
+        (
+            """
+            SELECT id, model_name, model_token, pdf_filename, pdf_original_name,
+                   pdf_mime, pdf_size, pdf_uploaded_at, pdf_source_url,
+                   pdf_ingest_state, pdf_ingest_started_at, pdf_ingest_finished_at,
+                   pdf_ingest_error
+              FROM ia_config
+          ORDER BY id DESC
+             LIMIT 1
+            """,
+            [
+                "id",
+                "model_name",
+                "model_token",
+                "pdf_filename",
+                "pdf_original_name",
+                "pdf_mime",
+                "pdf_size",
+                "pdf_uploaded_at",
+                "pdf_source_url",
+                "pdf_ingest_state",
+                "pdf_ingest_started_at",
+                "pdf_ingest_finished_at",
+                "pdf_ingest_error",
+            ],
+        ),
+    ]
+
+    row = None
+    row_keys = None
+    for query, query_keys in queries:
+        try:
+            cursor.execute(query)
+            row = cursor.fetchone()
+            row_keys = query_keys
+            break
+        except Exception:
+            continue
+
+    if not row:
+        return None
+
+    data = {key: None for key in keys}
+    for key, value in zip(row_keys or [], row):
+        data[key] = value
+
+    if data["enabled"] is None:
+        data["enabled"] = 1
+
+    return data
 
 
 def _botones_opciones_column(c, conn):
@@ -1270,6 +1387,22 @@ def configuracion_ia():
             business_description = (
                 (request.form.get('business_description') or '').strip() or None
             )
+            followup_message_1 = (request.form.get('followup_message_1') or '').strip() or None
+            followup_message_2 = (request.form.get('followup_message_2') or '').strip() or None
+            followup_message_3 = (request.form.get('followup_message_3') or '').strip() or None
+            followup_media_url_1 = (request.form.get('followup_media_url_1') or '').strip() or None
+            followup_media_url_2 = (request.form.get('followup_media_url_2') or '').strip() or None
+            followup_media_url_3 = (request.form.get('followup_media_url_3') or '').strip() or None
+            followup_media_tipo_1 = (request.form.get('followup_media_tipo_1') or '').strip() or None
+            followup_media_tipo_2 = (request.form.get('followup_media_tipo_2') or '').strip() or None
+            followup_media_tipo_3 = (request.form.get('followup_media_tipo_3') or '').strip() or None
+            followup_interval_minutes = request.form.get('followup_interval_minutes')
+            try:
+                followup_interval_minutes = int(followup_interval_minutes)
+            except (TypeError, ValueError):
+                followup_interval_minutes = None
+            if followup_interval_minutes is not None and followup_interval_minutes < 0:
+                followup_interval_minutes = 0
             catalog_url = (request.form.get('catalogo_url') or '').strip()
             pdf_file = request.files.get('catalogo_pdf')
             pdf_dir = _media_root()
@@ -1386,6 +1519,16 @@ def configuracion_ia():
                                system_prompt = %s,
                                enabled = %s,
                                business_description = %s,
+                               followup_message_1 = %s,
+                               followup_message_2 = %s,
+                               followup_message_3 = %s,
+                               followup_interval_minutes = %s,
+                               followup_media_url_1 = %s,
+                               followup_media_url_2 = %s,
+                               followup_media_url_3 = %s,
+                               followup_media_tipo_1 = %s,
+                               followup_media_tipo_2 = %s,
+                               followup_media_tipo_3 = %s,
                                pdf_filename = %s,
                                pdf_original_name = %s,
                                pdf_mime = %s,
@@ -1404,6 +1547,16 @@ def configuracion_ia():
                             system_prompt,
                             ia_enabled,
                             business_description,
+                            followup_message_1,
+                            followup_message_2,
+                            followup_message_3,
+                            followup_interval_minutes,
+                            followup_media_url_1,
+                            followup_media_url_2,
+                            followup_media_url_3,
+                            followup_media_tipo_1,
+                            followup_media_tipo_2,
+                            followup_media_tipo_3,
                             new_pdf['stored_name'] if new_pdf else ia_config.get('pdf_filename'),
                             new_pdf['original_name'] if new_pdf else ia_config.get('pdf_original_name'),
                             new_pdf['mime'] if new_pdf else ia_config.get('pdf_mime'),
@@ -1422,10 +1575,14 @@ def configuracion_ia():
                         """
                         INSERT INTO ia_config
                             (model_name, model_token, system_prompt, enabled, business_description,
+                             followup_message_1, followup_message_2, followup_message_3,
+                             followup_interval_minutes,
+                             followup_media_url_1, followup_media_url_2, followup_media_url_3,
+                             followup_media_tipo_1, followup_media_tipo_2, followup_media_tipo_3,
                              pdf_filename, pdf_original_name,
                              pdf_mime, pdf_size, pdf_uploaded_at, pdf_source_url, pdf_ingest_state,
                              pdf_ingest_started_at, pdf_ingest_finished_at, pdf_ingest_error)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                         """,
                         (
                             ia_model,
@@ -1433,6 +1590,16 @@ def configuracion_ia():
                             system_prompt,
                             ia_enabled,
                             business_description,
+                            followup_message_1,
+                            followup_message_2,
+                            followup_message_3,
+                            followup_interval_minutes,
+                            followup_media_url_1,
+                            followup_media_url_2,
+                            followup_media_url_3,
+                            followup_media_tipo_1,
+                            followup_media_tipo_2,
+                            followup_media_tipo_3,
                             new_pdf['stored_name'] if new_pdf else None,
                             new_pdf['original_name'] if new_pdf else None,
                             new_pdf['mime'] if new_pdf else None,
