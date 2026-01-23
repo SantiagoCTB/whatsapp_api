@@ -275,6 +275,7 @@ def notify_session_closed(numero: str, *, origin: str = "timeout") -> bool:
         "Mensaje de cierre de sesión enviado",
         extra=log_extra,
     )
+    update_chat_state(numero, None, "inactivo")
     return True
 
 RELEVANT_HEADERS = (
