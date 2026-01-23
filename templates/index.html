@@ -227,6 +227,7 @@
       const chatListEl = document.getElementById('chatList');
       const chatBoxEl  = document.getElementById('chatBox');
       const chatWindowEl = document.querySelector('.chatWindow');
+      const buscadorInput = document.getElementById('buscador');
       const botoneraEl = document.getElementById('botonera');
       const replyPreviewEl = document.getElementById('replyPreview');
       const typingIndicatorEl = document.createElement('div');
@@ -1616,7 +1617,13 @@
 
       function fetchChatList(allowRetry = true) {
         hideChatContextMenu();
-        fetch('/get_chat_list', { cache: 'no-store' })
+        const params = new URLSearchParams();
+        if (buscadorInput && buscadorInput.value.trim()) {
+          params.set('q', buscadorInput.value.trim());
+        }
+        const queryString = params.toString();
+        const requestUrl = queryString ? `/get_chat_list?${queryString}` : '/get_chat_list';
+        fetch(requestUrl, { cache: 'no-store' })
           .then(resp => {
             if (!resp.ok) throw new Error(`No se pudo cargar la lista de chats (HTTP ${resp.status})`);
             return resp.json();
@@ -1628,7 +1635,7 @@
           .catch(err => {
             console.error('Error al cargar la lista de chats', err);
             if (allowRetry) {
-              fetch('/get_chat_list')
+              fetch(requestUrl)
                 .then(resp => {
                   if (!resp.ok) throw new Error(`No se pudo cargar la lista de chats (HTTP ${resp.status})`);
                   return resp.json();
@@ -2584,12 +2591,9 @@
       updateSendButtons();
 
       // Filtrar chats
-      document.getElementById('buscador').addEventListener('input', function(){
-        const v = this.value.toLowerCase();
-        chatListEl.querySelectorAll('li').forEach(li => {
-          li.style.display = li.textContent.toLowerCase().includes(v) ? '' : 'none';
-        });
-      });
+      if (buscadorInput) {
+        buscadorInput.addEventListener('input', () => fetchChatList());
+      }
 
       // Inicializa
       setupSocket();
