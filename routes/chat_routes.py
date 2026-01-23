@@ -110,6 +110,59 @@ def _extract_words(text: str) -> list[str]:
     return [word for word in normalized.split() if word]
 
 
+def _get_session_roles(*, include_legacy: bool = True) -> list[str]:
+    roles = session.get('roles') or []
+    single_role = session.get('rol')
+    if not roles and single_role:
+        roles = [single_role]
+    if isinstance(roles, str):
+        roles = [roles]
+    if include_legacy and single_role and single_role not in roles:
+        roles.append(single_role)
+    return [role for role in roles if role]
+
+
+def _get_role_ids(cursor, roles: list[str]) -> list[int]:
+    if not roles:
+        return []
+    placeholders = ','.join(['%s'] * len(roles))
+    cursor.execute(
+        f"SELECT id FROM roles WHERE keyword IN ({placeholders})",
+        tuple(roles),
+    )
+    return [row[0] for row in cursor.fetchall() if row and row[0] is not None]
+
+
+def _get_session_user_id(cursor) -> int | None:
+    username = (session.get('user') or '').strip()
+    if not username:
+        return None
+    cursor.execute("SELECT id FROM usuarios WHERE username = %s", (username,))
+    row = cursor.fetchone()
+    return row[0] if row else None
+
+
+def _has_chat_access(cursor, numero: str, role_ids: list[int], user_id: int | None) -> bool:
+    if not role_ids or user_id is None:
+        return False
+    placeholders = ','.join(['%s'] * len(role_ids))
+    cursor.execute(
+        f"""
+        SELECT 1
+          FROM chat_roles cr
+          LEFT JOIN chat_assignments ca
+            ON ca.numero = cr.numero
+           AND ca.role_id = cr.role_id
+         WHERE cr.numero = %s
+           AND cr.role_id IN ({placeholders})
+           AND (ca.user_id = %s OR ca.user_id IS NULL)
+         LIMIT 1
+        """,
+        (numero, *role_ids, user_id),
+    )
+    return cursor.fetchone() is not None
+
+
 def _select_matching_rule(rules, text_norm: str | None):
     wildcard = None
     for rule in rules:
@@ -656,30 +709,39 @@ def index():
 
     conn = get_connection()
     c    = conn.cursor()
-    rol  = session.get('rol')
-    c.execute("SELECT id FROM roles WHERE keyword=%s", (rol,))
-    row = c.fetchone()
-    role_id = row[0] if row else None
+    roles = _get_session_roles()
+    role_ids = _get_role_ids(c, roles)
+    role_id = role_ids[0] if role_ids else None
+    user_id = _get_session_user_id(c)
     ai_enabled = _is_ai_enabled(c)
 
     # Lista de chats únicos filtrados por rol
-    if rol == 'admin':
+    if 'admin' in roles:
         c.execute(
             "SELECT DISTINCT numero FROM mensajes "
             "WHERE numero NOT IN (SELECT numero FROM hidden_chats)"
         )
     else:
-        c.execute(
-            """
-            SELECT DISTINCT m.numero
-            FROM mensajes m
-            INNER JOIN chat_roles cr ON m.numero = cr.numero
-            WHERE cr.role_id = %s
-              AND m.numero NOT IN (SELECT numero FROM hidden_chats)
-            """,
-            (role_id,)
-        )
-    numeros = [row[0] for row in c.fetchall()]
+        if role_ids and user_id is not None:
+            placeholders = ','.join(['%s'] * len(role_ids))
+            c.execute(
+                f"""
+                SELECT DISTINCT m.numero
+                FROM mensajes m
+                INNER JOIN chat_roles cr ON m.numero = cr.numero
+                LEFT JOIN chat_assignments ca
+                  ON ca.numero = cr.numero
+                 AND ca.role_id = cr.role_id
+                WHERE cr.role_id IN ({placeholders})
+                  AND (ca.user_id = %s OR ca.user_id IS NULL)
+                  AND m.numero NOT IN (SELECT numero FROM hidden_chats)
+                """,
+                (*role_ids, user_id),
+            )
+        else:
+            numeros = []
+    if 'numeros' not in locals():
+        numeros = [row[0] for row in c.fetchall()]
 
     chats = []
     for numero in numeros:
@@ -718,7 +780,7 @@ def index():
         'index.html',
         chats=chats,
         botones=botones,
-        rol=rol,
+        rol=roles[0] if roles else None,
         role_id=role_id,
         roles=roles_db,
         chat_state_definitions=chat_state_definitions,
@@ -732,36 +794,14 @@ def get_chat(numero):
 
     conn = get_connection()
     c    = conn.cursor()
-    roles = session.get('roles') or []
-    single_role = session.get('rol')
-    if not roles and single_role:
-        roles = [single_role]
-    if isinstance(roles, str):
-        roles = [roles]
-
+    roles = _get_session_roles()
     is_admin = 'admin' in roles
-    role_ids = []
-
-    if not is_admin and roles:
-        placeholders = ','.join(['%s'] * len(roles))
-        c.execute(
-            f"SELECT id FROM roles WHERE keyword IN ({placeholders})",
-            tuple(roles),
-        )
-        role_ids = [row[0] for row in c.fetchall()]
+    role_ids = _get_role_ids(c, roles)
+    user_id = _get_session_user_id(c)
 
     # Verificar que el usuario tenga acceso al número
     if not is_admin:
-        if not role_ids:
-            conn.close()
-            return jsonify({'error': 'No autorizado'}), 403
-
-        placeholders = ','.join(['%s'] * len(role_ids))
-        c.execute(
-            f"SELECT 1 FROM chat_roles WHERE numero = %s AND role_id IN ({placeholders})",
-            (numero, *role_ids),
-        )
-        if not c.fetchone():
+        if not _has_chat_access(c, numero, role_ids, user_id):
             conn.close()
             return jsonify({'error': 'No autorizado'}), 403
     if _table_exists(c, 'flow_responses'):
@@ -829,18 +869,13 @@ def typing_signal():
     if not numero:
         return jsonify({'error': 'Número requerido'}), 400
 
-    rol = session.get('rol')
-    if rol != 'admin':
+    roles = _get_session_roles()
+    if 'admin' not in roles:
         conn = get_connection()
         c = conn.cursor()
-        c.execute("SELECT id FROM roles WHERE keyword=%s", (rol,))
-        row = c.fetchone()
-        role_id = row[0] if row else None
-        c.execute(
-            "SELECT 1 FROM chat_roles WHERE numero = %s AND role_id = %s",
-            (numero, role_id),
-        )
-        autorizado = c.fetchone()
+        role_ids = _get_role_ids(c, roles)
+        user_id = _get_session_user_id(c)
+        autorizado = _has_chat_access(c, numero, role_ids, user_id)
         conn.close()
         if not autorizado:
             return jsonify({'error': 'No autorizado'}), 403
@@ -901,33 +936,50 @@ def respuestas():
 
     conn = get_connection()
     c = conn.cursor()
-    rol = session.get('rol')
-    role_id = None
-    if rol != 'admin':
-        c.execute("SELECT id FROM roles WHERE keyword=%s", (rol,))
-        row = c.fetchone()
-        role_id = row[0] if row else None
-        c.execute(
-            """
-            SELECT DISTINCT m.numero
-              FROM mensajes m
-              JOIN chat_roles cr ON m.numero = cr.numero
-             WHERE cr.role_id = %s
-              AND m.numero NOT IN (SELECT numero FROM hidden_chats)
-            """,
-            (role_id,),
-        )
+    roles = _get_session_roles()
+    is_admin = 'admin' in roles
+    role_ids = _get_role_ids(c, roles)
+    user_id = _get_session_user_id(c)
+    if not is_admin:
+        if role_ids and user_id is not None:
+            placeholders = ','.join(['%s'] * len(role_ids))
+            c.execute(
+                f"""
+                SELECT DISTINCT m.numero
+                  FROM mensajes m
+                  JOIN chat_roles cr ON m.numero = cr.numero
+                  LEFT JOIN chat_assignments ca
+                    ON ca.numero = cr.numero
+                   AND ca.role_id = cr.role_id
+                 WHERE cr.role_id IN ({placeholders})
+                   AND (ca.user_id = %s OR ca.user_id IS NULL)
+                   AND m.numero NOT IN (SELECT numero FROM hidden_chats)
+                """,
+                (*role_ids, user_id),
+            )
+        else:
+            numeros = []
     else:
         c.execute(
             "SELECT DISTINCT numero FROM mensajes "
             "WHERE numero NOT IN (SELECT numero FROM hidden_chats)"
         )
-    numeros = [row[0] for row in c.fetchall()]
+    if 'numeros' not in locals():
+        numeros = [row[0] for row in c.fetchall()]
 
-    if rol != 'admin' and not numeros and role_id is not None:
+    if not is_admin and not numeros and role_ids and user_id is not None:
+        placeholders = ','.join(['%s'] * len(role_ids))
         c.execute(
-            "SELECT DISTINCT numero FROM chat_roles WHERE role_id = %s",
-            (role_id,),
+            f"""
+            SELECT DISTINCT cr.numero
+              FROM chat_roles cr
+              LEFT JOIN chat_assignments ca
+                ON ca.numero = cr.numero
+               AND ca.role_id = cr.role_id
+             WHERE cr.role_id IN ({placeholders})
+               AND (ca.user_id = %s OR ca.user_id IS NULL)
+            """,
+            (*role_ids, user_id),
         )
         numeros = [row[0] for row in c.fetchall()]
 
@@ -959,7 +1011,7 @@ def respuestas():
     )
 
     if has_flow_table:
-        if rol == 'admin':
+        if is_admin:
             c.execute(
                 base_query + " ORDER BY fr.timestamp DESC",
             )
@@ -1067,38 +1119,16 @@ def send_message():
     conn = get_connection()
     c    = conn.cursor()
 
-    roles = session.get('roles') or []
-    single_role = session.get('rol')
-    if not roles and single_role:
-        roles = [single_role]
-    if isinstance(roles, str):
-        roles = [roles]
-
-    # Compatibilidad con código antiguo que aún lee ``session['rol']``
-    legacy_role = session.get('rol')
-    if legacy_role and legacy_role not in roles:
-        roles.append(legacy_role)
-
+    roles = _get_session_roles()
     is_admin = 'admin' in roles
     autorizado = False
 
     if is_admin:
         autorizado = True
-    elif roles:
-        placeholders = ','.join(['%s'] * len(roles))
-        c.execute(
-            f"SELECT id FROM roles WHERE keyword IN ({placeholders})",
-            tuple(roles),
-        )
-        role_ids = [row[0] for row in c.fetchall() if row and row[0] is not None]
-
-        if role_ids:
-            placeholders = ','.join(['%s'] * len(role_ids))
-            c.execute(
-                f"SELECT 1 FROM chat_roles WHERE numero = %s AND role_id IN ({placeholders}) LIMIT 1",
-                (numero, *role_ids),
-            )
-            autorizado = c.fetchone()
+    else:
+        role_ids = _get_role_ids(c, roles)
+        user_id = _get_session_user_id(c)
+        autorizado = _has_chat_access(c, numero, role_ids, user_id)
     conn.close()
     if not autorizado:
         return jsonify({'error': 'No autorizado'}), 403
@@ -1159,23 +1189,10 @@ def get_chat_list():
     search_term = (request.args.get("q") or "").strip()
     search_terms = _extract_words(search_term)
 
-    roles = session.get('roles') or []
-    single_role = session.get('rol')
-    if not roles and single_role:
-        roles = [single_role]
-    if isinstance(roles, str):
-        roles = [roles]
-
+    roles = _get_session_roles()
     is_admin = 'admin' in roles
-    role_ids = []
-
-    if not is_admin and roles:
-        placeholders = ','.join(['%s'] * len(roles))
-        c.execute(
-            f"SELECT id FROM roles WHERE keyword IN ({placeholders})",
-            tuple(roles),
-        )
-        role_ids = [row[0] for row in c.fetchall()]
+    role_ids = _get_role_ids(c, roles)
+    user_id = _get_session_user_id(c)
 
     # Únicos números filtrados por rol
     if search_terms:
@@ -1184,17 +1201,21 @@ def get_chat_list():
                 "SELECT numero, mensaje FROM mensajes "
                 "WHERE numero NOT IN (SELECT numero FROM hidden_chats)"
             )
-        elif role_ids:
+        elif role_ids and user_id is not None:
             placeholders = ','.join(['%s'] * len(role_ids))
             c.execute(
                 f"""
                 SELECT m.numero, m.mensaje
                 FROM mensajes m
                 INNER JOIN chat_roles cr ON m.numero = cr.numero
+                LEFT JOIN chat_assignments ca
+                  ON ca.numero = cr.numero
+                 AND ca.role_id = cr.role_id
                 WHERE cr.role_id IN ({placeholders})
+                  AND (ca.user_id = %s OR ca.user_id IS NULL)
                   AND m.numero NOT IN (SELECT numero FROM hidden_chats)
                 """,
-                tuple(role_ids),
+                (*role_ids, user_id),
             )
         else:
             numeros = []
@@ -1218,17 +1239,21 @@ def get_chat_list():
                 "SELECT DISTINCT numero FROM mensajes "
                 "WHERE numero NOT IN (SELECT numero FROM hidden_chats)"
             )
-        elif role_ids:
+        elif role_ids and user_id is not None:
             placeholders = ','.join(['%s'] * len(role_ids))
             c.execute(
                 f"""
                 SELECT DISTINCT m.numero
                 FROM mensajes m
                 INNER JOIN chat_roles cr ON m.numero = cr.numero
+                LEFT JOIN chat_assignments ca
+                  ON ca.numero = cr.numero
+                 AND ca.role_id = cr.role_id
                 WHERE cr.role_id IN ({placeholders})
+                  AND (ca.user_id = %s OR ca.user_id IS NULL)
                   AND m.numero NOT IN (SELECT numero FROM hidden_chats)
                 """,
-                tuple(role_ids),
+                (*role_ids, user_id),
             )
         else:
             numeros = []
@@ -1493,8 +1518,8 @@ def assign_chat_role():
     if 'user' not in session:
         return jsonify({'error': 'No autorizado'}), 401
 
-    rol = session.get('rol')
-    if rol != 'admin':
+    roles = _get_session_roles()
+    if 'admin' not in roles:
         return jsonify({'error': 'No autorizado'}), 403
 
     data = request.get_json()
@@ -1543,15 +1568,13 @@ def send_image():
     origen  = request.form.get('origen', 'asesor')
 
     # Verificar rol
-    rol = session.get('rol')
-    if rol != 'admin':
+    roles = _get_session_roles()
+    if 'admin' not in roles:
         conn = get_connection()
         c = conn.cursor()
-        c.execute("SELECT id FROM roles WHERE keyword=%s", (rol,))
-        row = c.fetchone()
-        role_id = row[0] if row else None
-        c.execute("SELECT 1 FROM chat_roles WHERE numero = %s AND role_id = %s", (numero, role_id))
-        autorizado = c.fetchone()
+        role_ids = _get_role_ids(c, roles)
+        user_id = _get_session_user_id(c)
+        autorizado = _has_chat_access(c, numero, role_ids, user_id)
         conn.close()
         if not autorizado:
             return jsonify({'error':'No autorizado'}), 403
@@ -1602,15 +1625,13 @@ def send_document():
     caption  = request.form.get('caption','')
     document = request.files.get('document')
 
-    rol = session.get('rol')
-    if rol != 'admin':
+    roles = _get_session_roles()
+    if 'admin' not in roles:
         conn = get_connection()
         c    = conn.cursor()
-        c.execute("SELECT id FROM roles WHERE keyword=%s", (rol,))
-        row = c.fetchone()
-        role_id = row[0] if row else None
-        c.execute("SELECT 1 FROM chat_roles WHERE numero = %s AND role_id = %s", (numero, role_id))
-        autorizado = c.fetchone()
+        role_ids = _get_role_ids(c, roles)
+        user_id = _get_session_user_id(c)
+        autorizado = _has_chat_access(c, numero, role_ids, user_id)
         conn.close()
         if not autorizado:
             return jsonify({'error':'No autorizado'}), 403
@@ -1660,15 +1681,13 @@ def send_audio():
     is_instagram = channel == "instagram"
     is_whatsapp = channel == "whatsapp"
 
-    rol = session.get('rol')
-    if rol != 'admin':
+    roles = _get_session_roles()
+    if 'admin' not in roles:
         conn = get_connection()
         c = conn.cursor()
-        c.execute("SELECT id FROM roles WHERE keyword=%s", (rol,))
-        row = c.fetchone()
-        role_id = row[0] if row else None
-        c.execute("SELECT 1 FROM chat_roles WHERE numero = %s AND role_id = %s", (numero, role_id))
-        autorizado = c.fetchone()
+        role_ids = _get_role_ids(c, roles)
+        user_id = _get_session_user_id(c)
+        autorizado = _has_chat_access(c, numero, role_ids, user_id)
         conn.close()
         if not autorizado:
             return jsonify({'error':'No autorizado'}), 403
@@ -1912,15 +1931,13 @@ def send_video():
     video   = request.files.get('video')
     origen  = request.form.get('origen', 'asesor')
 
-    rol = session.get('rol')
-    if rol != 'admin':
+    roles = _get_session_roles()
+    if 'admin' not in roles:
         conn = get_connection()
         c = conn.cursor()
-        c.execute("SELECT id FROM roles WHERE keyword=%s", (rol,))
-        row = c.fetchone()
-        role_id = row[0] if row else None
-        c.execute("SELECT 1 FROM chat_roles WHERE numero = %s AND role_id = %s", (numero, role_id))
-        autorizado = c.fetchone()
+        role_ids = _get_role_ids(c, roles)
+        user_id = _get_session_user_id(c)
+        autorizado = _has_chat_access(c, numero, role_ids, user_id)
         conn.close()
         if not autorizado:
             return jsonify({'error':'No autorizado'}), 403
