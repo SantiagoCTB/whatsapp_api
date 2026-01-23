@@ -804,6 +804,11 @@ def index():
 
     conn.close()
     chat_state_definitions, _ = _load_chat_state_definitions()
+    current_tenant = tenants.get_current_tenant()
+    tenant_name = None
+    if current_tenant:
+        tenant_name = current_tenant.name or current_tenant.tenant_key
+
     return render_template(
         'index.html',
         chats=chats,
@@ -813,6 +818,7 @@ def index():
         roles=roles_db,
         chat_state_definitions=chat_state_definitions,
         ai_enabled=ai_enabled,
+        tenant_name=tenant_name,
     )
 
 @chat_bp.route('/get_chat/<numero>')
