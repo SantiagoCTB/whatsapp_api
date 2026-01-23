@@ -1333,6 +1333,28 @@ def dispatch_rule(
     platform: str | None = None,
 ):
     """Envía la respuesta definida en una regla y asigna roles si aplica."""
+    def _apply_rule_role(role_keyword: str | None) -> None:
+        if not (role_keyword or "").strip():
+            return
+        role_keyword = role_keyword.strip()
+        conn = get_connection(); c = conn.cursor()
+        c.execute("SELECT id FROM roles WHERE keyword=%s", (role_keyword,))
+        role = c.fetchone()
+        if role:
+            # Mantener únicamente el rol definido por la regla para evitar
+            # asignaciones accidentales múltiples por coincidencia de palabras.
+            c.execute(
+                "DELETE FROM chat_roles WHERE numero = %s AND role_id != %s",
+                (numero, role[0]),
+            )
+            c.execute(
+                "INSERT IGNORE INTO chat_roles (numero, role_id) VALUES (%s, %s)",
+                (numero, role[0]),
+            )
+            conn.commit()
+        conn.close()
+        assign_chat_to_active_user(numero, role_keyword)
+
     if visited is None:
         visited = set()
     if not platform:
@@ -1364,6 +1386,7 @@ def dispatch_rule(
             history_step=None,
             message_step=current_step,
         )
+        _apply_rule_role(rol_kw)
         next_step = _resolve_next_step(next_step_raw, selected_option_id, opts)
         if next_step:
             advance_steps(numero, next_step, visited=visited, platform=platform)
@@ -1371,6 +1394,7 @@ def dispatch_rule(
 
     media_list = media_urls.split('||') if media_urls else []
     if tipo_resp in {'texto', 'lista', 'boton'} and not (resp or '').strip() and not media_list:
+        _apply_rule_role(rol_kw)
         next_step = _resolve_next_step(next_step_raw, selected_option_id, opts)
         advance_steps(numero, next_step, visited=visited, platform=platform)
         return
@@ -1401,24 +1425,7 @@ def dispatch_rule(
             step=current_step,
             regla_id=regla_id,
         )
-    if rol_kw:
-        conn = get_connection(); c = conn.cursor()
-        c.execute("SELECT id FROM roles WHERE keyword=%s", (rol_kw,))
-        role = c.fetchone()
-        if role:
-            # Mantener únicamente el rol definido por la regla para evitar
-            # asignaciones accidentales múltiples por coincidencia de palabras.
-            c.execute(
-                "DELETE FROM chat_roles WHERE numero = %s AND role_id != %s",
-                (numero, role[0]),
-            )
-            c.execute(
-                "INSERT IGNORE INTO chat_roles (numero, role_id) VALUES (%s, %s)",
-                (numero, role[0])
-            )
-            conn.commit()
-        conn.close()
-        assign_chat_to_active_user(numero, rol_kw)
+    _apply_rule_role(rol_kw)
     next_step = _resolve_next_step(next_step_raw, selected_option_id, opts)
     advance_steps(numero, next_step, visited=visited, platform=platform)
 
