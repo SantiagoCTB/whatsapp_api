@@ -1339,6 +1339,7 @@ def get_chat_list():
             "estado_color": estado_def.get("color") if estado_def else None,
             "estado_text_color": estado_def.get("text_color") if estado_def else None,
             "last_timestamp": last_ts,
+            "last_message": ultimo,
             "first_link_url": primer_link,
         })
 
