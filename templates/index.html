@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% block title %}Agestion{% endblock %}
+{% block title %}WHAPCO{% if tenant_name %} - {{ tenant_name }}{% endif %}{% endblock %}
 {% block body_class %}chat{% endblock %}
 {% block content %}
   <button id="menuToggle">☰</button>
