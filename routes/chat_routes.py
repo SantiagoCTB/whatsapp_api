@@ -1149,6 +1149,7 @@ def get_chat_list():
 
     conn = get_connection()
     c    = conn.cursor()
+    search_term = (request.args.get("q") or "").strip()
 
     roles = session.get('roles') or []
     single_role = session.get('rol')
@@ -1170,12 +1171,25 @@ def get_chat_list():
 
     # Únicos números filtrados por rol
     if is_admin:
-        c.execute(
-            "SELECT DISTINCT numero FROM mensajes "
-            "WHERE numero NOT IN (SELECT numero FROM hidden_chats)"
-        )
+        if search_term:
+            c.execute(
+                "SELECT DISTINCT numero FROM mensajes "
+                "WHERE numero NOT IN (SELECT numero FROM hidden_chats) "
+                "AND mensaje LIKE %s",
+                (f"%{search_term}%",),
+            )
+        else:
+            c.execute(
+                "SELECT DISTINCT numero FROM mensajes "
+                "WHERE numero NOT IN (SELECT numero FROM hidden_chats)"
+            )
     elif role_ids:
         placeholders = ','.join(['%s'] * len(role_ids))
+        params = list(role_ids)
+        message_filter = ""
+        if search_term:
+            message_filter = " AND m.mensaje LIKE %s"
+            params.append(f"%{search_term}%")
         c.execute(
             f"""
             SELECT DISTINCT m.numero
@@ -1183,8 +1197,9 @@ def get_chat_list():
             INNER JOIN chat_roles cr ON m.numero = cr.numero
             WHERE cr.role_id IN ({placeholders})
               AND m.numero NOT IN (SELECT numero FROM hidden_chats)
+              {message_filter}
             """,
-            tuple(role_ids),
+            tuple(params),
         )
     else:
         numeros = []
