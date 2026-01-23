@@ -1896,8 +1896,18 @@ def handle_text_message(
         )
         if handled:
             return
-        _apply_role_for_step(numero, get_current_step(numero), platform)
-        _reply_with_ai(numero, texto)
+        current_step = get_current_step(numero)
+        current_step_norm = _normalize_step_name(current_step)
+        _apply_role_for_step(numero, current_step, platform)
+        if current_step_norm == "ia_chat":
+            _reply_with_ai(
+                numero,
+                texto,
+                set_step=False,
+                message_step=current_step,
+            )
+        else:
+            _reply_with_ai(numero, texto)
         return
 
     process_step_chain(
