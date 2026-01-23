@@ -1360,7 +1360,9 @@ def get_chat_list():
             if stored_estado in LEGACY_STATE_MAP:
                 stored_estado = LEGACY_STATE_MAP[stored_estado]
 
-            if stored_estado == "asesor" or requiere_asesor:
+            if stored_estado:
+                estado = stored_estado
+            elif requiere_asesor:
                 estado = "asesor"
             elif last_tipo and str(last_tipo).startswith("bot"):
                 estado = "esperando_respuesta"
@@ -1391,8 +1393,6 @@ def get_chat_list():
                             estado = "error_flujo"
                         else:
                             estado = "en_flujo"
-            elif stored_estado:
-                estado = stored_estado
 
         estado_def = chat_state_def_map.get(estado) if estado else None
 
