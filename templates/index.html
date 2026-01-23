@@ -264,6 +264,15 @@
           chatStateDefinitionMap.set(def.key, def);
         }
       });
+      const roleNameByKeyword = new Map();
+      availableRoles.forEach(roleEntry => {
+        if (!Array.isArray(roleEntry)) return;
+        const roleName = roleEntry[1];
+        const roleKeyword = roleEntry[2];
+        if (roleKeyword) {
+          roleNameByKeyword.set(roleKeyword, roleName || roleKeyword);
+        }
+      });
       const bogotaFormatter = new Intl.DateTimeFormat('es-CO', {
         timeZone: 'America/Bogota',
         hour12: false,
@@ -1522,7 +1531,18 @@
           chatData.estado
         ];
         if (Array.isArray(chatData.roles_kw)) {
-          parts.push(...chatData.roles_kw);
+          chatData.roles_kw.forEach(roleKeyword => {
+            if (!roleKeyword) return;
+            parts.push(roleKeyword);
+            const roleName = roleNameByKeyword.get(roleKeyword);
+            if (roleName) {
+              parts.push(roleName);
+            }
+            const badge = getRoleBadge(roleKeyword);
+            if (badge) {
+              parts.push(badge);
+            }
+          });
         }
         return normalizeChatFilterValue(parts.filter(Boolean).join(' '));
       }
