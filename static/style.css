@@ -963,6 +963,79 @@
       margin-bottom: 16px;
     }
 
+    .followup-section {
+      border: 1px solid #e3e7ef;
+      border-radius: 12px;
+      padding: 16px;
+      background: #f8fafc;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .followup-item {
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+    }
+
+    .followup-body {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .followup-index {
+      font-weight: 700;
+      color: #3a4a5b;
+      width: 18px;
+      text-align: center;
+      margin-top: 8px;
+    }
+
+    .followup-body textarea {
+      min-height: 56px;
+      resize: vertical;
+    }
+
+    .followup-media {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .followup-media select {
+      min-width: 140px;
+    }
+
+    .followup-media input[type="text"] {
+      flex: 1;
+      min-width: 220px;
+    }
+
+    .followup-interval {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .followup-range {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .followup-range input[type="range"] {
+      flex: 1;
+      min-width: 180px;
+    }
+
+    .followup-range input[type="number"] {
+      width: 90px;
+    }
+
     .muted {
       color: #5f6b7a;
       margin: 0 0 6px;
