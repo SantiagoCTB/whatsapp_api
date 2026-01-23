@@ -1449,7 +1449,7 @@ def finalizar_chat():
     if not numero:
         return jsonify({"error": "Número requerido"}), 400
 
-    delete_chat_state(numero)
+    update_chat_state(numero, None, "inactivo")
     clear_chat_runtime_state(numero)
 
     notify_session_closed(numero, origin="manual")
