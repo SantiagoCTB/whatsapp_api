@@ -122,12 +122,25 @@ def _send_followup_if_pending(
     *,
     reference_time: datetime,
     message_step: str,
+    tenant_key: str | None,
+    tenant_env: dict | None,
 ) -> None:
     message = (followup.get("text") or "").strip()
     media_url = (followup.get("media_url") or "").strip()
     media_tipo = (followup.get("media_tipo") or "").strip()
     if not message and not media_url:
         return
+    tenants.clear_current_tenant()
+    if tenant_key:
+        tenant = tenants.get_tenant(tenant_key)
+        if tenant:
+            tenants.set_current_tenant(tenant)
+            if tenant_env:
+                tenants.set_current_tenant_env(tenant_env)
+            else:
+                tenants.set_current_tenant_env(tenants.get_tenant_env(tenant))
+    elif tenant_env:
+        tenants.set_current_tenant_env(tenant_env)
     current_step = get_current_step(numero)
     if _normalize_step_name(current_step) != "ia_chat":
         return
@@ -167,6 +180,9 @@ def _schedule_followup_messages(numero: str, message_step: str) -> None:
         return
 
     _clear_followup_timers(numero)
+    current_tenant = tenants.get_current_tenant()
+    tenant_key = current_tenant.tenant_key if current_tenant else None
+    tenant_env = dict(tenants.get_current_tenant_env() or {})
     reference_time = datetime.utcnow()
     scheduled = []
     for idx, message in enumerate(messages, start=1):
@@ -175,7 +191,12 @@ def _schedule_followup_messages(numero: str, message_step: str) -> None:
             delay_seconds,
             _send_followup_if_pending,
             args=(numero, message),
-            kwargs={"reference_time": reference_time, "message_step": message_step},
+            kwargs={
+                "reference_time": reference_time,
+                "message_step": message_step,
+                "tenant_key": tenant_key,
+                "tenant_env": tenant_env,
+            },
         )
         timer.daemon = True
         scheduled.append(timer)
