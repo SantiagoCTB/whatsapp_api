@@ -1815,6 +1815,26 @@
         }
       }
 
+      function scrollChatToBottom() {
+        chatBoxEl.scrollTop = chatBoxEl.scrollHeight;
+      }
+
+      function ensureScrollAfterMediaLoad(shouldScroll) {
+        if (!shouldScroll) return;
+        const mediaEls = chatBoxEl.querySelectorAll('img, video');
+        mediaEls.forEach(media => {
+          if (media.tagName === 'IMG') {
+            if (media.complete) return;
+            media.addEventListener('load', scrollChatToBottom, { once: true });
+            media.addEventListener('error', scrollChatToBottom, { once: true });
+            return;
+          }
+          if (media.readyState >= 1) return;
+          media.addEventListener('loadedmetadata', scrollChatToBottom, { once: true });
+          media.addEventListener('error', scrollChatToBottom, { once: true });
+        });
+      }
+
       // Cargar mensajes
       function loadMessages() {
         if (!currentChat) return;
@@ -1991,7 +2011,9 @@
             chatBoxEl.replaceChildren(nextChildren);
             lastIncomingWaId = newestIncoming;
             updateTypingIndicator(Boolean(data.is_typing), atBottom);
-            if (atBottom) chatBoxEl.scrollTop = chatBoxEl.scrollHeight;
+            const shouldForceScroll = shouldScrollToBottomOnLoad;
+            if (atBottom) scrollChatToBottom();
+            ensureScrollAfterMediaLoad(shouldForceScroll);
             shouldScrollToBottomOnLoad = false;
           });
       }
