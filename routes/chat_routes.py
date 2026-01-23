@@ -1449,7 +1449,13 @@ def finalizar_chat():
     if not numero:
         return jsonify({"error": "Número requerido"}), 400
 
-    update_chat_state(numero, None, "inactivo")
+    _, chat_state_keys = _load_chat_state_definitions(include_hidden=True)
+    if "inactivo" not in chat_state_keys:
+        return jsonify({"error": "Estado inactivo no definido"}), 400
+
+    state_row = get_chat_state(numero)
+    step = state_row[0] if state_row else None
+    update_chat_state(numero, step, "inactivo")
     clear_chat_runtime_state(numero)
 
     notify_session_closed(numero, origin="manual")
