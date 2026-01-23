@@ -2,6 +2,7 @@ from flask import session
 from flask_socketio import emit, join_room, leave_room
 
 from services.db import get_connection
+from services.presence import update_user_presence
 from services.realtime import socketio
 from services.whatsapp_api import trigger_typing_indicator
 
@@ -45,7 +46,13 @@ def _is_authorized_for_chat(numero):
 def handle_connect():
     if "user" not in session:
         return False
+    update_user_presence(session.get("user"), is_active=True)
     emit("socket_ready", {"status": "ok"})
+
+
+@socketio.on("disconnect")
+def handle_disconnect():
+    update_user_presence(session.get("user"), is_active=False)
 
 
 @socketio.on("join_chat")

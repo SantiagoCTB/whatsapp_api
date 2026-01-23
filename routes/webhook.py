@@ -43,6 +43,7 @@ from services.global_commands import handle_global_command
 from services.ia_client import generate_response
 from services.catalog import extract_text_from_image, find_relevant_pages
 from services.ia_client import generate_response_with_image
+from services.assignments import assign_chat_to_active_user
 
 webhook_bp = Blueprint('webhook', __name__)
 logger = logging.getLogger(__name__)
@@ -1417,6 +1418,7 @@ def dispatch_rule(
             )
             conn.commit()
         conn.close()
+        assign_chat_to_active_user(numero, rol_kw)
     next_step = _resolve_next_step(next_step_raw, selected_option_id, opts)
     advance_steps(numero, next_step, visited=visited, platform=platform)
 
@@ -1649,6 +1651,7 @@ def handle_medicion(numero, texto):
                 )
                 conn2.commit()
             conn2.close()
+            assign_chat_to_active_user(numero, rol_kw)
         advance_steps(numero, next_step, platform=platform)
     except Exception:
         enviar_mensaje(numero, "Por favor ingresa la medida correcta.")
