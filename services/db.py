@@ -409,6 +409,16 @@ def _ensure_auth_schema_and_seed(cursor, admin_hash: str):
     ) ENGINE=InnoDB;
     """)
 
+    # user_presence: marca usuarios activos
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS user_presence (
+      user_id INT PRIMARY KEY,
+      is_active TINYINT(1) NOT NULL DEFAULT 0,
+      last_seen DATETIME,
+      FOREIGN KEY (user_id) REFERENCES usuarios(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB;
+    """)
+
     # Migración: si existe usuarios.rol => poblar roles/user_roles y DROP columna
     cursor.execute("SHOW COLUMNS FROM usuarios LIKE 'rol';")
     if cursor.fetchone():
@@ -811,6 +821,29 @@ def init_db(db_settings: DatabaseSettings | None = None):
       numero  VARCHAR(20) NOT NULL,
       role_id INT NOT NULL,
       PRIMARY KEY (numero, role_id),
+      FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB;
+    """)
+
+    # role_assignment_state: mantiene el último usuario asignado por rol
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS role_assignment_state (
+      role_id INT PRIMARY KEY,
+      last_user_id INT NULL,
+      updated_at DATETIME,
+      FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE CASCADE,
+      FOREIGN KEY (last_user_id) REFERENCES usuarios(id) ON DELETE SET NULL
+    ) ENGINE=InnoDB;
+    """)
+
+    # chat_assignments: asigna chats a usuarios específicos
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS chat_assignments (
+      numero VARCHAR(20) PRIMARY KEY,
+      user_id INT NOT NULL,
+      role_id INT NOT NULL,
+      assigned_at DATETIME,
+      FOREIGN KEY (user_id) REFERENCES usuarios(id) ON DELETE CASCADE,
       FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE CASCADE
     ) ENGINE=InnoDB;
     """)

@@ -2,6 +2,7 @@ import re
 
 from config import Config
 from services.db import get_connection
+from services.assignments import assign_chat_to_active_user
 from services.whatsapp_api import enviar_mensaje
 from services.normalize_text import normalize_text
 
@@ -58,6 +59,7 @@ def reiniciar_handler(numero, text):
                 )
                 conn2.commit()
             conn2.close()
+            assign_chat_to_active_user(numero, rol_kw)
         advance_steps(numero, next_step, platform=platform)
 
 
