@@ -142,7 +142,7 @@ def _send_followup_if_pending(
     elif tenant_env:
         tenants.set_current_tenant_env(tenant_env)
     current_step = get_current_step(numero)
-    if _normalize_step_name(current_step) != "ia_chat":
+    if not _is_ia_step(current_step):
         return
     last_client_info = obtener_ultimo_mensaje_cliente_info(numero)
     last_client_ts = (last_client_info or {}).get("timestamp")
@@ -802,7 +802,7 @@ def _reply_with_ai_image(
     enviar_mensaje(numero, response, tipo="bot", step=message_step)
     message_step_norm = _normalize_step_name(message_step)
     media_pages = None
-    if message_step_norm == "ia_chat":
+    if _is_ia_step(message_step_norm):
         _schedule_followup_messages(numero, message_step)
         media_pages = find_relevant_pages(response, limit=2)
     matched_pages = _matched_catalog_pages(response, media_pages or [])
@@ -946,7 +946,7 @@ def _reply_with_ai(
     enviar_mensaje(numero, response, tipo="bot", step=message_step)
     message_step_norm = _normalize_step_name(message_step)
     media_pages = pages
-    if message_step_norm == "ia_chat":
+    if _is_ia_step(message_step_norm):
         _schedule_followup_messages(numero, message_step)
         media_pages = find_relevant_pages(response, limit=2)
     matched_pages = _matched_catalog_pages(response, media_pages)
