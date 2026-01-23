@@ -1324,6 +1324,55 @@ def _resolve_next_step(next_step: str, selected_option_id: str, opciones: str):
     return next_step
 
 
+def _apply_role_keyword(numero: str, role_keyword: str | None) -> None:
+    if not (role_keyword or "").strip():
+        return
+    role_keyword = role_keyword.strip()
+    conn = get_connection(); c = conn.cursor()
+    c.execute("SELECT id FROM roles WHERE keyword=%s", (role_keyword,))
+    role = c.fetchone()
+    if role:
+        # Mantener únicamente el rol definido por la regla para evitar
+        # asignaciones accidentales múltiples por coincidencia de palabras.
+        c.execute(
+            "DELETE FROM chat_roles WHERE numero = %s AND role_id != %s",
+            (numero, role[0]),
+        )
+        c.execute(
+            "INSERT IGNORE INTO chat_roles (numero, role_id) VALUES (%s, %s)",
+            (numero, role[0]),
+        )
+        conn.commit()
+    conn.close()
+    assign_chat_to_active_user(numero, role_keyword)
+
+
+def _apply_role_for_step(numero: str, step: str | None, platform: str) -> None:
+    if not (step or "").strip():
+        return
+    conn = get_connection(); c = conn.cursor()
+    try:
+        filter_sql, filter_params = _platform_filter_sql(platform, step=step)
+        c.execute(
+            f"""
+            SELECT r.rol_keyword
+              FROM reglas r
+             WHERE r.step=%s
+               AND {filter_sql}
+               AND r.rol_keyword IS NOT NULL
+               AND r.rol_keyword <> ''
+             ORDER BY (r.platform = %s) DESC, r.id
+             LIMIT 1
+            """,
+            (step, *filter_params, platform),
+        )
+        row = c.fetchone()
+    finally:
+        conn.close()
+    if row:
+        _apply_role_keyword(numero, row[0])
+
+
 def dispatch_rule(
     numero,
     regla,
@@ -1333,28 +1382,6 @@ def dispatch_rule(
     platform: str | None = None,
 ):
     """Envía la respuesta definida en una regla y asigna roles si aplica."""
-    def _apply_rule_role(role_keyword: str | None) -> None:
-        if not (role_keyword or "").strip():
-            return
-        role_keyword = role_keyword.strip()
-        conn = get_connection(); c = conn.cursor()
-        c.execute("SELECT id FROM roles WHERE keyword=%s", (role_keyword,))
-        role = c.fetchone()
-        if role:
-            # Mantener únicamente el rol definido por la regla para evitar
-            # asignaciones accidentales múltiples por coincidencia de palabras.
-            c.execute(
-                "DELETE FROM chat_roles WHERE numero = %s AND role_id != %s",
-                (numero, role[0]),
-            )
-            c.execute(
-                "INSERT IGNORE INTO chat_roles (numero, role_id) VALUES (%s, %s)",
-                (numero, role[0]),
-            )
-            conn.commit()
-        conn.close()
-        assign_chat_to_active_user(numero, role_keyword)
-
     if visited is None:
         visited = set()
     if not platform:
@@ -1386,7 +1413,7 @@ def dispatch_rule(
             history_step=None,
             message_step=current_step,
         )
-        _apply_rule_role(rol_kw)
+        _apply_role_keyword(numero, rol_kw)
         next_step = _resolve_next_step(next_step_raw, selected_option_id, opts)
         if next_step:
             advance_steps(numero, next_step, visited=visited, platform=platform)
@@ -1394,7 +1421,7 @@ def dispatch_rule(
 
     media_list = media_urls.split('||') if media_urls else []
     if tipo_resp in {'texto', 'lista', 'boton'} and not (resp or '').strip() and not media_list:
-        _apply_rule_role(rol_kw)
+        _apply_role_keyword(numero, rol_kw)
         next_step = _resolve_next_step(next_step_raw, selected_option_id, opts)
         advance_steps(numero, next_step, visited=visited, platform=platform)
         return
@@ -1425,7 +1452,7 @@ def dispatch_rule(
             step=current_step,
             regla_id=regla_id,
         )
-    _apply_rule_role(rol_kw)
+    _apply_role_keyword(numero, rol_kw)
     next_step = _resolve_next_step(next_step_raw, selected_option_id, opts)
     advance_steps(numero, next_step, visited=visited, platform=platform)
 
@@ -1729,6 +1756,7 @@ def handle_text_message(
         return
 
     if _is_ia_step(get_current_step(numero)) and not bootstrapped:
+        platform = platform or _resolve_rule_platform(numero)
         handled = process_step_chain(
             numero,
             text_norm,
@@ -1738,6 +1766,7 @@ def handle_text_message(
         )
         if handled:
             return
+        _apply_role_for_step(numero, get_current_step(numero), platform)
         _reply_with_ai(numero, texto)
         return
 
