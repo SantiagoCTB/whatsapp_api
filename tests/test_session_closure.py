@@ -25,9 +25,6 @@ def client():
 def test_finalizar_chat_envia_notificacion(client, monkeypatch):
     acciones = []
 
-    def fake_delete(numero):
-        acciones.append(("delete", numero))
-
     def fake_clear(numero):
         acciones.append(("clear", numero))
 
@@ -35,7 +32,16 @@ def test_finalizar_chat_envia_notificacion(client, monkeypatch):
         acciones.append(("notify", numero, origin))
         return True
 
-    monkeypatch.setattr(chat_routes, "delete_chat_state", fake_delete)
+    def fake_update(numero, step, estado=None):
+        acciones.append(("update", numero, step, estado))
+
+    monkeypatch.setattr(
+        chat_routes,
+        "_load_chat_state_definitions",
+        lambda include_hidden=True: ([], {"inactivo"}),
+    )
+    monkeypatch.setattr(chat_routes, "get_chat_state", lambda _: (None, None, None))
+    monkeypatch.setattr(chat_routes, "update_chat_state", fake_update)
     monkeypatch.setattr(chat_routes, "clear_chat_runtime_state", fake_clear)
     monkeypatch.setattr(chat_routes, "notify_session_closed", fake_notify)
 
@@ -46,7 +52,7 @@ def test_finalizar_chat_envia_notificacion(client, monkeypatch):
 
     assert response.status_code == 200
     assert response.json == {"status": "ok"}
-    assert ("delete", "5215550000") in acciones
+    assert any(action[0] == "update" for action in acciones)
     assert ("clear", "5215550000") in acciones
     assert ("notify", "5215550000", "manual") in acciones
 
@@ -164,3 +170,75 @@ def test_handle_text_message_no_timeout_when_step_missing(monkeypatch):
     webhook_module.handle_text_message(numero, "Hola", save=True)
 
     assert not notified
+
+
+def test_maybe_close_expired_session_notifies(monkeypatch):
+    numero = "5215554444"
+    now = datetime.utcnow()
+    last_activity = now - timedelta(seconds=15)
+    acciones = []
+
+    monkeypatch.setattr(
+        chat_routes,
+        "delete_chat_state",
+        lambda n: acciones.append(("delete", n)),
+    )
+    monkeypatch.setattr(
+        chat_routes,
+        "clear_chat_runtime_state",
+        lambda n: acciones.append(("clear", n)),
+    )
+    monkeypatch.setattr(
+        chat_routes,
+        "notify_session_closed",
+        lambda n, origin="timeout": acciones.append(("notify", n, origin)) or True,
+    )
+
+    estado = chat_routes._maybe_close_expired_session(
+        numero=numero,
+        step="menu",
+        last_activity=last_activity,
+        stored_estado=None,
+        timeout_seconds=10,
+        now=now,
+    )
+
+    assert estado == "inactivo"
+    assert ("delete", numero) in acciones
+    assert ("clear", numero) in acciones
+    assert ("notify", numero, "timeout") in acciones
+
+
+def test_maybe_close_expired_session_skips_inactive(monkeypatch):
+    numero = "5215555555"
+    now = datetime.utcnow()
+    last_activity = now - timedelta(seconds=15)
+    acciones = []
+
+    monkeypatch.setattr(
+        chat_routes,
+        "delete_chat_state",
+        lambda n: acciones.append(("delete", n)),
+    )
+    monkeypatch.setattr(
+        chat_routes,
+        "clear_chat_runtime_state",
+        lambda n: acciones.append(("clear", n)),
+    )
+    monkeypatch.setattr(
+        chat_routes,
+        "notify_session_closed",
+        lambda n, origin="timeout": acciones.append(("notify", n, origin)) or True,
+    )
+
+    estado = chat_routes._maybe_close_expired_session(
+        numero=numero,
+        step="menu",
+        last_activity=last_activity,
+        stored_estado="inactivo",
+        timeout_seconds=10,
+        now=now,
+    )
+
+    assert estado is None
+    assert not acciones

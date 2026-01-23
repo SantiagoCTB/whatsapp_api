@@ -103,6 +103,34 @@ def _session_timeout_seconds() -> int:
         return Config.SESSION_TIMEOUT
 
 
+def _maybe_close_expired_session(
+    *,
+    numero: str,
+    step: str | None,
+    last_activity: datetime | None,
+    stored_estado: str | None,
+    timeout_seconds: int,
+    now: datetime,
+) -> str | None:
+    if not step:
+        return None
+    if not isinstance(last_activity, datetime):
+        return None
+    if not timeout_seconds or timeout_seconds <= 0:
+        return None
+    normalized_estado = LEGACY_STATE_MAP.get(stored_estado, stored_estado)
+    if normalized_estado == "inactivo":
+        return None
+    elapsed = (now - last_activity).total_seconds()
+    if elapsed <= timeout_seconds:
+        return None
+
+    delete_chat_state(numero)
+    clear_chat_runtime_state(numero)
+    notify_session_closed(numero, origin="timeout")
+    return "inactivo"
+
+
 def _extract_words(text: str) -> list[str]:
     normalized = normalize_text(text)
     if not normalized:
@@ -1345,16 +1373,29 @@ def get_chat_list():
         stored_estado = fila_estado[2] if fila_estado else None
 
         estado = None
-        inactivity_reference = last_activity or last_ts_raw
-        if (
-            inactivity_reference
-            and timeout_seconds
-            and timeout_seconds > 0
-            and isinstance(inactivity_reference, datetime)
-        ):
-            elapsed = (now - inactivity_reference).total_seconds()
-            if elapsed > timeout_seconds:
-                estado = "inactivo"
+        closed_estado = _maybe_close_expired_session(
+            numero=numero,
+            step=step,
+            last_activity=last_activity,
+            stored_estado=stored_estado,
+            timeout_seconds=timeout_seconds,
+            now=now,
+        )
+        if closed_estado:
+            estado = closed_estado
+            stored_estado = closed_estado
+            step = None
+        else:
+            inactivity_reference = last_activity or last_ts_raw
+            if (
+                inactivity_reference
+                and timeout_seconds
+                and timeout_seconds > 0
+                and isinstance(inactivity_reference, datetime)
+            ):
+                elapsed = (now - inactivity_reference).total_seconds()
+                if elapsed > timeout_seconds:
+                    estado = "inactivo"
 
         if not estado:
             if stored_estado in LEGACY_STATE_MAP:
