@@ -55,10 +55,133 @@ default_env = tenants.get_tenant_env(None)
 message_buffer     = {}
 pending_timers     = {}
 cache_lock         = threading.Lock()
+followup_timers    = {}
+followup_lock      = threading.Lock()
 
 MAX_AUTO_STEPS = 25
 PLATFORM_AGNOSTIC_RULES = {"ia_chat"}
 IA_TRIGGER_ALIASES = {"ia", "iachat"}
+
+
+def _clear_followup_timers(numero: str) -> None:
+    with followup_lock:
+        timers = followup_timers.pop(numero, [])
+    for timer in timers:
+        timer.cancel()
+
+
+def _get_ia_followup_config() -> dict | None:
+    conn = get_connection()
+    c = conn.cursor()
+    try:
+        c.execute(
+            """
+            SELECT followup_message_1, followup_message_2, followup_message_3,
+                   followup_interval_minutes,
+                   followup_media_url_1, followup_media_url_2, followup_media_url_3,
+                   followup_media_tipo_1, followup_media_tipo_2, followup_media_tipo_3
+              FROM ia_config
+          ORDER BY id DESC
+             LIMIT 1
+            """
+        )
+        row = c.fetchone()
+    except Exception:
+        row = None
+    finally:
+        conn.close()
+
+    if not row:
+        return None
+
+    return {
+        "messages": [
+            {
+                "text": row[0],
+                "media_url": row[4],
+                "media_tipo": row[7],
+            },
+            {
+                "text": row[1],
+                "media_url": row[5],
+                "media_tipo": row[8],
+            },
+            {
+                "text": row[2],
+                "media_url": row[6],
+                "media_tipo": row[9],
+            },
+        ],
+        "interval_minutes": row[3],
+    }
+
+
+def _send_followup_if_pending(
+    numero: str,
+    followup: dict,
+    *,
+    reference_time: datetime,
+    message_step: str,
+) -> None:
+    message = (followup.get("text") or "").strip()
+    media_url = (followup.get("media_url") or "").strip()
+    media_tipo = (followup.get("media_tipo") or "").strip()
+    if not message and not media_url:
+        return
+    current_step = get_current_step(numero)
+    if _normalize_step_name(current_step) != "ia_chat":
+        return
+    last_client_info = obtener_ultimo_mensaje_cliente_info(numero)
+    last_client_ts = (last_client_info or {}).get("timestamp")
+    if isinstance(last_client_ts, datetime) and last_client_ts > reference_time:
+        return
+    enviar_mensaje(
+        numero,
+        message,
+        tipo="bot",
+        step=message_step,
+        tipo_respuesta=media_tipo or None,
+        opciones=media_url or None,
+    )
+
+
+def _schedule_followup_messages(numero: str, message_step: str) -> None:
+    config = _get_ia_followup_config()
+    if not config:
+        return
+    interval_minutes = config.get("interval_minutes")
+    try:
+        interval_minutes = int(interval_minutes)
+    except (TypeError, ValueError):
+        interval_minutes = None
+    if not interval_minutes or interval_minutes <= 0:
+        return
+
+    raw_messages = config.get("messages") or []
+    messages = [
+        message
+        for message in raw_messages
+        if (message.get("text") or "").strip() or (message.get("media_url") or "").strip()
+    ]
+    if not messages:
+        return
+
+    _clear_followup_timers(numero)
+    reference_time = datetime.utcnow()
+    scheduled = []
+    for idx, message in enumerate(messages, start=1):
+        delay_seconds = interval_minutes * 60 * idx
+        timer = threading.Timer(
+            delay_seconds,
+            _send_followup_if_pending,
+            args=(numero, message),
+            kwargs={"reference_time": reference_time, "message_step": message_step},
+        )
+        timer.daemon = True
+        scheduled.append(timer)
+        timer.start()
+    with followup_lock:
+        followup_timers[numero] = scheduled
 
 
 def _resolve_rule_platform(numero: str) -> str:
@@ -659,6 +782,7 @@ def _reply_with_ai_image(
     message_step_norm = _normalize_step_name(message_step)
     media_pages = None
     if message_step_norm == "ia_chat":
+        _schedule_followup_messages(numero, message_step)
         media_pages = find_relevant_pages(response, limit=2)
     matched_pages = _matched_catalog_pages(response, media_pages or [])
     if not matched_pages:
@@ -802,6 +926,7 @@ def _reply_with_ai(
     message_step_norm = _normalize_step_name(message_step)
     media_pages = pages
     if message_step_norm == "ia_chat":
+        _schedule_followup_messages(numero, message_step)
         media_pages = find_relevant_pages(response, limit=2)
     matched_pages = _matched_catalog_pages(response, media_pages)
     if not matched_pages:
@@ -1003,6 +1128,7 @@ def _handle_messenger_payload(data, summary, channel="messenger"):
             quick_reply_payload = (message.get("quick_reply") or {}).get("payload")
             text = (message.get("text") or "").strip()
             if text or quick_reply_payload:
+                _clear_followup_timers(sender_id)
                 stored_text = text or (quick_reply_payload or "")
                 normalized_text = normalize_text(quick_reply_payload or text)
                 step = get_current_step(sender_id)
@@ -1052,6 +1178,7 @@ def _handle_messenger_payload(data, summary, channel="messenger"):
 
             attachments = message.get("attachments") or []
             if attachments:
+                _clear_followup_timers(sender_id)
                 step = get_current_step(sender_id)
                 for attachment in attachments:
                     attach_type = (attachment.get("type") or "").lower()
@@ -1081,6 +1208,7 @@ def _handle_messenger_payload(data, summary, channel="messenger"):
 
             postback = event.get("postback") or {}
             if postback and not message:
+                _clear_followup_timers(sender_id)
                 postback_id = postback.get("mid")
                 if postback_id and _mark_message_processed(postback_id):
                     summary["duplicates"] += 1
@@ -1712,6 +1840,7 @@ def handle_text_message(
         reutilizar esta función en flujos donde el texto ya fue
         almacenado para evitar duplicados en el historial.
     """
+    _clear_followup_timers(numero)
     # Se usa UTC para evitar desfaces de zona horaria entre la app y la base
     # de datos que puedan disparar expiraciones falsas.
     now = datetime.utcnow()
@@ -1965,6 +2094,8 @@ def webhook():
                         "Chat en modo asesor; se omite flujo automático",
                         extra={"numero": from_number, "message_id": _mask_identifier(wa_id)},
                     )
+
+                _clear_followup_timers(from_number)
 
                 if msg.get("referral"):
                     ref = msg["referral"]
