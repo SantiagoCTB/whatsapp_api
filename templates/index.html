@@ -139,6 +139,7 @@
       let socketConnected = false;
       let socketFallbackTimer = null;
       let pollingFallbackActive = false;
+      let chatListRequestSeq = 0;
       let selectedBubble = null;
       let chatContextTarget = null;
       const notificationSoundUrl = "{{ url_for('static', filename='notificacion.mp3') }}";
@@ -1672,6 +1673,7 @@
 
       function fetchChatList(allowRetry = true) {
         hideChatContextMenu();
+        const requestSeq = ++chatListRequestSeq;
         const params = new URLSearchParams();
         if (buscadorInput && buscadorInput.value.trim()) {
           params.set('q', buscadorInput.value.trim());
@@ -1685,6 +1687,7 @@
           })
           .then(data => {
             if (!Array.isArray(data)) throw new Error('Respuesta de chats inválida');
+            if (requestSeq !== chatListRequestSeq) return;
             renderChatList(data);
           })
           .catch(err => {
@@ -1697,6 +1700,7 @@
                 })
                 .then(data => {
                   if (!Array.isArray(data)) throw new Error('Respuesta de chats inválida');
+                  if (requestSeq !== chatListRequestSeq) return;
                   renderChatList(data);
                 })
                 .catch(innerErr => {
