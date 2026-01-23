@@ -103,6 +103,13 @@ def _session_timeout_seconds() -> int:
         return Config.SESSION_TIMEOUT
 
 
+def _extract_words(text: str) -> list[str]:
+    normalized = normalize_text(text)
+    if not normalized:
+        return []
+    return [word for word in normalized.split() if word]
+
+
 def _select_matching_rule(rules, text_norm: str | None):
     wildcard = None
     for rule in rules:
@@ -1150,7 +1157,7 @@ def get_chat_list():
     conn = get_connection()
     c    = conn.cursor()
     search_term = (request.args.get("q") or "").strip()
-    search_terms = [term for term in search_term.split() if term]
+    search_terms = _extract_words(search_term)
 
     roles = session.get('roles') or []
     single_role = session.get('rol')
@@ -1171,41 +1178,60 @@ def get_chat_list():
         role_ids = [row[0] for row in c.fetchall()]
 
     # Únicos números filtrados por rol
-    if is_admin:
-        if search_terms:
-            search_clause = " AND ".join(["LOWER(mensaje) LIKE %s"] * len(search_terms))
-            search_params = tuple(f"%{term.lower()}%" for term in search_terms)
+    if search_terms:
+        if is_admin:
             c.execute(
-                "SELECT DISTINCT numero FROM mensajes "
-                "WHERE numero NOT IN (SELECT numero FROM hidden_chats) "
-                f"AND {search_clause}",
-                search_params,
+                "SELECT numero, mensaje FROM mensajes "
+                "WHERE numero NOT IN (SELECT numero FROM hidden_chats)"
+            )
+        elif role_ids:
+            placeholders = ','.join(['%s'] * len(role_ids))
+            c.execute(
+                f"""
+                SELECT m.numero, m.mensaje
+                FROM mensajes m
+                INNER JOIN chat_roles cr ON m.numero = cr.numero
+                WHERE cr.role_id IN ({placeholders})
+                  AND m.numero NOT IN (SELECT numero FROM hidden_chats)
+                """,
+                tuple(role_ids),
             )
         else:
+            numeros = []
+        if 'numeros' not in locals():
+            chat_words: dict[str, set[str]] = {}
+            for numero, mensaje in c.fetchall():
+                if not numero or not mensaje:
+                    continue
+                words = _extract_words(mensaje)
+                if not words:
+                    continue
+                word_set = chat_words.setdefault(numero, set())
+                word_set.update(words)
+            numeros = [
+                numero for numero, words in chat_words.items()
+                if all(term in words for term in search_terms)
+            ]
+    else:
+        if is_admin:
             c.execute(
                 "SELECT DISTINCT numero FROM mensajes "
                 "WHERE numero NOT IN (SELECT numero FROM hidden_chats)"
             )
-    elif role_ids:
-        placeholders = ','.join(['%s'] * len(role_ids))
-        params = list(role_ids)
-        message_filter = ""
-        if search_terms:
-            message_filter = " AND " + " AND ".join(["LOWER(m.mensaje) LIKE %s"] * len(search_terms))
-            params.extend([f"%{term.lower()}%" for term in search_terms])
-        c.execute(
-            f"""
-            SELECT DISTINCT m.numero
-            FROM mensajes m
-            INNER JOIN chat_roles cr ON m.numero = cr.numero
-            WHERE cr.role_id IN ({placeholders})
-              AND m.numero NOT IN (SELECT numero FROM hidden_chats)
-              {message_filter}
-            """,
-            tuple(params),
-        )
-    else:
-        numeros = []
+        elif role_ids:
+            placeholders = ','.join(['%s'] * len(role_ids))
+            c.execute(
+                f"""
+                SELECT DISTINCT m.numero
+                FROM mensajes m
+                INNER JOIN chat_roles cr ON m.numero = cr.numero
+                WHERE cr.role_id IN ({placeholders})
+                  AND m.numero NOT IN (SELECT numero FROM hidden_chats)
+                """,
+                tuple(role_ids),
+            )
+        else:
+            numeros = []
 
     if 'numeros' not in locals():
         numeros = [row[0] for row in c.fetchall()]
