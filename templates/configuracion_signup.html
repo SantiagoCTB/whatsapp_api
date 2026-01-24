@@ -510,14 +510,17 @@
       fetch(`{{ url_for('configuracion.messenger_signup') }}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload || {}),
+        body: JSON.stringify(Object.assign({ redirect_uri: signupRedirectUri }, payload || {})),
       })
         .then((resp) => resp.json())
         .then((resp) => {
           if (resp.ok) {
             updateStatus(resp.message || 'Token de Messenger actualizado.');
           } else {
-            updateStatus(resp.error || 'No se pudo guardar el token de Messenger.', true);
+            const details = resp.details && resp.details.error
+              ? ` Detalle: ${resp.details.error.message || resp.details.error.error_user_msg || ''}`
+              : '';
+            updateStatus((resp.error || 'No se pudo guardar el token de Messenger.') + details, true);
           }
         })
         .catch(() => updateStatus('Error al enviar los datos del signup.', true));

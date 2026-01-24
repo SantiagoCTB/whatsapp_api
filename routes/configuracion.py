@@ -2062,9 +2062,11 @@ def messenger_signup():
 
     embedded_code = (payload.get("code") or "").strip()
     access_token = (payload.get("access_token") or payload.get("token") or "").strip()
+    provided_redirect_uri = (payload.get("redirect_uri") or "").strip()
     if embedded_code:
         redirect_uri = _resolve_embedded_signup_redirect_uri(
-            url_for("configuracion.configuracion_signup", _external=True)
+            provided_redirect_uri
+            or url_for("configuracion.configuracion_signup", _external=True)
         )
         token_response = _exchange_embedded_signup_code_for_token(
             embedded_code, redirect_uri
@@ -2073,10 +2075,22 @@ def messenger_signup():
             access_token = token_response.get("access_token") or access_token
             payload["token_exchange"] = token_response.get("raw")
         else:
+            details = token_response.get("details") or {}
+            error_detail = ""
+            if isinstance(details, dict):
+                meta_error = details.get("error")
+                if isinstance(meta_error, dict):
+                    error_detail = (
+                        meta_error.get("error_user_msg")
+                        or meta_error.get("message")
+                        or ""
+                    )
+            error_message = token_response.get("error") or "No se pudo intercambiar el código de Messenger."
+            if error_detail:
+                error_message = f"{error_message} {error_detail}".strip()
             return {
                 "ok": False,
-                "error": token_response.get("error")
-                or "No se pudo intercambiar el código de Messenger.",
+                "error": error_message,
                 "details": token_response.get("details"),
             }, 400
 
