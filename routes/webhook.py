@@ -116,17 +116,15 @@ def _get_ia_followup_config() -> dict | None:
     }
 
 
-def _get_last_ia_message_info(numero: str) -> dict | None:
+def _get_last_message_info(numero: str) -> dict | None:
     conn = get_connection()
     c = conn.cursor()
     try:
         c.execute(
             """
-            SELECT tipo, timestamp
+            SELECT tipo, timestamp, step
               FROM mensajes
              WHERE numero = %s
-               AND step IN ('ia', 'ia_chat')
-               AND (tipo = 'bot' OR tipo LIKE 'bot_%%')
           ORDER BY timestamp DESC
              LIMIT 1
             """,
@@ -137,7 +135,7 @@ def _get_last_ia_message_info(numero: str) -> dict | None:
         conn.close()
     if not row:
         return None
-    return {"tipo": row[0], "timestamp": row[1]}
+    return {"tipo": row[0], "timestamp": row[1], "step": row[2]}
 
 
 def _send_followup_if_pending(
@@ -166,20 +164,19 @@ def _send_followup_if_pending(
                 tenants.set_current_tenant_env(tenants.get_tenant_env(tenant))
     elif tenant_env:
         tenants.set_current_tenant_env(tenant_env)
-    current_step = get_current_step(numero)
-    if not _is_ia_step(current_step):
+    last_message_info = _get_last_message_info(numero)
+    last_tipo = (last_message_info or {}).get("tipo") or ""
+    last_step = (last_message_info or {}).get("step") or ""
+    last_ts = (last_message_info or {}).get("timestamp")
+    if not isinstance(last_ts, datetime):
         return
-    last_ia_info = _get_last_ia_message_info(numero)
-    last_ia_ts = (last_ia_info or {}).get("timestamp")
-    if not isinstance(last_ia_ts, datetime):
+    if not _is_ia_step(last_step):
         return
-    last_client_info = obtener_ultimo_mensaje_cliente_info(numero)
-    last_client_ts = (last_client_info or {}).get("timestamp")
-    if isinstance(last_client_ts, datetime) and last_client_ts > last_ia_ts:
+    if not (last_tipo == "bot" or str(last_tipo).lower().startswith("bot_")):
         return
     if interval_minutes <= 0 or followup_index <= 0:
         return
-    elapsed_seconds = (datetime.utcnow() - last_ia_ts).total_seconds()
+    elapsed_seconds = (datetime.utcnow() - last_ts).total_seconds()
     required_seconds = interval_minutes * 60 * followup_index
     if elapsed_seconds < required_seconds:
         return
