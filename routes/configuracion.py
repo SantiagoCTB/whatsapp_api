@@ -1844,6 +1844,7 @@ def save_signup():
                 extra={
                     "tenant_key": tenant.tenant_key,
                     "access_token": token_response.get("access_token"),
+                    "response": token_response.get("raw"),
                 },
             )
         else:
