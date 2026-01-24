@@ -457,6 +457,13 @@ def _resolve_instagram_redirect_uri(fallback: str) -> str:
     return fallback
 
 
+def _resolve_embedded_signup_redirect_uri(fallback: str) -> str:
+    base_url = (Config.PUBLIC_BASE_URL or "").strip().rstrip("/")
+    if base_url:
+        return f"{base_url}/configuracion/signup"
+    return (fallback or "").rstrip("/")
+
+
 def _resolve_page_user_token(platform: str | None, tenant_env: dict, provided_token: str) -> str:
     normalized = (platform or "").strip().lower()
     if normalized == "instagram":
@@ -1765,8 +1772,7 @@ def configuracion_signup():
             "signup_config_code_present": bool(Config.SIGNUP_FACEBOOK),
         },
     )
-    base_url = (Config.PUBLIC_BASE_URL or request.url_root or "").rstrip("/")
-    signup_redirect_uri = f"{base_url}/configuracion/signup"
+    signup_redirect_uri = _resolve_embedded_signup_redirect_uri(request.base_url)
 
     return render_template(
         'configuracion_signup.html',
@@ -1835,8 +1841,7 @@ def save_signup():
             "Código embebido recibido",
             extra={"tenant_key": tenant.tenant_key, "code": embedded_code},
         )
-        base_url = (Config.PUBLIC_BASE_URL or request.url_root or "").rstrip("/")
-        redirect_uri = f"{base_url}/configuracion/signup"
+        redirect_uri = _resolve_embedded_signup_redirect_uri(request.base_url)
         token_response = _exchange_embedded_signup_code_for_token(
             embedded_code, redirect_uri
         )
