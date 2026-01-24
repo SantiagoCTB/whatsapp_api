@@ -458,6 +458,9 @@ def _resolve_instagram_redirect_uri(fallback: str) -> str:
 
 
 def _resolve_embedded_signup_redirect_uri(fallback: str) -> str:
+    explicit_redirect = (Config.EMBEDDED_SIGNUP_REDIRECT_URI or "").strip()
+    if explicit_redirect:
+        return explicit_redirect
     base_url = (Config.PUBLIC_BASE_URL or "").strip().rstrip("/")
     if base_url:
         return f"{base_url}/configuracion/signup"

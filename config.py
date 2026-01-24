@@ -160,6 +160,10 @@ class Config:
         ),
     )
     PUBLIC_BASE_URL = os.getenv('PUBLIC_BASE_URL', '')
+    EMBEDDED_SIGNUP_REDIRECT_URI = os.getenv(
+        'EMBEDDED_SIGNUP_REDIRECT_URI',
+        'https://app.whapco.site/configuracion/signup',
+    )
     PREFERRED_URL_SCHEME = os.getenv('PREFERRED_URL_SCHEME', 'https')
     IA_HISTORY_LIMIT = int(os.getenv('IA_HISTORY_LIMIT', 30))
     INITIAL_STEP = os.getenv('INITIAL_STEP', 'menu_principal')
