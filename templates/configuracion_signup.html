@@ -131,6 +131,24 @@
                 Opción A: pega un <strong>token de usuario</strong>, consulta tus páginas y guarda la selección.
                 Opción B: pega un <strong>token de página</strong> para guardar la integración directamente.
             </p>
+            <div class="form-row" style="margin-top: 0.75rem;">
+                <button
+                    id="messenger-embedded-trigger"
+                    class="btn-primary"
+                    data-config-code="{{ messenger_embedded_code or '' }}"
+                    data-tenant="{{ tenant_key or '' }}"
+                    {% if not messenger_embedded_code or not facebook_app_id %}disabled{% endif %}
+                >
+                    Abrir Embedded Signup de Messenger
+                </button>
+                {% if not messenger_embedded_code %}
+                <p class="alert alert-error" style="margin-top: 0.5rem">Falta configurar MESSENGER_EMBEDDED en el entorno.</p>
+                {% endif %}
+                {% if not facebook_app_id %}
+                <p class="alert alert-error" style="margin-top: 0.5rem">Falta configurar FACEBOOK_APP_ID en el entorno.</p>
+                {% endif %}
+                <div id="messenger-embedded-status" class="help" style="margin-top: 0.5rem"></div>
+            </div>
             <div class="form-row">
                 <label class="muted" for="messenger-user-token">Token de usuario (solo se guarda si lo envías)</label>
                 <input id="messenger-user-token" type="password" placeholder="EAA...">
@@ -468,6 +486,62 @@
           .catch(() => updatePhoneStatus('Error al guardar el número.', true));
       });
     }
+  })();
+</script>
+<script>
+  (function() {
+    const messengerTrigger = document.getElementById('messenger-embedded-trigger');
+    if (!messengerTrigger) return;
+
+    const facebookAppId = '{{ facebook_app_id or '' }}';
+    const messengerEmbeddedCode = messengerTrigger.dataset.configCode;
+    const tenantKey = messengerTrigger.dataset.tenant;
+    const statusBox = document.getElementById('messenger-embedded-status');
+
+    const updateStatus = (message, isError) => {
+      if (!statusBox) return;
+      statusBox.textContent = message || '';
+      statusBox.style.color = isError ? '#c0392b' : '#2c3e50';
+    };
+
+    messengerTrigger.addEventListener('click', function() {
+      if (!facebookAppId) {
+        updateStatus('Falta configurar FACEBOOK_APP_ID.', true);
+        return;
+      }
+      if (!messengerEmbeddedCode) {
+        updateStatus('Falta configurar MESSENGER_EMBEDDED.', true);
+        return;
+      }
+
+      facebookSdkReady.then((FB) => {
+        if (!FB || !FB.login) {
+          updateStatus('El SDK de Facebook no está listo. Revisa tu conexión y APP_ID.', true);
+          return;
+        }
+
+        updateStatus('Abriendo el flujo Embedded Signup de Messenger...');
+        FB.login(
+          function(response) {
+            if (response && response.status === 'connected') {
+              updateStatus('Sesión de Facebook detectada. Completa el cuadro de diálogo para continuar.');
+            } else {
+              updateStatus('No se pudo abrir el diálogo de Facebook. Verifica los permisos del navegador.', true);
+            }
+          },
+          {
+            config_id: messengerEmbeddedCode,
+            response_type: 'code',
+            override_default_response_type: true,
+          },
+        );
+      }).catch(() => {
+        const popupUrl = `https://www.facebook.com/v20.0/dialog/oauth?app_id=${encodeURIComponent(facebookAppId)}&config_id=${encodeURIComponent(messengerEmbeddedCode)}&state=${encodeURIComponent(tenantKey || 'default')}&redirect_uri=${encodeURIComponent(window.location.href)}`;
+        const features = 'width=700,height=800,menubar=no,toolbar=no';
+        window.open(popupUrl, 'messenger_signup', features);
+        updateStatus('Se abrió el flujo de Embedded Signup de Messenger en una nueva ventana (modo respaldo).');
+      });
+    });
   })();
 </script>
 <script>
