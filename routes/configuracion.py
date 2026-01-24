@@ -1680,7 +1680,16 @@ def configuracion_signup():
         return redirect(url_for("auth.login"))
 
     oauth_code = (request.args.get("code") or "").strip()
+    oauth_state = (request.args.get("state") or "").strip()
     if oauth_code:
+        logger.info(
+            "Código OAuth recibido en configuración de signup",
+            extra={
+                "tenant_key": tenants.get_active_tenant_key(),
+                "oauth_code": oauth_code,
+                "oauth_state": oauth_state,
+            },
+        )
         redirect_uri = _resolve_instagram_redirect_uri(request.base_url)
         result = _handle_instagram_oauth_code(oauth_code, redirect_uri)
         if not result.get("ok"):
