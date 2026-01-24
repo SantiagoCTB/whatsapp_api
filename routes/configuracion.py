@@ -457,6 +457,13 @@ def _resolve_instagram_redirect_uri(fallback: str) -> str:
     return fallback
 
 
+def _resolve_embedded_signup_redirect_uri(fallback: str) -> str:
+    base_url = (Config.PUBLIC_BASE_URL or "").strip().rstrip("/")
+    if base_url:
+        return f"{base_url}/configuracion/signup"
+    return (fallback or "").rstrip("/")
+
+
 def _resolve_page_user_token(platform: str | None, tenant_env: dict, provided_token: str) -> str:
     normalized = (platform or "").strip().lower()
     if normalized == "instagram":
@@ -1765,6 +1772,14 @@ def configuracion_signup():
             "signup_config_code_present": bool(Config.SIGNUP_FACEBOOK),
         },
     )
+    signup_redirect_uri = _resolve_embedded_signup_redirect_uri(request.base_url)
+    logger.info(
+        "Redirect URI embebido resuelto",
+        extra={
+            "tenant_key": tenant_key,
+            "redirect_uri": signup_redirect_uri,
+        },
+    )
 
     return render_template(
         'configuracion_signup.html',
@@ -1772,6 +1787,7 @@ def configuracion_signup():
         messenger_embedded_code=Config.MESSENGER_EMBEDDED,
         facebook_app_id=Config.FACEBOOK_APP_ID,
         signup_instagram_url=Config.SIGNUP_INSTRAGRAM,
+        signup_redirect_uri=signup_redirect_uri,
         tenant_key=tenant_key,
         tenant_waba_id=tenant_env.get("WABA_ID"),
         tenant_phone_number_id=tenant_env.get("PHONE_NUMBER_ID"),
@@ -1832,8 +1848,14 @@ def save_signup():
             "Código embebido recibido",
             extra={"tenant_key": tenant.tenant_key, "code": embedded_code},
         )
-        base_url = (Config.PUBLIC_BASE_URL or request.url_root or "").rstrip("/")
-        redirect_uri = f"{base_url}/configuracion/signup"
+        redirect_uri = _resolve_embedded_signup_redirect_uri(request.base_url)
+        logger.info(
+            "Redirect URI embebido para intercambio de token",
+            extra={
+                "tenant_key": tenant.tenant_key,
+                "redirect_uri": redirect_uri,
+            },
+        )
         token_response = _exchange_embedded_signup_code_for_token(
             embedded_code, redirect_uri
         )
