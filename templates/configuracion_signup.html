@@ -523,11 +523,20 @@
         updateStatus('Abriendo el flujo Embedded Signup de Messenger...');
         FB.login(
           function(response) {
+            console.log('Respuesta Embedded Signup Messenger', response);
+            const responseCode = response && response.authResponse ? response.authResponse.code : '';
+            if (responseCode) {
+              updateStatus(`Código recibido: ${responseCode}. Revisa los logs del servidor para el intercambio.`, false);
+              return;
+            }
             if (response && response.status === 'connected') {
               updateStatus('Sesión de Facebook detectada. Completa el cuadro de diálogo para continuar.');
-            } else {
-              updateStatus('No se pudo abrir el diálogo de Facebook. Verifica los permisos del navegador.', true);
+              return;
             }
+            const errorMessage = response && response.error_message
+              ? `No se completó el flujo: ${response.error_message}`
+              : 'No se completó el flujo de Facebook. Verifica permisos y redirección.';
+            updateStatus(errorMessage, true);
           },
           {
             config_id: messengerEmbeddedCode,
