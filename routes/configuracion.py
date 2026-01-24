@@ -1773,6 +1773,13 @@ def configuracion_signup():
         },
     )
     signup_redirect_uri = _resolve_embedded_signup_redirect_uri(request.base_url)
+    logger.info(
+        "Redirect URI embebido resuelto",
+        extra={
+            "tenant_key": tenant_key,
+            "redirect_uri": signup_redirect_uri,
+        },
+    )
 
     return render_template(
         'configuracion_signup.html',
@@ -1842,6 +1849,13 @@ def save_signup():
             extra={"tenant_key": tenant.tenant_key, "code": embedded_code},
         )
         redirect_uri = _resolve_embedded_signup_redirect_uri(request.base_url)
+        logger.info(
+            "Redirect URI embebido para intercambio de token",
+            extra={
+                "tenant_key": tenant.tenant_key,
+                "redirect_uri": redirect_uri,
+            },
+        )
         token_response = _exchange_embedded_signup_code_for_token(
             embedded_code, redirect_uri
         )
