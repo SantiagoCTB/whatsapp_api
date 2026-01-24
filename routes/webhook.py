@@ -116,11 +116,36 @@ def _get_ia_followup_config() -> dict | None:
     }
 
 
+def _get_last_ia_message_info(numero: str) -> dict | None:
+    conn = get_connection()
+    c = conn.cursor()
+    try:
+        c.execute(
+            """
+            SELECT tipo, timestamp
+              FROM mensajes
+             WHERE numero = %s
+               AND step IN ('ia', 'ia_chat')
+               AND (tipo = 'bot' OR tipo LIKE 'bot_%%')
+          ORDER BY timestamp DESC
+             LIMIT 1
+            """,
+            (numero,),
+        )
+        row = c.fetchone()
+    finally:
+        conn.close()
+    if not row:
+        return None
+    return {"tipo": row[0], "timestamp": row[1]}
+
+
 def _send_followup_if_pending(
     numero: str,
     followup: dict,
     *,
-    reference_time: datetime,
+    interval_minutes: int,
+    followup_index: int,
     message_step: str,
     tenant_key: str | None,
     tenant_env: dict | None,
@@ -144,9 +169,19 @@ def _send_followup_if_pending(
     current_step = get_current_step(numero)
     if not _is_ia_step(current_step):
         return
+    last_ia_info = _get_last_ia_message_info(numero)
+    last_ia_ts = (last_ia_info or {}).get("timestamp")
+    if not isinstance(last_ia_ts, datetime):
+        return
     last_client_info = obtener_ultimo_mensaje_cliente_info(numero)
     last_client_ts = (last_client_info or {}).get("timestamp")
-    if isinstance(last_client_ts, datetime) and last_client_ts > reference_time:
+    if isinstance(last_client_ts, datetime) and last_client_ts > last_ia_ts:
+        return
+    if interval_minutes <= 0 or followup_index <= 0:
+        return
+    elapsed_seconds = (datetime.utcnow() - last_ia_ts).total_seconds()
+    required_seconds = interval_minutes * 60 * followup_index
+    if elapsed_seconds < required_seconds:
         return
     enviar_mensaje(
         numero,
@@ -183,7 +218,6 @@ def _schedule_followup_messages(numero: str, message_step: str) -> None:
     current_tenant = tenants.get_current_tenant()
     tenant_key = current_tenant.tenant_key if current_tenant else None
     tenant_env = dict(tenants.get_current_tenant_env() or {})
-    reference_time = datetime.utcnow()
     scheduled = []
     for idx, message in enumerate(messages, start=1):
         delay_seconds = interval_minutes * 60 * idx
@@ -192,7 +226,8 @@ def _schedule_followup_messages(numero: str, message_step: str) -> None:
             _send_followup_if_pending,
             args=(numero, message),
             kwargs={
-                "reference_time": reference_time,
+                "interval_minutes": interval_minutes,
+                "followup_index": idx,
                 "message_step": message_step,
                 "tenant_key": tenant_key,
                 "tenant_env": tenant_env,
