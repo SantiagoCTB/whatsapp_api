@@ -505,6 +505,24 @@
       statusBox.style.color = isError ? '#c0392b' : '#2c3e50';
     };
 
+    const sendMessengerPayload = (payload) => {
+      updateStatus('Enviando datos del Embedded Signup a tu servidor...');
+      fetch(`{{ url_for('configuracion.messenger_signup') }}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload || {}),
+      })
+        .then((resp) => resp.json())
+        .then((resp) => {
+          if (resp.ok) {
+            updateStatus(resp.message || 'Token de Messenger actualizado.');
+          } else {
+            updateStatus(resp.error || 'No se pudo guardar el token de Messenger.', true);
+          }
+        })
+        .catch(() => updateStatus('Error al enviar los datos del signup.', true));
+    };
+
     messengerTrigger.addEventListener('click', function() {
       if (!facebookAppId) {
         updateStatus('Falta configurar FACEBOOK_APP_ID.', true);
@@ -526,8 +544,15 @@
           function(response) {
             console.log('Respuesta Embedded Signup Messenger', response);
             const responseCode = response && response.authResponse ? response.authResponse.code : '';
+            const responseToken = response && response.authResponse ? response.authResponse.accessToken : '';
             if (responseCode) {
-              updateStatus(`Código recibido: ${responseCode}. Revisa los logs del servidor para el intercambio.`, false);
+              updateStatus('Código recibido. Intercambiando por token...');
+              sendMessengerPayload({ code: responseCode });
+              return;
+            }
+            if (responseToken) {
+              updateStatus('Token recibido. Guardando credenciales...');
+              sendMessengerPayload({ access_token: responseToken });
               return;
             }
             if (response && response.status === 'connected') {
