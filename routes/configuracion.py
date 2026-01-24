@@ -2067,10 +2067,12 @@ def messenger_signup():
     access_token = (payload.get("access_token") or payload.get("token") or "").strip()
     provided_redirect_uri = (payload.get("redirect_uri") or "").strip()
     if embedded_code:
-        redirect_uri = _resolve_embedded_signup_redirect_uri(
-            provided_redirect_uri
-            or url_for("configuracion.configuracion_signup", _external=True)
-        )
+        if provided_redirect_uri:
+            redirect_uri = provided_redirect_uri
+        else:
+            redirect_uri = _resolve_embedded_signup_redirect_uri(
+                url_for("configuracion.configuracion_signup", _external=True)
+            )
         token_response = _exchange_embedded_signup_code_for_token(
             embedded_code, redirect_uri
         )
