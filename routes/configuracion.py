@@ -2046,6 +2046,66 @@ def messenger_pages():
     return {"ok": True, "pages": [{"id": page["id"], "name": page.get("name")} for page in pages]}
 
 
+@config_bp.route('/configuracion/messenger/signup', methods=['POST'])
+def messenger_signup():
+    if not _require_admin():
+        return {"ok": False, "error": "No autorizado"}, 403
+
+    tenant = _resolve_signup_tenant()
+    if not tenant:
+        return {"ok": False, "error": "No se encontró la empresa actual."}, 400
+
+    try:
+        payload = request.get_json(force=True) or {}
+    except Exception:
+        return {"ok": False, "error": "Payload inválido"}, 400
+
+    embedded_code = (payload.get("code") or "").strip()
+    access_token = (payload.get("access_token") or payload.get("token") or "").strip()
+    if embedded_code:
+        redirect_uri = _resolve_embedded_signup_redirect_uri(request.base_url)
+        token_response = _exchange_embedded_signup_code_for_token(
+            embedded_code, redirect_uri
+        )
+        if token_response.get("ok"):
+            access_token = token_response.get("access_token") or access_token
+            payload["token_exchange"] = token_response.get("raw")
+        else:
+            return {
+                "ok": False,
+                "error": token_response.get("error")
+                or "No se pudo intercambiar el código de Messenger.",
+                "details": token_response.get("details"),
+            }, 400
+
+    if not access_token:
+        return {"ok": False, "error": "No se obtuvo un token de Messenger."}, 400
+
+    tenant_env = tenants.get_tenant_env(tenant)
+    env_updates = {key: tenant_env.get(key) for key in tenants.TENANT_ENV_KEYS}
+    env_updates["MESSENGER_TOKEN"] = access_token
+    env_updates["PLATFORM"] = "messenger"
+    tenants.update_tenant_env(tenant.tenant_key, env_updates)
+    tenants.update_tenant_metadata(
+        tenant.tenant_key,
+        {"messenger_embedded_signup": payload},
+    )
+
+    logger.info(
+        "Token de Messenger actualizado desde Embedded Signup",
+        extra={
+            "tenant_key": tenant.tenant_key,
+            "has_token": bool(access_token),
+        },
+    )
+
+    return {
+        "ok": True,
+        "message": "Token de Messenger actualizado.",
+        "has_token": bool(access_token),
+    }
+
+
 @config_bp.route('/configuracion/messenger/page', methods=['POST'])
 def messenger_save_page():
     if not _require_admin():
