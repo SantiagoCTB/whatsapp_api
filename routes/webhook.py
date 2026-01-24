@@ -116,11 +116,34 @@ def _get_ia_followup_config() -> dict | None:
     }
 
 
+def _get_last_message_info(numero: str) -> dict | None:
+    conn = get_connection()
+    c = conn.cursor()
+    try:
+        c.execute(
+            """
+            SELECT tipo, timestamp, step
+              FROM mensajes
+             WHERE numero = %s
+          ORDER BY timestamp DESC
+             LIMIT 1
+            """,
+            (numero,),
+        )
+        row = c.fetchone()
+    finally:
+        conn.close()
+    if not row:
+        return None
+    return {"tipo": row[0], "timestamp": row[1], "step": row[2]}
+
+
 def _send_followup_if_pending(
     numero: str,
     followup: dict,
     *,
-    reference_time: datetime,
+    interval_minutes: int,
+    followup_index: int,
     message_step: str,
     tenant_key: str | None,
     tenant_env: dict | None,
@@ -141,12 +164,21 @@ def _send_followup_if_pending(
                 tenants.set_current_tenant_env(tenants.get_tenant_env(tenant))
     elif tenant_env:
         tenants.set_current_tenant_env(tenant_env)
-    current_step = get_current_step(numero)
-    if _normalize_step_name(current_step) != "ia_chat":
+    last_message_info = _get_last_message_info(numero)
+    last_tipo = (last_message_info or {}).get("tipo") or ""
+    last_step = (last_message_info or {}).get("step") or ""
+    last_ts = (last_message_info or {}).get("timestamp")
+    if not isinstance(last_ts, datetime):
         return
-    last_client_info = obtener_ultimo_mensaje_cliente_info(numero)
-    last_client_ts = (last_client_info or {}).get("timestamp")
-    if isinstance(last_client_ts, datetime) and last_client_ts > reference_time:
+    if not _is_ia_step(last_step):
+        return
+    if not (last_tipo == "bot" or str(last_tipo).lower().startswith("bot_")):
+        return
+    if interval_minutes <= 0 or followup_index <= 0:
+        return
+    elapsed_seconds = (datetime.utcnow() - last_ts).total_seconds()
+    required_seconds = interval_minutes * 60 * followup_index
+    if elapsed_seconds < required_seconds:
         return
     enviar_mensaje(
         numero,
@@ -183,7 +215,6 @@ def _schedule_followup_messages(numero: str, message_step: str) -> None:
     current_tenant = tenants.get_current_tenant()
     tenant_key = current_tenant.tenant_key if current_tenant else None
     tenant_env = dict(tenants.get_current_tenant_env() or {})
-    reference_time = datetime.utcnow()
     scheduled = []
     for idx, message in enumerate(messages, start=1):
         delay_seconds = interval_minutes * 60 * idx
@@ -192,7 +223,8 @@ def _schedule_followup_messages(numero: str, message_step: str) -> None:
             _send_followup_if_pending,
             args=(numero, message),
             kwargs={
-                "reference_time": reference_time,
+                "interval_minutes": interval_minutes,
+                "followup_index": idx,
                 "message_step": message_step,
                 "tenant_key": tenant_key,
                 "tenant_env": tenant_env,
@@ -802,7 +834,7 @@ def _reply_with_ai_image(
     enviar_mensaje(numero, response, tipo="bot", step=message_step)
     message_step_norm = _normalize_step_name(message_step)
     media_pages = None
-    if message_step_norm == "ia_chat":
+    if _is_ia_step(message_step_norm):
         _schedule_followup_messages(numero, message_step)
         media_pages = find_relevant_pages(response, limit=2)
     matched_pages = _matched_catalog_pages(response, media_pages or [])
@@ -946,7 +978,7 @@ def _reply_with_ai(
     enviar_mensaje(numero, response, tipo="bot", step=message_step)
     message_step_norm = _normalize_step_name(message_step)
     media_pages = pages
-    if message_step_norm == "ia_chat":
+    if _is_ia_step(message_step_norm):
         _schedule_followup_messages(numero, message_step)
         media_pages = find_relevant_pages(response, limit=2)
     matched_pages = _matched_catalog_pages(response, media_pages)
