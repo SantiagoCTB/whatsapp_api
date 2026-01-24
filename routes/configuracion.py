@@ -458,6 +458,9 @@ def _resolve_instagram_redirect_uri(fallback: str) -> str:
 
 
 def _resolve_embedded_signup_redirect_uri(fallback: str) -> str:
+    explicit_redirect = (Config.EMBEDDED_SIGNUP_REDIRECT_URI or "").strip()
+    if explicit_redirect:
+        return explicit_redirect
     base_url = (Config.PUBLIC_BASE_URL or "").strip().rstrip("/")
     if base_url:
         return f"{base_url}/configuracion/signup"
@@ -2044,6 +2047,84 @@ def messenger_pages():
 
     pages = response.get("pages", [])
     return {"ok": True, "pages": [{"id": page["id"], "name": page.get("name")} for page in pages]}
+
+
+@config_bp.route('/configuracion/messenger/signup', methods=['POST'])
+def messenger_signup():
+    if not _require_admin():
+        return {"ok": False, "error": "No autorizado"}, 403
+
+    tenant = _resolve_signup_tenant()
+    if not tenant:
+        return {"ok": False, "error": "No se encontró la empresa actual."}, 400
+
+    try:
+        payload = request.get_json(force=True) or {}
+    except Exception:
+        return {"ok": False, "error": "Payload inválido"}, 400
+
+    embedded_code = (payload.get("code") or "").strip()
+    access_token = (payload.get("access_token") or payload.get("token") or "").strip()
+    provided_redirect_uri = (payload.get("redirect_uri") or "").strip()
+    if embedded_code:
+        if provided_redirect_uri:
+            redirect_uri = provided_redirect_uri
+        else:
+            redirect_uri = _resolve_embedded_signup_redirect_uri(
+                url_for("configuracion.configuracion_signup", _external=True)
+            )
+        token_response = _exchange_embedded_signup_code_for_token(
+            embedded_code, redirect_uri
+        )
+        if token_response.get("ok"):
+            access_token = token_response.get("access_token") or access_token
+            payload["token_exchange"] = token_response.get("raw")
+        else:
+            details = token_response.get("details") or {}
+            error_detail = ""
+            if isinstance(details, dict):
+                meta_error = details.get("error")
+                if isinstance(meta_error, dict):
+                    error_detail = (
+                        meta_error.get("error_user_msg")
+                        or meta_error.get("message")
+                        or ""
+                    )
+            error_message = token_response.get("error") or "No se pudo intercambiar el código de Messenger."
+            if error_detail:
+                error_message = f"{error_message} {error_detail}".strip()
+            return {
+                "ok": False,
+                "error": error_message,
+                "details": token_response.get("details"),
+            }, 400
+
+    if not access_token:
+        return {"ok": False, "error": "No se obtuvo un token de Messenger."}, 400
+
+    tenant_env = tenants.get_tenant_env(tenant)
+    env_updates = {key: tenant_env.get(key) for key in tenants.TENANT_ENV_KEYS}
+    env_updates["MESSENGER_TOKEN"] = access_token
+    env_updates["PLATFORM"] = "messenger"
+    tenants.update_tenant_env(tenant.tenant_key, env_updates)
+    tenants.update_tenant_metadata(
+        tenant.tenant_key,
+        {"messenger_embedded_signup": payload},
+    )
+
+    logger.info(
+        "Token de Messenger actualizado desde Embedded Signup",
+        extra={
+            "tenant_key": tenant.tenant_key,
+            "has_token": bool(access_token),
+        },
+    )
+
+    return {
+        "ok": True,
+        "message": "Token de Messenger actualizado.",
+        "has_token": bool(access_token),
+    }
 
 
 @config_bp.route('/configuracion/messenger/page', methods=['POST'])
