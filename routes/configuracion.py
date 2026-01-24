@@ -1765,6 +1765,8 @@ def configuracion_signup():
             "signup_config_code_present": bool(Config.SIGNUP_FACEBOOK),
         },
     )
+    base_url = (Config.PUBLIC_BASE_URL or request.url_root or "").rstrip("/")
+    signup_redirect_uri = f"{base_url}/configuracion/signup"
 
     return render_template(
         'configuracion_signup.html',
@@ -1772,6 +1774,7 @@ def configuracion_signup():
         messenger_embedded_code=Config.MESSENGER_EMBEDDED,
         facebook_app_id=Config.FACEBOOK_APP_ID,
         signup_instagram_url=Config.SIGNUP_INSTRAGRAM,
+        signup_redirect_uri=signup_redirect_uri,
         tenant_key=tenant_key,
         tenant_waba_id=tenant_env.get("WABA_ID"),
         tenant_phone_number_id=tenant_env.get("PHONE_NUMBER_ID"),

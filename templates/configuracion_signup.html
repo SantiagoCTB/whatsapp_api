@@ -545,7 +545,7 @@
           },
         );
       }).catch(() => {
-        const popupUrl = `https://www.facebook.com/v20.0/dialog/oauth?app_id=${encodeURIComponent(facebookAppId)}&config_id=${encodeURIComponent(messengerEmbeddedCode)}&state=${encodeURIComponent(tenantKey || 'default')}&redirect_uri=${encodeURIComponent(window.location.href)}`;
+        const popupUrl = `https://www.facebook.com/v20.0/dialog/oauth?app_id=${encodeURIComponent(facebookAppId)}&config_id=${encodeURIComponent(messengerEmbeddedCode)}&state=${encodeURIComponent(tenantKey || 'default')}&redirect_uri=${encodeURIComponent({{ signup_redirect_uri | tojson }})}`;
         const features = 'width=700,height=800,menubar=no,toolbar=no';
         window.open(popupUrl, 'messenger_signup', features);
         updateStatus('Se abrió el flujo de Embedded Signup de Messenger en una nueva ventana (modo respaldo).');
