@@ -1712,6 +1712,7 @@ def configuracion_signup():
     return render_template(
         'configuracion_signup.html',
         signup_config_code=Config.SIGNUP_FACEBOOK,
+        messenger_embedded_code=Config.MESSENGER_EMBEDDED,
         facebook_app_id=Config.FACEBOOK_APP_ID,
         signup_instagram_url=Config.SIGNUP_INSTRAGRAM,
         tenant_key=tenant_key,
@@ -1766,6 +1767,13 @@ def save_signup():
         extra={
             "tenant_key": tenant.tenant_key,
             "payload_keys": sorted(list(payload.keys())),
+        },
+    )
+    logger.info(
+        "Token embebido recibido",
+        extra={
+            "tenant_key": tenant.tenant_key,
+            "access_token": payload.get("access_token") or payload.get("token"),
         },
     )
     logger.info(
