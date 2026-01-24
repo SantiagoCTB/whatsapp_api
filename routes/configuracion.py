@@ -346,6 +346,54 @@ def _exchange_instagram_code_for_token(code: str, redirect_uri: str) -> dict:
     return {"ok": True, "access_token": long_token, "is_long_lived": True}
 
 
+def _exchange_embedded_signup_code_for_token(code: str, redirect_uri: str) -> dict:
+    if not code:
+        return {"ok": False, "error": "Código de autorización vacío."}
+    if not Config.FACEBOOK_APP_ID or not Config.FACEBOOK_APP_SECRET:
+        return {
+            "ok": False,
+            "error": "Falta configurar FACEBOOK_APP_ID o SECRET_PASSWORD_APP.",
+        }
+
+    params = {
+        "client_id": Config.FACEBOOK_APP_ID,
+        "client_secret": Config.FACEBOOK_APP_SECRET,
+        "redirect_uri": redirect_uri,
+        "code": code,
+    }
+
+    try:
+        response = requests.get(
+            "https://graph.facebook.com/v22.0/oauth/access_token",
+            params=params,
+            timeout=15,
+        )
+    except requests.RequestException:
+        logger.warning("No se pudo conectar al endpoint de token de Meta.")
+        return {"ok": False, "error": "No se pudo conectar con la API de Meta."}
+
+    try:
+        data = response.json()
+    except ValueError:
+        data = {}
+
+    if response.status_code >= 400:
+        return {
+            "ok": False,
+            "error": "No se pudo intercambiar el código del Embedded Signup.",
+            "details": data,
+        }
+
+    access_token = data.get("access_token")
+    if not access_token:
+        return {
+            "ok": False,
+            "error": "Meta no devolvió un access_token en la respuesta.",
+        }
+
+    return {"ok": True, "access_token": access_token, "raw": data}
+
+
 def _handle_instagram_oauth_code(code: str, redirect_uri: str) -> dict:
     tenant = _resolve_signup_tenant()
     if not tenant:
@@ -1778,6 +1826,36 @@ def save_signup():
             "payload_keys": sorted(list(payload.keys())),
         },
     )
+    embedded_code = (payload.get("code") or "").strip()
+    if embedded_code:
+        logger.info(
+            "Código embebido recibido",
+            extra={"tenant_key": tenant.tenant_key, "code": embedded_code},
+        )
+        base_url = (Config.PUBLIC_BASE_URL or request.url_root or "").rstrip("/")
+        redirect_uri = f"{base_url}/configuracion/signup"
+        token_response = _exchange_embedded_signup_code_for_token(
+            embedded_code, redirect_uri
+        )
+        if token_response.get("ok"):
+            payload["access_token"] = token_response.get("access_token")
+            logger.info(
+                "Token embebido obtenido desde código",
+                extra={
+                    "tenant_key": tenant.tenant_key,
+                    "access_token": token_response.get("access_token"),
+                    "response": token_response.get("raw"),
+                },
+            )
+        else:
+            logger.warning(
+                "No se pudo obtener el token desde el código embebido",
+                extra={
+                    "tenant_key": tenant.tenant_key,
+                    "error": token_response.get("error"),
+                    "details": token_response.get("details"),
+                },
+            )
     logger.info(
         "Token embebido recibido",
         extra={
