@@ -217,6 +217,44 @@ def test_dispatch_rule_skips_ai_for_non_ia_rules(monkeypatch, patch_dependencies
     assert ai_calls == []
     assert patch_dependencies.sent_messages[-1][0] == '5215554321'
 
+
+def test_handle_text_message_delays_ia_chat(monkeypatch):
+    now = datetime.now()
+    chat_state = {"row": ("ia_chat", now, "ia_chat_pending")}
+    update_calls = []
+    ai_calls = []
+    chain_calls = []
+
+    monkeypatch.setattr(webhook_module, '_get_session_timeout', lambda: 0)
+    monkeypatch.setattr(webhook_module, 'guardar_mensaje', lambda *_, **__: None)
+    monkeypatch.setattr(webhook_module, 'handle_global_command', lambda *_: False)
+    monkeypatch.setattr(webhook_module, '_reply_with_ai', lambda *args, **__: ai_calls.append(args))
+    monkeypatch.setattr(
+        webhook_module,
+        'process_step_chain',
+        lambda *args, **__: chain_calls.append(args) or False,
+    )
+
+    def fake_get_chat_state(_):
+        return chat_state["row"]
+
+    def fake_update_chat_state(_, step, estado=None):
+        update_calls.append((step, estado))
+        chat_state["row"] = (step, datetime.now(), estado)
+
+    monkeypatch.setattr(webhook_module, 'get_chat_state', fake_get_chat_state)
+    monkeypatch.setattr(webhook_module, 'update_chat_state', fake_update_chat_state)
+
+    webhook_module.handle_text_message("5215559999", "hola")
+
+    assert ai_calls == []
+    assert chain_calls == []
+    assert update_calls[-1] == ("ia_chat", "espera_usuario")
+
+    webhook_module.handle_text_message("5215559999", "segunda")
+
+    assert len(ai_calls) == 1
+
 def test_advance_steps_unique_chain(monkeypatch, patch_dependencies):
     responses = {
         'intro': [

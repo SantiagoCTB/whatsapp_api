@@ -796,6 +796,9 @@ def register_external(name):
 
 def set_user_step(numero, step, estado='espera_usuario'):
     """Actualiza el paso en la tabla chat_state."""
+    normalized_step = _normalize_step_name(step)
+    if normalized_step == "ia_chat" and estado == "espera_usuario":
+        estado = "ia_chat_pending"
     update_chat_state(numero, step, estado)
 
 
@@ -808,6 +811,14 @@ def _extract_chat_status(row):
     if not row or len(row) < 3:
         return None
     return (row[2] or '').strip().lower() or None
+
+
+def _is_ia_chat_pending(row, step: str | None = None) -> bool:
+    status = _extract_chat_status(row)
+    if status != "ia_chat_pending":
+        return False
+    normalized_step = _normalize_step_name(step if step is not None else (row[0] if row else None))
+    return normalized_step == "ia_chat"
 
 
 def _is_agent_mode(row) -> bool:
@@ -1323,6 +1334,8 @@ def _handle_messenger_payload(data, summary, channel="messenger"):
             chat_state_row = get_chat_state(sender_id)
             agent_mode = _is_agent_mode(chat_state_row)
             estado_update = None if agent_mode else "sin_respuesta"
+            if not agent_mode and _is_ia_chat_pending(chat_state_row):
+                estado_update = "ia_chat_pending"
             if agent_mode:
                 logger.info(
                     "Chat en modo asesor; se omite flujo automático",
@@ -1745,7 +1758,7 @@ def dispatch_rule(
 
     input_text_clean = (input_text or '').strip()
     if _is_ia_trigger(input_text) or (
-        _is_ia_step(current_step) and input_text_clean
+        _is_ia_step(current_step) and input_text_clean == "*"
     ):
         system_prompt = _combine_system_prompts(_get_ia_system_prompt(), resp)
         _reply_with_ai(
@@ -2115,6 +2128,7 @@ def handle_text_message(
     row = get_chat_state(numero)
     step_db = row[0] if row else None
     last_time = row[1] if row else None
+    chat_status = _extract_chat_status(row)
     bootstrapped = False
     timeout_seconds = _get_session_timeout()
     expired_session = False
@@ -2132,9 +2146,10 @@ def handle_text_message(
         delete_chat_state(numero)
         clear_chat_runtime_state(numero)
         step_db = None
+        chat_status = None
         notify_session_closed(numero, origin="timeout")
     elif row:
-        update_chat_state(numero, step_db)
+        update_chat_state(numero, step_db, chat_status)
 
     if texto and save:
         guardar_mensaje(numero, texto, 'cliente', step=step_db)
@@ -2151,6 +2166,10 @@ def handle_text_message(
             return
 
     if handle_global_command(numero, texto):
+        return
+
+    if _is_ia_chat_pending(row, step_db) and not bootstrapped:
+        update_chat_state(numero, step_db, "espera_usuario")
         return
 
     if _is_ia_step(get_current_step(numero)) and not bootstrapped:
@@ -2369,6 +2388,8 @@ def webhook():
                 chat_state_row = get_chat_state(from_number)
                 agent_mode = _is_agent_mode(chat_state_row)
                 estado_update = None if agent_mode else 'sin_respuesta'
+                if not agent_mode and _is_ia_chat_pending(chat_state_row):
+                    estado_update = "ia_chat_pending"
                 if agent_mode:
                     logger.info(
                         "Chat en modo asesor; se omite flujo automático",
