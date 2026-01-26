@@ -99,14 +99,15 @@
                 Usa la URL configurada en <code>SIGNUP_INSTAGRAM</code> para abrir el flujo de login.
             </p>
             {% if signup_instagram_url %}
-            <a
+            <button
+                id="instagram-signup-trigger"
                 class="btn-primary"
-                href="{{ signup_instagram_url }}"
-                target="_blank"
-                rel="noopener"
+                type="button"
+                data-signup-url="{{ signup_instagram_url }}"
             >
                 Abrir signup de Instagram
-            </a>
+            </button>
+            <div id="instagram-signup-status" class="help" style="margin-top: 0.5rem"></div>
             {% else %}
             <button class="btn-primary" disabled>Configura SIGNUP_INSTAGRAM</button>
             <p class="alert alert-error" style="margin-top: 0.5rem">Falta configurar SIGNUP_INSTAGRAM en el entorno.</p>
@@ -816,6 +817,85 @@
     };
 
     setupInstagramToken();
+  })();
+</script>
+<script>
+  (function() {
+    const trigger = document.getElementById('instagram-signup-trigger');
+    if (!trigger) return;
+
+    const statusBox = document.getElementById('instagram-signup-status');
+    const signupUrl = trigger.dataset.signupUrl;
+
+    const updateStatus = (message, isError) => {
+      if (!statusBox) return;
+      statusBox.textContent = message || '';
+      statusBox.style.color = isError ? '#c0392b' : '#2c3e50';
+    };
+
+    const resetInstagramUi = () => {
+      const tokenInput = document.getElementById('instagram-user-token');
+      const tokenStatus = document.getElementById('instagram-token-status');
+      const tokenRow = document.getElementById('instagram-token-row');
+      const tokenValue = document.getElementById('instagram-token-value');
+      const accountLabel = document.getElementById('instagram-account-label');
+      const conversationCount = document.getElementById('ig-conversation-count');
+      const messageCount = document.getElementById('ig-message-count');
+      const healthList = document.getElementById('ig-backfill-health');
+
+      if (tokenInput) tokenInput.value = '';
+      if (tokenStatus) {
+        tokenStatus.textContent = '';
+        tokenStatus.style.color = '#198754';
+      }
+      if (tokenRow) tokenRow.style.display = 'none';
+      if (tokenValue) tokenValue.textContent = '';
+      if (accountLabel) accountLabel.textContent = 'Sin configurar';
+      if (conversationCount) conversationCount.textContent = '—';
+      if (messageCount) messageCount.textContent = '—';
+      if (healthList) {
+        const items = {
+          tenant: 'Tenant resuelto para el backfill',
+          token: 'Token de Instagram guardado',
+          account: 'Cuenta de Instagram identificada',
+        };
+        Object.entries(items).forEach(([key, label]) => {
+          const item = healthList.querySelector(`[data-check="${key}"]`);
+          if (item) {
+            item.textContent = `⚠️ ${label}`;
+            item.style.color = '#c0392b';
+          }
+        });
+      }
+    };
+
+    trigger.addEventListener('click', async () => {
+      if (!signupUrl) {
+        updateStatus('Falta configurar SIGNUP_INSTAGRAM.', true);
+        return;
+      }
+
+      trigger.disabled = true;
+      updateStatus('Limpiando datos anteriores de Instagram...', false);
+      try {
+        const response = await fetch('{{ url_for("configuracion.instagram_reset_signup") }}', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({}),
+        });
+        const data = await response.json();
+        if (!response.ok || !data.ok) {
+          throw new Error(data.error || 'No se pudieron limpiar los datos anteriores.');
+        }
+        resetInstagramUi();
+        updateStatus('Datos limpiados. Abriendo el signup de Instagram...', false);
+        window.open(signupUrl, '_blank', 'noopener');
+      } catch (err) {
+        updateStatus(err.message || 'No se pudieron limpiar los datos anteriores.', true);
+      } finally {
+        trigger.disabled = false;
+      }
+    });
   })();
 </script>
 {% endblock %}
