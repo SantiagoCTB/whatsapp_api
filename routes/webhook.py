@@ -244,26 +244,62 @@ def _send_followup_if_pending(
         )
         return
     channel = _resolve_message_channel(numero)
+    tipo_respuesta = media_tipo or "texto"
     logger.info(
         "Intentando enviar follow-up",
         extra={
             "numero": numero,
             "followup_index": followup_index,
             "channel": channel,
-            "tipo_respuesta": media_tipo or "texto",
+            "tipo_respuesta": tipo_respuesta,
             "has_media": bool(media_url),
             "message_len": len(message or ""),
         },
     )
-    success, error_reason = enviar_mensaje(
-        numero,
-        message,
-        tipo="bot",
-        step=message_step,
-        tipo_respuesta=media_tipo or None,
-        opciones=media_url or None,
-        return_error=True,
-    )
+    success = True
+    error_reason = None
+    if media_url and tipo_respuesta in {"image", "video", "audio", "document"}:
+        if message and channel in {"messenger", "instagram"}:
+            success, error_reason = enviar_mensaje(
+                numero,
+                message,
+                tipo="bot",
+                step=message_step,
+                tipo_respuesta="texto",
+                opciones=None,
+                return_error=True,
+            )
+            if not success:
+                logger.warning(
+                    "No se pudo enviar texto previo al follow-up con media: %s",
+                    error_reason or "sin motivo proporcionado",
+                    extra={
+                        "numero": numero,
+                        "followup_index": followup_index,
+                        "channel": channel,
+                    },
+                )
+                return
+            message = ""
+        success, error_reason = enviar_mensaje(
+            numero,
+            message,
+            tipo="bot",
+            step=message_step,
+            tipo_respuesta=tipo_respuesta,
+            opciones=media_url,
+            return_error=True,
+        )
+    else:
+        success, error_reason = enviar_mensaje(
+            numero,
+            message,
+            tipo="bot",
+            step=message_step,
+            tipo_respuesta=tipo_respuesta,
+            opciones=None,
+            return_error=True,
+        )
     if success:
         logger.info(
             "Follow-up enviado",
