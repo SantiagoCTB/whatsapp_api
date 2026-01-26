@@ -1061,6 +1061,21 @@ def _get_ia_system_prompt() -> str | None:
     return _combine_system_prompts(system_prompt, business_description)
 
 
+def _mark_ai_flow_error(numero: str, step: str | None, reason: str) -> None:
+    resolved_step = step or get_current_step(numero)
+    update_chat_state(numero, resolved_step, "error_flujo")
+    logger.warning(
+        "Se marcó el chat con error de flujo por IA",
+        extra={"numero": numero, "reason": reason, "step": resolved_step},
+    )
+    enviar_mensaje(
+        numero,
+        "Estoy revisando tu solicitud, dame un momento",
+        tipo="bot",
+        step=resolved_step,
+    )
+
+
 def _reply_with_ai_image(
     numero: str,
     *,
@@ -1116,6 +1131,7 @@ def _reply_with_ai_image(
     response = generate_response_with_image(history, prompt, image_url, system_message=_get_ia_system_prompt())
     if not response:
         logger.warning("La IA no devolvió respuesta con imagen", extra={"numero": numero})
+        _mark_ai_flow_error(numero, message_step, "ia_sin_respuesta_imagen")
         return False
 
     enviar_mensaje(numero, response, tipo="bot", step=message_step)
@@ -1217,14 +1233,10 @@ def _reply_with_ai(
     catalog_context, pages = _catalog_context_for_prompt(prompt)
     if not catalog_context and not allow_empty_catalog:
         logger.warning(
-            "Sin contexto de portafolio para la IA; se solicitará más información",
+            "Sin contexto de portafolio para la IA; se marcará error de flujo",
             extra={"numero": numero},
         )
-        pedir_datos = (
-            "Ahora mismo no encuentro información suficiente para tu consulta. "
-            "¿Puedes darme más detalles del producto, marca o categoría que buscas?"
-        )
-        enviar_mensaje(numero, pedir_datos, tipo="bot", step=message_step)
+        _mark_ai_flow_error(numero, message_step, "ia_sin_contexto_catalogo")
         return False
 
     prompt_for_model = prompt
@@ -1263,6 +1275,7 @@ def _reply_with_ai(
     response = generate_response(history, prompt_for_model, system_message=system_prompt)
     if not response:
         logger.warning("La IA no devolvió respuesta", extra={"numero": numero})
+        _mark_ai_flow_error(numero, message_step, "ia_sin_respuesta")
         return False
 
     enviar_mensaje(numero, response, tipo="bot", step=message_step)
