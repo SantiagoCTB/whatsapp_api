@@ -1386,7 +1386,7 @@ def handle_option_reply(numero, option_id, platform: str | None = None):
             )
             if step_filter is not None:
                 c.execute(
-                    """
+                    f"""
                     SELECT r.step,
                            r.id, r.respuesta, r.siguiente_step, r.tipo,
                            GROUP_CONCAT(m.media_url SEPARATOR '||') AS media_urls,
@@ -1402,7 +1402,7 @@ def handle_option_reply(numero, option_id, platform: str | None = None):
                 )
             else:
                 c.execute(
-                    """
+                    f"""
                     SELECT r.step,
                            r.id, r.respuesta, r.siguiente_step, r.tipo,
                            GROUP_CONCAT(m.media_url SEPARATOR '||') AS media_urls,
