@@ -963,6 +963,26 @@
       margin-bottom: 16px;
     }
 
+    .config-section {
+      padding: 20px;
+      border-radius: 12px;
+      background: #ffffff;
+      margin-bottom: 20px;
+    }
+
+    .config-section h3 {
+      margin: 0 0 12px;
+      font-size: 18px;
+      color: #1a2653;
+    }
+
+    .config-section-header {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      margin-bottom: 12px;
+    }
+
     .followup-section {
       border: 1px solid #e3e7ef;
       border-radius: 12px;

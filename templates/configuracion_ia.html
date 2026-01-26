@@ -48,27 +48,41 @@
     {% endif %}
 {% endif %}
 
-<form class="card" method="POST" enctype="multipart/form-data">
-    <div class="form-row">
-        <label for="ia_model">Modelo</label>
-        <input type="text" id="ia_model" name="ia_model" value="{{ ia_config.model_name if ia_config else 'o4-mini' }}" readonly>
-    </div>
-    <div class="form-row">
-        <label for="ia_token">Token del modelo</label>
-        <input type="text" id="ia_token" name="ia_token" value="{{ ia_config.model_token or '' if ia_config else '' }}" required>
-    </div>
-    <div class="form-row">
-        <label for="system_prompt">Prompt de respuesta</label>
-        <textarea id="system_prompt" name="system_prompt" rows="5" placeholder="Describe el tono, formato y límites de la respuesta de la IA.">{{ ia_config.system_prompt or '' if ia_config else '' }}</textarea>
-        <small>Se usará como mensaje de sistema para definir el estilo de respuesta de la IA.</small>
-    </div>
-    <div class="form-row">
-        <label for="business_description">Descripción del negocio</label>
-        <textarea id="business_description" name="business_description" rows="4" placeholder="Describe qué hace tu negocio, productos o servicios, y el tipo de cliente al que atiendes.">{{ ia_config.business_description or '' if ia_config else '' }}</textarea>
-        <small>Se añade como contexto para mejorar la detección del catálogo y las respuestas en ia_chat.</small>
-    </div>
-    <div class="form-row">
-        <label>Mensajes de seguimiento</label>
+<form method="POST" enctype="multipart/form-data">
+    <section class="card config-section">
+        <h3>Configuración general</h3>
+        <div class="form-row">
+            <label for="ia_model">Modelo</label>
+            <input type="text" id="ia_model" name="ia_model" value="{{ ia_config.model_name if ia_config else 'o4-mini' }}" readonly>
+        </div>
+        <div class="form-row">
+            <label for="ia_token">Token del modelo</label>
+            <input type="text" id="ia_token" name="ia_token" value="{{ ia_config.model_token or '' if ia_config else '' }}" required>
+        </div>
+        <div class="form-row">
+            <label for="system_prompt">Prompt de respuesta</label>
+            <textarea id="system_prompt" name="system_prompt" rows="5" placeholder="Describe el tono, formato y límites de la respuesta de la IA.">{{ ia_config.system_prompt or '' if ia_config else '' }}</textarea>
+            <small>Se usará como mensaje de sistema para definir el estilo de respuesta de la IA.</small>
+        </div>
+        <div class="form-row">
+            <label for="business_description">Descripción del negocio</label>
+            <textarea id="business_description" name="business_description" rows="4" placeholder="Describe qué hace tu negocio, productos o servicios, y el tipo de cliente al que atiendes.">{{ ia_config.business_description or '' if ia_config else '' }}</textarea>
+            <small>Se añade como contexto para mejorar la detección del catálogo y las respuestas en ia_chat.</small>
+        </div>
+        <div class="form-row checkbox-row">
+            <label for="ia_enabled" class="checkbox-label">
+                <input type="checkbox" id="ia_enabled" name="ia_enabled" value="1" {% if ia_config is none or ia_config.enabled %}checked{% endif %}>
+                Activar respuestas con IA
+            </label>
+            <small>Si desactivas la IA, no se mostrará el aviso en el chat hasta volver a habilitarla.</small>
+        </div>
+    </section>
+
+    <section class="card config-section followup-card">
+        <div class="config-section-header">
+            <h3>Mensajes de seguimiento</h3>
+            <p class="muted">Configura los mensajes y el intervalo para insistir cuando el cliente no responde.</p>
+        </div>
         <div class="followup-section">
             <div class="followup-item">
                 <span class="followup-index">1</span>
@@ -156,44 +170,41 @@
             </div>
             <small>Se enviarán automáticamente si la regla <strong>ia_chat</strong> está activa y el cliente no responde.</small>
         </div>
-    </div>
-    <div class="form-row checkbox-row">
-        <label for="ia_enabled" class="checkbox-label">
-            <input type="checkbox" id="ia_enabled" name="ia_enabled" value="1" {% if ia_config is none or ia_config.enabled %}checked{% endif %}>
-            Activar respuestas con IA
-        </label>
-        <small>Si desactivas la IA, no se mostrará el aviso en el chat hasta volver a habilitarla.</small>
-    </div>
-    <div class="form-row">
-        <label for="catalogo_pdf">Catálogo PDF</label>
-        <input type="file" id="catalogo_pdf" name="catalogo_pdf" accept="application/pdf">
-        <small>Solo archivos PDF, máximo 15 MB.</small>
-    </div>
-    <div class="form-row">
-        <label for="catalogo_url">o URL del catálogo</label>
-        <input type="url" id="catalogo_url" name="catalogo_url" placeholder="https://.../catalogo.pdf" value="{{ ia_config.pdf_source_url or '' if ia_config else '' }}">
-        <small>Se descargará y se indexará igual que un archivo subido.</small>
-    </div>
+    </section>
 
-    {% if ia_config and ia_config.pdf_filename %}
-    <div class="form-row">
-        <p class="muted">Archivo actual:</p>
-        <ul class="file-meta">
-            <li><strong>Nombre original:</strong> {{ ia_config.pdf_original_name or 'Desconocido' }}</li>
-            <li><strong>Peso:</strong> {{ ia_config.pdf_size or '0' }} bytes</li>
-            <li><strong>MIME:</strong> {{ ia_config.pdf_mime or 'application/pdf' }}</li>
-            {% if ia_config.pdf_uploaded_at %}
-            <li><strong>Subido:</strong> {{ ia_config.pdf_uploaded_at }}</li>
-            {% endif %}
-            {% if pdf_url %}
-            <li><a href="{{ pdf_url }}" target="_blank" rel="noopener">Ver PDF</a></li>
-            {% endif %}
-            {% if ia_config.pdf_source_url %}
-            <li><strong>Origen:</strong> <a href="{{ ia_config.pdf_source_url }}" target="_blank" rel="noopener">{{ ia_config.pdf_source_url }}</a></li>
-            {% endif %}
-        </ul>
-    </div>
-    {% endif %}
+    <section class="card config-section">
+        <h3>Catálogo</h3>
+        <div class="form-row">
+            <label for="catalogo_pdf">Catálogo PDF</label>
+            <input type="file" id="catalogo_pdf" name="catalogo_pdf" accept="application/pdf">
+            <small>Solo archivos PDF, máximo 15 MB.</small>
+        </div>
+        <div class="form-row">
+            <label for="catalogo_url">o URL del catálogo</label>
+            <input type="url" id="catalogo_url" name="catalogo_url" placeholder="https://.../catalogo.pdf" value="{{ ia_config.pdf_source_url or '' if ia_config else '' }}">
+            <small>Se descargará y se indexará igual que un archivo subido.</small>
+        </div>
+
+        {% if ia_config and ia_config.pdf_filename %}
+        <div class="form-row">
+            <p class="muted">Archivo actual:</p>
+            <ul class="file-meta">
+                <li><strong>Nombre original:</strong> {{ ia_config.pdf_original_name or 'Desconocido' }}</li>
+                <li><strong>Peso:</strong> {{ ia_config.pdf_size or '0' }} bytes</li>
+                <li><strong>MIME:</strong> {{ ia_config.pdf_mime or 'application/pdf' }}</li>
+                {% if ia_config.pdf_uploaded_at %}
+                <li><strong>Subido:</strong> {{ ia_config.pdf_uploaded_at }}</li>
+                {% endif %}
+                {% if pdf_url %}
+                <li><a href="{{ pdf_url }}" target="_blank" rel="noopener">Ver PDF</a></li>
+                {% endif %}
+                {% if ia_config.pdf_source_url %}
+                <li><strong>Origen:</strong> <a href="{{ ia_config.pdf_source_url }}" target="_blank" rel="noopener">{{ ia_config.pdf_source_url }}</a></li>
+                {% endif %}
+            </ul>
+        </div>
+        {% endif %}
+    </section>
 
     <button type="submit" class="btn-primary">Guardar configuración</button>
 </form>
