@@ -168,6 +168,18 @@ def _send_followup_if_pending(
         tenants.set_current_tenant_env(tenant_env)
     if interval_minutes <= 0 or followup_index <= 0:
         return
+    required_seconds = interval_minutes * 60 * followup_index
+    elapsed_seconds = (datetime.utcnow() - scheduled_at).total_seconds()
+    remaining_seconds = max(0, required_seconds - elapsed_seconds)
+    logger.info(
+        "Tiempo restante para follow-up",
+        extra={
+            "numero": numero,
+            "followup_index": followup_index,
+            "remaining_seconds": remaining_seconds,
+            "interval_minutes": interval_minutes,
+        },
+    )
     last_message_info = _get_last_message_info(numero)
     last_tipo = (last_message_info or {}).get("tipo") or ""
     if _is_client_message_type(last_tipo):
