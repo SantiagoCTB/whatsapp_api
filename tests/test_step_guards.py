@@ -247,13 +247,9 @@ def test_handle_text_message_delays_ia_chat(monkeypatch):
 
     webhook_module.handle_text_message("5215559999", "hola")
 
-    assert ai_calls == []
-    assert chain_calls == []
-    assert update_calls[-1] == ("ia_chat", "espera_usuario")
-
-    webhook_module.handle_text_message("5215559999", "segunda")
-
     assert len(ai_calls) == 1
+    assert chain_calls == [("5215559999", "hola")]
+    assert update_calls[-1] == ("ia_chat", "espera_usuario")
 
 def test_advance_steps_unique_chain(monkeypatch, patch_dependencies):
     responses = {

@@ -2236,7 +2236,6 @@ def handle_text_message(
 
     if _is_ia_chat_pending(row, step_db) and not bootstrapped:
         update_chat_state(numero, step_db, "espera_usuario")
-        return
 
     if _is_ia_step(get_current_step(numero)) and not bootstrapped:
         platform = platform or _resolve_rule_platform(numero)
