@@ -1073,6 +1073,16 @@
       cursor: pointer;
       transition: background 0.3s, color 0.3s;
     }
+
+    .btn-danger {
+      background: #e74c3c;
+      color: var(--text-light);
+      border: none;
+      padding: 10px 20px;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background 0.3s, transform 0.2s;
+    }
     .btn-primary:hover {
       transform: scale(1.05);
       background: var(--accent-hover);
@@ -1080,6 +1090,18 @@
 
     .btn-secondary:hover {
       background: #e4e9f0;
+    }
+
+    .btn-danger:hover {
+      background: #c0392b;
+      transform: scale(1.05);
+    }
+
+    .btn-danger:disabled {
+      background: #d6dbe1;
+      color: #7f8c8d;
+      cursor: not-allowed;
+      transform: none;
     }
     .btn-primary::after {
       content: '';
