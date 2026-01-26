@@ -102,6 +102,11 @@
                             placeholder="URL del archivo"
                             value="{{ ia_config.followup_media_url_1 or '' if ia_config else '' }}"
                         >
+                        <input
+                            type="file"
+                            name="followup_media_file_1"
+                            accept="image/*,video/*,audio/*,application/pdf"
+                        >
                     </div>
                 </div>
             </div>
@@ -123,6 +128,11 @@
                             placeholder="URL del archivo"
                             value="{{ ia_config.followup_media_url_2 or '' if ia_config else '' }}"
                         >
+                        <input
+                            type="file"
+                            name="followup_media_file_2"
+                            accept="image/*,video/*,audio/*,application/pdf"
+                        >
                     </div>
                 </div>
             </div>
@@ -143,6 +153,11 @@
                             name="followup_media_url_3"
                             placeholder="URL del archivo"
                             value="{{ ia_config.followup_media_url_3 or '' if ia_config else '' }}"
+                        >
+                        <input
+                            type="file"
+                            name="followup_media_file_3"
+                            accept="image/*,video/*,audio/*,application/pdf"
                         >
                     </div>
                 </div>
