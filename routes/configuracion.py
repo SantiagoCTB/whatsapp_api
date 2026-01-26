@@ -35,6 +35,21 @@ logger = logging.getLogger(__name__)
 def _media_root():
     return tenants.get_media_root()
 
+
+def _save_followup_media(media_file, media_url):
+    if media_file and media_file.filename:
+        filename = secure_filename(media_file.filename)
+        unique = f"followup_{uuid.uuid4().hex}_{filename}"
+        path = os.path.join(_media_root(), unique)
+        media_file.save(path)
+        return url_for(
+            'static',
+            filename=tenants.get_uploads_url_path(unique),
+            _external=True,
+        )
+    return media_url
+
+
 def _require_admin():
     # Debe haber usuario logueado y el rol 'admin' en la lista de roles
     return "user" in session and 'admin' in (session.get('roles') or [])
@@ -1455,6 +1470,9 @@ def configuracion_ia():
             followup_media_url_1 = (request.form.get('followup_media_url_1') or '').strip() or None
             followup_media_url_2 = (request.form.get('followup_media_url_2') or '').strip() or None
             followup_media_url_3 = (request.form.get('followup_media_url_3') or '').strip() or None
+            followup_media_file_1 = request.files.get('followup_media_file_1')
+            followup_media_file_2 = request.files.get('followup_media_file_2')
+            followup_media_file_3 = request.files.get('followup_media_file_3')
             followup_media_tipo_1 = (request.form.get('followup_media_tipo_1') or '').strip() or None
             followup_media_tipo_2 = (request.form.get('followup_media_tipo_2') or '').strip() or None
             followup_media_tipo_3 = (request.form.get('followup_media_tipo_3') or '').strip() or None
@@ -1479,6 +1497,20 @@ def configuracion_ia():
 
             if pdf_file and pdf_file.filename and catalog_url:
                 error_message = 'Sube un PDF o indica una URL, pero no ambas opciones.'
+
+            if not error_message:
+                followup_pairs = [
+                    (1, followup_media_file_1, followup_media_url_1),
+                    (2, followup_media_file_2, followup_media_url_2),
+                    (3, followup_media_file_3, followup_media_url_3),
+                ]
+                for idx, media_file, media_url in followup_pairs:
+                    if media_file and media_file.filename and media_url:
+                        error_message = (
+                            f'Sube un archivo o indica una URL en el follow-up {idx},'
+                            ' pero no ambas opciones.'
+                        )
+                        break
 
             if pdf_file and pdf_file.filename and not error_message:
                 filename = secure_filename(pdf_file.filename)
@@ -1505,7 +1537,6 @@ def configuracion_ia():
                             legacy_path = os.path.join(pdf_dir, 'ia', ia_config['pdf_filename'])
                             if os.path.exists(legacy_path):
                                 old_pdf_path = legacy_path
-
 
             elif catalog_url and not error_message:
                 ok, mime = _url_ok(catalog_url)
@@ -1553,6 +1584,18 @@ def configuracion_ia():
                             os.remove(path)
                         except OSError:
                             pass
+
+            if not error_message:
+                os.makedirs(_media_root(), exist_ok=True)
+                followup_media_url_1 = _save_followup_media(
+                    followup_media_file_1, followup_media_url_1
+                )
+                followup_media_url_2 = _save_followup_media(
+                    followup_media_file_2, followup_media_url_2
+                )
+                followup_media_url_3 = _save_followup_media(
+                    followup_media_file_3, followup_media_url_3
+                )
 
             if not error_message:
                 ingest_state = ia_config.get("pdf_ingest_state") if ia_config else None
