@@ -183,19 +183,47 @@ def _send_followup_if_pending(
     last_message_info = _get_last_message_info(numero)
     last_tipo = (last_message_info or {}).get("tipo") or ""
     if _is_client_message_type(last_tipo):
+        logger.info(
+            "Follow-up omitido; último mensaje es del cliente",
+            extra={"numero": numero, "followup_index": followup_index, "last_tipo": last_tipo},
+        )
         return
     last_client_info = obtener_ultimo_mensaje_cliente_info(numero)
     last_client_ts = (last_client_info or {}).get("timestamp")
     if isinstance(last_client_ts, datetime) and last_client_ts >= scheduled_at:
+        logger.info(
+            "Follow-up omitido; cliente respondió después de programar",
+            extra={
+                "numero": numero,
+                "followup_index": followup_index,
+                "last_client_ts": last_client_ts,
+                "scheduled_at": scheduled_at,
+            },
+        )
         return
-    enviar_mensaje(
+    success, error_reason = enviar_mensaje(
         numero,
         message,
         tipo="bot",
         step=message_step,
         tipo_respuesta=media_tipo or None,
         opciones=media_url or None,
+        return_error=True,
     )
+    if success:
+        logger.info(
+            "Follow-up enviado",
+            extra={"numero": numero, "followup_index": followup_index},
+        )
+    else:
+        logger.warning(
+            "No se pudo enviar follow-up",
+            extra={
+                "numero": numero,
+                "followup_index": followup_index,
+                "error_reason": error_reason,
+            },
+        )
 
 
 def _schedule_followup_messages(numero: str, message_step: str) -> None:
