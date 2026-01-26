@@ -146,6 +146,7 @@ def _send_followup_if_pending(
     interval_minutes: int,
     followup_index: int,
     message_step: str,
+    scheduled_at: datetime,
     tenant_key: str | None,
     tenant_env: dict | None,
 ) -> None:
@@ -165,30 +166,64 @@ def _send_followup_if_pending(
                 tenants.set_current_tenant_env(tenants.get_tenant_env(tenant))
     elif tenant_env:
         tenants.set_current_tenant_env(tenant_env)
-    last_message_info = _get_last_message_info(numero)
-    last_tipo = (last_message_info or {}).get("tipo") or ""
-    last_step = (last_message_info or {}).get("step") or ""
-    last_ts = (last_message_info or {}).get("timestamp")
-    if not isinstance(last_ts, datetime):
-        return
-    if not _is_ia_step(last_step):
-        return
-    if not (last_tipo == "bot" or str(last_tipo).lower().startswith("bot_")):
-        return
     if interval_minutes <= 0 or followup_index <= 0:
         return
-    elapsed_seconds = (datetime.utcnow() - last_ts).total_seconds()
     required_seconds = interval_minutes * 60 * followup_index
-    if elapsed_seconds < required_seconds:
+    elapsed_seconds = (datetime.utcnow() - scheduled_at).total_seconds()
+    remaining_seconds = max(0, required_seconds - elapsed_seconds)
+    logger.info(
+        "Tiempo restante para follow-up",
+        extra={
+            "numero": numero,
+            "followup_index": followup_index,
+            "remaining_seconds": remaining_seconds,
+            "interval_minutes": interval_minutes,
+        },
+    )
+    last_message_info = _get_last_message_info(numero)
+    last_tipo = (last_message_info or {}).get("tipo") or ""
+    if _is_client_message_type(last_tipo):
+        logger.info(
+            "Follow-up omitido; último mensaje es del cliente",
+            extra={"numero": numero, "followup_index": followup_index, "last_tipo": last_tipo},
+        )
         return
-    enviar_mensaje(
+    last_client_info = obtener_ultimo_mensaje_cliente_info(numero)
+    last_client_ts = (last_client_info or {}).get("timestamp")
+    if isinstance(last_client_ts, datetime) and last_client_ts >= scheduled_at:
+        logger.info(
+            "Follow-up omitido; cliente respondió después de programar",
+            extra={
+                "numero": numero,
+                "followup_index": followup_index,
+                "last_client_ts": last_client_ts,
+                "scheduled_at": scheduled_at,
+            },
+        )
+        return
+    success, error_reason = enviar_mensaje(
         numero,
         message,
         tipo="bot",
         step=message_step,
         tipo_respuesta=media_tipo or None,
         opciones=media_url or None,
+        return_error=True,
     )
+    if success:
+        logger.info(
+            "Follow-up enviado",
+            extra={"numero": numero, "followup_index": followup_index},
+        )
+    else:
+        logger.warning(
+            "No se pudo enviar follow-up",
+            extra={
+                "numero": numero,
+                "followup_index": followup_index,
+                "error_reason": error_reason,
+            },
+        )
 
 
 def _schedule_followup_messages(numero: str, message_step: str) -> None:
@@ -217,6 +252,7 @@ def _schedule_followup_messages(numero: str, message_step: str) -> None:
     tenant_key = current_tenant.tenant_key if current_tenant else None
     tenant_env = dict(tenants.get_current_tenant_env() or {})
     scheduled = []
+    scheduled_at = datetime.utcnow()
     for idx, message in enumerate(messages, start=1):
         delay_seconds = interval_minutes * 60 * idx
         timer = threading.Timer(
@@ -227,6 +263,7 @@ def _schedule_followup_messages(numero: str, message_step: str) -> None:
                 "interval_minutes": interval_minutes,
                 "followup_index": idx,
                 "message_step": message_step,
+                "scheduled_at": scheduled_at,
                 "tenant_key": tenant_key,
                 "tenant_env": tenant_env,
             },
@@ -464,6 +501,11 @@ RELEVANT_HEADERS = (
 
 def _normalize_step_name(step):
     return (step or '').strip().lower()
+
+
+def _is_client_message_type(message_type: str | None) -> bool:
+    normalized = str(message_type or "").lower()
+    return normalized == "cliente" or normalized.startswith("cliente_")
 
 
 def _split_input_variants(value: str) -> list[str]:
@@ -850,9 +892,9 @@ def _reply_with_ai_image(
 
     enviar_mensaje(numero, response, tipo="bot", step=message_step)
     message_step_norm = _normalize_step_name(message_step)
+    _schedule_followup_messages(numero, message_step)
     media_pages = None
     if _is_ia_step(message_step_norm):
-        _schedule_followup_messages(numero, message_step)
         media_pages = find_relevant_pages(response, limit=2)
     matched_pages = _matched_catalog_pages(response, media_pages or [])
     if not matched_pages:
@@ -994,9 +1036,9 @@ def _reply_with_ai(
 
     enviar_mensaje(numero, response, tipo="bot", step=message_step)
     message_step_norm = _normalize_step_name(message_step)
+    _schedule_followup_messages(numero, message_step)
     media_pages = pages
     if _is_ia_step(message_step_norm):
-        _schedule_followup_messages(numero, message_step)
         media_pages = find_relevant_pages(response, limit=2)
     matched_pages = _matched_catalog_pages(response, media_pages)
     if not matched_pages:
@@ -1661,6 +1703,7 @@ def dispatch_rule(
             step=current_step,
             regla_id=regla_id,
         )
+    _schedule_followup_messages(numero, current_step)
     _apply_role_keyword(numero, rol_kw)
     next_step = _resolve_next_step(next_step_raw, selected_option_id, opts)
     advance_steps(numero, next_step, visited=visited, platform=platform)
