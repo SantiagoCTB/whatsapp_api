@@ -35,6 +35,7 @@ from services.whatsapp_api import (
     download_audio,
     get_media_url,
     enviar_mensaje,
+    _resolve_message_channel,
     start_typing_feedback,
     stop_typing_feedback,
 )
@@ -201,6 +202,18 @@ def _send_followup_if_pending(
             },
         )
         return
+    channel = _resolve_message_channel(numero)
+    logger.info(
+        "Intentando enviar follow-up",
+        extra={
+            "numero": numero,
+            "followup_index": followup_index,
+            "channel": channel,
+            "tipo_respuesta": media_tipo or "texto",
+            "has_media": bool(media_url),
+            "message_len": len(message or ""),
+        },
+    )
     success, error_reason = enviar_mensaje(
         numero,
         message,
@@ -222,6 +235,7 @@ def _send_followup_if_pending(
                 "numero": numero,
                 "followup_index": followup_index,
                 "error_reason": error_reason,
+                "channel": channel,
             },
         )
 
