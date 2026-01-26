@@ -206,6 +206,9 @@
                     <button id="instagram-token-save" class="btn-primary" type="button">Guardar token</button>
                 </div>
                 <div id="instagram-token-status" class="help" style="margin-top: 0.5rem"></div>
+                <div id="instagram-token-row" class="help" style="margin-top: 0.25rem; display: none;">
+                    Token recibido: <span id="instagram-token-value" style="word-break: break-all;"></span>
+                </div>
             </div>
             <p class="muted" style="margin-top: 0.75rem;">
                 Cuenta actual: <strong id="instagram-account-label">{{ instagram_account_name or 'Sin configurar' }}</strong>
@@ -713,6 +716,8 @@
       const tokenInput = document.getElementById('instagram-user-token');
       const saveButton = document.getElementById('instagram-token-save');
       const statusBox = document.getElementById('instagram-token-status');
+      const tokenRow = document.getElementById('instagram-token-row');
+      const tokenValue = document.getElementById('instagram-token-value');
       const accountLabel = document.getElementById('instagram-account-label');
       const healthList = document.getElementById('ig-backfill-health');
 
@@ -723,6 +728,17 @@
       const setStatus = (message, isError = false) => {
         statusBox.textContent = message;
         statusBox.style.color = isError ? '#dc3545' : '#198754';
+      };
+
+      const updateTokenDisplay = (token) => {
+        if (!tokenRow || !tokenValue) return;
+        if (!token) {
+          tokenValue.textContent = '';
+          tokenRow.style.display = 'none';
+          return;
+        }
+        tokenValue.textContent = token;
+        tokenRow.style.display = 'block';
       };
 
       const markHealth = (check, ok, detail) => {
@@ -755,6 +771,7 @@
           return;
         }
 
+        updateTokenDisplay(token);
         setStatus('Validando token...', false);
         try {
           const response = await fetch('{{ url_for("configuracion.instagram_save_token") }}', {
