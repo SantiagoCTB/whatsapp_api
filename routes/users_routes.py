@@ -26,6 +26,7 @@ def manage_users():
         return redirect(url_for('auth.login'))
 
     success_message = session.pop('user_success', None)
+    delete_error = session.pop('user_error', None)
     error = None
     form_data = {}
 
@@ -90,6 +91,9 @@ def manage_users():
     finally:
         conn.close()
 
+    if not error and delete_error:
+        error = delete_error
+
     return render_template(
         'usuarios.html',
         roles=roles,
@@ -98,3 +102,28 @@ def manage_users():
         success=success_message,
         form_data=form_data,
     )
+
+
+@users_bp.route('/usuarios/<int:user_id>/delete', methods=['POST'])
+def delete_user(user_id: int):
+    if not _is_admin():
+        return redirect(url_for('auth.login'))
+
+    current_username = session.get('user')
+    conn = get_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute('SELECT id, username FROM usuarios WHERE id = %s', (user_id,))
+        row = cursor.fetchone()
+        if not row:
+            session['user_error'] = 'El usuario seleccionado no existe.'
+        elif row[1] == current_username:
+            session['user_error'] = 'No puedes eliminar tu propio usuario.'
+        else:
+            cursor.execute('DELETE FROM usuarios WHERE id = %s', (user_id,))
+            conn.commit()
+            session['user_success'] = f"Usuario '{row[1]}' eliminado correctamente."
+    finally:
+        conn.close()
+
+    return redirect(url_for('usuarios.manage_users'))
