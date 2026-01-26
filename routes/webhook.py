@@ -832,6 +832,15 @@ def _catalog_context_for_prompt(prompt: str):
     if not pages:
         return "", []
 
+    price_range = _extract_price_range(prompt)
+    if price_range:
+        ranged_pages = [
+            page for page in pages
+            if _page_has_price_in_range(page, price_range)
+        ]
+        if ranged_pages:
+            pages = ranged_pages
+
     context_lines: list[str] = []
 
     for page in pages:
@@ -839,19 +848,73 @@ def _catalog_context_for_prompt(prompt: str):
         if len(snippet) > 800:
             snippet = f"{snippet[:780]}..."
 
+        prices = _extract_prices(page.text_content or "")
         image_rel = ""
         if page.image_filename:
             image_rel = tenants.get_uploads_url_path(f"ia_pages/{page.image_filename}")
 
         context_lines.append(
-            "- registro: {registro}\n  texto: {texto}\n  imagen_rel: {rel}".format(
+            "- registro: {registro}\n  texto: {texto}\n  precios_detectados: {precios}\n  imagen_rel: {rel}".format(
                 registro=page.page_number,
                 texto=snippet,
+                precios=", ".join(f"${price:,}".replace(",", ".") for price in prices) or "N/A",
                 rel=f"/static/{image_rel}" if image_rel else "",
             )
         )
 
     return "\n".join(context_lines), pages
+
+
+def _extract_prices(text: str) -> list[int]:
+    if not text:
+        return []
+    normalized = text.replace("\u00a0", " ")
+    matches = re.findall(r"(?:\\$\\s*)?(\\d{1,3}(?:[\\.,]\\d{3})+|\\d{4,})", normalized)
+    prices: list[int] = []
+    for token in matches:
+        digits = re.sub(r"[\\.,]", "", token)
+        if not digits.isdigit():
+            continue
+        value = int(digits)
+        if value <= 0:
+            continue
+        if value < 1000:
+            continue
+        prices.append(value)
+    return prices
+
+
+def _extract_price_range(prompt: str) -> tuple[int | None, int | None] | None:
+    if not prompt:
+        return None
+    normalized = normalize_text(prompt)
+    numbers = _extract_prices(prompt)
+    if not numbers:
+        return None
+    numbers.sort()
+    if "entre" in normalized and len(numbers) >= 2:
+        return numbers[0], numbers[-1]
+    if "hasta" in normalized or "menos" in normalized or "max" in normalized:
+        return None, numbers[-1]
+    if "mas de" in normalized or "mínimo" in normalized or "minimo" in normalized:
+        return numbers[0], None
+    if len(numbers) >= 2:
+        return numbers[0], numbers[-1]
+    return None
+
+
+def _page_has_price_in_range(page, price_range: tuple[int | None, int | None]) -> bool:
+    prices = _extract_prices(page.text_content or "")
+    if not prices:
+        return False
+    min_price, max_price = price_range
+    for price in prices:
+        if min_price is not None and price < min_price:
+            continue
+        if max_price is not None and price > max_price:
+            continue
+        return True
+    return False
 
 
 def _page_keywords_for_match(page) -> set[str]:
@@ -1112,7 +1175,10 @@ def _reply_with_ai(
             "- Responde únicamente con datos disponibles en este contexto.\n"
             "- Evita mencionar el origen del contenido o detalles internos.\n"
             "- No incluyas enlaces ni imágenes en formato markdown/HTML.\n"
-            "- Si no hay coincidencias claras, pide más detalles al usuario sin inventar datos."
+            "- Si no hay coincidencias claras, pide más detalles al usuario sin inventar datos.\n"
+            "- Si el usuario pide un rango de precio y el contexto incluye precios, propone productos que cumplan; "
+            "si no hay precios claros, pide más detalles sin asumir que no existen.\n"
+            "- Usa el campo precios_detectados para comparar rangos de precio cuando esté disponible."
         )
     elif allow_empty_catalog:
         prompt_for_model = (
