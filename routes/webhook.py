@@ -2,6 +2,7 @@ import os
 import logging
 import threading
 import json
+import mimetypes
 import re
 from urllib.parse import urlparse
 import unicodedata
@@ -154,6 +155,37 @@ def _send_followup_if_pending(
     message = (followup.get("text") or "").strip()
     media_url = (followup.get("media_url") or "").strip()
     media_tipo = (followup.get("media_tipo") or "").strip()
+    if media_url and not media_tipo:
+        mime_type, _ = mimetypes.guess_type(media_url)
+        if mime_type:
+            if mime_type.startswith("image/"):
+                media_tipo = "image"
+            elif mime_type.startswith("video/"):
+                media_tipo = "video"
+            elif mime_type.startswith("audio/"):
+                media_tipo = "audio"
+            else:
+                media_tipo = "document"
+            logger.info(
+                "Tipo de media inferido para follow-up",
+                extra={
+                    "numero": numero,
+                    "followup_index": followup_index,
+                    "media_tipo": media_tipo,
+                    "media_url": media_url,
+                    "mime_type": mime_type,
+                },
+            )
+        else:
+            media_tipo = "document"
+            logger.warning(
+                "Tipo de media no detectado; se usará document en follow-up",
+                extra={
+                    "numero": numero,
+                    "followup_index": followup_index,
+                    "media_url": media_url,
+                },
+            )
     if not message and not media_url:
         return
     tenants.clear_current_tenant()
@@ -239,7 +271,8 @@ def _send_followup_if_pending(
         )
     else:
         logger.warning(
-            "No se pudo enviar follow-up",
+            "No se pudo enviar follow-up: %s",
+            error_reason or "sin motivo proporcionado",
             extra={
                 "numero": numero,
                 "followup_index": followup_index,
