@@ -1112,7 +1112,9 @@ def _reply_with_ai(
             "- Responde únicamente con datos disponibles en este contexto.\n"
             "- Evita mencionar el origen del contenido o detalles internos.\n"
             "- No incluyas enlaces ni imágenes en formato markdown/HTML.\n"
-            "- Si no hay coincidencias claras, pide más detalles al usuario sin inventar datos."
+            "- Si no hay coincidencias claras, pide más detalles al usuario sin inventar datos.\n"
+            "- Si el usuario pide un rango de precio y el contexto incluye precios, propone productos que cumplan; "
+            "si no hay precios claros, pide más detalles sin asumir que no existen."
         )
     elif allow_empty_catalog:
         prompt_for_model = (
