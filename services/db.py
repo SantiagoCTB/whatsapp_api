@@ -3,6 +3,8 @@ import importlib.util
 import json
 import os
 import re
+
+from services.normalize_text import normalize_text
 import contextvars
 import sys
 import logging
@@ -1547,7 +1549,11 @@ def search_catalog_pages(
     mezclar datos entre empresas.
     """
 
-    tokens = [t for t in re.split(r"\W+", (query or "").lower()) if len(t) > 2]
+    normalized_query = normalize_text(query or "")
+    raw_tokens = [t for t in normalized_query.split() if t]
+    tokens = [t for t in raw_tokens if len(t) > 2]
+    if not tokens:
+        tokens = [t for t in raw_tokens if len(t) >= 2]
 
     active_tenant = tenant_key if tenant_key is not None else get_current_tenant_key()
     default_tenant = (Config.DEFAULT_TENANT or "").strip() or None
@@ -1651,9 +1657,10 @@ def search_catalog_pages(
         rows_cache.append((candidate, rows))
         scored = []
         for pdf_filename, page_number, text_content, keywords, image_filename in rows:
-            text_lower = (text_content or "").lower()
-            kw_tokens = (keywords or "").lower().split(",") if keywords else []
-            score = sum(1 for token in tokens if token in text_lower)
+            text_normalized = normalize_text(text_content or "")
+            text_tokens = set(text_normalized.split())
+            kw_tokens = set(normalize_text(keywords or "").split()) if keywords else set()
+            score = sum(1 for token in tokens if token in text_tokens)
             if not score and kw_tokens:
                 score = sum(1 for token in tokens if token in kw_tokens)
             if score:
@@ -1679,8 +1686,8 @@ def search_catalog_pages(
                         "tokens": tokens,
                     },
                 )
-            scored.sort(key=lambda item: item["page_number"])
-            return _select_evenly(scored, limit)
+            scored.sort(key=lambda item: (-item["score"], item["page_number"]))
+            return scored[:limit]
 
         logger.debug(
             "Catálogo IA sin coincidencias",
