@@ -1,4 +1,5 @@
 import os
+import base64
 import logging
 import threading
 import json
@@ -2678,9 +2679,11 @@ def webhook():
                         if _normalize_step_name(step) == "ia_chat":
                             local_path = None
                             public_url = None
+                            mime_clean = "image/jpeg"
+                            image_bytes = None
                             try:
                                 mime_raw = msg['image'].get('mime_type', 'image/jpeg')
-                                mime_clean = mime_raw.split(';')[0].strip()
+                                mime_clean = mime_raw.split(';')[0].strip() or "image/jpeg"
                                 ext = mime_clean.split('/')[-1] or "jpg"
                                 image_bytes = download_audio(media_id)
                                 filename = f"{media_id}.{ext}"
@@ -2701,19 +2704,33 @@ def webhook():
                                 )
                                 public_url = _normalize_media_url(media_url)
 
-                            prompt_prefix = None
+                            image_text = extract_text_from_image(local_path) if local_path else ""
+
+                            prompt_lines = [
+                                "El usuario envió una imagen. "
+                                "Lee el contenido como se procesa el catálogo y "
+                                "busca coincidencias con el catálogo para responder."
+                            ]
                             if caption:
-                                prompt_prefix = (
-                                    "El usuario envió una imagen. "
-                                    "Lee el contenido como se procesa el catálogo y "
-                                    "busca coincidencias con el catálogo para responder.\n"
+                                prompt_lines.append(
                                     "Texto adjunto del usuario:\n"
                                     f"{caption}"
                                 )
+                            if image_text:
+                                prompt_lines.append(
+                                    "Texto detectado en la imagen:\n"
+                                    f"{image_text}"
+                                )
+                            prompt_prefix = "\n".join(prompt_lines)
+
+                            image_url = None
+                            if image_bytes:
+                                encoded = base64.b64encode(image_bytes).decode("utf-8")
+                                image_url = f"data:{mime_clean};base64,{encoded}"
 
                             responded = _reply_with_ai_image(
                                 from_number,
-                                media_url=public_url or media_url,
+                                media_url=image_url or public_url or media_url,
                                 prompt_prefix=prompt_prefix,
                                 set_step=False,
                                 history_step=None,
