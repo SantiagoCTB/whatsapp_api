@@ -868,19 +868,80 @@ def _catalog_context_for_prompt(prompt: str):
 def _extract_prices(text: str) -> list[int]:
     if not text:
         return []
-    normalized = text.replace("\u00a0", " ")
-    matches = re.findall(r"(?:\\$\\s*)?(\\d{1,3}(?:[\\.,]\\d{3})+|\\d{4,})", normalized)
+    normalized = text.replace("\u00a0", " ").lower()
+
+    def _append_unique(values: list[int], value: int) -> None:
+        if value in values:
+            return
+        values.append(value)
+
+    def _parse_number_token(token: str) -> float | None:
+        cleaned = token.strip()
+        if not cleaned:
+            return None
+        has_dot = "." in cleaned
+        has_comma = "," in cleaned
+        if has_dot and has_comma:
+            cleaned = cleaned.replace(".", "").replace(",", ".")
+        elif has_comma:
+            parts = cleaned.split(",")
+            if len(parts[-1]) == 3 and len(parts) > 1:
+                cleaned = cleaned.replace(",", "")
+            else:
+                cleaned = cleaned.replace(",", ".")
+        elif has_dot:
+            parts = cleaned.split(".")
+            if len(parts[-1]) == 3 and len(parts) > 1:
+                cleaned = cleaned.replace(".", "")
+        try:
+            return float(cleaned)
+        except ValueError:
+            return None
+
     prices: list[int] = []
+
+    matches = re.findall(r"(?:\\$\\s*)?(\\d{1,3}(?:[\\.,]\\d{3})+|\\d{4,})", normalized)
     for token in matches:
-        digits = re.sub(r"[\\.,]", "", token)
-        if not digits.isdigit():
+        value = _parse_number_token(token)
+        if value is None:
             continue
-        value = int(digits)
+        price = int(round(value))
+        if price <= 0:
+            continue
+        if price < 1000:
+            continue
+        _append_unique(prices, price)
+
+    unit_matches = re.findall(
+        r"(\\d+(?:[\\.,]\\d+)?)\\s*(mil|miles|k|millon(?:es)?|mm)",
+        normalized,
+    )
+    for amount, unit in unit_matches:
+        value = _parse_number_token(amount)
+        if value is None:
+            continue
+        factor = 1000 if unit in {"mil", "miles", "k"} else 1_000_000
+        price = int(round(value * factor))
+        if price <= 0:
+            continue
+        _append_unique(prices, price)
+
+    currency_prefix = re.findall(
+        r"(?:\\$|cop|pesos?|usd|dolares?|eur|euros?)\\s*(\\d{1,3})(?![\\d\\.,])",
+        normalized,
+    )
+    currency_suffix = re.findall(
+        r"(\\d{1,3})(?![\\d\\.,])\\s*(?:pesos?|usd|dolares?|cop|eur|euros?)",
+        normalized,
+    )
+    for token in currency_prefix + currency_suffix:
+        if not token.isdigit():
+            continue
+        value = int(token)
         if value <= 0:
             continue
-        if value < 1000:
-            continue
-        prices.append(value)
+        _append_unique(prices, value)
+
     return prices
 
 
