@@ -167,13 +167,10 @@ def _send_followup_if_pending(
         tenants.set_current_tenant_env(tenant_env)
     last_message_info = _get_last_message_info(numero)
     last_tipo = (last_message_info or {}).get("tipo") or ""
-    last_step = (last_message_info or {}).get("step") or ""
     last_ts = (last_message_info or {}).get("timestamp")
     if not isinstance(last_ts, datetime):
         return
-    if not _is_ia_step(last_step):
-        return
-    if not (last_tipo == "bot" or str(last_tipo).lower().startswith("bot_")):
+    if _is_client_message_type(last_tipo):
         return
     if interval_minutes <= 0 or followup_index <= 0:
         return
@@ -464,6 +461,11 @@ RELEVANT_HEADERS = (
 
 def _normalize_step_name(step):
     return (step or '').strip().lower()
+
+
+def _is_client_message_type(message_type: str | None) -> bool:
+    normalized = str(message_type or "").lower()
+    return normalized == "cliente" or normalized.startswith("cliente_")
 
 
 def _split_input_variants(value: str) -> list[str]:
@@ -850,9 +852,9 @@ def _reply_with_ai_image(
 
     enviar_mensaje(numero, response, tipo="bot", step=message_step)
     message_step_norm = _normalize_step_name(message_step)
+    _schedule_followup_messages(numero, message_step)
     media_pages = None
     if _is_ia_step(message_step_norm):
-        _schedule_followup_messages(numero, message_step)
         media_pages = find_relevant_pages(response, limit=2)
     matched_pages = _matched_catalog_pages(response, media_pages or [])
     if not matched_pages:
@@ -994,9 +996,9 @@ def _reply_with_ai(
 
     enviar_mensaje(numero, response, tipo="bot", step=message_step)
     message_step_norm = _normalize_step_name(message_step)
+    _schedule_followup_messages(numero, message_step)
     media_pages = pages
     if _is_ia_step(message_step_norm):
-        _schedule_followup_messages(numero, message_step)
         media_pages = find_relevant_pages(response, limit=2)
     matched_pages = _matched_catalog_pages(response, media_pages)
     if not matched_pages:
@@ -1661,6 +1663,7 @@ def dispatch_rule(
             step=current_step,
             regla_id=regla_id,
         )
+    _schedule_followup_messages(numero, current_step)
     _apply_role_keyword(numero, rol_kw)
     next_step = _resolve_next_step(next_step_raw, selected_option_id, opts)
     advance_steps(numero, next_step, visited=visited, platform=platform)
