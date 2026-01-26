@@ -1609,8 +1609,9 @@ def dispatch_rule(
     if current_step_norm:
         visited.add(current_step_norm)
 
+    input_text_clean = (input_text or '').strip()
     if _is_ia_trigger(input_text) or (
-        (input_text or '').strip() == '*' and _is_ia_step(current_step)
+        _is_ia_step(current_step) and input_text_clean
     ):
         system_prompt = _combine_system_prompts(_get_ia_system_prompt(), resp)
         _reply_with_ai(
@@ -1811,6 +1812,54 @@ def process_step_chain(
             dispatch_rule(numero, r, step, visited=visited, platform=platform)
             handled = True
             return handled
+
+    def _select_global_rule():
+        if text_norm is None:
+            return None
+        conn = get_connection(); c = conn.cursor()
+        try:
+            c.execute(
+                """
+                SELECT r.step, r.platform, r.id, r.respuesta, r.siguiente_step, r.tipo,
+                       GROUP_CONCAT(m.media_url SEPARATOR '||') AS media_urls,
+                       r.opciones, r.rol_keyword, r.input_text
+                  FROM reglas r
+                  LEFT JOIN regla_medias m ON r.id = m.regla_id
+                 WHERE r.input_text IS NOT NULL
+                   AND r.input_text <> ''
+                 GROUP BY r.step, r.platform, r.id
+                 ORDER BY (r.platform = %s) DESC, r.id
+                """,
+                (platform,),
+            )
+            rows = c.fetchall()
+        finally:
+            conn.close()
+        matches = []
+        for row in rows:
+            rule_step = (row[0] or '').strip()
+            rule_platform = row[1]
+            rule_input = (row[9] or '').strip()
+            if not _input_text_matches(text_norm, rule_input):
+                continue
+            if _is_platform_agnostic_rule(step=rule_step, input_text=rule_input):
+                matches.append(row)
+                continue
+            if not rule_platform or rule_platform == platform:
+                matches.append(row)
+        if not matches:
+            return None
+        return matches[0]
+
+    global_rule = _select_global_rule()
+    if global_rule:
+        rule_step = (global_rule[0] or '').strip().lower()
+        rule = global_rule[2:]
+        effective_step = rule_step or step
+        set_user_step(numero, effective_step)
+        dispatch_rule(numero, rule, step=effective_step, visited=visited, platform=platform)
+        handled = True
+        return handled
 
     # Regla comodín
     if comodines and wildcard_allowed:
