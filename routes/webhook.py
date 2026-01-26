@@ -167,6 +167,15 @@ def _send_followup_if_pending(
                 tenants.set_current_tenant_env(tenants.get_tenant_env(tenant))
     elif tenant_env:
         tenants.set_current_tenant_env(tenant_env)
+    logger.info(
+        "Contexto tenant para follow-up",
+        extra={
+            "numero": numero,
+            "followup_index": followup_index,
+            "tenant_key": tenant_key,
+            "tenant_env_keys": sorted(list((tenant_env or {}).keys())),
+        },
+    )
     if interval_minutes <= 0 or followup_index <= 0:
         return
     required_seconds = interval_minutes * 60 * followup_index
