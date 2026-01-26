@@ -490,7 +490,7 @@ def _handle_instagram_oauth_code(code: str, redirect_uri: str) -> dict:
             "is_long_lived": token_response.get("is_long_lived"),
         },
     )
-    return {"ok": True, "account": account}
+    return {"ok": True, "account": account, "access_token": access_token}
 
 
 def _resolve_instagram_redirect_uri(fallback: str) -> str:
@@ -1841,10 +1841,16 @@ def configuracion_signup():
         redirect_uri = _resolve_instagram_redirect_uri(request.base_url)
         result = _handle_instagram_oauth_code(oauth_code, redirect_uri)
         if not result.get("ok"):
+            session["instagram_oauth_error"] = result.get("error") or "No se pudo procesar el OAuth de Instagram."
+            if result.get("details"):
+                session["instagram_oauth_error_details"] = result.get("details")
             logger.warning(
                 "No se pudo procesar el código de Instagram OAuth",
                 extra={"error": result.get("error"), "details": result.get("details")},
             )
+        else:
+            session["instagram_oauth_status"] = "Token de Instagram obtenido desde OAuth."
+            session["instagram_oauth_token"] = result.get("access_token")
         return redirect(url_for("configuracion.configuracion_signup"))
 
     tenant = _resolve_signup_tenant()
@@ -1874,6 +1880,11 @@ def configuracion_signup():
         },
     )
 
+    instagram_oauth_status = session.pop("instagram_oauth_status", "")
+    instagram_oauth_token = session.pop("instagram_oauth_token", "")
+    instagram_oauth_error = session.pop("instagram_oauth_error", "")
+    instagram_oauth_error_details = session.pop("instagram_oauth_error_details", None)
+
     return render_template(
         'configuracion_signup.html',
         signup_config_code=Config.SIGNUP_FACEBOOK,
@@ -1890,6 +1901,10 @@ def configuracion_signup():
         instagram_token_present=bool((tenant_env.get("INSTAGRAM_TOKEN") or "").strip()),
         instagram_conversation_count=instagram_conversation_count,
         instagram_message_count=instagram_message_count,
+        instagram_oauth_status=instagram_oauth_status,
+        instagram_oauth_token=instagram_oauth_token,
+        instagram_oauth_error=instagram_oauth_error,
+        instagram_oauth_error_details=instagram_oauth_error_details,
     )
 
 
@@ -1905,10 +1920,16 @@ def instagram_oauth_callback():
     redirect_uri = _resolve_instagram_redirect_uri(request.base_url)
     result = _handle_instagram_oauth_code(oauth_code, redirect_uri)
     if not result.get("ok"):
+        session["instagram_oauth_error"] = result.get("error") or "No se pudo completar el OAuth de Instagram."
+        if result.get("details"):
+            session["instagram_oauth_error_details"] = result.get("details")
         logger.warning(
             "No se pudo completar el callback de Instagram OAuth",
             extra={"error": result.get("error"), "details": result.get("details")},
         )
+    else:
+        session["instagram_oauth_status"] = "Token de Instagram obtenido desde OAuth."
+        session["instagram_oauth_token"] = result.get("access_token")
     return redirect(url_for("configuracion.configuracion_signup"))
 
 

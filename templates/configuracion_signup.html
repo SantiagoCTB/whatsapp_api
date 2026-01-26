@@ -206,8 +206,26 @@
                     <button id="instagram-token-save" class="btn-primary" type="button">Guardar token</button>
                 </div>
                 <div id="instagram-token-status" class="help" style="margin-top: 0.5rem"></div>
-                <div id="instagram-token-row" class="help" style="margin-top: 0.25rem; display: none;">
-                    Token recibido: <span id="instagram-token-value" style="word-break: break-all;"></span>
+                {% if instagram_oauth_status %}
+                <div class="alert alert-success" style="margin-top: 0.5rem;">{{ instagram_oauth_status }}</div>
+                {% endif %}
+                {% if instagram_oauth_error %}
+                <div class="alert alert-error" style="margin-top: 0.5rem;">
+                    {{ instagram_oauth_error }}
+                    {% if instagram_oauth_error_details %}
+                    <details style="margin-top: 0.25rem;">
+                        <summary>Detalles</summary>
+                        <pre style="white-space: pre-wrap; margin: 0;">{{ instagram_oauth_error_details | tojson(indent=2) }}</pre>
+                    </details>
+                    {% endif %}
+                </div>
+                {% endif %}
+                <div
+                    id="instagram-token-row"
+                    class="help"
+                    style="margin-top: 0.25rem; display: {{ 'block' if instagram_oauth_token else 'none' }};"
+                >
+                    Token recibido: <span id="instagram-token-value" style="word-break: break-all;">{{ instagram_oauth_token }}</span>
                 </div>
             </div>
             <p class="muted" style="margin-top: 0.75rem;">
