@@ -28,7 +28,11 @@ from services.whatsapp_api import (
     subir_media,
     _resolve_message_channel,
 )
-from routes.webhook import clear_chat_runtime_state, notify_session_closed
+from routes.webhook import (
+    _schedule_followup_messages,
+    clear_chat_runtime_state,
+    notify_session_closed,
+)
 from services.db import (
     get_connection,
     get_chat_state,
@@ -1209,6 +1213,7 @@ def send_message():
     row = get_chat_state(numero)
     step = row[0] if row else ''
     current_state = row[2] if row and len(row) > 2 else None
+    _schedule_followup_messages(numero, step)
     next_state = 'asesor' if current_state else None
     update_chat_state(numero, step, next_state)
     return jsonify({'status': 'success'}), 200
@@ -1661,9 +1666,10 @@ def send_image():
     )
     if not success:
         return jsonify({'error': error_reason or 'No se pudo enviar la imagen.'}), 502
+    row = get_chat_state(numero)
+    step = row[0] if row else ''
+    _schedule_followup_messages(numero, step)
     if origen != 'bot':
-        row = get_chat_state(numero)
-        step = row[0] if row else ''
         update_chat_state(numero, step, 'asesor')
 
     return jsonify({'status':'sent_image'}), 200
@@ -1716,6 +1722,7 @@ def send_document():
         return jsonify({'error': error_reason or 'No se pudo enviar el documento.'}), 502
     row = get_chat_state(numero)
     step = row[0] if row else ''
+    _schedule_followup_messages(numero, step)
     update_chat_state(numero, step, 'asesor')
 
     return jsonify({'status':'sent_document'}), 200
@@ -1952,9 +1959,10 @@ def send_audio():
             tipo=tipo_envio,
             tipo_respuesta='texto',
         )
+    row = get_chat_state(numero)
+    step = row[0] if row else ''
+    _schedule_followup_messages(numero, step)
     if origen != 'bot':
-        row = get_chat_state(numero)
-        step = row[0] if row else ''
         update_chat_state(numero, step, 'asesor')
 
     response_payload = {'status': 'sent_audio', 'url': preferred_audio_url, 'urls': audio_urls}
@@ -2014,9 +2022,10 @@ def send_video():
     )
     if not success:
         return jsonify({'error': error_reason or 'No se pudo enviar el video.'}), 502
+    row = get_chat_state(numero)
+    step = row[0] if row else ''
+    _schedule_followup_messages(numero, step)
     if origen != 'bot':
-        row = get_chat_state(numero)
-        step = row[0] if row else ''
         update_chat_state(numero, step, 'asesor')
 
     return jsonify({'status':'sent_video'}), 200
