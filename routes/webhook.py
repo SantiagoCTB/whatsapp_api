@@ -1724,6 +1724,7 @@ def process_step_chain(
     *,
     allow_wildcard_with_text=True,
     allow_wildcard_when_no_specific=True,
+    raw_text: str | None = None,
 ):
     """Procesa el step actual una sola vez.
 
@@ -1800,6 +1801,10 @@ def process_step_chain(
         # comodines. Esto ocurre, por ejemplo, en el primer mensaje del
         # usuario tras iniciar el flujo, donde se espera que el bot ya haya
         # enviado las instrucciones y aguarde una nueva respuesta válida.
+        return handled
+
+    if raw_text and handle_option_reply(numero, raw_text, platform=platform):
+        handled = True
         return handled
 
     logging.warning("Fallback en step '%s' para entrada '%s'", step, text_norm)
@@ -1946,6 +1951,7 @@ def handle_text_message(
             allow_wildcard_with_text=True,
             allow_wildcard_when_no_specific=True,
             platform=platform,
+            raw_text=texto,
         )
         if handled:
             return
@@ -1968,6 +1974,7 @@ def handle_text_message(
         text_norm,
         allow_wildcard_with_text=not bootstrapped,
         platform=platform,
+        raw_text=texto,
     )
 
 
