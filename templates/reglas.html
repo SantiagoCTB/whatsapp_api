@@ -60,7 +60,12 @@
     <textarea id="media_url" name="media_url" style="display:none;" placeholder="URL1, URL2&#10;URL3"></textarea>
 
     <label for="rol_keyword">Rol keyword:</label>
-    <input type="text" id="rol_keyword" name="rol_keyword">
+    <select id="rol_keyword" name="rol_keyword">
+        <option value="">Sin rol</option>
+        {% for role in roles %}
+        <option value="{{ role.keyword }}">{{ role.name }} ({{ role.keyword }})</option>
+        {% endfor %}
+    </select>
 
     <label for="calculo">Cálculo:</label>
     <input type="text" id="calculo" name="calculo">

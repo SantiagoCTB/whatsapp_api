@@ -1318,12 +1318,16 @@ def _reglas_view(template_name):
                             d[key] = value
                     d['flow_options'] = parsed_opts
             reglas.append(d)
+        c.execute("SELECT name, keyword FROM roles ORDER BY name")
+        roles_rows = c.fetchall()
+        roles = [{"name": row[0], "keyword": row[1]} for row in roles_rows]
         tenant_env = dict(tenants.get_current_tenant_env() or {})
         instagram_token_present = bool((tenant_env.get("INSTAGRAM_TOKEN") or "").strip())
         chat_state_definitions = get_chat_state_definitions(include_hidden=True)
         return render_template(
             template_name,
             reglas=reglas,
+            roles=roles,
             chat_state_definitions=chat_state_definitions,
             instagram_token_present=instagram_token_present,
         )
