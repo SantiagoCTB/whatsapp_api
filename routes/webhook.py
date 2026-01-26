@@ -2,6 +2,7 @@ import os
 import logging
 import threading
 import json
+import re
 from urllib.parse import urlparse
 import unicodedata
 from datetime import datetime
@@ -463,6 +464,22 @@ RELEVANT_HEADERS = (
 
 def _normalize_step_name(step):
     return (step or '').strip().lower()
+
+
+def _split_input_variants(value: str) -> list[str]:
+    if not isinstance(value, str):
+        return []
+    parts = re.split(r"[,;\n]+", value)
+    return [part.strip() for part in parts if part.strip()]
+
+
+def _input_text_matches(text_norm: str, rule_input: str) -> bool:
+    if not text_norm or not isinstance(rule_input, str):
+        return False
+    for part in _split_input_variants(rule_input):
+        if normalize_text(part) == text_norm:
+            return True
+    return False
 
 
 def _is_ia_trigger(value: str | None) -> bool:
@@ -1372,6 +1389,14 @@ def handle_option_reply(numero, option_id, platform: str | None = None):
         )
         return normalized.strip().lower()
 
+    def _input_option_matches(option_norm: str, input_value: str) -> bool:
+        if not option_norm or not isinstance(input_value, str):
+            return False
+        for part in _split_input_variants(input_value):
+            if _normalize_option_value(part) == option_norm:
+                return True
+        return False
+
     option_norm = _normalize_option_value(option_id)
     if not option_norm:
         return False
@@ -1409,12 +1434,13 @@ def handle_option_reply(numero, option_id, platform: str | None = None):
                            r.opciones, r.rol_keyword, r.input_text
                      FROM reglas r
                      LEFT JOIN regla_medias m ON r.id = m.regla_id
-                     WHERE LOWER(r.input_text)=LOWER(%s)
+                     WHERE r.input_text IS NOT NULL
+                       AND r.input_text <> ''
                        AND {filter_sql}
                      GROUP BY r.step, r.id
                      ORDER BY (r.platform = %s) DESC, r.id
                     """,
-                    (option_id, *filter_params, platform),
+                    (*filter_params, platform),
                 )
             rows = c.fetchall()
         finally:
@@ -1426,7 +1452,7 @@ def handle_option_reply(numero, option_id, platform: str | None = None):
             return None
         matches = [
             row for row in rows
-            if _normalize_option_value((row[8] or '').strip()) == option_norm
+            if _input_option_matches(option_norm, (row[8] or '').strip())
         ]
         if not matches:
             return None
@@ -1781,7 +1807,7 @@ def process_step_chain(
     # Coincidencia exacta
     for r in reglas:
         patt = (r[7] or '').strip()
-        if patt and patt != '*' and normalize_text(patt) == text_norm:
+        if patt and patt != '*' and _input_text_matches(text_norm, patt):
             dispatch_rule(numero, r, step, visited=visited, platform=platform)
             handled = True
             return handled
