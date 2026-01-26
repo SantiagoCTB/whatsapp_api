@@ -291,23 +291,28 @@ def _fetch_instagram_user(user_token: str):
 def _exchange_instagram_code_for_token(code: str, redirect_uri: str) -> dict:
     if not code:
         return {"ok": False, "error": "Código de autorización vacío."}
-    if not Config.FACEBOOK_APP_ID or not Config.FACEBOOK_APP_SECRET:
+    client_id = Config.INSTAGRAM_APP_ID or Config.FACEBOOK_APP_ID
+    client_secret = Config.INSTAGRAM_APP_SECRET or Config.FACEBOOK_APP_SECRET
+    if not client_id or not client_secret:
         return {
             "ok": False,
-            "error": "Falta configurar FACEBOOK_APP_ID o FACEBOOK_APP_SECRET.",
+            "error": "Falta configurar INSTAGRAM_APP_ID/INSTAGRAM_APP_SECRET o FACEBOOK_APP_ID/FACEBOOK_APP_SECRET.",
         }
 
     payload = {
-        "client_id": Config.FACEBOOK_APP_ID,
-        "client_secret": Config.FACEBOOK_APP_SECRET,
+        "client_id": client_id,
+        "client_secret": client_secret,
         "grant_type": "authorization_code",
         "redirect_uri": redirect_uri,
         "code": code,
     }
 
+    token_url = (Config.INSTAGRAM_OAUTH_TOKEN_URL or "").strip() or "https://api.instagram.com/oauth/access_token"
+    supports_long_lived = "api.instagram.com" in token_url
+
     try:
         response = requests.post(
-            "https://api.instagram.com/oauth/access_token",
+            token_url,
             data=payload,
             timeout=15,
         )
@@ -321,29 +326,64 @@ def _exchange_instagram_code_for_token(code: str, redirect_uri: str) -> dict:
         data = {}
 
     if response.status_code >= 400:
+        if "api.instagram.com" in token_url:
+            fallback_url = (
+                f"https://graph.facebook.com/{Config.FACEBOOK_GRAPH_API_VERSION}/oauth/access_token"
+            )
+            try:
+                fallback_response = requests.post(
+                    fallback_url,
+                    data=payload,
+                    timeout=15,
+                )
+            except requests.RequestException:
+                fallback_response = None
+
+            fallback_data = {}
+            if fallback_response is not None:
+                try:
+                    fallback_data = fallback_response.json()
+                except ValueError:
+                    fallback_data = {}
+
+                if fallback_response.status_code < 400:
+                    access_token = fallback_data.get("access_token")
+                    if access_token:
+                        return {
+                            "ok": True,
+                            "access_token": access_token,
+                            "is_long_lived": False,
+                            "raw": fallback_data,
+                            "token_url": fallback_url,
+                        }
+
         return {
             "ok": False,
             "error": "No se pudo intercambiar el código de Instagram.",
             "details": data,
+            "token_url": token_url,
         }
 
     access_token = data.get("access_token")
     if not access_token:
         return {"ok": False, "error": "Instagram no devolvió un access_token."}
 
+    if not supports_long_lived:
+        return {"ok": True, "access_token": access_token, "is_long_lived": False, "raw": data}
+
     try:
         long_response = requests.get(
             "https://graph.instagram.com/access_token",
             params={
                 "grant_type": "ig_exchange_token",
-                "client_secret": Config.FACEBOOK_APP_SECRET,
+                "client_secret": client_secret,
                 "access_token": access_token,
             },
             timeout=15,
         )
     except requests.RequestException:
         logger.warning("No se pudo conectar al endpoint de token largo de Instagram.")
-        return {"ok": True, "access_token": access_token, "is_long_lived": False}
+        return {"ok": True, "access_token": access_token, "is_long_lived": False, "raw": data}
 
     try:
         long_data = long_response.json()
@@ -355,10 +395,10 @@ def _exchange_instagram_code_for_token(code: str, redirect_uri: str) -> dict:
             "No se pudo obtener el token largo de Instagram.",
             extra={"details": long_data},
         )
-        return {"ok": True, "access_token": access_token, "is_long_lived": False}
+        return {"ok": True, "access_token": access_token, "is_long_lived": False, "raw": data}
 
     long_token = long_data.get("access_token") or access_token
-    return {"ok": True, "access_token": long_token, "is_long_lived": True}
+    return {"ok": True, "access_token": long_token, "is_long_lived": True, "raw": long_data}
 
 
 def _exchange_embedded_signup_code_for_token(code: str, redirect_uri: str) -> dict:
@@ -454,6 +494,9 @@ def _handle_instagram_oauth_code(code: str, redirect_uri: str) -> dict:
 
 
 def _resolve_instagram_redirect_uri(fallback: str) -> str:
+    explicit_redirect = (Config.INSTAGRAM_OAUTH_REDIRECT_URI or "").strip()
+    if explicit_redirect:
+        return explicit_redirect
     signup_url = (Config.SIGNUP_INSTRAGRAM or "").strip()
     if not signup_url:
         return fallback
