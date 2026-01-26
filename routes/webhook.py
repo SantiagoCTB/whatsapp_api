@@ -146,6 +146,7 @@ def _send_followup_if_pending(
     interval_minutes: int,
     followup_index: int,
     message_step: str,
+    scheduled_at: datetime,
     tenant_key: str | None,
     tenant_env: dict | None,
 ) -> None:
@@ -165,18 +166,15 @@ def _send_followup_if_pending(
                 tenants.set_current_tenant_env(tenants.get_tenant_env(tenant))
     elif tenant_env:
         tenants.set_current_tenant_env(tenant_env)
-    last_message_info = _get_last_message_info(numero)
-    last_tipo = (last_message_info or {}).get("tipo") or ""
-    last_ts = (last_message_info or {}).get("timestamp")
-    if not isinstance(last_ts, datetime):
-        return
-    if _is_client_message_type(last_tipo):
-        return
     if interval_minutes <= 0 or followup_index <= 0:
         return
-    elapsed_seconds = (datetime.utcnow() - last_ts).total_seconds()
-    required_seconds = interval_minutes * 60 * followup_index
-    if elapsed_seconds < required_seconds:
+    last_message_info = _get_last_message_info(numero)
+    last_tipo = (last_message_info or {}).get("tipo") or ""
+    if _is_client_message_type(last_tipo):
+        return
+    last_client_info = obtener_ultimo_mensaje_cliente_info(numero)
+    last_client_ts = (last_client_info or {}).get("timestamp")
+    if isinstance(last_client_ts, datetime) and last_client_ts >= scheduled_at:
         return
     enviar_mensaje(
         numero,
@@ -214,6 +212,7 @@ def _schedule_followup_messages(numero: str, message_step: str) -> None:
     tenant_key = current_tenant.tenant_key if current_tenant else None
     tenant_env = dict(tenants.get_current_tenant_env() or {})
     scheduled = []
+    scheduled_at = datetime.utcnow()
     for idx, message in enumerate(messages, start=1):
         delay_seconds = interval_minutes * 60 * idx
         timer = threading.Timer(
@@ -224,6 +223,7 @@ def _schedule_followup_messages(numero: str, message_step: str) -> None:
                 "interval_minutes": interval_minutes,
                 "followup_index": idx,
                 "message_step": message_step,
+                "scheduled_at": scheduled_at,
                 "tenant_key": tenant_key,
                 "tenant_env": tenant_env,
             },
