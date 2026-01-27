@@ -1,3 +1,5 @@
+import re
+
 from flask import Blueprint, render_template, request, redirect, url_for, session
 from services.db import get_connection
 
@@ -32,7 +34,23 @@ def roles():
     usuarios = c.fetchall()
     conn.close()
 
-    return render_template('roles.html', roles=roles, asignaciones=asignaciones, usuarios=usuarios)
+    bulk_summary = None
+    assigned = request.args.get('bulk_assigned')
+    if assigned is not None:
+        bulk_summary = {
+            "assigned": assigned,
+            "role": request.args.get('bulk_role'),
+            "keywords": request.args.get('bulk_keywords'),
+            "error": request.args.get('bulk_error'),
+        }
+
+    return render_template(
+        'roles.html',
+        roles=roles,
+        asignaciones=asignaciones,
+        usuarios=usuarios,
+        bulk_summary=bulk_summary,
+    )
 
 
 @roles_bp.route('/roles/create', methods=['POST'])
@@ -106,3 +124,53 @@ def quitar_rol():
     conn.commit()
     conn.close()
     return redirect(url_for('roles.roles'))
+
+
+@roles_bp.route('/roles/bulk_assign', methods=['POST'])
+def asignar_roles_masivo():
+    if not _is_admin():
+        return redirect(url_for('auth.login'))
+
+    role_id = request.form.get('role_id')
+    raw_keywords = request.form.get('keywords', '')
+    keywords = [kw.strip().lower() for kw in re.split(r'[,\\n]+', raw_keywords) if kw.strip()]
+
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("SELECT name, keyword FROM roles WHERE id=%s", (role_id,))
+    role_row = c.fetchone()
+    if not role_row:
+        conn.close()
+        return redirect(url_for('roles.roles', bulk_assigned=0, bulk_error='rol_no_encontrado'))
+
+    role_name, role_keyword = role_row
+    if not keywords and role_keyword:
+        keywords = [role_keyword.strip().lower()]
+
+    if not keywords:
+        conn.close()
+        return redirect(url_for('roles.roles', bulk_assigned=0, bulk_error='sin_keywords'))
+
+    conditions = " OR ".join(["LOWER(m.mensaje) LIKE %s"] * len(keywords))
+    like_params = [f"%{kw}%" for kw in keywords]
+    c.execute(
+        f"""
+        INSERT IGNORE INTO chat_roles (numero, role_id)
+        SELECT DISTINCT m.numero, %s
+          FROM mensajes m
+         WHERE {conditions}
+        """,
+        [role_id, *like_params],
+    )
+    assigned = c.rowcount or 0
+    conn.commit()
+    conn.close()
+
+    return redirect(
+        url_for(
+            'roles.roles',
+            bulk_assigned=assigned,
+            bulk_role=role_name,
+            bulk_keywords=", ".join(keywords),
+        )
+    )
