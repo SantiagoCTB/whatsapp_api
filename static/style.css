@@ -197,6 +197,20 @@
       display:flex;
       gap:4px;
     }
+    .chat-list-meta {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 4px;
+      flex: 0 0 auto;
+    }
+    .chat-assignee {
+      font-size: 11px;
+      font-weight: 500;
+      color: inherit;
+      opacity: 0.7;
+      white-space: nowrap;
+    }
     #chatList li .badge {
       display: inline-flex;
       align-items: center;

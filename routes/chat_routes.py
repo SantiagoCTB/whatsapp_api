@@ -1311,6 +1311,18 @@ def get_chat_list():
         fila = c.fetchone()
         alias = fila[0] if fila else None
 
+        c.execute(
+            """
+            SELECT COALESCE(NULLIF(u.nombre, ''), u.username)
+              FROM chat_assignments ca
+              JOIN usuarios u ON ca.user_id = u.id
+             WHERE ca.numero = %s
+            """,
+            (numero,),
+        )
+        fila_asignado = c.fetchone()
+        asignado_nombre = fila_asignado[0] if fila_asignado else None
+
         # Último mensaje y su timestamp
         c.execute(
             "SELECT mensaje, timestamp, tipo FROM mensajes WHERE numero = %s "
@@ -1451,6 +1463,7 @@ def get_chat_list():
         chats.append({
             "numero": numero,
             "alias":  alias,
+            "assigned_user_name": asignado_nombre,
             "asesor": requiere_asesor,
             "roles": roles,
             "roles_kw": role_keywords,

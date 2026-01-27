@@ -36,12 +36,14 @@ def manage_users():
 
         if request.method == 'POST':
             username = (request.form.get('username') or '').strip()
+            nombre = (request.form.get('nombre') or '').strip()
             password = request.form.get('password') or ''
             confirm_password = request.form.get('confirm_password') or ''
             role_id = request.form.get('role_id') or ''
 
             form_data = {
                 'username': username,
+                'nombre': nombre,
                 'role_id': role_id,
             }
 
@@ -58,8 +60,8 @@ def manage_users():
                 hashed_password = generate_password_hash(password)
                 try:
                     cursor.execute(
-                        'INSERT INTO usuarios (username, password) VALUES (%s, %s)',
-                        (username, hashed_password),
+                        'INSERT INTO usuarios (username, nombre, password) VALUES (%s, %s, %s)',
+                        (username, nombre or None, hashed_password),
                     )
                     user_id = cursor.lastrowid
                     cursor.execute(
@@ -78,12 +80,12 @@ def manage_users():
 
         cursor.execute(
             '''
-            SELECT u.id, u.username,
+            SELECT u.id, u.username, u.nombre,
                    COALESCE(GROUP_CONCAT(r.name ORDER BY r.name SEPARATOR ', '), '')
               FROM usuarios u
          LEFT JOIN user_roles ur ON u.id = ur.user_id
          LEFT JOIN roles r ON ur.role_id = r.id
-          GROUP BY u.id, u.username
+          GROUP BY u.id, u.username, u.nombre
           ORDER BY u.username
             '''
         )

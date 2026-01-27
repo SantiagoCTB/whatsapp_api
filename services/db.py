@@ -402,6 +402,7 @@ def _ensure_auth_schema_and_seed(cursor, admin_hash: str):
     CREATE TABLE IF NOT EXISTS usuarios (
       id INT AUTO_INCREMENT PRIMARY KEY,
       username VARCHAR(50) UNIQUE NOT NULL,
+      nombre VARCHAR(100) NULL,
       password VARCHAR(128) NOT NULL
     ) ENGINE=InnoDB;
     """)
@@ -412,6 +413,10 @@ def _ensure_auth_schema_and_seed(cursor, admin_hash: str):
     # col -> (Field, Type, Null, Key, Default, Extra)
     if col and isinstance(col[1], str) and 'varchar(128)' in col[1].lower():
         cursor.execute("ALTER TABLE usuarios MODIFY password VARCHAR(255) NOT NULL;")
+
+    cursor.execute("SHOW COLUMNS FROM usuarios LIKE 'nombre';")
+    if not cursor.fetchone():
+        cursor.execute("ALTER TABLE usuarios ADD COLUMN nombre VARCHAR(100) NULL AFTER username;")
 
     # roles
     cursor.execute("""

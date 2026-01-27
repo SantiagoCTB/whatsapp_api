@@ -1572,6 +1572,15 @@
           // Badges por roles
           li.querySelectorAll('.badge').forEach(b => b.remove());
           li.querySelectorAll('.badges').forEach(bc => bc.remove());
+          li.querySelectorAll('.chat-list-meta').forEach(bc => bc.remove());
+          const metaContainer = document.createElement('span');
+          metaContainer.className = 'chat-list-meta';
+          if (c.assigned_user_name) {
+            const assignee = document.createElement('span');
+            assignee.className = 'chat-assignee';
+            assignee.textContent = c.assigned_user_name;
+            metaContainer.appendChild(assignee);
+          }
           const badgeContainer = document.createElement('span');
           badgeContainer.className = 'badges';
           if (c.estado) {
@@ -1601,7 +1610,10 @@
             });
           }
           if (badgeContainer.children.length > 0) {
-            li.appendChild(badgeContainer);
+            metaContainer.appendChild(badgeContainer);
+          }
+          if (metaContainer.children.length > 0) {
+            li.appendChild(metaContainer);
           }
 
           // Al hacer clic, seleccionar el chat
