@@ -42,6 +42,8 @@ def roles():
             "role": request.args.get('bulk_role'),
             "keywords": request.args.get('bulk_keywords'),
             "error": request.args.get('bulk_error'),
+            "user": request.args.get('bulk_user'),
+            "user_assigned": request.args.get('bulk_user_assigned'),
         }
 
     return render_template(
@@ -132,6 +134,7 @@ def asignar_roles_masivo():
         return redirect(url_for('auth.login'))
 
     role_id = request.form.get('role_id')
+    user_id = request.form.get('user_id')
     raw_keywords = request.form.get('keywords', '')
     keywords = [kw.strip().lower() for kw in re.split(r'[,\\n]+', raw_keywords) if kw.strip()]
 
@@ -151,6 +154,15 @@ def asignar_roles_masivo():
         conn.close()
         return redirect(url_for('roles.roles', bulk_assigned=0, bulk_error='sin_keywords'))
 
+    user_name = None
+    if user_id:
+        c.execute("SELECT username FROM usuarios WHERE id = %s", (user_id,))
+        user_row = c.fetchone()
+        if not user_row:
+            conn.close()
+            return redirect(url_for('roles.roles', bulk_assigned=0, bulk_error='usuario_no_encontrado'))
+        user_name = user_row[0]
+
     conditions = " OR ".join(["LOWER(m.mensaje) LIKE %s"] * len(keywords))
     like_params = [f"%{kw}%" for kw in keywords]
     c.execute(
@@ -163,6 +175,22 @@ def asignar_roles_masivo():
         [role_id, *like_params],
     )
     assigned = c.rowcount or 0
+    user_assigned = 0
+    if user_id:
+        c.execute(
+            f"""
+            INSERT INTO chat_assignments (numero, user_id, role_id, assigned_at)
+            SELECT DISTINCT m.numero, %s, %s, NOW()
+              FROM mensajes m
+             WHERE {conditions}
+            ON DUPLICATE KEY UPDATE
+              user_id = VALUES(user_id),
+              role_id = VALUES(role_id),
+              assigned_at = VALUES(assigned_at)
+            """,
+            [user_id, role_id, *like_params],
+        )
+        user_assigned = c.rowcount or 0
     conn.commit()
     conn.close()
 
@@ -172,5 +200,7 @@ def asignar_roles_masivo():
             bulk_assigned=assigned,
             bulk_role=role_name,
             bulk_keywords=", ".join(keywords),
+            bulk_user=user_name,
+            bulk_user_assigned=user_assigned,
         )
     )
