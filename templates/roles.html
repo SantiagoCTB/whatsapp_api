@@ -9,6 +9,24 @@
 </div>
 
 <h2>Roles</h2>
+{% if bulk_summary %}
+    {% if bulk_summary.error %}
+        <p class="muted">No se pudo asignar roles de manera masiva: {{ bulk_summary.error }}</p>
+    {% else %}
+        <p class="muted">
+            Asignación masiva completada: {{ bulk_summary.assigned }} chats asociados al rol
+            "{{ bulk_summary.role }}". Palabras clave usadas: {{ bulk_summary.keywords }}.
+            {% if bulk_summary.user_id %}
+                Chats asignados al usuario seleccionado
+                {% if bulk_summary.user_name %}
+                    ({{ bulk_summary.user_name }})
+                {% else %}
+                    (ID {{ bulk_summary.user_id }})
+                {% endif %}: {{ bulk_summary.user_assigned }}.
+            {% endif %}
+        </p>
+    {% endif %}
+{% endif %}
 <form action="{{ url_for('roles.crear_rol') }}" method="post">
     <h3>Crear rol</h3>
     <input type="text" name="name" placeholder="Nombre" required>
@@ -70,5 +88,27 @@
     {% endfor %}
     </select>
     <button type="submit" class="btn-primary">Quitar</button>
+</form>
+
+<form action="{{ url_for('roles.asignar_roles_masivo') }}" method="post">
+    <h3>Asignación masiva por palabras clave</h3>
+    <p class="muted">
+        Busca en los mensajes y asigna el rol seleccionado a todos los chats que contengan
+        alguna de las palabras clave (separadas por coma). Si no ingresas palabras, se usa
+        la palabra clave del rol.
+    </p>
+    <select name="role_id" required>
+    {% for rol in roles %}
+        <option value="{{ rol[0] }}">{{ rol[1] }}</option>
+    {% endfor %}
+    </select>
+    <select name="user_id">
+        <option value="">(Sin asignar a usuario)</option>
+    {% for u in usuarios %}
+        <option value="{{ u[0] }}">{{ u[1] }}</option>
+    {% endfor %}
+    </select>
+    <input type="text" name="keywords" placeholder="ej: ventas, soporte, cotización">
+    <button type="submit" class="btn-primary">Asignar masivamente</button>
 </form>
 {% endblock %}
