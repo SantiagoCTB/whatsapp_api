@@ -45,6 +45,7 @@ def roles():
             "user": request.args.get('bulk_user'),
             "user_assigned": request.args.get('bulk_user_assigned'),
         }
+    roles_reset = request.args.get('roles_reset') == '1'
 
     return render_template(
         'roles.html',
@@ -52,6 +53,7 @@ def roles():
         asignaciones=asignaciones,
         usuarios=usuarios,
         bulk_summary=bulk_summary,
+        roles_reset=roles_reset,
     )
 
 
@@ -204,3 +206,17 @@ def asignar_roles_masivo():
             bulk_user_assigned=user_assigned,
         )
     )
+
+
+@roles_bp.route('/roles/reset_chat_roles', methods=['POST'])
+def reset_chat_roles():
+    if not _is_admin():
+        return redirect(url_for('auth.login'))
+
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute('DELETE FROM chat_assignments')
+    c.execute('DELETE FROM chat_roles')
+    conn.commit()
+    conn.close()
+    return redirect(url_for('roles.roles', roles_reset=1))

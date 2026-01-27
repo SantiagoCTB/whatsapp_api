@@ -25,6 +25,9 @@
         {% endif %}
     {% endif %}
 {% endif %}
+{% if roles_reset %}
+    <p class="muted">Se eliminaron todos los roles asignados a los chats.</p>
+{% endif %}
 <form action="{{ url_for('roles.crear_rol') }}" method="post">
     <h3>Crear rol</h3>
     <input type="text" name="name" placeholder="Nombre" required>
@@ -109,5 +112,14 @@
     </select>
     <input type="text" name="keywords" placeholder="ej: ventas, soporte, cotización">
     <button type="submit" class="btn-primary">Asignar masivamente</button>
+</form>
+
+<form action="{{ url_for('roles.reset_chat_roles') }}" method="post"
+      onsubmit="return confirm('¿Seguro que deseas eliminar todos los roles asignados a los chats? Esta acción no se puede deshacer.');">
+    <h3>Reiniciar roles de chats</h3>
+    <p class="muted">
+        Elimina todas las asignaciones de roles en chats y reinicia la distribución actual.
+    </p>
+    <button type="submit" class="delete-btn btn-primary">Reiniciar roles de chats</button>
 </form>
 {% endblock %}
