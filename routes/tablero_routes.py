@@ -125,6 +125,66 @@ def datos_tablero():
     return jsonify(data)
 
 
+@tablero_bp.route('/datos_chats_por_usuario')
+def datos_chats_por_usuario():
+    """Devuelve la cantidad de chats asignados por usuario."""
+    if "user" not in session:
+        return redirect(url_for('auth.login'))
+
+    start = request.args.get('start')
+    end = request.args.get('end')
+    rol = request.args.get('rol', type=int)
+    numero = request.args.get('numero')
+    texto = request.args.get('texto')
+
+    conn = get_connection()
+    cur = conn.cursor()
+
+    if numero:
+        cur.execute("SELECT 1 FROM mensajes WHERE numero = %s LIMIT 1", (numero,))
+        if not cur.fetchone():
+            conn.close()
+            return jsonify({"error": "Número no encontrado"}), 400
+    if rol:
+        cur.execute("SELECT 1 FROM roles WHERE id = %s", (rol,))
+        if not cur.fetchone():
+            conn.close()
+            return jsonify({"error": "Rol no encontrado"}), 400
+
+    query = (
+        """
+        SELECT u.username, COUNT(DISTINCT ca.numero) AS total
+          FROM chat_assignments ca
+          JOIN usuarios u ON ca.user_id = u.id
+          JOIN mensajes m ON m.numero = ca.numero
+        """
+    )
+    conditions = []
+    params = []
+    if start and end:
+        conditions.append("m.timestamp BETWEEN %s AND %s")
+        params.extend([start, end])
+    if rol:
+        conditions.append("ca.role_id = %s")
+        params.append(rol)
+    if numero:
+        conditions.append("ca.numero = %s")
+        params.append(numero)
+    if texto:
+        conditions.append("LOWER(m.mensaje) LIKE %s")
+        params.append(f"%{texto.lower()}%")
+    if conditions:
+        query += " WHERE " + " AND ".join(conditions)
+    query += " GROUP BY u.username ORDER BY total DESC"
+
+    cur.execute(query, params)
+    rows = cur.fetchall()
+    conn.close()
+
+    data = [{"usuario": username, "chats": total} for username, total in rows]
+    return jsonify(data)
+
+
 @tablero_bp.route('/datos_tipos_diarios')
 def datos_tipos_diarios():
     """Devuelve la cantidad de mensajes por tipo agrupados por fecha."""

@@ -17,6 +17,12 @@
             Asignación masiva completada: {{ bulk_summary.assigned }} chats asociados al rol
             "{{ bulk_summary.role }}". Palabras clave usadas: {{ bulk_summary.keywords }}.
         </p>
+        {% if bulk_summary.user %}
+            <p class="muted">
+                Asignación masiva de usuario: {{ bulk_summary.user_assigned }} chats asignados a
+                "{{ bulk_summary.user }}".
+            </p>
+        {% endif %}
     {% endif %}
 {% endif %}
 <form action="{{ url_for('roles.crear_rol') }}" method="post">
@@ -89,6 +95,13 @@
         alguna de las palabras clave (separadas por coma). Si no ingresas palabras, se usa
         la palabra clave del rol.
     </p>
+    <label for="bulk-user">Usuario (opcional)</label>
+    <select id="bulk-user" name="user_id">
+        <option value="">Sin asignación</option>
+        {% for u in usuarios %}
+            <option value="{{ u[0] }}">{{ u[1] }}</option>
+        {% endfor %}
+    </select>
     <select name="role_id" required>
     {% for rol in roles %}
         <option value="{{ rol[0] }}">{{ rol[1] }}</option>

@@ -404,7 +404,7 @@ document.addEventListener('DOMContentLoaded', () => {
         showCardMessage('graficoSemana', 'Error al cargar datos');
       });
 
-    fetch(`/datos_tablero${query}`)
+    fetch(`/datos_chats_por_usuario${query}`)
       .then(response => response.json())
       .then(data => {
         if (!Array.isArray(data) || data.length === 0) {
@@ -412,8 +412,8 @@ document.addEventListener('DOMContentLoaded', () => {
           showCardMessage('grafico', 'No hay datos disponibles');
           return;
         }
-        const labels = data.map(item => item.numero);
-        const values = data.map(item => item.palabras);
+        const labels = data.map(item => item.usuario);
+        const values = data.map(item => item.chats);
         if (chartTablero) chartTablero.destroy();
         showCardMessage('grafico');
         const ctx = document.getElementById('grafico').getContext('2d');
@@ -422,7 +422,7 @@ document.addEventListener('DOMContentLoaded', () => {
           data: {
             labels: labels,
             datasets: [{
-              label: 'Palabras por chat',
+              label: 'Chats asignados',
               data: values,
               backgroundColor: 'rgba(54, 162, 235, 0.5)',
               borderColor: 'rgba(54, 162, 235, 1)',
