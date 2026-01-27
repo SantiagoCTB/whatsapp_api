@@ -23,6 +23,9 @@
     <label for="username">Nombre de usuario</label>
     <input type="text" id="username" name="username" value="{{ form_data.get('username', '') }}" required>
 
+    <label for="nombre">Nombre</label>
+    <input type="text" id="nombre" name="nombre" value="{{ form_data.get('nombre', '') }}">
+
     <label for="password">Contraseña</label>
     <input type="password" id="password" name="password" required>
 
@@ -44,13 +47,15 @@
 <table class="fixed-table">
     <tr>
         <th>Usuario</th>
+        <th>Nombre</th>
         <th>Roles asignados</th>
         <th>Acciones</th>
     </tr>
     {% for usuario in usuarios %}
     <tr>
         <td>{{ usuario[1] }}</td>
-        <td>{{ usuario[2] if usuario[2] else 'Sin roles asignados' }}</td>
+        <td>{{ usuario[2] or '—' }}</td>
+        <td>{{ usuario[3] if usuario[3] else 'Sin roles asignados' }}</td>
         <td>
             <form action="{{ url_for('usuarios.delete_user', user_id=usuario[0]) }}" method="post">
                 <button
