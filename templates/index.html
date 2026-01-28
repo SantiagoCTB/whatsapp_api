@@ -6,6 +6,10 @@
   <div class="container">
     <!-- Sidebar -->
     <div class="sidebar">
+      {% set session_user = session.get('user') %}
+      {% if session_user %}
+      <div class="sidebar-greeting">Hola {{ session_user }}!</div>
+      {% endif %}
       <h2>Chats</h2>
       <div class="sidebar-header">
         <button id="settingsBtn">⚙️</button>
@@ -33,7 +37,9 @@
       <div class="chat-filters">
         <div class="chat-filters__bar">
           <input id="buscador" type="text" placeholder="Buscar número…">
-          <button type="button" id="filterToggle" class="filter-toggle" aria-expanded="false">Filtros</button>
+          <button type="button" id="filterToggle" class="filter-toggle" aria-expanded="false" aria-label="Mostrar filtros">
+            <span aria-hidden="true">☰</span>
+          </button>
         </div>
         <div id="filterPanel" class="filter-panel" hidden>
           <div class="filter-row">
@@ -779,6 +785,11 @@
           const next = !isExpanded;
           filterToggle.setAttribute('aria-expanded', String(next));
           filterPanel.hidden = !next;
+        }
+
+        if (filterToggle && filterPanel) {
+          filterToggle.setAttribute('aria-expanded', 'false');
+          filterPanel.hidden = true;
         }
 
         buildFilterOptions();
@@ -1772,6 +1783,16 @@
         });
       }
 
+      function formatChatDate(timestamp) {
+        if (!timestamp) return '';
+        const date = new Date(timestamp);
+        if (Number.isNaN(date.getTime())) return '';
+        const day = String(date.getDate()).padStart(2, '0');
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const year = date.getFullYear();
+        return `${day}/${month}/${year}`;
+      }
+
       function renderChatList(data) {
         const getTimestamp = ts => ts ? new Date(ts).getTime() : 0;
         const sorted = Array.isArray(data) ? [...data] : [];
@@ -1838,6 +1859,13 @@
             assignee.className = 'chat-assignee';
             assignee.textContent = c.assigned_user_name;
             metaContainer.appendChild(assignee);
+          }
+          const lastDate = formatChatDate(c.last_timestamp);
+          if (lastDate) {
+            const lastMessageDate = document.createElement('span');
+            lastMessageDate.className = 'chat-assignee chat-last-date';
+            lastMessageDate.textContent = lastDate;
+            metaContainer.appendChild(lastMessageDate);
           }
           const badgeContainer = document.createElement('span');
           badgeContainer.className = 'badges';
