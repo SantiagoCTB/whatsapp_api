@@ -263,7 +263,7 @@
       position: relative;
     }
     .chat-header {
-      display: none;
+      display: flex;
       align-items: center;
       gap: 12px;
       padding: 10px 14px;
@@ -301,6 +301,26 @@
       display: grid;
       place-items: center;
       cursor: pointer;
+    }
+    .chat-header__actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .chat-header__finish {
+      height: 36px;
+      min-width: 96px;
+      padding: 0 14px;
+      border-radius: 8px;
+      border: none;
+      background: #dc2626;
+      color: #ffffff;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .chat-header__finish:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
     }
     .chat-header__btn:disabled {
       opacity: 0.5;

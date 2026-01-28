@@ -45,7 +45,10 @@
           <span id="mobileChatTitle" class="chat-header__title">Selecciona un chat</span>
           <span id="mobileChatSubtitle" class="chat-header__subtitle"></span>
         </div>
-        <button type="button" id="mobileChatActions" class="chat-header__btn" aria-label="Acciones del chat">⋮</button>
+        <div class="chat-header__actions">
+          <button type="button" id="mobileChatActions" class="chat-header__btn" aria-label="Acciones del chat">⋮</button>
+          <button type="button" id="chatFinishButton" class="chat-header__finish" aria-label="Finalizar chat" disabled>Finalizar</button>
+        </div>
       </div>
       <div id="botonera"></div>
       <div id="chatBox"></div>
@@ -92,9 +95,7 @@
   <div id="chatContextMenu" class="context-menu chat-context-menu">
     <div id="chatAliasAction">Asignar alias</div>
     <div id="chatFinishAction" class="danger-action">Finalizar chat</div>
-    {% if rol == 'admin' %}
     <div id="chatDeleteAction" class="danger-action">Eliminar chat</div>
-    {% endif %}
     <div class="menu-divider"></div>
     <div class="menu-section collapsed" data-section="state">
       <div class="menu-header collapsible">
@@ -103,7 +104,6 @@
       </div>
       <div id="chatStateOptions" class="menu-options"></div>
     </div>
-    {% if rol == 'admin' %}
     <div class="menu-divider"></div>
     <div class="menu-section collapsed" data-section="roles">
       <div class="menu-header collapsible">
@@ -112,7 +112,14 @@
       </div>
       <div id="chatRoleOptions" class="menu-options"></div>
     </div>
-    {% endif %}
+    <div class="menu-divider"></div>
+    <div class="menu-section collapsed" data-section="users">
+      <div class="menu-header collapsible">
+        <span>Usuarios</span>
+        <span class="menu-header-icon">▶</span>
+      </div>
+      <div id="chatUserOptions" class="menu-options"></div>
+    </div>
   </div>
 
   <div class="role-indicator">{{ rol }}</div>
@@ -252,13 +259,17 @@
       const chatAliasAction = document.getElementById('chatAliasAction');
       const chatFinishAction = document.getElementById('chatFinishAction');
       const chatDeleteAction = document.getElementById('chatDeleteAction');
+      const chatFinishButton = document.getElementById('chatFinishButton');
       const chatStateOptionsContainer = document.getElementById('chatStateOptions');
       const chatRoleOptionsContainer = document.getElementById('chatRoleOptions');
+      const chatUserOptionsContainer = document.getElementById('chatUserOptions');
       const chatStateSection = chatContextMenu.querySelector('[data-section="state"]');
       const chatRolesSection = chatContextMenu.querySelector('[data-section="roles"]');
+      const chatUsersSection = chatContextMenu.querySelector('[data-section="users"]');
       let chatStateOptions = [];
       const chatStateDefinitions = {{ chat_state_definitions | tojson }};
       const availableRoles = {{ roles | tojson }};
+      const availableUsers = {{ users | tojson }};
       const chatStateDefinitionMap = new Map();
       chatStateDefinitions.forEach(def => {
         if (def && def.key) {
@@ -594,6 +605,7 @@
 
       setSectionExpanded(chatStateSection, false);
       setSectionExpanded(chatRolesSection, false);
+      setSectionExpanded(chatUsersSection, false);
       function injectChatStateStyles(definitions) {
         if (!Array.isArray(definitions) || definitions.length === 0) {
           const existing = document.getElementById('chat-state-dynamic-styles');
@@ -1352,7 +1364,9 @@
         chatContextMenu.style.visibility = 'visible';
         setSectionExpanded(chatStateSection, false);
         setSectionExpanded(chatRolesSection, false);
+        setSectionExpanded(chatUsersSection, false);
         buildChatRoleOptions(chatData);
+        buildChatUserOptions(chatData);
       }
 
       function buildChatRoleOptions(chatData) {
@@ -1399,6 +1413,67 @@
         });
       }
 
+      function buildChatUserOptions(chatData) {
+        if (!chatUserOptionsContainer) return;
+        chatUserOptionsContainer.innerHTML = '';
+
+        if (!Array.isArray(availableUsers) || availableUsers.length === 0) {
+          const emptyOption = document.createElement('div');
+          emptyOption.className = 'context-option disabled role-option';
+          emptyOption.textContent = 'Sin usuarios disponibles';
+          chatUserOptionsContainer.appendChild(emptyOption);
+          return;
+        }
+
+        const assignedUserId = chatData.assigned_user_id || null;
+
+        const clearOption = document.createElement('div');
+        clearOption.classList.add('context-option', 'role-option');
+        clearOption.dataset.user = '';
+        clearOption.textContent = 'Sin asignación';
+        if (!assignedUserId) {
+          clearOption.classList.add('active');
+          const check = document.createElement('span');
+          check.className = 'role-option-check';
+          check.textContent = '✔';
+          clearOption.appendChild(check);
+        }
+        clearOption.addEventListener('click', () => {
+          assignChatUser(chatData.numero, null, Boolean(assignedUserId));
+        });
+        chatUserOptionsContainer.appendChild(clearOption);
+
+        availableUsers.forEach(userEntry => {
+          if (!userEntry || userEntry.length < 2) return;
+          const userId = userEntry[0];
+          const displayName = userEntry[1] || userEntry[2] || userId;
+          const roleLabel = userEntry[3] ? ` (${userEntry[3]})` : '';
+          const option = document.createElement('div');
+          option.classList.add('context-option', 'role-option');
+          option.dataset.user = userId;
+
+          const label = document.createElement('span');
+          label.className = 'role-option-label';
+          label.textContent = `${displayName}${roleLabel}`;
+          option.appendChild(label);
+
+          const isAssigned = assignedUserId === userId;
+          if (isAssigned) {
+            option.classList.add('active');
+            const check = document.createElement('span');
+            check.className = 'role-option-check';
+            check.textContent = '✔';
+            option.appendChild(check);
+          }
+
+          option.addEventListener('click', () => {
+            assignChatUser(chatData.numero, userId, isAssigned);
+          });
+
+          chatUserOptionsContainer.appendChild(option);
+        });
+      }
+
       async function toggleChatRole(numero, roleKeyword, hasRole) {
         if (!numero || !roleKeyword) return;
         try {
@@ -1412,6 +1487,26 @@
             })
           });
           if (!res.ok) throw new Error('No se pudo actualizar el rol');
+          hideChatContextMenu();
+          fetchChatList();
+        } catch (err) {
+          console.error(err);
+        }
+      }
+
+      async function assignChatUser(numero, userId, isAssigned) {
+        if (!numero) return;
+        try {
+          const res = await fetch('/assign_chat_user', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              numero,
+              user_id: userId,
+              action: isAssigned ? 'remove' : 'assign'
+            })
+          });
+          if (!res.ok) throw new Error('No se pudo actualizar el usuario');
           hideChatContextMenu();
           fetchChatList();
         } catch (err) {
@@ -1463,22 +1558,34 @@
         syncMobileLayout();
       }
 
+      function finalizeChat(numero) {
+        if (!numero) return;
+        fetch('/finalizar_chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ numero })
+        })
+        .then(resp => {
+          if (!resp.ok) throw new Error('No se pudo finalizar el chat');
+          resetActiveChatIfMatches(numero);
+          fetchChatList();
+        })
+        .catch(err => console.error(err));
+      }
+
       chatFinishAction.addEventListener('click', () => {
         if (!chatContextTarget) return;
         const chatData = chatContextTarget;
         hideChatContextMenu();
-        fetch('/finalizar_chat', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ numero: chatData.numero })
-        })
-        .then(resp => {
-          if (!resp.ok) throw new Error('No se pudo finalizar el chat');
-          resetActiveChatIfMatches(chatData.numero);
-          fetchChatList();
-        })
-        .catch(err => console.error(err));
+        finalizeChat(chatData.numero);
       });
+
+      if (chatFinishButton) {
+        chatFinishButton.addEventListener('click', () => {
+          if (!currentChat) return;
+          finalizeChat(currentChat);
+        });
+      }
 
       if (chatDeleteAction) {
         chatDeleteAction.addEventListener('click', () => {
@@ -1800,6 +1907,9 @@
           mobileChatTitle.textContent = 'Selecciona un chat';
           mobileChatSubtitle.textContent = '';
           mobileChatActions.disabled = true;
+          if (chatFinishButton) {
+            chatFinishButton.disabled = true;
+          }
           return;
         }
         const title = chatData.alias ? `${chatData.alias} (${chatData.numero})` : (chatData.numero || '');
@@ -1808,6 +1918,9 @@
         const estadoLabel = chatData.estado_label || (estadoDef && estadoDef.label) || chatData.estado;
         mobileChatSubtitle.textContent = estadoLabel ? `Estado: ${estadoLabel}` : '';
         mobileChatActions.disabled = false;
+        if (chatFinishButton) {
+          chatFinishButton.disabled = false;
+        }
       }
 
       function updateTypingIndicator(isActive, shouldMaintainScroll = false) {

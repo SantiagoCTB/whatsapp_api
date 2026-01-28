@@ -195,6 +195,15 @@ def _has_chat_access(cursor, numero: str, role_ids: list[int], user_id: int | No
     return cursor.fetchone() is not None
 
 
+def _require_chat_access(cursor, numero: str) -> bool:
+    roles = _get_session_roles()
+    if 'admin' in roles:
+        return True
+    role_ids = _get_role_ids(cursor, roles)
+    user_id = _get_session_user_id(cursor)
+    return _has_chat_access(cursor, numero, role_ids, user_id)
+
+
 def _select_matching_rule(rules, text_norm: str | None):
     wildcard = None
     for rule in rules:
@@ -806,6 +815,21 @@ def index():
     c.execute("SELECT id, name, keyword FROM roles WHERE keyword != 'admin'")
     roles_db = c.fetchall()
 
+    c.execute(
+        """
+        SELECT u.id,
+               COALESCE(NULLIF(u.nombre, ''), u.username) AS display_name,
+               u.username,
+               COALESCE(GROUP_CONCAT(r.name ORDER BY r.name SEPARATOR ', '), '')
+          FROM usuarios u
+          LEFT JOIN user_roles ur ON u.id = ur.user_id
+          LEFT JOIN roles r ON ur.role_id = r.id
+         GROUP BY u.id, u.username, u.nombre
+         ORDER BY display_name
+        """
+    )
+    users_db = c.fetchall()
+
     conn.close()
     chat_state_definitions, _ = _load_chat_state_definitions()
     current_tenant = tenants.get_current_tenant()
@@ -820,6 +844,7 @@ def index():
         rol=roles[0] if roles else None,
         role_id=role_id,
         roles=roles_db,
+        users=users_db,
         chat_state_definitions=chat_state_definitions,
         ai_enabled=ai_enabled,
         tenant_name=tenant_name,
@@ -1313,7 +1338,7 @@ def get_chat_list():
 
         c.execute(
             """
-            SELECT COALESCE(NULLIF(u.nombre, ''), u.username)
+            SELECT ca.user_id, COALESCE(NULLIF(u.nombre, ''), u.username)
               FROM chat_assignments ca
               JOIN usuarios u ON ca.user_id = u.id
              WHERE ca.numero = %s
@@ -1321,7 +1346,8 @@ def get_chat_list():
             (numero,),
         )
         fila_asignado = c.fetchone()
-        asignado_nombre = fila_asignado[0] if fila_asignado else None
+        asignado_id = fila_asignado[0] if fila_asignado else None
+        asignado_nombre = fila_asignado[1] if fila_asignado else None
 
         # Último mensaje y su timestamp
         c.execute(
@@ -1463,6 +1489,7 @@ def get_chat_list():
         chats.append({
             "numero": numero,
             "alias":  alias,
+            "assigned_user_id": asignado_id,
             "assigned_user_name": asignado_nombre,
             "asesor": requiere_asesor,
             "roles": roles,
@@ -1490,8 +1517,14 @@ def set_alias():
     numero = data.get('numero')
     nombre = data.get('nombre')
 
+    if not numero:
+        return jsonify({"error": "Número requerido"}), 400
+
     conn = get_connection()
     c    = conn.cursor()
+    if not _require_chat_access(c, numero):
+        conn.close()
+        return jsonify({"error": "No autorizado"}), 403
     c.execute(
         "INSERT INTO alias (numero, nombre) VALUES (%s, %s) "
         "ON DUPLICATE KEY UPDATE nombre = VALUES(nombre)",
@@ -1514,6 +1547,13 @@ def finalizar_chat():
     if not numero:
         return jsonify({"error": "Número requerido"}), 400
 
+    conn = get_connection()
+    c = conn.cursor()
+    if not _require_chat_access(c, numero):
+        conn.close()
+        return jsonify({"error": "No autorizado"}), 403
+    conn.close()
+
     _, chat_state_keys = _load_chat_state_definitions(include_hidden=True)
     if "inactivo" not in chat_state_keys:
         return jsonify({"error": "Estado inactivo no definido"}), 400
@@ -1533,19 +1573,17 @@ def delete_chat():
     if 'user' not in session:
         return jsonify({"error": "No autorizado"}), 403
 
-    roles = session.get('roles') or []
-    if isinstance(roles, str):
-        roles = [roles]
-    is_admin = 'admin' in roles
-    if not is_admin:
-        is_admin = session.get('rol') == 'admin'
-    if not is_admin:
-        return jsonify({"error": "No autorizado"}), 403
-
     data = request.get_json() or {}
     numero = data.get('numero')
     if not numero:
         return jsonify({"error": "Número requerido"}), 400
+
+    conn = get_connection()
+    c = conn.cursor()
+    if not _require_chat_access(c, numero):
+        conn.close()
+        return jsonify({"error": "No autorizado"}), 403
+    conn.close()
 
     hide_chat(numero)
     clear_chat_runtime_state(numero)
@@ -1563,6 +1601,13 @@ def set_chat_state():
 
     if not numero:
         return jsonify({"error": "Número requerido"}), 400
+
+    conn = get_connection()
+    c = conn.cursor()
+    if not _require_chat_access(c, numero):
+        conn.close()
+        return jsonify({"error": "No autorizado"}), 403
+    conn.close()
 
     if isinstance(estado, str):
         estado = estado.strip().lower()
@@ -1589,19 +1634,22 @@ def assign_chat_role():
     if 'user' not in session:
         return jsonify({'error': 'No autorizado'}), 401
 
-    roles = _get_session_roles()
-    if 'admin' not in roles:
-        return jsonify({'error': 'No autorizado'}), 403
-
     data = request.get_json()
     numero = data.get('numero')
+    if not numero:
+        return jsonify({'error': 'Número requerido'}), 400
     # "role" es el campo enviado desde el frontend, pero aceptamos
     # opcionalmente "role_kw" para mayor claridad al llamar la API.
     role_kw = data.get('role') or data.get('role_kw')
+    if not role_kw:
+        return jsonify({'error': 'Rol requerido'}), 400
     action  = data.get('action', 'add')
 
     conn = get_connection()
     c    = conn.cursor()
+    if not _require_chat_access(c, numero):
+        conn.close()
+        return jsonify({'error': 'No autorizado'}), 403
 
     c.execute("SELECT id FROM roles WHERE keyword=%s", (role_kw,))
     row = c.fetchone()
@@ -1626,6 +1674,76 @@ def assign_chat_role():
     conn.close()
 
     return jsonify({'status': status})
+
+
+@chat_bp.route('/assign_chat_user', methods=['POST'])
+def assign_chat_user():
+    if 'user' not in session:
+        return jsonify({'error': 'No autorizado'}), 401
+
+    data = request.get_json() or {}
+    numero = data.get('numero')
+    action = (data.get('action') or 'assign').strip().lower()
+    user_id = data.get('user_id')
+
+    if not numero:
+        return jsonify({'error': 'Número requerido'}), 400
+
+    conn = get_connection()
+    c = conn.cursor()
+    if not _require_chat_access(c, numero):
+        conn.close()
+        return jsonify({'error': 'No autorizado'}), 403
+
+    if action == 'remove' or not user_id:
+        c.execute("DELETE FROM chat_assignments WHERE numero = %s", (numero,))
+        conn.commit()
+        conn.close()
+        return jsonify({'status': 'removed'})
+
+    try:
+        user_id_int = int(user_id)
+    except (TypeError, ValueError):
+        conn.close()
+        return jsonify({'error': 'Usuario inválido'}), 400
+
+    c.execute(
+        "SELECT id, COALESCE(NULLIF(nombre, ''), username) FROM usuarios WHERE id = %s",
+        (user_id_int,),
+    )
+    user_row = c.fetchone()
+    if not user_row:
+        conn.close()
+        return jsonify({'error': 'Usuario no encontrado'}), 404
+
+    c.execute(
+        "SELECT role_id FROM user_roles WHERE user_id = %s ORDER BY role_id ASC",
+        (user_id_int,),
+    )
+    role_row = c.fetchone()
+    if not role_row:
+        conn.close()
+        return jsonify({'error': 'El usuario no tiene rol asignado'}), 400
+    role_id = role_row[0]
+
+    c.execute(
+        "INSERT IGNORE INTO chat_roles (numero, role_id) VALUES (%s, %s)",
+        (numero, role_id),
+    )
+    c.execute(
+        """
+        INSERT INTO chat_assignments (numero, user_id, role_id, assigned_at)
+        VALUES (%s, %s, %s, NOW())
+        ON DUPLICATE KEY UPDATE
+          user_id = VALUES(user_id),
+          role_id = VALUES(role_id),
+          assigned_at = VALUES(assigned_at)
+        """,
+        (numero, user_id_int, role_id),
+    )
+    conn.commit()
+    conn.close()
+    return jsonify({'status': 'assigned', 'user_id': str(user_row[0]), 'user_name': user_row[1]})
 
 @chat_bp.route('/send_image', methods=['POST'])
 def send_image():
