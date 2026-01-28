@@ -18,9 +18,6 @@
         <a href="{{ url_for('roles.roles') }}">Roles</a>
         <a href="{{ url_for('usuarios.manage_users') }}">Usuarios</a>
         {% endif %}
-        {% if session.get('roles') and 'superadmin' in session['roles'] %}
-        <a href="{{ url_for('tenant_admin.dashboard') }}">Empresas</a>
-        {% endif %}
         <a href="{{ url_for('tablero.tablero') }}">Tablero</a>
         <a id="respuestasLink" href="{{ url_for('chat.respuestas') }}">Respuestas</a>
         <a href="{{ url_for('auth.logout') }}">Cerrar sesión</a>
@@ -33,7 +30,47 @@
           <span>Autocorrección al escribir</span>
         </label>
       </div>
-      <input id="buscador" type="text" placeholder="Buscar número…">
+      <div class="chat-filters">
+        <div class="chat-filters__bar">
+          <input id="buscador" type="text" placeholder="Buscar número…">
+          <button type="button" id="filterToggle" class="filter-toggle" aria-expanded="false">Filtros</button>
+        </div>
+        <div id="filterPanel" class="filter-panel" hidden>
+          <div class="filter-row">
+            <label for="filterState">Estado</label>
+            <select id="filterState"></select>
+          </div>
+          <div class="filter-row">
+            <label for="filterRole">Rol</label>
+            <select id="filterRole"></select>
+          </div>
+          <div class="filter-row">
+            <label for="filterUser">Usuario</label>
+            <select id="filterUser"></select>
+          </div>
+          <div class="filter-row">
+            <label for="filterIntegration">Integración</label>
+            <select id="filterIntegration">
+              <option value="">Todas</option>
+              <option value="whatsapp">WhatsApp</option>
+              <option value="messenger">Messenger</option>
+              <option value="instagram">Instagram</option>
+            </select>
+          </div>
+          <div class="filter-row">
+            <label for="filterDateFrom">Desde</label>
+            <input type="date" id="filterDateFrom">
+          </div>
+          <div class="filter-row">
+            <label for="filterDateTo">Hasta</label>
+            <input type="date" id="filterDateTo">
+          </div>
+          <label class="filter-toggle-row">
+            <input type="checkbox" id="filterShowInactive">
+            <span>Mostrar inactivos</span>
+          </label>
+        </div>
+      </div>
       <ul id="chatList"></ul>
     </div>
 
@@ -45,7 +82,10 @@
           <span id="mobileChatTitle" class="chat-header__title">Selecciona un chat</span>
           <span id="mobileChatSubtitle" class="chat-header__subtitle"></span>
         </div>
-        <button type="button" id="mobileChatActions" class="chat-header__btn" aria-label="Acciones del chat">⋮</button>
+        <div class="chat-header__actions">
+          <button type="button" id="mobileChatActions" class="chat-header__btn" aria-label="Acciones del chat">⋮</button>
+          <button type="button" id="chatFinishButton" class="chat-header__finish" aria-label="Finalizar chat" disabled>Finalizar</button>
+        </div>
       </div>
       <div id="botonera"></div>
       <div id="chatBox"></div>
@@ -92,9 +132,7 @@
   <div id="chatContextMenu" class="context-menu chat-context-menu">
     <div id="chatAliasAction">Asignar alias</div>
     <div id="chatFinishAction" class="danger-action">Finalizar chat</div>
-    {% if rol == 'admin' %}
     <div id="chatDeleteAction" class="danger-action">Eliminar chat</div>
-    {% endif %}
     <div class="menu-divider"></div>
     <div class="menu-section collapsed" data-section="state">
       <div class="menu-header collapsible">
@@ -103,7 +141,6 @@
       </div>
       <div id="chatStateOptions" class="menu-options"></div>
     </div>
-    {% if rol == 'admin' %}
     <div class="menu-divider"></div>
     <div class="menu-section collapsed" data-section="roles">
       <div class="menu-header collapsible">
@@ -112,10 +149,19 @@
       </div>
       <div id="chatRoleOptions" class="menu-options"></div>
     </div>
-    {% endif %}
+    <div class="menu-divider"></div>
+    <div class="menu-section collapsed" data-section="users">
+      <div class="menu-header collapsible">
+        <span>Usuarios</span>
+        <span class="menu-header-icon">▶</span>
+      </div>
+      <div id="chatUserOptions" class="menu-options"></div>
+    </div>
   </div>
 
+  {% if rol and rol != 'superadmin' %}
   <div class="role-indicator">{{ rol }}</div>
+  {% endif %}
 
   <div id="imageModal" class="image-modal" role="dialog" aria-modal="true" aria-hidden="true">
     <button type="button" class="close-modal" aria-label="Cerrar vista de imagen">×</button>
@@ -229,6 +275,15 @@
       const chatBoxEl  = document.getElementById('chatBox');
       const chatWindowEl = document.querySelector('.chatWindow');
       const buscadorInput = document.getElementById('buscador');
+      const filterToggle = document.getElementById('filterToggle');
+      const filterPanel = document.getElementById('filterPanel');
+      const filterStateSelect = document.getElementById('filterState');
+      const filterRoleSelect = document.getElementById('filterRole');
+      const filterUserSelect = document.getElementById('filterUser');
+      const filterIntegrationSelect = document.getElementById('filterIntegration');
+      const filterDateFrom = document.getElementById('filterDateFrom');
+      const filterDateTo = document.getElementById('filterDateTo');
+      const filterShowInactive = document.getElementById('filterShowInactive');
       const botoneraEl = document.getElementById('botonera');
       const replyPreviewEl = document.getElementById('replyPreview');
       const typingIndicatorEl = document.createElement('div');
@@ -252,13 +307,17 @@
       const chatAliasAction = document.getElementById('chatAliasAction');
       const chatFinishAction = document.getElementById('chatFinishAction');
       const chatDeleteAction = document.getElementById('chatDeleteAction');
+      const chatFinishButton = document.getElementById('chatFinishButton');
       const chatStateOptionsContainer = document.getElementById('chatStateOptions');
       const chatRoleOptionsContainer = document.getElementById('chatRoleOptions');
+      const chatUserOptionsContainer = document.getElementById('chatUserOptions');
       const chatStateSection = chatContextMenu.querySelector('[data-section="state"]');
       const chatRolesSection = chatContextMenu.querySelector('[data-section="roles"]');
+      const chatUsersSection = chatContextMenu.querySelector('[data-section="users"]');
       let chatStateOptions = [];
       const chatStateDefinitions = {{ chat_state_definitions | tojson }};
       const availableRoles = {{ roles | tojson }};
+      const availableUsers = {{ users | tojson }};
       const chatStateDefinitionMap = new Map();
       chatStateDefinitions.forEach(def => {
         if (def && def.key) {
@@ -594,6 +653,7 @@
 
       setSectionExpanded(chatStateSection, false);
       setSectionExpanded(chatRolesSection, false);
+      setSectionExpanded(chatUsersSection, false);
       function injectChatStateStyles(definitions) {
         if (!Array.isArray(definitions) || definitions.length === 0) {
           const existing = document.getElementById('chat-state-dynamic-styles');
@@ -713,6 +773,35 @@
           return computeRoleAbbreviation(keyword) || keyword.charAt(0).toUpperCase();
         }
 
+        function toggleFilterPanel() {
+          if (!filterPanel || !filterToggle) return;
+          const isExpanded = filterToggle.getAttribute('aria-expanded') === 'true';
+          const next = !isExpanded;
+          filterToggle.setAttribute('aria-expanded', String(next));
+          filterPanel.hidden = !next;
+        }
+
+        buildFilterOptions();
+        if (filterToggle && filterPanel) {
+          filterToggle.addEventListener('click', toggleFilterPanel);
+        }
+
+        if (filterStateSelect) {
+          filterStateSelect.addEventListener('change', () => {
+            if (filterShowInactive && filterStateSelect.value === 'inactivo') {
+              filterShowInactive.checked = true;
+            }
+            applyChatFilters();
+          });
+        }
+        [filterRoleSelect, filterUserSelect, filterIntegrationSelect, filterDateFrom, filterDateTo].forEach(el => {
+          if (!el) return;
+          el.addEventListener('change', applyChatFilters);
+        });
+        if (filterShowInactive) {
+          filterShowInactive.addEventListener('change', applyChatFilters);
+        }
+
         const CHAT_SOURCE_LOGOS = {
           instagram: "{{ url_for('static', filename='logo-instagram.png') }}",
           facebook: "{{ url_for('static', filename='logo-facebook.png') }}",
@@ -732,6 +821,80 @@
             return { key: 'facebook', label: 'Facebook' };
           }
           return { key: 'whatsapp', label: 'WhatsApp' };
+        }
+
+        function appendSelectOption(select, value, label) {
+          if (!select) return;
+          const option = document.createElement('option');
+          option.value = value;
+          option.textContent = label;
+          select.appendChild(option);
+        }
+
+        function buildFilterOptions() {
+          if (filterStateSelect) {
+            filterStateSelect.innerHTML = '';
+            appendSelectOption(filterStateSelect, '', 'Todos');
+            chatStateDefinitions.forEach(def => {
+              if (!def || !def.key) return;
+              if (def.visible === false) return;
+              const label = def.label || def.key;
+              appendSelectOption(filterStateSelect, def.key, label);
+            });
+          }
+          if (filterRoleSelect) {
+            filterRoleSelect.innerHTML = '';
+            appendSelectOption(filterRoleSelect, '', 'Todos');
+            availableRoles.forEach(roleEntry => {
+              if (!roleEntry || roleEntry.length < 3) return;
+              const roleName = roleEntry[1] || roleEntry[2];
+              const roleKeyword = roleEntry[2];
+              appendSelectOption(filterRoleSelect, roleKeyword, roleName);
+            });
+          }
+          if (filterUserSelect) {
+            filterUserSelect.innerHTML = '';
+            appendSelectOption(filterUserSelect, '', 'Todos');
+            availableUsers.forEach(userEntry => {
+              if (!userEntry || userEntry.length < 2) return;
+              const userId = userEntry[0];
+              const displayName = userEntry[1] || userEntry[2] || userId;
+              appendSelectOption(filterUserSelect, String(userId), displayName);
+            });
+          }
+        }
+
+        function applyChatFilters() {
+          const stateFilter = filterStateSelect ? filterStateSelect.value : '';
+          const roleFilter = filterRoleSelect ? filterRoleSelect.value : '';
+          const userFilter = filterUserSelect ? filterUserSelect.value : '';
+          const integrationFilter = filterIntegrationSelect ? filterIntegrationSelect.value : '';
+          const showInactive = Boolean(filterShowInactive && filterShowInactive.checked) || stateFilter === 'inactivo';
+          const fromValue = filterDateFrom ? filterDateFrom.value : '';
+          const toValue = filterDateTo ? filterDateTo.value : '';
+          const fromDate = fromValue ? new Date(`${fromValue}T00:00:00`) : null;
+          const toDate = toValue ? new Date(`${toValue}T23:59:59`) : null;
+
+          const filtered = (todosChats || []).filter(chat => {
+            if (!showInactive && chat.estado === 'inactivo') return false;
+            if (stateFilter && chat.estado !== stateFilter) return false;
+            if (roleFilter && (!Array.isArray(chat.roles_kw) || !chat.roles_kw.includes(roleFilter))) return false;
+            if (userFilter && String(chat.assigned_user_id || '') !== userFilter) return false;
+            if (integrationFilter) {
+              const sourceKey = resolveChatSourceLogo(chat.first_link_url).key;
+              if (sourceKey !== integrationFilter) return false;
+            }
+            if (fromDate || toDate) {
+              if (!chat.last_timestamp) return false;
+              const chatDate = new Date(chat.last_timestamp);
+              if (Number.isNaN(chatDate.getTime())) return false;
+              if (fromDate && chatDate < fromDate) return false;
+              if (toDate && chatDate > toDate) return false;
+            }
+            return true;
+          });
+
+          renderChatList(filtered);
         }
         let isSending = false;
         let isSendingImage = false;
@@ -1352,7 +1515,9 @@
         chatContextMenu.style.visibility = 'visible';
         setSectionExpanded(chatStateSection, false);
         setSectionExpanded(chatRolesSection, false);
+        setSectionExpanded(chatUsersSection, false);
         buildChatRoleOptions(chatData);
+        buildChatUserOptions(chatData);
       }
 
       function buildChatRoleOptions(chatData) {
@@ -1399,6 +1564,67 @@
         });
       }
 
+      function buildChatUserOptions(chatData) {
+        if (!chatUserOptionsContainer) return;
+        chatUserOptionsContainer.innerHTML = '';
+
+        if (!Array.isArray(availableUsers) || availableUsers.length === 0) {
+          const emptyOption = document.createElement('div');
+          emptyOption.className = 'context-option disabled role-option';
+          emptyOption.textContent = 'Sin usuarios disponibles';
+          chatUserOptionsContainer.appendChild(emptyOption);
+          return;
+        }
+
+        const assignedUserId = chatData.assigned_user_id || null;
+
+        const clearOption = document.createElement('div');
+        clearOption.classList.add('context-option', 'role-option');
+        clearOption.dataset.user = '';
+        clearOption.textContent = 'Sin asignación';
+        if (!assignedUserId) {
+          clearOption.classList.add('active');
+          const check = document.createElement('span');
+          check.className = 'role-option-check';
+          check.textContent = '✔';
+          clearOption.appendChild(check);
+        }
+        clearOption.addEventListener('click', () => {
+          assignChatUser(chatData.numero, null, Boolean(assignedUserId));
+        });
+        chatUserOptionsContainer.appendChild(clearOption);
+
+        availableUsers.forEach(userEntry => {
+          if (!userEntry || userEntry.length < 2) return;
+          const userId = userEntry[0];
+          const displayName = userEntry[1] || userEntry[2] || userId;
+          const roleLabel = userEntry[3] ? ` (${userEntry[3]})` : '';
+          const option = document.createElement('div');
+          option.classList.add('context-option', 'role-option');
+          option.dataset.user = userId;
+
+          const label = document.createElement('span');
+          label.className = 'role-option-label';
+          label.textContent = `${displayName}${roleLabel}`;
+          option.appendChild(label);
+
+          const isAssigned = assignedUserId === userId;
+          if (isAssigned) {
+            option.classList.add('active');
+            const check = document.createElement('span');
+            check.className = 'role-option-check';
+            check.textContent = '✔';
+            option.appendChild(check);
+          }
+
+          option.addEventListener('click', () => {
+            assignChatUser(chatData.numero, userId, isAssigned);
+          });
+
+          chatUserOptionsContainer.appendChild(option);
+        });
+      }
+
       async function toggleChatRole(numero, roleKeyword, hasRole) {
         if (!numero || !roleKeyword) return;
         try {
@@ -1412,6 +1638,26 @@
             })
           });
           if (!res.ok) throw new Error('No se pudo actualizar el rol');
+          hideChatContextMenu();
+          fetchChatList();
+        } catch (err) {
+          console.error(err);
+        }
+      }
+
+      async function assignChatUser(numero, userId, isAssigned) {
+        if (!numero) return;
+        try {
+          const res = await fetch('/assign_chat_user', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              numero,
+              user_id: userId,
+              action: isAssigned ? 'remove' : 'assign'
+            })
+          });
+          if (!res.ok) throw new Error('No se pudo actualizar el usuario');
           hideChatContextMenu();
           fetchChatList();
         } catch (err) {
@@ -1463,22 +1709,34 @@
         syncMobileLayout();
       }
 
+      function finalizeChat(numero) {
+        if (!numero) return;
+        fetch('/finalizar_chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ numero })
+        })
+        .then(resp => {
+          if (!resp.ok) throw new Error('No se pudo finalizar el chat');
+          resetActiveChatIfMatches(numero);
+          fetchChatList();
+        })
+        .catch(err => console.error(err));
+      }
+
       chatFinishAction.addEventListener('click', () => {
         if (!chatContextTarget) return;
         const chatData = chatContextTarget;
         hideChatContextMenu();
-        fetch('/finalizar_chat', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ numero: chatData.numero })
-        })
-        .then(resp => {
-          if (!resp.ok) throw new Error('No se pudo finalizar el chat');
-          resetActiveChatIfMatches(chatData.numero);
-          fetchChatList();
-        })
-        .catch(err => console.error(err));
+        finalizeChat(chatData.numero);
       });
+
+      if (chatFinishButton) {
+        chatFinishButton.addEventListener('click', () => {
+          if (!currentChat) return;
+          finalizeChat(currentChat);
+        });
+      }
 
       if (chatDeleteAction) {
         chatDeleteAction.addEventListener('click', () => {
@@ -1516,10 +1774,10 @@
 
       function renderChatList(data) {
         const getTimestamp = ts => ts ? new Date(ts).getTime() : 0;
-        data.sort((a, b) => getTimestamp(b.last_timestamp) - getTimestamp(a.last_timestamp));
-        todosChats = data;
+        const sorted = Array.isArray(data) ? [...data] : [];
+        sorted.sort((a, b) => getTimestamp(b.last_timestamp) - getTimestamp(a.last_timestamp));
         chatListEl.innerHTML='';
-        data.forEach(c => {
+        sorted.forEach(c => {
           const serverTime = c.last_timestamp ? new Date(c.last_timestamp).getTime() : null;
           const prevTime = lastChatTimestamps[c.numero];
           if (serverTime && prevTime && serverTime > prevTime && c.numero !== currentChat) {
@@ -1654,7 +1912,8 @@
           .then(data => {
             if (!Array.isArray(data)) throw new Error('Respuesta de chats inválida');
             if (requestSeq !== chatListRequestSeq) return;
-            renderChatList(data);
+            todosChats = data;
+            applyChatFilters();
           })
           .catch(err => {
             console.error('Error al cargar la lista de chats', err);
@@ -1667,18 +1926,19 @@
                 .then(data => {
                   if (!Array.isArray(data)) throw new Error('Respuesta de chats inválida');
                   if (requestSeq !== chatListRequestSeq) return;
-                  renderChatList(data);
+                  todosChats = data;
+                  applyChatFilters();
                 })
                 .catch(innerErr => {
                   console.error('Reintento sin bypass de caché falló', innerErr);
                   if (chatListEl.children.length === 0 && Array.isArray(todosChats) && todosChats.length) {
-                    renderChatList(todosChats);
+                    applyChatFilters();
                   }
                 });
               return;
             }
             if (chatListEl.children.length === 0 && Array.isArray(todosChats) && todosChats.length) {
-              renderChatList(todosChats);
+              applyChatFilters();
             }
           });
       }
@@ -1800,6 +2060,9 @@
           mobileChatTitle.textContent = 'Selecciona un chat';
           mobileChatSubtitle.textContent = '';
           mobileChatActions.disabled = true;
+          if (chatFinishButton) {
+            chatFinishButton.disabled = true;
+          }
           return;
         }
         const title = chatData.alias ? `${chatData.alias} (${chatData.numero})` : (chatData.numero || '');
@@ -1808,6 +2071,9 @@
         const estadoLabel = chatData.estado_label || (estadoDef && estadoDef.label) || chatData.estado;
         mobileChatSubtitle.textContent = estadoLabel ? `Estado: ${estadoLabel}` : '';
         mobileChatActions.disabled = false;
+        if (chatFinishButton) {
+          chatFinishButton.disabled = false;
+        }
       }
 
       function updateTypingIndicator(isActive, shouldMaintainScroll = false) {

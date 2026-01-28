@@ -150,7 +150,63 @@
     }
     #buscador {
       padding:8px; border:none; border-radius:12px;
-      margin-bottom:12px; font-size:14px;
+      font-size:14px;
+      flex: 1;
+      min-width: 0;
+    }
+    .chat-filters {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    .chat-filters__bar {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    .filter-toggle {
+      border: none;
+      background: var(--accent-neon);
+      color: var(--text-light);
+      border-radius: 10px;
+      padding: 8px 12px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    .filter-panel {
+      border: 1px solid rgba(0, 0, 0, 0.08);
+      border-radius: 12px;
+      padding: 10px;
+      background: var(--bg-secondary);
+      display: grid;
+      gap: 8px;
+    }
+    .filter-row {
+      display: grid;
+      grid-template-columns: 72px 1fr;
+      align-items: center;
+      gap: 8px;
+    }
+    .filter-row label {
+      font-size: 0.85rem;
+      color: var(--text-main);
+    }
+    .filter-row select,
+    .filter-row input[type="date"] {
+      border: none;
+      border-radius: 10px;
+      padding: 6px 8px;
+      font-size: 0.85rem;
+      background: var(--text-light);
+      color: var(--text-main);
+    }
+    .filter-toggle-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.85rem;
+      color: var(--text-main);
     }
     #chatList {
       flex:1; overflow-y:auto; list-style:none;
@@ -263,7 +319,7 @@
       position: relative;
     }
     .chat-header {
-      display: none;
+      display: flex;
       align-items: center;
       gap: 12px;
       padding: 10px 14px;
@@ -301,6 +357,26 @@
       display: grid;
       place-items: center;
       cursor: pointer;
+    }
+    .chat-header__actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .chat-header__finish {
+      height: 36px;
+      min-width: 96px;
+      padding: 0 14px;
+      border-radius: 8px;
+      border: none;
+      background: #dc2626;
+      color: #ffffff;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .chat-header__finish:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
     }
     .chat-header__btn:disabled {
       opacity: 0.5;

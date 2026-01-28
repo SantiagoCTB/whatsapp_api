@@ -75,13 +75,29 @@ def manage_users():
                     conn.rollback()
                     error = 'El nombre de usuario ya existe.'
 
-        cursor.execute('SELECT id, name FROM roles ORDER BY name')
+        cursor.execute(
+            """
+            SELECT id, name
+              FROM roles
+             WHERE keyword NOT IN ('superadmin', 'tiquetes', 'soporte')
+             ORDER BY name
+            """
+        )
         roles = cursor.fetchall()
 
         cursor.execute(
             '''
             SELECT u.id, u.username, u.nombre,
-                   COALESCE(GROUP_CONCAT(r.name ORDER BY r.name SEPARATOR ', '), '')
+                   COALESCE(
+                       GROUP_CONCAT(
+                           CASE
+                               WHEN r.keyword NOT IN ('superadmin', 'tiquetes', 'soporte')
+                               THEN r.name
+                           END
+                           ORDER BY r.name SEPARATOR ', '
+                       ),
+                       ''
+                   )
               FROM usuarios u
          LEFT JOIN user_roles ur ON u.id = ur.user_id
          LEFT JOIN roles r ON ur.role_id = r.id
