@@ -504,13 +504,31 @@ def _ensure_auth_schema_and_seed(cursor, admin_hash: str):
     INSERT INTO roles (name, keyword)
       SELECT %s, %s FROM DUAL
       WHERE NOT EXISTS (SELECT 1 FROM roles WHERE keyword=%s)
-    """, ('Tiquetes', 'tiquetes', 'tiquetes'))
-
-    cursor.execute("""
-    INSERT INTO roles (name, keyword)
-      SELECT %s, %s FROM DUAL
-      WHERE NOT EXISTS (SELECT 1 FROM roles WHERE keyword=%s)
     """, ('Cotizar', 'cotizar', 'cotizar'))
+
+    def _table_exists(table_name: str) -> bool:
+        cursor.execute("SHOW TABLES LIKE %s", (table_name,))
+        return cursor.fetchone() is not None
+
+    if _table_exists("roles"):
+        role_cleanup_tables = [
+            "user_roles",
+            "chat_roles",
+            "chat_assignments",
+            "role_assignment_state",
+        ]
+        for table in role_cleanup_tables:
+            if not _table_exists(table):
+                continue
+            cursor.execute(
+                f"""
+                DELETE t
+                  FROM {table} t
+                  JOIN roles r ON t.role_id = r.id
+                 WHERE r.keyword IN ('tiquetes', 'soporte')
+                """
+            )
+        cursor.execute("DELETE FROM roles WHERE keyword IN ('tiquetes', 'soporte')")
 
     cursor.execute("""
     INSERT IGNORE INTO user_roles (user_id, role_id)

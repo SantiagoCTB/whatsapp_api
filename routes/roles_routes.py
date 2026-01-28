@@ -18,7 +18,14 @@ def roles():
     conn = get_connection()
     c = conn.cursor()
 
-    c.execute('SELECT id, name, keyword FROM roles ORDER BY name')
+    c.execute(
+        """
+        SELECT id, name, keyword
+          FROM roles
+         WHERE keyword NOT IN ('superadmin', 'tiquetes', 'soporte')
+         ORDER BY name
+        """
+    )
     roles = c.fetchall()
 
     c.execute('''

@@ -77,6 +77,7 @@ LEGACY_STATE_MAP = {
     "bot": "en_flujo",
     "ia_activa": "en_flujo",
 }
+EXCLUDED_ROLE_KEYWORDS = {"superadmin", "tiquetes", "soporte"}
 
 
 EXCLUDED_FLOW_FIELDS = {"flow_token"}
@@ -811,8 +812,13 @@ def index():
     )
     botones = c.fetchall()
 
-    # Roles disponibles (excluyendo admin)
-    c.execute("SELECT id, name, keyword FROM roles WHERE keyword != 'admin'")
+    # Roles disponibles (excluyendo admin y roles ocultos)
+    excluded_role_values = ('admin', *EXCLUDED_ROLE_KEYWORDS)
+    placeholders = ','.join(['%s'] * len(excluded_role_values))
+    c.execute(
+        f"SELECT id, name, keyword FROM roles WHERE keyword NOT IN ({placeholders})",
+        excluded_role_values,
+    )
     roles_db = c.fetchall()
 
     c.execute(
@@ -820,7 +826,16 @@ def index():
         SELECT u.id,
                COALESCE(NULLIF(u.nombre, ''), u.username) AS display_name,
                u.username,
-               COALESCE(GROUP_CONCAT(r.name ORDER BY r.name SEPARATOR ', '), '')
+               COALESCE(
+                   GROUP_CONCAT(
+                       CASE
+                           WHEN r.keyword NOT IN ('superadmin', 'tiquetes', 'soporte')
+                           THEN r.name
+                       END
+                       ORDER BY r.name SEPARATOR ', '
+                   ),
+                   ''
+               )
           FROM usuarios u
           LEFT JOIN user_roles ur ON u.id = ur.user_id
           LEFT JOIN roles r ON ur.role_id = r.id
@@ -1409,6 +1424,22 @@ def get_chat_list():
         roles = fila_roles[0] if fila_roles else None
         nombres_roles = fila_roles[1] if fila_roles else None
         role_keywords = [n.strip() for n in nombres_roles.split(',')] if nombres_roles else []
+        role_keywords = [kw for kw in role_keywords if kw and kw not in EXCLUDED_ROLE_KEYWORDS]
+        if asignado_id:
+            c.execute(
+                """
+                SELECT r.keyword
+                  FROM user_roles ur
+                  JOIN roles r ON ur.role_id = r.id
+                 WHERE ur.user_id = %s
+                   AND r.keyword NOT IN ('superadmin', 'tiquetes', 'soporte')
+                """,
+                (asignado_id,),
+            )
+            assigned_roles = [row[0] for row in c.fetchall() if row and row[0]]
+            for keyword in assigned_roles:
+                if keyword not in role_keywords:
+                    role_keywords.append(keyword)
         inicial_rol = role_keywords[0][0].upper() if role_keywords else None
 
         # Estado actual del chat
@@ -1643,6 +1674,8 @@ def assign_chat_role():
     role_kw = data.get('role') or data.get('role_kw')
     if not role_kw:
         return jsonify({'error': 'Rol requerido'}), 400
+    if role_kw in EXCLUDED_ROLE_KEYWORDS:
+        return jsonify({'error': 'Rol no permitido'}), 400
     action  = data.get('action', 'add')
 
     conn = get_connection()
@@ -1717,19 +1750,31 @@ def assign_chat_user():
         return jsonify({'error': 'Usuario no encontrado'}), 404
 
     c.execute(
-        "SELECT role_id FROM user_roles WHERE user_id = %s ORDER BY role_id ASC",
+        """
+        SELECT r.id
+          FROM user_roles ur
+          JOIN roles r ON ur.role_id = r.id
+         WHERE ur.user_id = %s
+           AND r.keyword NOT IN ('superadmin', 'tiquetes', 'soporte')
+         ORDER BY r.id ASC
+        """,
         (user_id_int,),
     )
-    role_row = c.fetchone()
-    if not role_row:
+    role_rows = c.fetchall()
+    if not role_rows:
         conn.close()
         return jsonify({'error': 'El usuario no tiene rol asignado'}), 400
-    role_id = role_row[0]
+    role_ids = [row[0] for row in role_rows if row and row[0] is not None]
+    if not role_ids:
+        conn.close()
+        return jsonify({'error': 'El usuario no tiene rol asignado'}), 400
+    role_id = role_ids[0]
 
-    c.execute(
-        "INSERT IGNORE INTO chat_roles (numero, role_id) VALUES (%s, %s)",
-        (numero, role_id),
-    )
+    for user_role_id in role_ids:
+        c.execute(
+            "INSERT IGNORE INTO chat_roles (numero, role_id) VALUES (%s, %s)",
+            (numero, user_role_id),
+        )
     c.execute(
         """
         INSERT INTO chat_assignments (numero, user_id, role_id, assigned_at)
