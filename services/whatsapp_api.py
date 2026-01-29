@@ -139,6 +139,19 @@ def _get_messenger_message_tag() -> str | None:
     return tag or None
 
 
+def _get_whatsapp_video_limit_bytes() -> int:
+    limit_mb = tenants.get_runtime_setting(
+        "WHATSAPP_VIDEO_MAX_MB",
+        default=Config.WHATSAPP_VIDEO_MAX_MB,
+        cast=int,
+    )
+    if not isinstance(limit_mb, int):
+        limit_mb = Config.WHATSAPP_VIDEO_MAX_MB
+    if limit_mb < 1:
+        limit_mb = 1
+    return limit_mb * 1024 * 1024
+
+
 def _resolve_message_channel(numero: str) -> str:
     last_client_info = obtener_ultimo_mensaje_cliente_info(numero)
     last_tipo = (last_client_info or {}).get("tipo") or ""
@@ -913,6 +926,17 @@ def enviar_mensaje(
 
     elif tipo_respuesta == 'video':
         if opciones and os.path.isfile(opciones):
+            max_bytes = _get_whatsapp_video_limit_bytes()
+            try:
+                size_bytes = os.path.getsize(opciones)
+            except OSError:
+                size_bytes = None
+            if size_bytes is not None and size_bytes > max_bytes:
+                limit_mb = max_bytes // (1024 * 1024)
+                return _fail(
+                    "El video supera el tamaño máximo permitido por WhatsApp "
+                    f"({limit_mb} MB). Comprime el archivo o envíalo como documento."
+                )
             filename   = os.path.basename(opciones)
             public_url = url_for(
                 'static',
@@ -1164,6 +1188,12 @@ def enviar_mensaje(
                 friendly_reason = (
                     "Meta rechazó la solicitud por parámetros inválidos. "
                     "Revisa el número y el mensaje citado."
+                )
+            elif message_text and "anexo" in message_text.lower() and "maior" in message_text.lower():
+                limit_mb = _get_whatsapp_video_limit_bytes() // (1024 * 1024)
+                friendly_reason = (
+                    "El archivo adjunto supera el tamaño permitido por WhatsApp "
+                    f"({limit_mb} MB). Comprime el archivo o envíalo como documento."
                 )
             elif message_text:
                 friendly_reason = message_text
