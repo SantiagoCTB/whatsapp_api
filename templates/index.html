@@ -932,6 +932,7 @@
         let sendUnlockTimeout = null;
         let lastSentMessage = '';
         let lastSentTimestamp = 0;
+        const pendingVideoUploads = new Map();
         const audioStatusEl = document.getElementById('audioStatus');
         let audioStatusTimeout = null;
         const videoStatusEl = document.getElementById('videoStatus');
@@ -957,8 +958,136 @@
 
         function updateSendButtons() {
           if (sendBtn) {
-            sendBtn.disabled = isSending || isSendingImage || isSendingAudio || isSendingVideo || isRecordingAudio;
+            sendBtn.disabled = isSending || isSendingImage || isSendingAudio || isRecordingAudio;
           }
+        }
+
+        function buildPendingVideoElement(pending) {
+          const div = document.createElement('div');
+          div.className = 'bubble asesor message pending-message';
+          div.dataset.pendingId = pending.id;
+
+          if (pending.previewUrl) {
+            const v = document.createElement('video');
+            v.controls = true;
+            v.muted = true;
+            v.playsInline = true;
+            v.src = pending.previewUrl;
+            v.style.maxWidth = '200px';
+            div.appendChild(v);
+          }
+
+          if (pending.caption) {
+            const p = document.createElement('p');
+            p.textContent = pending.caption;
+            div.appendChild(p);
+          }
+
+          const status = document.createElement('div');
+          status.className = 'pending-status';
+          status.dataset.state = pending.state || 'uploading';
+
+          const spinner = document.createElement('span');
+          spinner.className = 'pending-spinner';
+
+          const text = document.createElement('span');
+          text.className = 'pending-text';
+          text.textContent = pending.message || 'Enviando video…';
+
+          status.appendChild(spinner);
+          status.appendChild(text);
+          div.appendChild(status);
+          return div;
+        }
+
+        function addPendingVideoUpload({ file, previewUrl, caption }) {
+          if (!currentChat) return null;
+          const id = `pending-video-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+          const pendingUrl = previewUrl || (file ? URL.createObjectURL(file) : '');
+          const payload = {
+            id,
+            chat: currentChat,
+            previewUrl: pendingUrl,
+            caption: caption || '',
+            state: 'uploading',
+            message: 'Enviando video…',
+            createdAt: Date.now()
+          };
+          pendingVideoUploads.set(id, payload);
+          if (chatBoxEl) {
+            const el = buildPendingVideoElement(payload);
+            chatBoxEl.appendChild(el);
+            scrollChatToBottom();
+          }
+          return id;
+        }
+
+        function updatePendingVideoUpload(id, { state, message } = {}) {
+          const pending = pendingVideoUploads.get(id);
+          if (!pending) return;
+          if (state) pending.state = state;
+          if (message) pending.message = message;
+          const el = chatBoxEl ? chatBoxEl.querySelector(`[data-pending-id="${id}"]`) : null;
+          if (!el) return;
+          const status = el.querySelector('.pending-status');
+          if (!status) return;
+          if (pending.state) status.dataset.state = pending.state;
+          const text = status.querySelector('.pending-text');
+          if (text && pending.message) text.textContent = pending.message;
+        }
+
+        function removePendingVideoUpload(id) {
+          const pending = pendingVideoUploads.get(id);
+          if (!pending) return;
+          if (pending.previewUrl) {
+            URL.revokeObjectURL(pending.previewUrl);
+          }
+          pendingVideoUploads.delete(id);
+          const el = chatBoxEl ? chatBoxEl.querySelector(`[data-pending-id="${id}"]`) : null;
+          if (el) el.remove();
+        }
+
+        function appendPendingVideoUploads(fragment) {
+          if (!pendingVideoUploads.size) return;
+          pendingVideoUploads.forEach(pending => {
+            if (pending.chat !== currentChat) return;
+            fragment.appendChild(buildPendingVideoElement(pending));
+          });
+        }
+
+        function reconcilePendingVideoUploads(msgs) {
+          if (!pendingVideoUploads.size || !Array.isArray(msgs)) return;
+          const candidates = [];
+          msgs.forEach(row => {
+            if (!Array.isArray(row)) return;
+            const [txt, tipo, url, opciones, ts] = row;
+            if (!tipo || !tipo.startsWith('asesor')) return;
+            if (!tipo.includes('video')) return;
+            const timestamp = ts ? Date.parse(ts) : null;
+            candidates.push({
+              timestamp,
+              text: (txt || '').trim()
+            });
+          });
+          const usedIndexes = new Set();
+          pendingVideoUploads.forEach(pending => {
+            if (pending.chat !== currentChat) return;
+            if (pending.state === 'error') return;
+            for (let i = 0; i < candidates.length; i += 1) {
+              if (usedIndexes.has(i)) continue;
+              const candidate = candidates[i];
+              if (candidate.timestamp === null) continue;
+              if (pending.caption && candidate.text && candidate.text !== pending.caption.trim()) {
+                continue;
+              }
+              if (candidate.timestamp + 5000 < pending.createdAt) {
+                continue;
+              }
+              usedIndexes.add(i);
+              removePendingVideoUpload(pending.id);
+              break;
+            }
+          });
         }
 
         function setAudioStatus(message, state = 'info', autoClearMs = 0) {
@@ -2364,6 +2493,8 @@
               }
               lastCount = i + 1;
             }
+            reconcilePendingVideoUploads(msgs);
+            appendPendingVideoUploads(nextChildren);
             chatBoxEl.replaceChildren(nextChildren);
             lastIncomingWaId = newestIncoming;
             updateTypingIndicator(Boolean(data.is_typing), atBottom);
@@ -2495,7 +2626,7 @@
           sendVideoDraft();
           return;
         }
-        if (isSending || isSendingImage || isSendingVideo) return;
+        if (isSending || isSendingImage) return;
         const txt = messageInput.value.trim();
         if (!txt||!currentChat) return;
         const now = Date.now();
@@ -2925,19 +3056,33 @@
         isSendingVideo = true;
         updateSendButtons();
         setVideoStatus('Procesando video…', 'uploading');
+        const caption = messageInput ? messageInput.value.trim() : '';
+        const pendingId = addPendingVideoUpload({
+          file: videoDraft.file,
+          previewUrl: URL.createObjectURL(videoDraft.file),
+          caption
+        });
         const form = new FormData();
         form.append('video', videoDraft.file);
-        form.append('caption', messageInput ? messageInput.value.trim() : '');
+        form.append('caption', caption);
         form.append('numero', currentChat);
         try {
+          clearVideoDraft();
+          if (messageInput) {
+            messageInput.value = '';
+            messageInput.placeholder = 'Escribe un mensaje…';
+            messageInput.focus();
+          }
           const res = await fetch('/send_video', { method:'POST', body: form });
           if (!res.ok) {
             const msg = await extractSendError(res);
             throw new Error(msg);
           }
-          clearVideoDraft();
-          if (messageInput) {
-            messageInput.value = '';
+          if (pendingId) {
+            updatePendingVideoUpload(pendingId, {
+              state: 'queued',
+              message: 'Video en cola para enviar'
+            });
           }
           setVideoStatus('Video en cola para enviar', 'success', 4000);
           loadMessages();
@@ -2945,6 +3090,10 @@
         } catch (err) {
           const msg = (err && err.message) ? err.message : 'No se pudo enviar el video';
           setVideoStatus(msg, 'error', 6000);
+          if (pendingId) {
+            updatePendingVideoUpload(pendingId, { state: 'error', message: msg });
+            setTimeout(() => removePendingVideoUpload(pendingId), 6000);
+          }
           alert(msg);
         } finally {
           isSendingVideo = false;
@@ -2964,15 +3113,26 @@
         if (!currentChat || !file) return;
         const form = new FormData();
         form.append(endpoint.split('_')[1], file);
-        form.append('caption', messageInput ? messageInput.value.trim() : '');
+        const caption = messageInput ? messageInput.value.trim() : '';
+        form.append('caption', caption);
         form.append('numero', currentChat);
         const isVideoUpload = endpoint === 'send_video';
+        const pendingId = isVideoUpload ? addPendingVideoUpload({
+          file,
+          previewUrl: URL.createObjectURL(file),
+          caption
+        }) : null;
         if (isVideoUpload) {
           isSendingVideo = true;
           updateSendButtons();
           setVideoStatus('Procesando video…', 'uploading');
         }
         try {
+          if (isVideoUpload && messageInput) {
+            messageInput.value = '';
+            messageInput.placeholder = 'Escribe un mensaje…';
+            messageInput.focus();
+          }
           const res = await fetch(`/${endpoint}`, { method:'POST', body: form });
           if (!res.ok) {
             const msg = await extractSendError(res);
@@ -2982,11 +3142,21 @@
           loadMessages(); fetchChatList();
           if (isVideoUpload) {
             setVideoStatus('Video en cola para enviar', 'success', 4000);
+            if (pendingId) {
+              updatePendingVideoUpload(pendingId, {
+                state: 'queued',
+                message: 'Video en cola para enviar'
+              });
+            }
           }
         } catch (err) {
           const msg = (err && err.message) ? err.message : 'No se pudo enviar el archivo';
           if (isVideoUpload) {
             setVideoStatus(msg, 'error', 6000);
+            if (pendingId) {
+              updatePendingVideoUpload(pendingId, { state: 'error', message: msg });
+              setTimeout(() => removePendingVideoUpload(pendingId), 6000);
+            }
           }
           alert(msg);
         } finally {

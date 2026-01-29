@@ -541,6 +541,48 @@
       max-width:70%; padding:10px 14px; border-radius:16px;
       word-wrap:break-word; box-shadow:0 2px 4px rgba(0,0,0,0.1);
     }
+    .pending-message {
+      opacity: 0.9;
+      position: relative;
+    }
+    .pending-status {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 6px;
+      margin-top: 6px;
+      font-size: 0.75rem;
+      color: var(--timestamp-color);
+    }
+    .pending-status[data-state="error"] {
+      color: #b00020;
+    }
+    .pending-status[data-state="success"] {
+      color: #1b5e20;
+    }
+    .pending-status[data-state="queued"] {
+      color: #1b5e20;
+    }
+    .pending-spinner {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      border: 2px solid rgba(0, 0, 0, 0.15);
+      border-top-color: var(--accent);
+      animation: pendingSpin 0.9s linear infinite;
+    }
+    .pending-status[data-state="error"] .pending-spinner {
+      border-top-color: #b00020;
+    }
+    .pending-status[data-state="success"] .pending-spinner {
+      border-top-color: #1b5e20;
+    }
+    .pending-status[data-state="queued"] .pending-spinner {
+      border-top-color: #1b5e20;
+    }
+    @keyframes pendingSpin {
+      to { transform: rotate(360deg); }
+    }
     .typing-indicator {
       display: flex;
       align-items: center;
