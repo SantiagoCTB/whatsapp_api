@@ -216,16 +216,14 @@ def _upload_instagram_attachment(
     attachment_type: str,
     *,
     is_reusable: bool = True,
-) -> str | None:
+) -> tuple[str | None, str | None]:
     try:
         runtime = _get_instagram_env()
     except RuntimeError as exc:
-        logger.error("No se puede subir adjunto a Instagram: %s", exc)
-        return None
+        return None, f"No se puede subir adjunto a Instagram: {exc}"
 
     if not os.path.isfile(file_path):
-        logger.error("Adjunto de Instagram no existe: %s", file_path)
-        return None
+        return None, f"Adjunto de Instagram no existe: {file_path}"
 
     url = f"{GRAPH_BASE_URL}/me/message_attachments"
     headers = {"Authorization": f"Bearer {runtime['token']}"}
@@ -244,29 +242,26 @@ def _upload_instagram_attachment(
                 timeout=Config.MESSENGER_ATTACHMENT_TIMEOUT_SECONDS,
             )
     except requests.RequestException as exc:
-        logger.error("Error subiendo adjunto a Instagram: %s", exc)
-        return None
+        return None, f"Error subiendo adjunto a Instagram: {exc}"
 
     if response.status_code >= 400:
         details = _extract_error_details(response)
-        logger.error(
-            "Fallo al subir adjunto a Instagram",
-            extra={"status": response.status_code, "details": details},
+        return (
+            None,
+            "Fallo al subir adjunto a Instagram"
+            f" (status={response.status_code}, details={details})",
         )
-        return None
 
     try:
         payload = response.json()
     except ValueError:
-        logger.error("Respuesta inválida al subir adjunto a Instagram: no JSON")
-        return None
+        return None, "Respuesta inválida al subir adjunto a Instagram: no JSON"
 
     attachment_id = payload.get("attachment_id") if isinstance(payload, dict) else None
     if not attachment_id:
-        logger.error("Respuesta sin attachment_id al subir adjunto a Instagram")
-        return None
+        return None, "Respuesta sin attachment_id al subir adjunto a Instagram"
 
-    return attachment_id
+    return attachment_id, None
 
 
 def _upload_messenger_attachment(
@@ -954,10 +949,15 @@ def enviar_mensaje(
                         attachment_url = opciones.get("url") or opciones.get("link") or opciones.get("id")
                     else:
                         attachment_url = opciones
+                attachment_url = _resolve_public_media_url(attachment_url)
                 attachment_id = None
+                upload_error = None
                 local_path = _extract_local_media_path(opciones)
-                if local_path:
-                    attachment_id = _upload_instagram_attachment(local_path, attachment_type)
+                if local_path and not attachment_url:
+                    attachment_id, upload_error = _upload_instagram_attachment(
+                        local_path,
+                        attachment_type,
+                    )
                 if attachment_id:
                     payload["message"] = {
                         "attachment": {
@@ -966,8 +966,12 @@ def enviar_mensaje(
                         }
                     }
                 else:
-                    attachment_url = _resolve_public_media_url(attachment_url)
                     if not attachment_url:
+                        if upload_error:
+                            logger.error(
+                                "No se pudo enviar el adjunto a Instagram: %s",
+                                upload_error,
+                            )
                         return _fail("No se pudo enviar el adjunto a Instagram.")
                     payload["message"] = {
                         "attachment": {
@@ -977,9 +981,14 @@ def enviar_mensaje(
                     }
             else:
                 attachment_url, attachment_id = _extract_instagram_attachment_reference(opciones)
+                attachment_url = _resolve_public_media_url(attachment_url)
                 local_path = _extract_local_media_path(opciones)
-                if local_path and not attachment_id:
-                    attachment_id = _upload_instagram_attachment(local_path, attachment_type)
+                upload_error = None
+                if local_path and not attachment_id and not attachment_url:
+                    attachment_id, upload_error = _upload_instagram_attachment(
+                        local_path,
+                        attachment_type,
+                    )
                 if attachment_id:
                     payload["message"] = {
                         "attachment": {
@@ -988,8 +997,12 @@ def enviar_mensaje(
                         }
                     }
                 else:
-                    attachment_url = _resolve_public_media_url(attachment_url)
                     if not attachment_url:
+                        if upload_error:
+                            logger.error(
+                                "No se pudo enviar el adjunto a Instagram: %s",
+                                upload_error,
+                            )
                         return _fail("No se pudo enviar el adjunto a Instagram.")
                     payload["message"] = {
                         "attachment": {
