@@ -1010,7 +1010,8 @@
             previewUrl: pendingUrl,
             caption: caption || '',
             state: 'uploading',
-            message: 'Enviando video…'
+            message: 'Enviando video…',
+            createdAt: Date.now()
           };
           pendingVideoUploads.set(id, payload);
           if (chatBoxEl) {
@@ -1051,6 +1052,41 @@
           pendingVideoUploads.forEach(pending => {
             if (pending.chat !== currentChat) return;
             fragment.appendChild(buildPendingVideoElement(pending));
+          });
+        }
+
+        function reconcilePendingVideoUploads(msgs) {
+          if (!pendingVideoUploads.size || !Array.isArray(msgs)) return;
+          const candidates = [];
+          msgs.forEach(row => {
+            if (!Array.isArray(row)) return;
+            const [txt, tipo, url, opciones, ts] = row;
+            if (!tipo || !tipo.startsWith('asesor')) return;
+            if (!tipo.includes('video')) return;
+            const timestamp = ts ? Date.parse(ts) : null;
+            candidates.push({
+              timestamp,
+              text: (txt || '').trim()
+            });
+          });
+          const usedIndexes = new Set();
+          pendingVideoUploads.forEach(pending => {
+            if (pending.chat !== currentChat) return;
+            if (pending.state === 'error') return;
+            for (let i = 0; i < candidates.length; i += 1) {
+              if (usedIndexes.has(i)) continue;
+              const candidate = candidates[i];
+              if (candidate.timestamp === null) continue;
+              if (pending.caption && candidate.text && candidate.text !== pending.caption.trim()) {
+                continue;
+              }
+              if (candidate.timestamp + 5000 < pending.createdAt) {
+                continue;
+              }
+              usedIndexes.add(i);
+              removePendingVideoUpload(pending.id);
+              break;
+            }
           });
         }
 
@@ -2457,6 +2493,7 @@
               }
               lastCount = i + 1;
             }
+            reconcilePendingVideoUploads(msgs);
             appendPendingVideoUploads(nextChildren);
             chatBoxEl.replaceChildren(nextChildren);
             lastIncomingWaId = newestIncoming;
@@ -3042,7 +3079,10 @@
             throw new Error(msg);
           }
           if (pendingId) {
-            removePendingVideoUpload(pendingId);
+            updatePendingVideoUpload(pendingId, {
+              state: 'queued',
+              message: 'Video en cola para enviar'
+            });
           }
           setVideoStatus('Video en cola para enviar', 'success', 4000);
           loadMessages();
@@ -3103,7 +3143,10 @@
           if (isVideoUpload) {
             setVideoStatus('Video en cola para enviar', 'success', 4000);
             if (pendingId) {
-              removePendingVideoUpload(pendingId);
+              updatePendingVideoUpload(pendingId, {
+                state: 'queued',
+                message: 'Video en cola para enviar'
+              });
             }
           }
         } catch (err) {
