@@ -1625,3 +1625,41 @@ def download_audio(media_id):
     )
     r2.raise_for_status()
     return r2.content
+
+
+class MediaTooLargeError(RuntimeError):
+    """Raised when a media file exceeds the maximum allowed size."""
+
+
+def download_media_to_path(media_id: str, dest_path: str, *, max_bytes: int | None = None) -> int:
+    runtime = _get_runtime_env()
+    url_media = f"{GRAPH_BASE_URL}/{media_id}"
+    r1 = requests.get(url_media, params={"access_token": runtime['token']})
+    r1.raise_for_status()
+    media_url = r1.json()["url"]
+
+    total_bytes = 0
+    with requests.get(
+        media_url,
+        headers={"Authorization": f"Bearer {runtime['token']}"},
+        stream=True,
+    ) as r2:
+        r2.raise_for_status()
+        content_length = r2.headers.get("Content-Length")
+        if max_bytes and content_length:
+            try:
+                if int(content_length) > max_bytes:
+                    raise MediaTooLargeError("El archivo supera el tamaño permitido.")
+            except ValueError:
+                pass
+
+        with open(dest_path, "wb") as f:
+            for chunk in r2.iter_content(chunk_size=1024 * 1024):
+                if not chunk:
+                    continue
+                total_bytes += len(chunk)
+                if max_bytes and total_bytes > max_bytes:
+                    raise MediaTooLargeError("El archivo supera el tamaño permitido.")
+                f.write(chunk)
+
+    return total_bytes

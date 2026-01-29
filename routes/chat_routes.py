@@ -2183,6 +2183,27 @@ def send_video():
     if not numero or not video:
         return jsonify({'error':'Falta número o video'}), 400
 
+    max_bytes = Config.MAX_VIDEO_BYTES
+    try:
+        video.stream.seek(0, os.SEEK_END)
+        video_size = video.stream.tell()
+        video.stream.seek(0)
+    except (AttributeError, OSError):
+        video_size = None
+
+    if video_size is not None and video_size > max_bytes:
+        return (
+            jsonify(
+                {
+                    "error": (
+                        f"El video supera el máximo permitido de "
+                        f"{Config.MAX_VIDEO_MB} MB."
+                    )
+                }
+            ),
+            413,
+        )
+
     filename = secure_filename(video.filename)
     unique   = f"{uuid.uuid4().hex}_{filename}"
     path     = _media_path(unique)

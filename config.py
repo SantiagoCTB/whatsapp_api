@@ -141,6 +141,9 @@ class Config:
         'yes',
         'on',
     }
+    MAX_VIDEO_MB = int(os.getenv('MAX_VIDEO_MB', 500))
+    MAX_VIDEO_BYTES = MAX_VIDEO_MB * 1024 * 1024
+    MAX_CONTENT_LENGTH = int(os.getenv('MAX_CONTENT_LENGTH', MAX_VIDEO_BYTES))
     IA_CATALOG_MAX_FILE_MB = int(os.getenv('IA_CATALOG_MAX_FILE_MB', 50))
     IA_CATALOG_REQUEST_DELAY_SECONDS = float(os.getenv('IA_CATALOG_REQUEST_DELAY_SECONDS', 1.0))
     LANGUAGETOOL_URL = os.getenv('LANGUAGETOOL_URL', 'https://api.languagetool.org/v2/check')
