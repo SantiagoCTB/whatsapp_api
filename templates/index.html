@@ -1506,20 +1506,28 @@
 
       function openChatContextMenu(event, chatData) {
         chatContextTarget = chatData;
-        const pageX = typeof event.pageX === 'number' ? event.pageX : (typeof event.x === 'number' ? event.x : 0);
-        const pageY = typeof event.pageY === 'number' ? event.pageY : (typeof event.y === 'number' ? event.y : 0);
+        const baseX = typeof event.clientX === 'number'
+          ? event.clientX
+          : (typeof event.pageX === 'number' ? event.pageX : (typeof event.x === 'number' ? event.x : 0));
+        const baseY = typeof event.clientY === 'number'
+          ? event.clientY
+          : (typeof event.pageY === 'number' ? event.pageY : (typeof event.y === 'number' ? event.y : 0));
         chatContextMenu.style.visibility = 'hidden';
         chatContextMenu.classList.add('show');
-        chatContextMenu.style.left = `${pageX}px`;
-        chatContextMenu.style.top = `${pageY}px`;
+        chatContextMenu.style.left = `${baseX}px`;
+        chatContextMenu.style.top = `${baseY}px`;
         const rect = chatContextMenu.getBoundingClientRect();
-        let left = pageX;
-        let top = pageY;
-        if (rect.right > window.innerWidth) {
-          left = Math.max(0, window.innerWidth - rect.width - 8);
+        const margin = 8;
+        let left = baseX;
+        let top = baseY;
+        if (rect.right > window.innerWidth - margin) {
+          left = Math.max(margin, window.innerWidth - rect.width - margin);
         }
-        if (rect.bottom > window.innerHeight) {
-          top = Math.max(0, window.innerHeight - rect.height - 8);
+        if (rect.bottom > window.innerHeight - margin) {
+          top = Math.max(margin, window.innerHeight - rect.height - margin);
+        }
+        if (rect.top < margin) {
+          top = margin;
         }
         chatContextMenu.style.left = `${left}px`;
         chatContextMenu.style.top = `${top}px`;
@@ -1685,7 +1693,6 @@
         }
       });
       window.addEventListener('resize', hideChatContextMenu);
-      chatListEl.addEventListener('scroll', hideChatContextMenu);
       chatContextMenu.addEventListener('contextmenu', e => e.preventDefault());
 
 
@@ -1916,7 +1923,7 @@
           addLongPressListener(li, event => {
             const touch = event.touches[0];
             if (!touch) return;
-            openChatContextMenu({ pageX: touch.pageX, pageY: touch.pageY }, c);
+            openChatContextMenu({ clientX: touch.clientX, clientY: touch.clientY }, c);
           });
 
           chatListEl.appendChild(li);
@@ -1924,7 +1931,9 @@
       }
 
       function fetchChatList(allowRetry = true) {
-        hideChatContextMenu();
+        if (!chatContextMenu.classList.contains('show')) {
+          hideChatContextMenu();
+        }
         const requestSeq = ++chatListRequestSeq;
         const params = new URLSearchParams();
         if (buscadorInput && buscadorInput.value.trim()) {
