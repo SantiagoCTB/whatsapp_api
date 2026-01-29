@@ -130,6 +130,7 @@
         <p class="record-controls__hint">Pulsa grabar para iniciar y detener para enviar.</p>
       </div>
       <div id="audioStatus" class="audio-status" aria-live="polite" hidden></div>
+      <div id="videoStatus" class="video-status" aria-live="polite" hidden></div>
     </div>
   </div>
 </div>
@@ -910,6 +911,7 @@
         let isSending = false;
         let isSendingImage = false;
         let isSendingAudio = false;
+        let isSendingVideo = false;
         let isRecordingAudio = false;
         let imageDraft = null;
         let isBotoneraSending = false;
@@ -918,6 +920,8 @@
         let lastSentTimestamp = 0;
         const audioStatusEl = document.getElementById('audioStatus');
         let audioStatusTimeout = null;
+        const videoStatusEl = document.getElementById('videoStatus');
+        let videoStatusTimeout = null;
 
         function startSending() {
           if (sendUnlockTimeout) clearTimeout(sendUnlockTimeout);
@@ -939,7 +943,7 @@
 
         function updateSendButtons() {
           if (sendBtn) {
-            sendBtn.disabled = isSending || isSendingImage || isSendingAudio || isRecordingAudio;
+            sendBtn.disabled = isSending || isSendingImage || isSendingAudio || isSendingVideo || isRecordingAudio;
           }
         }
 
@@ -957,6 +961,24 @@
               audioStatusEl.textContent = '';
               audioStatusEl.hidden = true;
               audioStatusTimeout = null;
+            }, autoClearMs);
+          }
+        }
+
+        function setVideoStatus(message, state = 'info', autoClearMs = 0) {
+          if (!videoStatusEl) return;
+          if (videoStatusTimeout) {
+            clearTimeout(videoStatusTimeout);
+            videoStatusTimeout = null;
+          }
+          videoStatusEl.textContent = message || '';
+          videoStatusEl.dataset.state = state || 'info';
+          videoStatusEl.hidden = !message;
+          if (message && autoClearMs) {
+            videoStatusTimeout = setTimeout(() => {
+              videoStatusEl.textContent = '';
+              videoStatusEl.hidden = true;
+              videoStatusTimeout = null;
             }, autoClearMs);
           }
         }
@@ -2841,6 +2863,12 @@
         form.append(endpoint.split('_')[1], file);
         form.append('caption', messageInput ? messageInput.value.trim() : '');
         form.append('numero', currentChat);
+        const isVideoUpload = endpoint === 'send_video';
+        if (isVideoUpload) {
+          isSendingVideo = true;
+          updateSendButtons();
+          setVideoStatus('Procesando video…', 'uploading');
+        }
         try {
           const res = await fetch(`/${endpoint}`, { method:'POST', body: form });
           if (!res.ok) {
@@ -2849,9 +2877,21 @@
           }
           attachMenu.classList.remove('show');
           loadMessages(); fetchChatList();
+          if (isVideoUpload) {
+            setVideoStatus('Video en cola para enviar', 'success', 4000);
+          }
         } catch (err) {
           const msg = (err && err.message) ? err.message : 'No se pudo enviar el archivo';
+          if (isVideoUpload) {
+            setVideoStatus(msg, 'error', 6000);
+          }
           alert(msg);
+        } finally {
+          if (isVideoUpload) {
+            isSendingVideo = false;
+            updateSendButtons();
+            if (messageInput) messageInput.focus();
+          }
         }
       }
 
