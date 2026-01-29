@@ -73,18 +73,42 @@
     <label for="handler">Handler externo:</label>
     <input type="text" id="handler" name="handler">
 
-    <label for="active_hours">Horario activo (solo para IA):</label>
-    <input type="text" id="active_hours" name="active_hours" placeholder="Ej. 18:00-08:00, 12:00-14:00">
+    <label for="active_schedule_preset">Horario activo (solo para IA):</label>
+    <select id="active_schedule_preset" class="form-control">
+        <option value="custom">Personalizado</option>
+        <option value="nights">Noches (17:30-07:30)</option>
+        <option value="all_day">Todo el día (00:00-23:59)</option>
+        <option value="business_hours">Horario laboral (08:00-18:00)</option>
+    </select>
+    <div class="schedule-row">
+        <div class="schedule-field">
+            <label for="active_start_time">Desde:</label>
+            <input type="time" id="active_start_time">
+        </div>
+        <div class="schedule-field">
+            <label for="active_end_time">Hasta:</label>
+            <input type="time" id="active_end_time">
+        </div>
+    </div>
+    <div class="schedule-days">
+        <span class="helper-text">Días activos:</span>
+        <label><input type="checkbox" class="active-day" value="lun"> Lun</label>
+        <label><input type="checkbox" class="active-day" value="mar"> Mar</label>
+        <label><input type="checkbox" class="active-day" value="mie"> Mié</label>
+        <label><input type="checkbox" class="active-day" value="jue"> Jue</label>
+        <label><input type="checkbox" class="active-day" value="vie"> Vie</label>
+        <label><input type="checkbox" class="active-day" value="sab"> Sáb</label>
+        <label><input type="checkbox" class="active-day" value="dom"> Dom</label>
+        <button type="button" class="btn-secondary btn-xs" id="schedule_days_all">Todos</button>
+        <button type="button" class="btn-secondary btn-xs" id="schedule_days_weekdays">Lun-Vie</button>
+        <button type="button" class="btn-secondary btn-xs" id="schedule_days_weekend">Sáb-Dom</button>
+        <button type="button" class="btn-secondary btn-xs" id="schedule_days_clear">Limpiar</button>
+    </div>
     <small class="helper-text">
-        Define rangos de hora en formato 24h. Si dejas vacío, no se limita por horario.
+        Si dejas horas o días vacíos, no se limitará la regla por ese criterio.
     </small>
-
-    <label for="active_days">Días activos (solo para IA):</label>
-    <input type="text" id="active_days" name="active_days" placeholder="Ej. sab, dom">
-    <small class="helper-text">
-        Usa abreviaciones como <code>lun</code>, <code>mar</code>, <code>mie</code>, <code>jue</code>,
-        <code>vie</code>, <code>sab</code>, <code>dom</code> (separadas por comas). Si dejas vacío, aplica todos los días.
-    </small>
+    <input type="hidden" id="active_hours" name="active_hours">
+    <input type="hidden" id="active_days" name="active_days">
 
     <label for="list_header" class="list-field" style="display:none;">Encabezado de la lista:</label>
     <input type="text" id="list_header" name="list_header" class="list-field" style="display:none;">
@@ -856,6 +880,40 @@ window.addEventListener('DOMContentLoaded', () => {
     if (document.getElementById('sections_builder')?.children.length === 0) {
         addListSection();
     }
+    const presetSelect = document.getElementById('active_schedule_preset');
+    if (presetSelect) {
+        presetSelect.addEventListener('change', applyPresetSelection);
+        document.getElementById('active_start_time')?.addEventListener('input', () => {
+            presetSelect.value = 'custom';
+            applyPresetSelection();
+        });
+        document.getElementById('active_end_time')?.addEventListener('input', () => {
+            presetSelect.value = 'custom';
+            applyPresetSelection();
+        });
+        document.querySelectorAll('.active-day').forEach(el => {
+            el.addEventListener('change', () => {
+                updateHiddenScheduleFields();
+            });
+        });
+        document.getElementById('schedule_days_all')?.addEventListener('click', () => {
+            setScheduleDays(['lun', 'mar', 'mie', 'jue', 'vie', 'sab', 'dom']);
+            updateHiddenScheduleFields();
+        });
+        document.getElementById('schedule_days_weekdays')?.addEventListener('click', () => {
+            setScheduleDays(['lun', 'mar', 'mie', 'jue', 'vie']);
+            updateHiddenScheduleFields();
+        });
+        document.getElementById('schedule_days_weekend')?.addEventListener('click', () => {
+            setScheduleDays(['sab', 'dom']);
+            updateHiddenScheduleFields();
+        });
+        document.getElementById('schedule_days_clear')?.addEventListener('click', () => {
+            setScheduleDays([]);
+            updateHiddenScheduleFields();
+        });
+        applyPresetSelection();
+    }
 });
 
 function valueOrEmpty(value, joiner = ', ') {
@@ -885,6 +943,108 @@ function toPrettyJson(value) {
     } catch (err) {
         return '';
     }
+}
+
+const schedulePresets = {
+    nights: { start: '17:30', end: '07:30' },
+    all_day: { start: '00:00', end: '23:59' },
+    business_hours: { start: '08:00', end: '18:00' },
+};
+
+function normalizeDayToken(token) {
+    const cleaned = (token || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const map = {
+        lun: 'lun',
+        lunes: 'lun',
+        mon: 'lun',
+        mar: 'mar',
+        martes: 'mar',
+        tue: 'mar',
+        mie: 'mie',
+        miercoles: 'mie',
+        miers: 'mie',
+        wed: 'mie',
+        jue: 'jue',
+        jueves: 'jue',
+        thu: 'jue',
+        vie: 'vie',
+        viernes: 'vie',
+        fri: 'vie',
+        sab: 'sab',
+        sabado: 'sab',
+        sat: 'sab',
+        dom: 'dom',
+        domingo: 'dom',
+        sun: 'dom',
+    };
+    return map[cleaned] || cleaned;
+}
+
+function parseDayList(value) {
+    if (!value) return [];
+    return String(value)
+        .split(/[,\s;]+/)
+        .map(item => normalizeDayToken(item.trim()))
+        .filter(Boolean);
+}
+
+function parseHoursRange(value) {
+    if (!value) return null;
+    const firstRange = String(value).split(',')[0];
+    const match = firstRange.trim().match(/^(\d{1,2})(?::(\d{2}))?\s*-\s*(\d{1,2})(?::(\d{2}))?$/);
+    if (!match) return null;
+    const pad = num => String(num).padStart(2, '0');
+    const start = `${pad(match[1])}:${pad(match[2] || '00')}`;
+    const end = `${pad(match[3])}:${pad(match[4] || '00')}`;
+    return { start, end };
+}
+
+function updateHiddenScheduleFields() {
+    const start = document.getElementById('active_start_time').value;
+    const end = document.getElementById('active_end_time').value;
+    const days = Array.from(document.querySelectorAll('.active-day:checked')).map(el => el.value);
+    document.getElementById('active_hours').value = start && end ? `${start}-${end}` : '';
+    document.getElementById('active_days').value = days.join(', ');
+}
+
+function setScheduleDays(values) {
+    const normalized = new Set(values.map(normalizeDayToken));
+    document.querySelectorAll('.active-day').forEach(el => {
+        el.checked = normalized.has(el.value);
+    });
+}
+
+function applyPresetSelection() {
+    const preset = document.getElementById('active_schedule_preset').value;
+    const startInput = document.getElementById('active_start_time');
+    const endInput = document.getElementById('active_end_time');
+    if (preset !== 'custom') {
+        const presetValue = schedulePresets[preset];
+        if (presetValue) {
+            startInput.value = presetValue.start;
+            endInput.value = presetValue.end;
+        }
+        startInput.disabled = true;
+        endInput.disabled = true;
+    } else {
+        startInput.disabled = false;
+        endInput.disabled = false;
+    }
+    updateHiddenScheduleFields();
+}
+
+function syncScheduleUiFromRule(activeHours, activeDays) {
+    const range = parseHoursRange(activeHours);
+    if (range) {
+        document.getElementById('active_start_time').value = range.start;
+        document.getElementById('active_end_time').value = range.end;
+    } else {
+        document.getElementById('active_start_time').value = '';
+        document.getElementById('active_end_time').value = '';
+    }
+    setScheduleDays(parseDayList(activeDays));
+    document.getElementById('active_schedule_preset').value = 'custom';
+    applyPresetSelection();
 }
 
 function parseOptions(raw) {
@@ -919,6 +1079,7 @@ function cargarRegla(regla) {
     document.getElementById('handler').value = regla.handler || '';
     document.getElementById('active_hours').value = regla.active_hours || '';
     document.getElementById('active_days').value = regla.active_days || '';
+    syncScheduleUiFromRule(regla.active_hours, regla.active_days);
     document.getElementById('list_header').value = regla.header || '';
     document.getElementById('list_button').value = regla.button || '';
     document.getElementById('list_footer').value = regla.footer || '';
