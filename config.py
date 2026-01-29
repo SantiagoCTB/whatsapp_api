@@ -177,6 +177,8 @@ class Config:
     )
     PREFERRED_URL_SCHEME = os.getenv('PREFERRED_URL_SCHEME', 'https')
     IA_HISTORY_LIMIT = int(os.getenv('IA_HISTORY_LIMIT', 30))
+    IA_CHAT_ACTIVE_HOURS = os.getenv('IA_CHAT_ACTIVE_HOURS', '')
+    IA_CHAT_ACTIVE_TZ = os.getenv('IA_CHAT_ACTIVE_TZ', 'America/Bogota')
     INITIAL_STEP = os.getenv('INITIAL_STEP', 'menu_principal')
     MAX_TRANSCRIPTION_DURATION_MS = int(os.getenv('MAX_TRANSCRIPTION_DURATION_MS', 60000))
     TRANSCRIPTION_MAX_AVG_TIME_SEC = float(os.getenv('TRANSCRIPTION_MAX_AVG_TIME_SEC', 10))

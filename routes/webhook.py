@@ -8,6 +8,7 @@ import re
 from urllib.parse import urlparse
 import unicodedata
 from datetime import datetime
+from zoneinfo import ZoneInfo
 from flask import (
     Blueprint,
     Response,
@@ -67,6 +68,42 @@ followup_lock      = threading.Lock()
 MAX_AUTO_STEPS = 25
 PLATFORM_AGNOSTIC_RULES = {"ia_chat"}
 IA_TRIGGER_ALIASES = {"ia", "iachat"}
+IA_CHAT_TIME_RANGE_RE = re.compile(r"^\s*(\d{1,2})(?::(\d{2}))?\s*-\s*(\d{1,2})(?::(\d{2}))?\s*$")
+IA_CHAT_DAY_ALIASES = {
+    "lun": 0,
+    "lunes": 0,
+    "mon": 0,
+    "monday": 0,
+    "mar": 1,
+    "martes": 1,
+    "tue": 1,
+    "tues": 1,
+    "tuesday": 1,
+    "mie": 2,
+    "mier": 2,
+    "miercoles": 2,
+    "miers": 2,
+    "wed": 2,
+    "weds": 2,
+    "wednesday": 2,
+    "jue": 3,
+    "jueves": 3,
+    "thu": 3,
+    "thurs": 3,
+    "thursday": 3,
+    "vie": 4,
+    "viernes": 4,
+    "fri": 4,
+    "friday": 4,
+    "sab": 5,
+    "sabado": 5,
+    "sat": 5,
+    "saturday": 5,
+    "dom": 6,
+    "domingo": 6,
+    "sun": 6,
+    "sunday": 6,
+}
 
 
 def _clear_followup_timers(numero: str) -> None:
@@ -627,6 +664,153 @@ def _is_ia_trigger(value: str | None) -> bool:
     return canonical in IA_TRIGGER_ALIASES
 
 
+def _rule_has_ia_trigger(value: str | None) -> bool:
+    if not value:
+        return False
+    for part in _split_input_variants(str(value)):
+        if _is_ia_trigger(part):
+            return True
+    return False
+
+
+def _parse_time_range(value: str) -> tuple[int, int] | None:
+    if not value:
+        return None
+    match = IA_CHAT_TIME_RANGE_RE.match(value)
+    if not match:
+        return None
+    start_hour = int(match.group(1))
+    start_minute = int(match.group(2) or 0)
+    end_hour = int(match.group(3))
+    end_minute = int(match.group(4) or 0)
+    if not (0 <= start_hour <= 23 and 0 <= end_hour <= 23):
+        return None
+    if not (0 <= start_minute <= 59 and 0 <= end_minute <= 59):
+        return None
+    start_total = start_hour * 60 + start_minute
+    end_total = end_hour * 60 + end_minute
+    return start_total, end_total
+
+
+def _parse_time_ranges(value) -> list[tuple[int, int]]:
+    if not value:
+        return []
+    ranges = []
+    if isinstance(value, (list, tuple, set)):
+        parts = value
+    else:
+        parts = re.split(r"[;,]+", str(value))
+    for raw in parts:
+        parsed = _parse_time_range(str(raw).strip())
+        if parsed:
+            ranges.append(parsed)
+    return ranges
+
+
+def _parse_active_days(value) -> set[int]:
+    if not value:
+        return set()
+    if isinstance(value, (list, tuple, set)):
+        raw_parts = value
+    else:
+        raw_parts = re.split(r"[,\s;]+", str(value))
+    days = set()
+    for raw in raw_parts:
+        token = str(raw).strip()
+        if not token:
+            continue
+        if "-" in token:
+            start_raw, end_raw = [part.strip() for part in token.split("-", 1)]
+            start_day = _coerce_weekday(start_raw)
+            end_day = _coerce_weekday(end_raw)
+            if start_day is None or end_day is None:
+                continue
+            _add_weekday_range(days, start_day, end_day)
+            continue
+        day = _coerce_weekday(token)
+        if day is not None:
+            days.add(day)
+    return days
+
+
+def _coerce_weekday(value: str) -> int | None:
+    if not value:
+        return None
+    cleaned = normalize_text(value).replace(" ", "")
+    if cleaned.isdigit():
+        num = int(cleaned)
+        if 0 <= num <= 6:
+            return num
+        if 1 <= num <= 7:
+            return num - 1
+        return None
+    return IA_CHAT_DAY_ALIASES.get(cleaned)
+
+
+def _add_weekday_range(days: set[int], start: int, end: int) -> None:
+    if start == end:
+        days.add(start)
+        return
+    if start < end:
+        for day in range(start, end + 1):
+            days.add(day)
+    else:
+        for day in range(start, 7):
+            days.add(day)
+        for day in range(0, end + 1):
+            days.add(day)
+
+
+def _is_minutes_in_range(minutes: int, start: int, end: int) -> bool:
+    if start == end:
+        return True
+    if start < end:
+        return start <= minutes < end
+    return minutes >= start or minutes < end
+
+
+def _is_schedule_active(
+    hours_value: str | None,
+    days_value: str | None,
+    now: datetime | None = None,
+) -> bool:
+    ranges = _parse_time_ranges(hours_value)
+    days = _parse_active_days(days_value)
+    if not ranges and not days:
+        return True
+    tz_name = tenants.get_runtime_setting(
+        "IA_CHAT_ACTIVE_TZ",
+        default=Config.IA_CHAT_ACTIVE_TZ,
+    ) or "America/Bogota"
+    try:
+        tzinfo = ZoneInfo(str(tz_name))
+    except Exception:
+        logger.warning("Zona horaria inválida para IA chat: %s", tz_name)
+        tzinfo = ZoneInfo("America/Bogota")
+    if now is None:
+        now = datetime.now(tzinfo)
+    elif now.tzinfo is None:
+        now = now.replace(tzinfo=tzinfo)
+    else:
+        now = now.astimezone(tzinfo)
+    if days and now.weekday() not in days:
+        return False
+    if not ranges:
+        return True
+    minutes = now.hour * 60 + now.minute
+    return any(_is_minutes_in_range(minutes, start, end) for start, end in ranges)
+
+
+def _is_ia_rule_active(active_hours: str | None, active_days: str | None) -> bool:
+    if active_hours or active_days:
+        return _is_schedule_active(active_hours, active_days)
+    schedule = tenants.get_runtime_setting(
+        "IA_CHAT_ACTIVE_HOURS",
+        default=Config.IA_CHAT_ACTIVE_HOURS,
+    )
+    return _is_schedule_active(schedule, None)
+
+
 def _is_platform_agnostic_rule(
     *, step: str | None = None, input_text: str | None = None
 ) -> bool:
@@ -652,6 +836,21 @@ def _is_ia_step(step: str | None) -> bool:
     if _is_ia_trigger(step):
         return True
     return _normalize_step_name(step) in {'ia', 'ia_chat'}
+
+
+def _should_use_ia_for_rule(input_text: str | None, step: str | None) -> bool:
+    input_text_clean = (input_text or '').strip()
+    if _rule_has_ia_trigger(input_text):
+        return True
+    return _is_ia_step(step) and input_text_clean == "*"
+
+
+def _rule_schedule_fields(rule) -> tuple[str | None, str | None]:
+    if not rule:
+        return None, None
+    active_hours = rule[8] if len(rule) > 8 else None
+    active_days = rule[9] if len(rule) > 9 else None
+    return active_hours, active_days
 
 
 def _ia_history_limit() -> int:
@@ -1705,7 +1904,8 @@ def handle_option_reply(numero, option_id, platform: str | None = None):
                     SELECT r.step,
                            r.id, r.respuesta, r.siguiente_step, r.tipo,
                            GROUP_CONCAT(m.media_url SEPARATOR '||') AS media_urls,
-                           r.opciones, r.rol_keyword, r.input_text
+                           r.opciones, r.rol_keyword, r.input_text,
+                           r.active_hours, r.active_days
                      FROM reglas r
                      LEFT JOIN regla_medias m ON r.id = m.regla_id
                      WHERE r.step=%s
@@ -1721,7 +1921,8 @@ def handle_option_reply(numero, option_id, platform: str | None = None):
                     SELECT r.step,
                            r.id, r.respuesta, r.siguiente_step, r.tipo,
                            GROUP_CONCAT(m.media_url SEPARATOR '||') AS media_urls,
-                           r.opciones, r.rol_keyword, r.input_text
+                           r.opciones, r.rol_keyword, r.input_text,
+                           r.active_hours, r.active_days
                      FROM reglas r
                      LEFT JOIN regla_medias m ON r.id = m.regla_id
                      WHERE r.input_text IS NOT NULL
@@ -1747,9 +1948,17 @@ def handle_option_reply(numero, option_id, platform: str | None = None):
         if not matches:
             return None
         for row in matches:
+            is_ia = _should_use_ia_for_rule((row[8] or '').strip(), row[0])
+            if is_ia and not _is_ia_rule_active(row[9], row[10]):
+                continue
             if _normalize_option_value((row[0] or '').strip()) == option_norm:
                 return row
-        return matches[0]
+        for row in matches:
+            is_ia = _should_use_ia_for_rule((row[8] or '').strip(), row[0])
+            if is_ia and not _is_ia_rule_active(row[9], row[10]):
+                continue
+            return row
+        return None
 
     current_step_rules = _fetch_rules(current_step)
     rule_row = _select_rule(current_step_rules)
@@ -1893,6 +2102,8 @@ def dispatch_rule(
         opts,
         rol_kw,
         input_text,
+        active_hours,
+        active_days,
     ) = regla
     current_step = step or get_current_step(numero)
     current_step_norm = _normalize_step_name(current_step)
@@ -1900,9 +2111,10 @@ def dispatch_rule(
         visited.add(current_step_norm)
 
     input_text_clean = (input_text or '').strip()
-    if _is_ia_trigger(input_text) or (
-        _is_ia_step(current_step) and input_text_clean == "*"
-    ):
+    use_ia = _should_use_ia_for_rule(input_text, current_step)
+    if use_ia and not _is_ia_rule_active(active_hours, active_days):
+        use_ia = False
+    if use_ia:
         system_prompt = _combine_system_prompts(_get_ia_system_prompt(), resp)
         _reply_with_ai(
             numero,
@@ -1992,7 +2204,8 @@ def advance_steps(numero: str, steps_str: str, visited=None, platform: str | Non
                 f"""
                 SELECT r.id, r.respuesta, r.siguiente_step, r.tipo,
                        GROUP_CONCAT(m.media_url SEPARATOR '||') AS media_urls,
-                       r.opciones, r.rol_keyword, r.input_text
+                       r.opciones, r.rol_keyword, r.input_text,
+                       r.active_hours, r.active_days
                   FROM reglas r
                   LEFT JOIN regla_medias m ON r.id = m.regla_id
                  WHERE r.step=%s
@@ -2008,6 +2221,13 @@ def advance_steps(numero: str, steps_str: str, visited=None, platform: str | Non
         finally:
             conn.close()
         if regla:
+            active_hours, active_days = _rule_schedule_fields(regla)
+            if _should_use_ia_for_rule(regla[7], step) and not _is_ia_rule_active(
+                active_hours,
+                active_days,
+            ):
+                set_user_step(numero, step)
+                return
             dispatch_rule(numero, regla, step, visited=visited, platform=platform)
         else:
             # No hay regla comodín; respetar el orden y detener el avance
@@ -2069,7 +2289,8 @@ def process_step_chain(
         f"""
         SELECT r.id, r.respuesta, r.siguiente_step, r.tipo,
                GROUP_CONCAT(m.media_url SEPARATOR '||') AS media_urls,
-               r.opciones, r.rol_keyword, r.input_text
+               r.opciones, r.rol_keyword, r.input_text,
+               r.active_hours, r.active_days
           FROM reglas r
           LEFT JOIN regla_medias m ON r.id = m.regla_id
          WHERE r.step=%s
@@ -2099,10 +2320,17 @@ def process_step_chain(
     # Coincidencia exacta
     for r in reglas:
         patt = (r[7] or '').strip()
-        if patt and patt != '*' and _input_text_matches(text_norm, patt):
-            dispatch_rule(numero, r, step, visited=visited, platform=platform)
-            handled = True
-            return handled
+        if not patt or patt == '*' or not _input_text_matches(text_norm, patt):
+            continue
+        active_hours, active_days = _rule_schedule_fields(r)
+        if _should_use_ia_for_rule(patt, step) and not _is_ia_rule_active(
+            active_hours,
+            active_days,
+        ):
+            continue
+        dispatch_rule(numero, r, step, visited=visited, platform=platform)
+        handled = True
+        return handled
 
     def _select_global_rule():
         if text_norm is None:
@@ -2113,7 +2341,8 @@ def process_step_chain(
                 """
                 SELECT r.step, r.platform, r.id, r.respuesta, r.siguiente_step, r.tipo,
                        GROUP_CONCAT(m.media_url SEPARATOR '||') AS media_urls,
-                       r.opciones, r.rol_keyword, r.input_text
+                       r.opciones, r.rol_keyword, r.input_text,
+                       r.active_hours, r.active_days
                   FROM reglas r
                   LEFT JOIN regla_medias m ON r.id = m.regla_id
                  WHERE r.input_text IS NOT NULL
@@ -2133,10 +2362,18 @@ def process_step_chain(
             rule_input = (row[9] or '').strip()
             if not _input_text_matches(text_norm, rule_input):
                 continue
+            active_hours = row[10] if len(row) > 10 else None
+            active_days = row[11] if len(row) > 11 else None
             if _is_platform_agnostic_rule(step=rule_step, input_text=rule_input):
+                is_ia = _should_use_ia_for_rule(rule_input, rule_step)
+                if is_ia and not _is_ia_rule_active(active_hours, active_days):
+                    continue
                 matches.append(row)
                 continue
             if not rule_platform or rule_platform == platform:
+                is_ia = _should_use_ia_for_rule(rule_input, rule_step)
+                if is_ia and not _is_ia_rule_active(active_hours, active_days):
+                    continue
                 matches.append(row)
         if not matches:
             return None
@@ -2154,7 +2391,19 @@ def process_step_chain(
 
     # Regla comodín
     if comodines and wildcard_allowed:
-        dispatch_rule(numero, comodines[0], step, visited=visited, platform=platform)
+        selected_rule = None
+        for r in comodines:
+            active_hours, active_days = _rule_schedule_fields(r)
+            if _should_use_ia_for_rule(r[7], step) and not _is_ia_rule_active(
+                active_hours,
+                active_days,
+            ):
+                continue
+            selected_rule = r
+            break
+        if selected_rule is None:
+            return handled
+        dispatch_rule(numero, selected_rule, step, visited=visited, platform=platform)
         # No procesar recursivamente otros comodines; esperar nueva entrada
         handled = True
         return handled
