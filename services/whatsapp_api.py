@@ -99,6 +99,64 @@ def _resolve_public_media_url(raw_value: str | None) -> str | None:
     return normalized
 
 
+def _upload_messenger_attachment(
+    file_path: str,
+    attachment_type: str,
+    *,
+    is_reusable: bool = True,
+) -> str | None:
+    try:
+        runtime = _get_messenger_env()
+    except RuntimeError as exc:
+        logger.error("No se puede subir adjunto a Messenger: %s", exc)
+        return None
+
+    if not os.path.isfile(file_path):
+        logger.error("Adjunto de Messenger no existe: %s", file_path)
+        return None
+
+    url = f"{GRAPH_BASE_URL}/me/message_attachments"
+    headers = {"Authorization": f"Bearer {runtime['token']}"}
+    attachment_payload = {
+        "type": attachment_type,
+        "payload": {"is_reusable": is_reusable},
+    }
+
+    try:
+        with open(file_path, "rb") as file_handle:
+            response = requests.post(
+                url,
+                headers=headers,
+                data={"message_attachment": json.dumps(attachment_payload)},
+                files={"filedata": file_handle},
+                timeout=30,
+            )
+    except requests.RequestException as exc:
+        logger.error("Error subiendo adjunto a Messenger: %s", exc)
+        return None
+
+    if response.status_code >= 400:
+        details = _extract_error_details(response)
+        logger.error(
+            "Fallo al subir adjunto a Messenger",
+            extra={"status": response.status_code, "details": details},
+        )
+        return None
+
+    try:
+        payload = response.json()
+    except ValueError:
+        logger.error("Respuesta inválida al subir adjunto a Messenger: no JSON")
+        return None
+
+    attachment_id = payload.get("attachment_id") if isinstance(payload, dict) else None
+    if not attachment_id:
+        logger.error("Respuesta sin attachment_id al subir adjunto a Messenger")
+        return None
+
+    return attachment_id
+
+
 def _get_runtime_env():
     env = tenants.get_current_tenant_env()
     token = (env.get("META_TOKEN") or "").strip()
@@ -480,8 +538,10 @@ def enviar_mensaje(
                     payload["message"] = {"attachments": attachments}
             if "message" not in payload:
                 attachment_id = None
+                attachment_raw = None
                 if isinstance(opciones, dict):
                     attachment_url = opciones.get("url") or opciones.get("link")
+                    attachment_raw = attachment_url or opciones.get("path") or opciones.get("file")
                     attachment_id = (
                         opciones.get("attachment_id")
                         or opciones.get("attachmentId")
@@ -489,6 +549,7 @@ def enviar_mensaje(
                     )
                 else:
                     attachment_url = opciones
+                    attachment_raw = attachment_url
                 if not attachment_url and not attachment_id:
                     return _fail("No se pudo enviar el adjunto a Messenger.")
                 if attachment_id and not attachment_url:
@@ -500,16 +561,35 @@ def enviar_mensaje(
                     }
                 else:
                     attachment_url = _resolve_public_media_url(attachment_url)
-                    if not attachment_url:
-                        return _fail(
-                            "No se pudo construir una URL pública para el adjunto de Messenger."
-                        )
-                    payload["message"] = {
-                        "attachment": {
-                            "type": attachment_type,
-                            "payload": {"url": attachment_url, "is_reusable": True},
+                    if attachment_url:
+                        payload["message"] = {
+                            "attachment": {
+                                "type": attachment_type,
+                                "payload": {"url": attachment_url, "is_reusable": True},
+                            }
                         }
-                    }
+                    else:
+                        attachment_path = None
+                        if isinstance(attachment_raw, str) and os.path.isfile(attachment_raw):
+                            attachment_path = attachment_raw
+                        if attachment_path:
+                            attachment_id = _upload_messenger_attachment(
+                                attachment_path, attachment_type
+                            )
+                            if not attachment_id:
+                                return _fail(
+                                    "No se pudo subir el adjunto a Messenger."
+                                )
+                            payload["message"] = {
+                                "attachment": {
+                                    "type": attachment_type,
+                                    "payload": {"attachment_id": attachment_id},
+                                }
+                            }
+                        else:
+                            return _fail(
+                                "No se pudo construir una URL pública para el adjunto de Messenger."
+                            )
         elif tipo_respuesta == "boton":
             try:
                 botones = json.loads(opciones) if opciones else []
