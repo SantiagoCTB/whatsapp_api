@@ -6,6 +6,7 @@ import posixpath
 import os
 import shutil
 import subprocess
+import threading
 import uuid
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -2210,16 +2211,34 @@ def send_video():
     video.save(path)
 
     tipo_envio = 'bot_video' if origen == 'bot' else 'asesor'
-    success, error_reason = enviar_mensaje(
-        numero,
-        caption,
-        tipo=tipo_envio,
-        tipo_respuesta='video',
-        opciones=path,
-        return_error=True,
-    )
-    if not success:
-        return jsonify({'error': error_reason or 'No se pudo enviar el video.'}), 502
+    if _resolve_message_channel(numero) == "instagram":
+        def _send_instagram_video_async():
+            success, error_reason = enviar_mensaje(
+                numero,
+                caption,
+                tipo=tipo_envio,
+                tipo_respuesta='video',
+                opciones=path,
+                return_error=True,
+            )
+            if not success:
+                logger.error(
+                    "Error enviando video de Instagram",
+                    extra={"numero": numero, "error": error_reason},
+                )
+
+        threading.Thread(target=_send_instagram_video_async, daemon=True).start()
+    else:
+        success, error_reason = enviar_mensaje(
+            numero,
+            caption,
+            tipo=tipo_envio,
+            tipo_respuesta='video',
+            opciones=path,
+            return_error=True,
+        )
+        if not success:
+            return jsonify({'error': error_reason or 'No se pudo enviar el video.'}), 502
     row = get_chat_state(numero)
     step = row[0] if row else ''
     _schedule_followup_messages(numero, step)
