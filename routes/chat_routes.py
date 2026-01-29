@@ -2212,20 +2212,29 @@ def send_video():
 
     tipo_envio = 'bot_video' if origen == 'bot' else 'asesor'
     if _resolve_message_channel(numero) == "instagram":
+        current_tenant = tenants.get_current_tenant()
+
         def _send_instagram_video_async():
-            success, error_reason = enviar_mensaje(
-                numero,
-                caption,
-                tipo=tipo_envio,
-                tipo_respuesta='video',
-                opciones=path,
-                return_error=True,
-            )
-            if not success:
-                logger.error(
-                    "Error enviando video de Instagram",
-                    extra={"numero": numero, "error": error_reason},
+            try:
+                if current_tenant:
+                    tenants.set_current_tenant(current_tenant)
+                else:
+                    tenants.clear_current_tenant()
+                success, error_reason = enviar_mensaje(
+                    numero,
+                    caption,
+                    tipo=tipo_envio,
+                    tipo_respuesta='video',
+                    opciones=path,
+                    return_error=True,
                 )
+                if not success:
+                    logger.error(
+                        "Error enviando video de Instagram",
+                        extra={"numero": numero, "error": error_reason},
+                    )
+            finally:
+                tenants.clear_current_tenant()
 
         threading.Thread(target=_send_instagram_video_async, daemon=True).start()
     else:
