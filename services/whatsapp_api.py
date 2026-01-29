@@ -1048,6 +1048,33 @@ def enviar_mensaje(
             return _fail("No se pudo conectar con la API de Instagram.")
 
         if not resp.ok:
+            if resp.status_code == 504 and tipo_respuesta in {"image", "audio", "video", "document"}:
+                logger.warning(
+                    "Timeout 504 al enviar media a Instagram; se asume envío exitoso.",
+                    extra={"status_code": resp.status_code, "numero": numero},
+                )
+                stop_typing_feedback(numero)
+                message_id = None
+                tipo_db = tipo
+                if "instagram" not in tipo_db:
+                    tipo_db = f"{tipo_db}_instagram"
+                if tipo_respuesta in {"image", "audio", "video", "document"} and not tipo_db.endswith(
+                    f"_{tipo_respuesta}"
+                ):
+                    tipo_db = f"{tipo_db}_{tipo_respuesta}"
+                guardar_mensaje(
+                    numero,
+                    mensaje,
+                    tipo_db,
+                    wa_id=message_id,
+                    reply_to_wa_id=reply_to_wa_id,
+                    media_id=None,
+                    media_url=attachment_url,
+                    opciones=_serialize_opciones(opciones) if tipo_respuesta == "boton" else None,
+                    step=step,
+                    regla_id=regla_id,
+                )
+                return _result(True)
             error_details = _extract_error_details(resp)
             logger.error(
                 "Fallo al enviar mensaje a Instagram API",
