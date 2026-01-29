@@ -12,7 +12,17 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 import requests
-from flask import Blueprint, jsonify, redirect, render_template, request, send_file, session, url_for
+from flask import (
+    Blueprint,
+    current_app,
+    jsonify,
+    redirect,
+    render_template,
+    request,
+    send_file,
+    session,
+    url_for,
+)
 from werkzeug.utils import secure_filename
 
 if importlib.util.find_spec("mysql.connector"):
@@ -2212,20 +2222,23 @@ def send_video():
 
     tipo_envio = 'bot_video' if origen == 'bot' else 'asesor'
     if _resolve_message_channel(numero) == "instagram":
+        app = current_app._get_current_object()
+
         def _send_instagram_video_async():
-            success, error_reason = enviar_mensaje(
-                numero,
-                caption,
-                tipo=tipo_envio,
-                tipo_respuesta='video',
-                opciones=path,
-                return_error=True,
-            )
-            if not success:
-                logger.error(
-                    "Error enviando video de Instagram",
-                    extra={"numero": numero, "error": error_reason},
+            with app.app_context():
+                success, error_reason = enviar_mensaje(
+                    numero,
+                    caption,
+                    tipo=tipo_envio,
+                    tipo_respuesta='video',
+                    opciones=path,
+                    return_error=True,
                 )
+                if not success:
+                    logger.error(
+                        "Error enviando video de Instagram",
+                        extra={"numero": numero, "error": error_reason},
+                    )
 
         threading.Thread(target=_send_instagram_video_async, daemon=True).start()
     else:
