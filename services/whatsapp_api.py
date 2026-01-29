@@ -129,7 +129,7 @@ def _upload_messenger_attachment(
                 headers=headers,
                 data={"message_attachment": json.dumps(attachment_payload)},
                 files={"filedata": file_handle},
-                timeout=30,
+                timeout=Config.MESSENGER_ATTACHMENT_TIMEOUT_SECONDS,
             )
     except requests.RequestException as exc:
         logger.error("Error subiendo adjunto a Messenger: %s", exc)
@@ -689,7 +689,7 @@ def enviar_mensaje(
 
         timeout_seconds = 10
         if tipo_respuesta in {"image", "audio", "video", "document"}:
-            timeout_seconds = 45
+            timeout_seconds = Config.MESSENGER_MEDIA_TIMEOUT_SECONDS
         try:
             resp = requests.post(url, headers=headers, json=payload, timeout=timeout_seconds)
         except requests.RequestException as exc:

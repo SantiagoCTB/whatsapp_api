@@ -107,6 +107,10 @@
         <img id="imagePreviewThumb" alt="Imagen lista para enviar" />
         <button type="button" id="clearImageDraft" aria-label="Quitar imagen">×</button>
       </div>
+      <div id="videoPreviewChip" class="video-preview-chip" hidden>
+        <video id="videoPreviewThumb" muted></video>
+        <button type="button" id="clearVideoDraft" aria-label="Quitar video">×</button>
+      </div>
       <input id="messageInput" type="text" placeholder="Escribe un mensaje…" spellcheck="true" autocorrect="on" autocapitalize="sentences">
       <button id="sendBtn">Enviar</button>
       <input id="imageInput" type="file" accept="image/*" style="display:none;">
@@ -485,6 +489,8 @@
       const inputArea = document.querySelector('.inputArea');
       const imagePreviewChip = document.getElementById('imagePreviewChip');
       const imagePreviewThumb = document.getElementById('imagePreviewThumb');
+      const videoPreviewChip = document.getElementById('videoPreviewChip');
+      const videoPreviewThumb = document.getElementById('videoPreviewThumb');
       let autocorrectTimeout = null;
       let autocorrectController = null;
       let lastAutocorrectedText = '';
@@ -532,11 +538,18 @@
         }
       }
       const clearImageDraftBtn = document.getElementById('clearImageDraft');
+      const clearVideoDraftBtn = document.getElementById('clearVideoDraft');
       if (imagePreviewChip) {
         imagePreviewChip.hidden = true;
       }
       if (imagePreviewThumb) {
         imagePreviewThumb.removeAttribute('src');
+      }
+      if (videoPreviewChip) {
+        videoPreviewChip.hidden = true;
+      }
+      if (videoPreviewThumb) {
+        videoPreviewThumb.removeAttribute('src');
       }
       const sidebar = document.querySelector('.sidebar');
       const menuToggle = document.getElementById('menuToggle');
@@ -914,6 +927,7 @@
         let isSendingVideo = false;
         let isRecordingAudio = false;
         let imageDraft = null;
+        let videoDraft = null;
         let isBotoneraSending = false;
         let sendUnlockTimeout = null;
         let lastSentMessage = '';
@@ -2477,7 +2491,11 @@
           sendImageDraft();
           return;
         }
-        if (isSending || isSendingImage) return;
+        if (videoDraft) {
+          sendVideoDraft();
+          return;
+        }
+        if (isSending || isSendingImage || isSendingVideo) return;
         const txt = messageInput.value.trim();
         if (!txt||!currentChat) return;
         const now = Date.now();
@@ -2706,6 +2724,11 @@
           inputEl.value='';
           return;
         }
+        if (endpoint === 'send_video') {
+          prepareVideoDraft(file);
+          inputEl.value='';
+          return;
+        }
         await sendMediaUpload(file, endpoint);
         inputEl.value='';
       }
@@ -2762,6 +2785,22 @@
         updateSendButtons();
       }
 
+      function clearVideoDraft() {
+        if (videoDraft && videoDraft.previewUrl) {
+          URL.revokeObjectURL(videoDraft.previewUrl);
+        }
+        videoDraft = null;
+        if (videoPreviewThumb) {
+          videoPreviewThumb.removeAttribute('src');
+          videoPreviewThumb.load();
+        }
+        if (videoPreviewChip) videoPreviewChip.hidden = true;
+        if (messageInput) {
+          messageInput.placeholder = 'Escribe un mensaje…';
+        }
+        updateSendButtons();
+      }
+
       function extractFileByType(dataTransfer, typePrefix) {
         if (!dataTransfer) return null;
         if (dataTransfer.files && dataTransfer.files.length) {
@@ -2798,6 +2837,9 @@
 
       function prepareImageDraft(file) {
         if (!file || !file.type || !file.type.startsWith('image/')) return;
+        if (videoDraft) {
+          clearVideoDraft();
+        }
         if (imageDraft && imageDraft.previewUrl) {
           URL.revokeObjectURL(imageDraft.previewUrl);
         }
@@ -2813,6 +2855,33 @@
         }
         if (messageInput) {
           messageInput.placeholder = 'Agrega un mensaje para enviar la imagen…';
+          messageInput.focus();
+        }
+        attachMenu.classList.remove('show');
+        updateSendButtons();
+      }
+
+      function prepareVideoDraft(file) {
+        if (!file || !file.type || !file.type.startsWith('video/')) return;
+        if (imageDraft) {
+          clearImageDraft();
+        }
+        if (videoDraft && videoDraft.previewUrl) {
+          URL.revokeObjectURL(videoDraft.previewUrl);
+        }
+        videoDraft = {
+          file,
+          previewUrl: URL.createObjectURL(file)
+        };
+        if (videoPreviewThumb) {
+          videoPreviewThumb.src = videoDraft.previewUrl;
+          videoPreviewThumb.load();
+        }
+        if (videoPreviewChip) {
+          videoPreviewChip.hidden = false;
+        }
+        if (messageInput) {
+          messageInput.placeholder = 'Agrega un mensaje para enviar el video…';
           messageInput.focus();
         }
         attachMenu.classList.remove('show');
@@ -2845,6 +2914,40 @@
           alert(msg);
         } finally {
           isSendingImage = false;
+          updateSendButtons();
+          if (messageInput) messageInput.focus();
+        }
+      }
+
+      async function sendVideoDraft() {
+        if (!videoDraft || !currentChat || isSendingVideo) return;
+        attachMenu.classList.remove('show');
+        isSendingVideo = true;
+        updateSendButtons();
+        setVideoStatus('Procesando video…', 'uploading');
+        const form = new FormData();
+        form.append('video', videoDraft.file);
+        form.append('caption', messageInput ? messageInput.value.trim() : '');
+        form.append('numero', currentChat);
+        try {
+          const res = await fetch('/send_video', { method:'POST', body: form });
+          if (!res.ok) {
+            const msg = await extractSendError(res);
+            throw new Error(msg);
+          }
+          clearVideoDraft();
+          if (messageInput) {
+            messageInput.value = '';
+          }
+          setVideoStatus('Video en cola para enviar', 'success', 4000);
+          loadMessages();
+          fetchChatList();
+        } catch (err) {
+          const msg = (err && err.message) ? err.message : 'No se pudo enviar el video';
+          setVideoStatus(msg, 'error', 6000);
+          alert(msg);
+        } finally {
+          isSendingVideo = false;
           updateSendButtons();
           if (messageInput) messageInput.focus();
         }
@@ -2930,6 +3033,12 @@
           if (messageInput) messageInput.focus();
         });
       }
+      if (clearVideoDraftBtn) {
+        clearVideoDraftBtn.addEventListener('click', () => {
+          clearVideoDraft();
+          if (messageInput) messageInput.focus();
+        });
+      }
 
       messageInput.addEventListener('paste', handlePasteForImage);
 
@@ -2960,7 +3069,7 @@
         if (media.type === 'image') {
           prepareImageDraft(media.file);
         } else if (media.type === 'video') {
-          await sendMediaUpload(media.file, 'send_video');
+          prepareVideoDraft(media.file);
         }
       }
 
