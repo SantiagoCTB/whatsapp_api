@@ -35,6 +35,8 @@ from services.db import (
 )
 from services.whatsapp_api import (
     download_audio,
+    download_media_to_path,
+    MediaTooLargeError,
     get_media_url,
     enviar_mensaje,
     _resolve_message_channel,
@@ -2621,12 +2623,27 @@ def webhook():
                     mime_clean = mime_raw.split(';')[0].strip()
                     ext        = mime_clean.split('/')[-1]
 
-                    # 1) Descarga bytes y guardar en static/uploads
-                    media_bytes = download_audio(media_id)
-                    filename    = f"{media_id}.{ext}"
-                    path        = os.path.join(_media_root(), filename)
-                    with open(path, 'wb') as f:
-                        f.write(media_bytes)
+                    # 1) Descargar y guardar en static/uploads sin cargar todo en memoria
+                    filename = f"{media_id}.{ext}"
+                    path = os.path.join(_media_root(), filename)
+                    try:
+                        download_media_to_path(
+                            media_id,
+                            path,
+                            max_bytes=Config.MAX_VIDEO_BYTES,
+                        )
+                    except MediaTooLargeError:
+                        logging.warning(
+                            "Video supera el máximo permitido",
+                            extra={
+                                "media_id": media_id,
+                                "max_mb": Config.MAX_VIDEO_MB,
+                            },
+                        )
+                        if os.path.exists(path):
+                            os.remove(path)
+                        summary['processed'] += 1
+                        continue
 
                     # 2) URL pública
                     public_url = url_for(
