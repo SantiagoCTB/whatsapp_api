@@ -9,7 +9,7 @@ from datetime import datetime
 from typing import Any, Dict, Optional
 
 import requests
-from flask import url_for
+from flask import has_request_context, request, url_for
 
 from config import Config
 from services import tenants
@@ -28,6 +28,75 @@ _typing_ui_state = set()
 _TYPING_INITIAL_DELAY = 2.0
 _TYPING_INTERVAL = 6.0
 _TYPING_ENABLED = bool(getattr(Config, "ENABLE_TYPING_INDICATOR", False))
+
+
+def _public_base_url() -> str | None:
+    if has_request_context():
+        return request.url_root
+    base_url = tenants.get_runtime_setting("PUBLIC_BASE_URL", default=Config.PUBLIC_BASE_URL)
+    if not base_url:
+        return None
+    return str(base_url).strip() or None
+
+
+def _build_static_url(path: str) -> str | None:
+    base_url = _public_base_url()
+    if not base_url:
+        logger.warning("PUBLIC_BASE_URL no está configurado; no se puede construir URL pública.")
+        return None
+    return f"{base_url.rstrip('/')}/{path.lstrip('/')}"
+
+
+def _build_upload_url(filename: str) -> str | None:
+    if has_request_context():
+        return url_for(
+            "static",
+            filename=tenants.get_uploads_url_path(filename),
+            _external=True,
+        )
+    base_url = _public_base_url()
+    if not base_url:
+        logger.warning("PUBLIC_BASE_URL no está configurado; no se puede construir URL pública.")
+        return None
+    uploads_path = tenants.get_uploads_url_path(filename)
+    return f"{base_url.rstrip('/')}/static/{uploads_path}"
+
+
+def _resolve_public_media_url(raw_value: str | None) -> str | None:
+    if raw_value is None:
+        return None
+    try:
+        normalized = str(raw_value).strip()
+    except Exception:
+        return None
+    if not normalized:
+        return None
+
+    lower = normalized.lower()
+    if lower.startswith("http://"):
+        return f"https://{normalized[len('http://'):]}"
+    if lower.startswith("https://"):
+        return normalized
+
+    if os.path.isfile(normalized):
+        filename = os.path.basename(normalized)
+        return _build_upload_url(filename)
+
+    if normalized.startswith("/"):
+        return _build_static_url(normalized)
+
+    if normalized.startswith(("static/", "uploads/")):
+        if normalized.startswith("uploads/"):
+            normalized = f"static/{normalized}"
+        return _build_static_url(normalized)
+
+    if "/" in normalized:
+        return _build_static_url(normalized)
+
+    if "." in normalized:
+        return _build_upload_url(normalized)
+
+    return normalized
 
 
 def _get_runtime_env():
@@ -403,7 +472,10 @@ def enviar_mensaje(
                         url = item
                     if not url:
                         continue
-                    attachments.append({"type": "image", "payload": {"url": url}})
+                    resolved_url = _resolve_public_media_url(url)
+                    if not resolved_url:
+                        continue
+                    attachments.append({"type": "image", "payload": {"url": resolved_url}})
                 if attachments:
                     payload["message"] = {"attachments": attachments}
             if "message" not in payload:
@@ -427,6 +499,11 @@ def enviar_mensaje(
                         }
                     }
                 else:
+                    attachment_url = _resolve_public_media_url(attachment_url)
+                    if not attachment_url:
+                        return _fail(
+                            "No se pudo construir una URL pública para el adjunto de Messenger."
+                        )
                     payload["message"] = {
                         "attachment": {
                             "type": attachment_type,
@@ -624,6 +701,7 @@ def enviar_mensaje(
                         attachment_url = opciones.get("url") or opciones.get("link") or opciones.get("id")
                     else:
                         attachment_url = opciones
+                attachment_url = _resolve_public_media_url(attachment_url)
                 if not attachment_url:
                     return _fail("No se pudo enviar el adjunto a Instagram.")
                 payload["message"] = {
@@ -637,6 +715,7 @@ def enviar_mensaje(
                     attachment_url = opciones.get("url") or opciones.get("link") or opciones.get("id")
                 else:
                     attachment_url = opciones
+                attachment_url = _resolve_public_media_url(attachment_url)
                 if not attachment_url:
                     return _fail("No se pudo enviar el adjunto a Instagram.")
                 payload["message"] = {
