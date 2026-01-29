@@ -22,6 +22,7 @@ else:  # pragma: no cover - fallback cuando no está instalado el conector
         pass
 from config import Config
 from services import tenants
+from services.assignments import assign_chat_to_non_admin_user
 from services.whatsapp_api import (
     enviar_mensaje,
     trigger_typing_indicator,
@@ -107,6 +108,17 @@ def _session_timeout_seconds() -> int:
         return int(timeout)
     except (TypeError, ValueError):
         return Config.SESSION_TIMEOUT
+
+
+def _inactive_assignment_seconds() -> int:
+    runtime = tenants.get_current_tenant_env()
+    timeout = runtime.get("INACTIVE_ASSIGNMENT_SECONDS") if runtime else None
+    if isinstance(timeout, int):
+        return timeout
+    try:
+        return int(timeout)
+    except (TypeError, ValueError):
+        return Config.INACTIVE_ASSIGNMENT_SECONDS
 
 
 def _maybe_close_expired_session(
@@ -1344,6 +1356,7 @@ def get_chat_list():
     chat_state_definitions, _ = _load_chat_state_definitions(include_hidden=True)
     chat_state_def_map = {item["key"]: item for item in chat_state_definitions if item.get("key")}
     timeout_seconds = _session_timeout_seconds()
+    inactive_assignment_seconds = _inactive_assignment_seconds()
     now = datetime.utcnow()
     chats = []
     for numero in numeros:
@@ -1424,23 +1437,9 @@ def get_chat_list():
         fila_roles = c.fetchone()
         roles = fila_roles[0] if fila_roles else None
         nombres_roles = fila_roles[1] if fila_roles else None
+        role_ids_for_chat = [int(role_id) for role_id in roles.split(',')] if roles else []
         role_keywords = [n.strip() for n in nombres_roles.split(',')] if nombres_roles else []
         role_keywords = [kw for kw in role_keywords if kw and kw not in EXCLUDED_ROLE_KEYWORDS]
-        if asignado_id:
-            c.execute(
-                """
-                SELECT r.keyword
-                  FROM user_roles ur
-                  JOIN roles r ON ur.role_id = r.id
-                 WHERE ur.user_id = %s
-                   AND r.keyword NOT IN ('superadmin', 'tiquetes', 'soporte')
-                """,
-                (asignado_id,),
-            )
-            assigned_roles = [row[0] for row in c.fetchall() if row and row[0]]
-            for keyword in assigned_roles:
-                if keyword not in role_keywords:
-                    role_keywords.append(keyword)
         inicial_rol = role_keywords[0][0].upper() if role_keywords else None
 
         # Estado actual del chat
@@ -1515,6 +1514,38 @@ def get_chat_list():
                             estado = "error_flujo"
                         else:
                             estado = "en_flujo"
+
+        inactivity_reference = last_activity or last_ts_raw
+        if (
+            not asignado_id
+            and inactivity_reference
+            and isinstance(inactivity_reference, datetime)
+            and inactive_assignment_seconds > 0
+        ):
+            elapsed_assign = (now - inactivity_reference).total_seconds()
+            if elapsed_assign > inactive_assignment_seconds and estado in {"esperando_respuesta", "en_flujo"}:
+                assignment = assign_chat_to_non_admin_user(numero, role_ids_for_chat)
+                if assignment:
+                    asignado_id = int(assignment["user_id"])
+                    asignado_nombre = assignment["username"]
+
+        if asignado_id:
+            c.execute(
+                """
+                SELECT r.keyword
+                  FROM user_roles ur
+                  JOIN roles r ON ur.role_id = r.id
+                 WHERE ur.user_id = %s
+                   AND r.keyword NOT IN ('superadmin', 'tiquetes', 'soporte')
+                """,
+                (asignado_id,),
+            )
+            assigned_roles = [row[0] for row in c.fetchall() if row and row[0]]
+            for keyword in assigned_roles:
+                if keyword not in role_keywords:
+                    role_keywords.append(keyword)
+            if role_keywords and not inicial_rol:
+                inicial_rol = role_keywords[0][0].upper()
 
         estado_def = chat_state_def_map.get(estado) if estado else None
 
