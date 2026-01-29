@@ -687,8 +687,11 @@ def enviar_mensaje(
         else:
             return _fail("Tipo de respuesta no soportado para Messenger.")
 
+        timeout_seconds = 10
+        if tipo_respuesta in {"image", "audio", "video", "document"}:
+            timeout_seconds = 45
         try:
-            resp = requests.post(url, headers=headers, json=payload, timeout=10)
+            resp = requests.post(url, headers=headers, json=payload, timeout=timeout_seconds)
         except requests.RequestException as exc:
             logger.error("Error enviando solicitud a Messenger API: %s", exc)
             return _fail("No se pudo conectar con la API de Messenger.")
