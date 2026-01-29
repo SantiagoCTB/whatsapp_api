@@ -1770,6 +1770,7 @@ def assign_chat_user():
         return jsonify({'error': 'El usuario no tiene rol asignado'}), 400
     role_id = role_ids[0]
 
+    c.execute("DELETE FROM chat_roles WHERE numero = %s", (numero,))
     for user_role_id in role_ids:
         c.execute(
             "INSERT IGNORE INTO chat_roles (numero, role_id) VALUES (%s, %s)",
