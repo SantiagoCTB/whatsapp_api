@@ -99,6 +99,49 @@ def _resolve_public_media_url(raw_value: str | None) -> str | None:
     return normalized
 
 
+def _extract_local_media_bytes(raw_value: Any) -> int | None:
+    candidates = []
+    if isinstance(raw_value, dict):
+        for key in ("path", "file_path", "filename", "file", "url", "link", "id"):
+            value = raw_value.get(key)
+            if value:
+                candidates.append(value)
+    elif isinstance(raw_value, list):
+        candidates.extend(raw_value)
+    else:
+        candidates.append(raw_value)
+
+    for candidate in candidates:
+        if not candidate:
+            continue
+        try:
+            normalized = str(candidate).strip()
+        except Exception:
+            continue
+        if not normalized:
+            continue
+        if os.path.isfile(normalized):
+            try:
+                return os.path.getsize(normalized)
+            except OSError:
+                continue
+    return None
+
+
+def _instagram_request_timeout(tipo_respuesta: str, opciones: Any) -> float:
+    base_timeout = 10.0
+    if tipo_respuesta != "video":
+        return base_timeout
+
+    size_bytes = _extract_local_media_bytes(opciones)
+    if not size_bytes:
+        return base_timeout
+
+    size_mb = size_bytes / (1024 * 1024)
+    dynamic_timeout = base_timeout + (size_mb * 1.5)
+    return max(base_timeout, min(dynamic_timeout, 120.0))
+
+
 def _upload_messenger_attachment(
     file_path: str,
     attachment_type: str,
@@ -879,8 +922,9 @@ def enviar_mensaje(
         else:
             return _fail("Tipo de respuesta no soportado para Instagram.")
 
+        timeout = _instagram_request_timeout(tipo_respuesta, opciones)
         try:
-            resp = requests.post(url, headers=headers, json=payload, timeout=10)
+            resp = requests.post(url, headers=headers, json=payload, timeout=timeout)
         except requests.RequestException as exc:
             logger.error("Error enviando solicitud a Instagram API: %s", exc)
             return _fail("No se pudo conectar con la API de Instagram.")
