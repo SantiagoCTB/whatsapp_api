@@ -34,8 +34,14 @@ document.addEventListener('DOMContentLoaded', () => {
   const tipoAsesor = document.getElementById('tipoAsesor');
 
   if (filtersToggle && filtersPanel) {
+    filtersToggle.setAttribute('aria-expanded', 'false');
+    filtersPanel.classList.remove('open');
+    filtersPanel.hidden = true;
     filtersToggle.addEventListener('click', () => {
-      filtersPanel.classList.toggle('open');
+      const nextState = !filtersPanel.classList.contains('open');
+      filtersPanel.classList.toggle('open', nextState);
+      filtersPanel.hidden = !nextState;
+      filtersToggle.setAttribute('aria-expanded', String(nextState));
     });
   }
 
@@ -45,6 +51,10 @@ document.addEventListener('DOMContentLoaded', () => {
       cargarRoles();
       cargarNumeros();
       filtersPanel.classList.remove('open');
+      filtersPanel.hidden = true;
+      if (filtersToggle) {
+        filtersToggle.setAttribute('aria-expanded', 'false');
+      }
     });
   }
 
