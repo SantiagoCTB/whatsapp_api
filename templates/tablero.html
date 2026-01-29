@@ -11,8 +11,8 @@
 </div>
 
 
-<button id="filters-toggle" class="filters-toggle btn-primary" type="button">Filtros</button>
-<div class="filters-panel">
+<button id="filters-toggle" class="filters-toggle btn-primary" type="button" aria-expanded="false" aria-controls="filters-panel">Filtros</button>
+<div id="filters-panel" class="filters-panel" hidden>
     <label for="fechaInicio">Desde:</label>
     <input type="date" id="fechaInicio">
     <label for="fechaFin">Hasta:</label>
