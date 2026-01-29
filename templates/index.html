@@ -1676,11 +1676,16 @@
               action: isAssigned ? 'remove' : 'assign'
             })
           });
-          if (!res.ok) throw new Error('No se pudo actualizar el usuario');
+          const payload = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            const message = payload && payload.error ? payload.error : 'No se pudo actualizar el usuario';
+            throw new Error(message);
+          }
           hideChatContextMenu();
           fetchChatList();
         } catch (err) {
           console.error(err);
+          alert(err.message || 'No se pudo actualizar el usuario');
         }
       }
 
