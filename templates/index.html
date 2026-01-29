@@ -785,6 +785,15 @@
           const next = !isExpanded;
           filterToggle.setAttribute('aria-expanded', String(next));
           filterPanel.hidden = !next;
+          filterPanel.style.display = next ? 'grid' : 'none';
+          filterPanel.style.pointerEvents = next ? 'auto' : 'none';
+        }
+
+        if (filterToggle && filterPanel) {
+          filterToggle.setAttribute('aria-expanded', 'false');
+          filterPanel.hidden = true;
+          filterPanel.style.display = 'none';
+          filterPanel.style.pointerEvents = 'none';
         }
 
         if (filterToggle && filterPanel) {
