@@ -721,7 +721,9 @@ def init_db(db_settings: DatabaseSettings | None = None):
       calculo TEXT,
       handler VARCHAR(50),
       media_url TEXT,
-      media_tipo VARCHAR(20)
+      media_tipo VARCHAR(20),
+      active_hours TEXT,
+      active_days TEXT
     ) ENGINE=InnoDB;
     """)
 
@@ -741,6 +743,12 @@ def init_db(db_settings: DatabaseSettings | None = None):
     c.execute("SHOW COLUMNS FROM reglas LIKE 'media_tipo';")
     if not c.fetchone():
         c.execute("ALTER TABLE reglas ADD COLUMN media_tipo VARCHAR(20) NULL;")
+    c.execute("SHOW COLUMNS FROM reglas LIKE 'active_hours';")
+    if not c.fetchone():
+        c.execute("ALTER TABLE reglas ADD COLUMN active_hours TEXT NULL;")
+    c.execute("SHOW COLUMNS FROM reglas LIKE 'active_days';")
+    if not c.fetchone():
+        c.execute("ALTER TABLE reglas ADD COLUMN active_days TEXT NULL;")
 
     # regla_medias: soporta múltiples archivos por regla
     c.execute("""

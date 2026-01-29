@@ -1017,6 +1017,14 @@ def _reglas_view(template_name):
         if not c.fetchone():
             c.execute("ALTER TABLE reglas ADD COLUMN media_tipo VARCHAR(20) NULL;")
             conn.commit()
+        c.execute("SHOW COLUMNS FROM reglas LIKE 'active_hours';")
+        if not c.fetchone():
+            c.execute("ALTER TABLE reglas ADD COLUMN active_hours TEXT NULL;")
+            conn.commit()
+        c.execute("SHOW COLUMNS FROM reglas LIKE 'active_days';")
+        if not c.fetchone():
+            c.execute("ALTER TABLE reglas ADD COLUMN active_days TEXT NULL;")
+            conn.commit()
 
         if request.method == 'POST':
             # Importar desde Excel
@@ -1028,8 +1036,23 @@ def _reglas_view(template_name):
                     if not fila:
                         continue
                     # Permitir archivos con columnas opcionales
-                    datos = list(fila) + [None] * 12
-                    step, input_text, respuesta, siguiente_step, tipo, media_url, media_tipo, opciones, rol_keyword, calculo, handler, platform_raw = datos[:12]
+                    datos = list(fila) + [None] * 14
+                    (
+                        step,
+                        input_text,
+                        respuesta,
+                        siguiente_step,
+                        tipo,
+                        media_url,
+                        media_tipo,
+                        opciones,
+                        rol_keyword,
+                        calculo,
+                        handler,
+                        platform_raw,
+                        active_hours,
+                        active_days,
+                    ) = datos[:14]
                     url_ok = False
                     detected_type = None
                     if media_url:
@@ -1046,6 +1069,8 @@ def _reglas_view(template_name):
                     input_text = _normalize_input(input_text)
                     siguiente_step = _normalize_input(siguiente_step) or None
                     platform = _normalize_platform(platform_raw)
+                    active_hours = (active_hours or '').strip() or None
+                    active_days = (active_days or '').strip() or None
 
                     c.execute(
                         """
@@ -1073,7 +1098,9 @@ def _reglas_view(template_name):
                                    opciones = %s,
                                    rol_keyword = %s,
                                    calculo = %s,
-                                   handler = %s
+                                   handler = %s,
+                                   active_hours = %s,
+                                   active_days = %s
                              WHERE id = %s
                             """,
                             (
@@ -1087,6 +1114,8 @@ def _reglas_view(template_name):
                                 rol_keyword,
                                 calculo,
                                 handler,
+                                active_hours,
+                                active_days,
                                 regla_id,
                             ),
                         )
@@ -1098,8 +1127,8 @@ def _reglas_view(template_name):
                             )
                     else:
                         c.execute(
-                            "INSERT INTO reglas (step, input_text, respuesta, siguiente_step, platform, tipo, media_url, media_tipo, opciones, rol_keyword, calculo, handler) "
-                            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                            "INSERT INTO reglas (step, input_text, respuesta, siguiente_step, platform, tipo, media_url, media_tipo, opciones, rol_keyword, calculo, handler, active_hours, active_days) "
+                            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
                             (
                                 step,
                                 input_text,
@@ -1113,6 +1142,8 @@ def _reglas_view(template_name):
                                 rol_keyword,
                                 calculo,
                                 handler,
+                                active_hours,
+                                active_days,
                             ),
                         )
                         regla_id = c.lastrowid
@@ -1198,6 +1229,8 @@ def _reglas_view(template_name):
                 rol_keyword = request.form.get('rol_keyword')
                 calculo = request.form.get('calculo')
                 handler = request.form.get('handler')
+                active_hours = (request.form.get('active_hours') or '').strip() or None
+                active_days = (request.form.get('active_days') or '').strip() or None
                 regla_id = request.form.get('regla_id')
                 platform = _normalize_platform(request.form.get('platform'))
 
@@ -1216,7 +1249,9 @@ def _reglas_view(template_name):
                                opciones = %s,
                                rol_keyword = %s,
                                calculo = %s,
-                               handler = %s
+                               handler = %s,
+                               active_hours = %s,
+                               active_days = %s
                          WHERE id = %s
                         """,
                         (
@@ -1232,6 +1267,8 @@ def _reglas_view(template_name):
                             rol_keyword,
                             calculo,
                             handler,
+                            active_hours,
+                            active_days,
                             regla_id,
                         ),
                     )
@@ -1268,7 +1305,9 @@ def _reglas_view(template_name):
                                    opciones = %s,
                                    rol_keyword = %s,
                                    calculo = %s,
-                                   handler = %s
+                                   handler = %s,
+                                   active_hours = %s,
+                                   active_days = %s
                              WHERE id = %s
                             """,
                             (
@@ -1282,6 +1321,8 @@ def _reglas_view(template_name):
                                 rol_keyword,
                                 calculo,
                                 handler,
+                                active_hours,
+                                active_days,
                                 regla_id,
                             ),
                         )
@@ -1293,8 +1334,8 @@ def _reglas_view(template_name):
                             )
                     else:
                         c.execute(
-                            "INSERT INTO reglas (step, input_text, respuesta, siguiente_step, platform, tipo, media_url, media_tipo, opciones, rol_keyword, calculo, handler) "
-                            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                            "INSERT INTO reglas (step, input_text, respuesta, siguiente_step, platform, tipo, media_url, media_tipo, opciones, rol_keyword, calculo, handler, active_hours, active_days) "
+                            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
                             (
                                 step,
                                 input_text,
@@ -1308,6 +1349,8 @@ def _reglas_view(template_name):
                                 rol_keyword,
                                 calculo,
                                 handler,
+                                active_hours,
+                                active_days,
                             ),
                         )
                         regla_id = c.lastrowid
@@ -1324,7 +1367,8 @@ def _reglas_view(template_name):
             SELECT r.id, r.step, r.input_text, r.respuesta, r.siguiente_step, r.platform, r.tipo,
                    GROUP_CONCAT(m.media_url SEPARATOR '||') AS media_urls,
                    GROUP_CONCAT(m.media_tipo SEPARATOR '||') AS media_tipos,
-                   r.opciones, r.rol_keyword, r.calculo, r.handler
+                   r.opciones, r.rol_keyword, r.calculo, r.handler,
+                   r.active_hours, r.active_days
               FROM reglas r
               LEFT JOIN regla_medias m ON r.id = m.regla_id
              GROUP BY r.id
@@ -1348,6 +1392,8 @@ def _reglas_view(template_name):
                 'rol_keyword': row[10],
                 'calculo': row[11],
                 'handler': row[12],
+                'active_hours': row[13],
+                'active_days': row[14],
                 'header': None,
                 'button': None,
                 'footer': None,
