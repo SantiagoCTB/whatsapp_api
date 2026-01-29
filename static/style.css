@@ -613,10 +613,13 @@
       position:absolute;
       background:var(--text-light);
       border:1px solid #ccc;
-      border-radius:4px;
-      box-shadow:0 2px 6px rgba(0,0,0,0.1);
+      border-radius:12px;
+      box-shadow:0 8px 18px rgba(0,0,0,0.12);
       display:none;
       z-index:20;
+      padding:6px 0;
+      max-height:calc(100vh - 24px);
+      overflow-y:auto;
     }
     .context-menu.show { display:block; }
     .context-menu div {
@@ -676,6 +679,10 @@
     }
     .context-menu .context-option {
       display:block;
+    }
+    .chat-context-menu {
+      position:fixed;
+      min-width:220px;
     }
     .reply-preview {
       margin:8px 12px; padding:4px 8px;
