@@ -69,6 +69,13 @@ document.addEventListener('DOMContentLoaded', () => {
       [tipoCliente, tipoBot, tipoAsesor].forEach(cb => {
         if (cb) cb.checked = true;
       });
+      if (filtersPanel) {
+        filtersPanel.classList.remove('open');
+        filtersPanel.hidden = true;
+      }
+      if (filtersToggle) {
+        filtersToggle.setAttribute('aria-expanded', 'false');
+      }
       cargarDatos();
     });
   }
