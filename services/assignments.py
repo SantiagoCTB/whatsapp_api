@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Dict, List, Optional
 
 from services.db import get_connection
@@ -124,6 +125,117 @@ def assign_chat_to_active_user(numero: str, role_keyword: str) -> Optional[Dict[
         return {
             "user_id": str(selected_user_id),
             "username": role_usernames.get(selected_user_id, ""),
+        }
+    finally:
+        conn.close()
+
+
+def assign_chat_to_non_admin_user(
+    numero: str,
+    role_ids: List[int],
+) -> Optional[Dict[str, str]]:
+    if not role_ids:
+        return None
+
+    conn = get_connection()
+    try:
+        c = conn.cursor()
+        c.execute("SELECT user_id FROM chat_assignments WHERE numero = %s", (numero,))
+        if c.fetchone():
+            return None
+
+        role_placeholders = ", ".join(["%s"] * len(role_ids))
+        c.execute(
+            f"""
+            SELECT DISTINCT u.id, COALESCE(NULLIF(u.nombre, ''), u.username)
+              FROM usuarios u
+              JOIN user_roles ur ON u.id = ur.user_id
+             WHERE ur.role_id IN ({role_placeholders})
+               AND u.id NOT IN (
+                     SELECT ur_admin.user_id
+                       FROM user_roles ur_admin
+                       JOIN roles r_admin ON ur_admin.role_id = r_admin.id
+                      WHERE r_admin.keyword = 'admin'
+               )
+             ORDER BY u.id
+            """,
+            role_ids,
+        )
+        role_users = c.fetchall()
+        if not role_users:
+            return None
+
+        eligible_user_ids = [row[0] for row in role_users]
+        user_names = {row[0]: row[1] for row in role_users}
+
+        user_placeholders = ", ".join(["%s"] * len(eligible_user_ids))
+        c.execute(
+            f"""
+            SELECT user_id, COUNT(*) AS total
+              FROM chat_assignments
+             WHERE user_id IN ({user_placeholders})
+             GROUP BY user_id
+            """,
+            eligible_user_ids,
+        )
+        assignment_counts = {row[0]: row[1] for row in c.fetchall()}
+
+        min_count = min(assignment_counts.get(user_id, 0) for user_id in eligible_user_ids)
+        candidates = [user_id for user_id in eligible_user_ids if assignment_counts.get(user_id, 0) == min_count]
+
+        selected_user_id = candidates[0]
+        if len(candidates) > 1:
+            c.execute(
+                f"""
+                SELECT user_id, MAX(assigned_at) AS last_assigned
+                  FROM chat_assignments
+                 WHERE user_id IN ({user_placeholders})
+                 GROUP BY user_id
+                """,
+                eligible_user_ids,
+            )
+            last_assigned = {row[0]: row[1] for row in c.fetchall()}
+            candidates.sort(
+                key=lambda user_id: (
+                    last_assigned.get(user_id) is not None,
+                    last_assigned.get(user_id) or datetime.min,
+                    user_id,
+                )
+            )
+            selected_user_id = candidates[0]
+
+        c.execute(
+            f"""
+            SELECT role_id
+              FROM user_roles
+             WHERE user_id = %s
+               AND role_id IN ({role_placeholders})
+             ORDER BY role_id
+             LIMIT 1
+            """,
+            [selected_user_id, *role_ids],
+        )
+        role_row = c.fetchone()
+        if not role_row:
+            return None
+        selected_role_id = role_row[0]
+
+        c.execute(
+            """
+            INSERT INTO chat_assignments (numero, user_id, role_id, assigned_at)
+            VALUES (%s, %s, %s, NOW())
+            ON DUPLICATE KEY UPDATE
+              user_id = VALUES(user_id),
+              role_id = VALUES(role_id),
+              assigned_at = VALUES(assigned_at)
+            """,
+            (numero, selected_user_id, selected_role_id),
+        )
+        conn.commit()
+        return {
+            "user_id": str(selected_user_id),
+            "username": user_names.get(selected_user_id, ""),
+            "role_id": str(selected_role_id),
         }
     finally:
         conn.close()

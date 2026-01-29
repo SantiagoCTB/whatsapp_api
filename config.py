@@ -135,6 +135,7 @@ class Config:
     )
     VERIFY_TOKEN = os.getenv('VERIFY_TOKEN',"my_secret_token")
     SESSION_TIMEOUT = int(os.getenv('SESSION_TIMEOUT_SECONDS', 1800))
+    INACTIVE_ASSIGNMENT_SECONDS = int(os.getenv('INACTIVE_ASSIGNMENT_SECONDS', 900))
     SESSION_TIMEOUT_MESSAGE = os.getenv(
         'SESSION_TIMEOUT_MESSAGE',
         'Tu sesión ha terminado por inactividad. Hemos reiniciado la conversación.',
