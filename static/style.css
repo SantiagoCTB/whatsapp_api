@@ -172,6 +172,9 @@
       gap: 8px;
       align-items: center;
     }
+    .filter-panel[hidden] {
+      display: none;
+    }
     .filter-toggle {
       border: none;
       background: var(--accent-neon);
@@ -241,6 +244,12 @@
       gap: 6px;
       min-width: 0;
       flex: 1 1 auto;
+    }
+    .chat-list-text-stack {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      gap: 2px;
     }
     .chat-source-icon {
       width: 32px;

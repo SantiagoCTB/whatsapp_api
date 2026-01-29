@@ -1817,12 +1817,24 @@
           sourceIcon.alt = sourceInfo.label;
           sourceIcon.title = sourceInfo.label;
 
+          const textStack = document.createElement('span');
+          textStack.className = 'chat-list-text-stack';
+
           const textLabel = document.createElement('span');
           textLabel.className = 'chat-list-text';
           textLabel.textContent = c.alias ? `${c.alias} (${c.numero})` : c.numero;
 
+          textStack.appendChild(textLabel);
+          const lastDate = formatChatDate(c.last_timestamp);
+          if (lastDate) {
+            const lastMessageDate = document.createElement('span');
+            lastMessageDate.className = 'chat-assignee chat-last-date';
+            lastMessageDate.textContent = lastDate;
+            textStack.appendChild(lastMessageDate);
+          }
+
           labelWrapper.appendChild(sourceIcon);
-          labelWrapper.appendChild(textLabel);
+          labelWrapper.appendChild(textStack);
           li.appendChild(labelWrapper);
           if (c.estado === 'error_flujo') {
             const alertIcon = document.createElement('span');
