@@ -73,6 +73,19 @@
     <label for="handler">Handler externo:</label>
     <input type="text" id="handler" name="handler">
 
+    <label for="active_hours">Horario activo (solo para IA):</label>
+    <input type="text" id="active_hours" name="active_hours" placeholder="Ej. 18:00-08:00, 12:00-14:00">
+    <small class="helper-text">
+        Define rangos de hora en formato 24h. Si dejas vacío, no se limita por horario.
+    </small>
+
+    <label for="active_days">Días activos (solo para IA):</label>
+    <input type="text" id="active_days" name="active_days" placeholder="Ej. sab, dom">
+    <small class="helper-text">
+        Usa abreviaciones como <code>lun</code>, <code>mar</code>, <code>mie</code>, <code>jue</code>,
+        <code>vie</code>, <code>sab</code>, <code>dom</code> (separadas por comas). Si dejas vacío, aplica todos los días.
+    </small>
+
     <label for="list_header" class="list-field" style="display:none;">Encabezado de la lista:</label>
     <input type="text" id="list_header" name="list_header" class="list-field" style="display:none;">
 
@@ -295,6 +308,14 @@
                 <div class="rule-field">
                     <dt>Handler</dt>
                     <dd>{{ regla.handler or '-' }}</dd>
+                </div>
+                <div class="rule-field">
+                    <dt>Horario activo</dt>
+                    <dd>{{ regla.active_hours or '-' }}</dd>
+                </div>
+                <div class="rule-field">
+                    <dt>Días activos</dt>
+                    <dd>{{ regla.active_days or '-' }}</dd>
                 </div>
                 <div class="rule-field">
                     <dt>Encabezado</dt>
@@ -896,6 +917,8 @@ function cargarRegla(regla) {
     document.getElementById('rol_keyword').value = regla.rol_keyword || '';
     document.getElementById('calculo').value = regla.calculo || '';
     document.getElementById('handler').value = regla.handler || '';
+    document.getElementById('active_hours').value = regla.active_hours || '';
+    document.getElementById('active_days').value = regla.active_days || '';
     document.getElementById('list_header').value = regla.header || '';
     document.getElementById('list_button').value = regla.button || '';
     document.getElementById('list_footer').value = regla.footer || '';
