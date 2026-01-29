@@ -105,6 +105,16 @@ def _load_chat_state_definitions():
 
     return sanitized
 
+def _load_optional_int(value: str | None):
+    if value is None:
+        return None
+    if isinstance(value, str) and value.strip().lower() in {"", "none", "null", "0", "false"}:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
 class Config:
     # Las sesiones deben expirar al cerrar el navegador (no persistentes).
     SESSION_PERMANENT = False
@@ -211,6 +221,14 @@ class Config:
     _DEFAULT_MEDIA_ROOT = os.path.join(BASEDIR, "static", "uploads")
     MEDIA_ROOT = os.path.abspath(_DEFAULT_MEDIA_ROOT)
     CHAT_STATE_DEFINITIONS = _load_chat_state_definitions()
+    _DEFAULT_MAX_UPLOAD_BYTES = 500 * 1024 * 1024
+    MAX_CONTENT_LENGTH = (
+        _load_optional_int(os.getenv("MAX_CONTENT_LENGTH")) or _DEFAULT_MAX_UPLOAD_BYTES
+    )
+    MAX_FORM_MEMORY_SIZE = (
+        _load_optional_int(os.getenv("MAX_FORM_MEMORY_SIZE")) or _DEFAULT_MAX_UPLOAD_BYTES
+    )
+    MAX_FORM_PARTS = _load_optional_int(os.getenv("MAX_FORM_PARTS"))
     ENABLE_TYPING_INDICATOR = os.getenv('ENABLE_TYPING_INDICATOR', 'false').strip().lower() in {
         '1',
         'true',
