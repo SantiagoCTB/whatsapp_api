@@ -154,6 +154,44 @@ def _extract_local_media_path(raw_value: Any) -> str | None:
     return None
 
 
+def _extract_instagram_attachment_reference(raw_value: Any) -> tuple[Any, str | None]:
+    attachment_url = None
+    attachment_id = None
+    if isinstance(raw_value, list):
+        for item in raw_value:
+            if not item:
+                continue
+            if isinstance(item, dict):
+                attachment_url = item.get("url") or item.get("link") or item.get("id")
+                attachment_id = item.get("attachment_id") or item.get("attachmentId")
+                if not attachment_url:
+                    for key in ("path", "file_path", "filename", "file"):
+                        if item.get(key):
+                            attachment_url = item.get(key)
+                            break
+            else:
+                attachment_url = item
+            if attachment_url or attachment_id:
+                break
+        return attachment_url, attachment_id
+
+    if isinstance(raw_value, dict):
+        attachment_url = raw_value.get("url") or raw_value.get("link") or raw_value.get("id")
+        attachment_id = (
+            raw_value.get("attachment_id")
+            or raw_value.get("attachmentId")
+            or (raw_value.get("id") if not attachment_url else None)
+        )
+        if not attachment_url:
+            for key in ("path", "file_path", "filename", "file"):
+                if raw_value.get(key):
+                    attachment_url = raw_value.get(key)
+                    break
+    else:
+        attachment_url = raw_value
+    return attachment_url, attachment_id
+
+
 def _instagram_request_timeout(tipo_respuesta: str, opciones: Any) -> float:
     base_timeout = 10.0
     if tipo_respuesta not in {"image", "audio", "video", "document"}:
@@ -938,16 +976,7 @@ def enviar_mensaje(
                         }
                     }
             else:
-                attachment_id = None
-                if isinstance(opciones, dict):
-                    attachment_url = opciones.get("url") or opciones.get("link") or opciones.get("id")
-                    attachment_id = (
-                        opciones.get("attachment_id")
-                        or opciones.get("attachmentId")
-                        or (opciones.get("id") if not attachment_url else None)
-                    )
-                else:
-                    attachment_url = opciones
+                attachment_url, attachment_id = _extract_instagram_attachment_reference(opciones)
                 local_path = _extract_local_media_path(opciones)
                 if local_path and not attachment_id:
                     attachment_id = _upload_instagram_attachment(local_path, attachment_type)
