@@ -104,41 +104,53 @@ def _ensure_instagram_profiles_table(cursor) -> None:
 def _fetch_instagram_profile(ig_user_id: str, access_token: str) -> dict | None:
     if not ig_user_id or not access_token:
         return None
-    url = f"https://graph.facebook.com/{Config.FACEBOOK_GRAPH_API_VERSION}/{ig_user_id}"
     params = {
         "fields": "name,username,profile_picture_url",
         "access_token": access_token,
     }
-    headers = {"Authorization": f"Bearer {access_token}"}
-    try:
-        response = requests.get(url, params=params, headers=headers, timeout=15)
-    except requests.RequestException as exc:
-        logger.warning("Error consultando perfil de Instagram: %s", exc)
+    endpoints = [
+        f"https://graph.instagram.com/{ig_user_id}",
+        f"https://graph.facebook.com/{Config.FACEBOOK_GRAPH_API_VERSION}/{ig_user_id}",
+    ]
+    last_status = None
+    last_error = None
+    for url in endpoints:
+        try:
+            response = requests.get(url, params=params, timeout=15)
+        except requests.RequestException as exc:
+            last_error = exc
+            continue
+
+        last_status = response.status_code
+        if not response.ok:
+            continue
+
+        try:
+            payload = response.json()
+        except ValueError:
+            payload = {}
+
+        if not isinstance(payload, dict):
+            continue
+
+        return {
+            "ig_user_id": ig_user_id,
+            "name": payload.get("name"),
+            "username": payload.get("username"),
+            "profile_picture_url": payload.get("profile_picture_url"),
+        }
+
+    if last_error:
+        logger.warning("Error consultando perfil de Instagram: %s", last_error)
         return None
 
-    if not response.ok:
+    if last_status:
         logger.warning(
             "Error consultando perfil de Instagram para %s (HTTP %s)",
             ig_user_id,
-            response.status_code,
+            last_status,
         )
-        return None
-
-    payload = {}
-    try:
-        payload = response.json()
-    except ValueError:
-        payload = {}
-
-    if not isinstance(payload, dict):
-        return None
-
-    return {
-        "ig_user_id": ig_user_id,
-        "name": payload.get("name"),
-        "username": payload.get("username"),
-        "profile_picture_url": payload.get("profile_picture_url"),
-    }
+    return None
 
 
 def _get_cached_instagram_profile(
