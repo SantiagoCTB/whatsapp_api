@@ -1970,6 +1970,20 @@
         return `${day}/${month}/${year}`;
       }
 
+      function resolveChatDisplayName(chatData) {
+        if (!chatData) return '';
+        const alias = (chatData.alias || '').trim();
+        if (alias) {
+          if (chatData.is_instagram) return alias;
+          return `${alias} (${chatData.numero || ''})`.trim();
+        }
+        if (chatData.is_instagram) {
+          const igName = (chatData.instagram_name || '').trim();
+          if (igName) return igName;
+        }
+        return (chatData.numero || '').trim();
+      }
+
       function renderChatList(data) {
         const getTimestamp = ts => ts ? new Date(ts).getTime() : 0;
         const sorted = Array.isArray(data) ? [...data] : [];
@@ -1996,7 +2010,7 @@
 
           const textLabel = document.createElement('span');
           textLabel.className = 'chat-list-text';
-          textLabel.textContent = c.alias ? `${c.alias} (${c.numero})` : c.numero;
+          textLabel.textContent = resolveChatDisplayName(c);
 
           labelWrapper.appendChild(sourceIcon);
           labelWrapper.appendChild(textLabel);
@@ -2272,7 +2286,7 @@
           }
           return;
         }
-        const title = chatData.alias ? `${chatData.alias} (${chatData.numero})` : (chatData.numero || '');
+        const title = resolveChatDisplayName(chatData);
         const estadoDef = chatStateDefinitionMap.get(chatData.estado);
         mobileChatTitle.textContent = title || 'Chat';
         const estadoLabel = chatData.estado_label || (estadoDef && estadoDef.label) || chatData.estado;

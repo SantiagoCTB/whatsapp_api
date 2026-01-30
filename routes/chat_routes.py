@@ -7,6 +7,7 @@ import os
 import shutil
 import subprocess
 import threading
+import queue
 import uuid
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -50,6 +51,11 @@ chat_bp = Blueprint('chat', __name__)
 logger = logging.getLogger(__name__)
 
 BOGOTA_TZ = ZoneInfo('America/Bogota')
+INSTAGRAM_PROFILE_TTL_SECONDS = 6 * 60 * 60
+_instagram_profile_queue: "queue.Queue[tuple[str | None, str, str]]" = queue.Queue()
+_instagram_profile_inflight: set[tuple[str | None, str]] = set()
+_instagram_profile_lock = threading.Lock()
+_instagram_profile_worker_started = False
 
 
 def _preferred_url_scheme() -> str:
@@ -79,6 +85,168 @@ LEGACY_STATE_MAP = {
     "bot": "en_flujo",
     "ia_activa": "en_flujo",
 }
+
+
+def _ensure_instagram_profiles_table(cursor) -> None:
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS instagram_profiles (
+          ig_user_id VARCHAR(50) PRIMARY KEY,
+          name VARCHAR(255) NULL,
+          username VARCHAR(255) NULL,
+          profile_picture_url TEXT NULL,
+          updated_at DATETIME NULL
+        ) ENGINE=InnoDB;
+        """
+    )
+
+
+def _fetch_instagram_profile(ig_user_id: str, access_token: str) -> dict | None:
+    if not ig_user_id or not access_token:
+        return None
+    params = {
+        "fields": "name",
+        "access_token": access_token,
+    }
+    url = f"https://graph.facebook.com/{Config.FACEBOOK_GRAPH_API_VERSION}/{ig_user_id}"
+    try:
+        response = requests.get(url, params=params, timeout=15)
+    except requests.RequestException as exc:
+        logger.warning("Error consultando perfil de Instagram: %s", exc)
+        return None
+
+    if not response.ok:
+        logger.warning(
+            "Error consultando perfil de Instagram para %s (HTTP %s)",
+            ig_user_id,
+            response.status_code,
+        )
+        return None
+
+    try:
+        payload = response.json()
+    except ValueError:
+        payload = {}
+
+    if not isinstance(payload, dict):
+        return None
+
+    return {
+        "ig_user_id": ig_user_id,
+        "name": payload.get("name"),
+        "username": None,
+        "profile_picture_url": None,
+    }
+
+
+def _get_cached_instagram_profile(
+    cursor,
+    ig_user_id: str,
+) -> dict | None:
+    if not ig_user_id:
+        return None
+    _ensure_instagram_profiles_table(cursor)
+    cursor.execute(
+        """
+        SELECT name, username, profile_picture_url, updated_at
+          FROM instagram_profiles
+         WHERE ig_user_id = %s
+        """,
+        (ig_user_id,),
+    )
+    row = cursor.fetchone()
+    cached = None
+    if row:
+        cached = {
+            "ig_user_id": ig_user_id,
+            "name": row[0],
+            "username": row[1],
+            "profile_picture_url": row[2],
+            "updated_at": row[3],
+        }
+    return cached
+
+
+def _should_refresh_instagram_profile(profile: dict | None, *, now: datetime) -> bool:
+    if not profile:
+        return True
+    updated_at = profile.get("updated_at")
+    if not isinstance(updated_at, datetime):
+        return True
+    age_seconds = (now - updated_at).total_seconds()
+    return age_seconds > INSTAGRAM_PROFILE_TTL_SECONDS
+
+
+def _start_instagram_profile_worker() -> None:
+    global _instagram_profile_worker_started
+    if _instagram_profile_worker_started:
+        return
+    _instagram_profile_worker_started = True
+    worker = threading.Thread(
+        target=_instagram_profile_worker_loop,
+        name="instagram-profile-worker",
+        daemon=True,
+    )
+    worker.start()
+
+
+def _enqueue_instagram_profile_fetch(
+    *,
+    tenant_key: str | None,
+    ig_user_id: str,
+    access_token: str | None,
+) -> None:
+    if not ig_user_id or not access_token:
+        return
+    _start_instagram_profile_worker()
+    key = (tenant_key, ig_user_id)
+    with _instagram_profile_lock:
+        if key in _instagram_profile_inflight:
+            return
+        _instagram_profile_inflight.add(key)
+    _instagram_profile_queue.put((tenant_key, ig_user_id, access_token))
+
+
+def _instagram_profile_worker_loop() -> None:
+    while True:
+        tenant_key, ig_user_id, access_token = _instagram_profile_queue.get()
+        try:
+            tenant = tenants.get_tenant(tenant_key) if tenant_key else None
+            if tenant:
+                tenants.set_current_tenant(tenant)
+            conn = get_connection()
+            c = conn.cursor()
+            _ensure_instagram_profiles_table(c)
+            now = datetime.utcnow()
+            fetched = _fetch_instagram_profile(ig_user_id, access_token)
+            if fetched:
+                c.execute(
+                    """
+                    INSERT INTO instagram_profiles (ig_user_id, name, username, profile_picture_url, updated_at)
+                    VALUES (%s, %s, %s, %s, %s)
+                    ON DUPLICATE KEY UPDATE
+                      name = VALUES(name),
+                      username = VALUES(username),
+                      profile_picture_url = VALUES(profile_picture_url),
+                      updated_at = VALUES(updated_at)
+                    """,
+                    (
+                        ig_user_id,
+                        fetched.get("name"),
+                        fetched.get("username"),
+                        fetched.get("profile_picture_url"),
+                        now,
+                    ),
+                )
+                conn.commit()
+            conn.close()
+        except Exception:
+            logger.exception("Error procesando perfil de Instagram en segundo plano.")
+        finally:
+            with _instagram_profile_lock:
+                _instagram_profile_inflight.discard((tenant_key, ig_user_id))
+            tenants.set_current_tenant(None)
+            _instagram_profile_queue.task_done()
 EXCLUDED_ROLE_KEYWORDS = {"superadmin", "tiquetes", "soporte"}
 
 
@@ -1358,6 +1526,13 @@ def get_chat_list():
     timeout_seconds = _session_timeout_seconds()
     inactive_assignment_seconds = _inactive_assignment_seconds()
     now = datetime.utcnow()
+    tenant_env = tenants.get_current_tenant_env() or {}
+    instagram_token = (
+        (tenant_env.get("INSTAGRAM_PAGE_ACCESS_TOKEN") or "").strip()
+        or (tenant_env.get("PAGE_ACCESS_TOKEN") or "").strip()
+        or None
+    )
+    tenant_key = tenants.get_active_tenant_key()
     chats = []
     for numero in numeros:
         # Alias
@@ -1422,6 +1597,20 @@ def get_chat_list():
                 primer_link = "messenger"
             elif "instagram" in last_tipo_lower:
                 primer_link = "instagram"
+
+        instagram_profile = None
+        is_instagram_chat = bool(primer_link and "instagram" in str(primer_link).lower())
+        if is_instagram_chat:
+            instagram_profile = _get_cached_instagram_profile(
+                c,
+                str(numero),
+            )
+            if instagram_token and _should_refresh_instagram_profile(instagram_profile, now=now):
+                _enqueue_instagram_profile_fetch(
+                    tenant_key=tenant_key,
+                    ig_user_id=str(numero),
+                    access_token=instagram_token,
+                )
 
         # Roles asociados al número y nombre/keyword
         c.execute(
@@ -1552,6 +1741,8 @@ def get_chat_list():
         chats.append({
             "numero": numero,
             "alias":  alias,
+            "is_instagram": is_instagram_chat,
+            "instagram_name": instagram_profile.get("name") if instagram_profile else None,
             "assigned_user_id": asignado_id,
             "assigned_user_name": asignado_nombre,
             "asesor": requiere_asesor,
