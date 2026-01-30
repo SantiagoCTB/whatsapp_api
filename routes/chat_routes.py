@@ -105,7 +105,7 @@ def _fetch_instagram_profile(ig_user_id: str, access_token: str) -> dict | None:
     if not ig_user_id or not access_token:
         return None
     params = {
-        "fields": "name,username,profile_picture_url",
+        "fields": "name,username,profile_pic,profile_picture_url",
         "access_token": access_token,
     }
     url = f"https://graph.facebook.com/{Config.FACEBOOK_GRAPH_API_VERSION}/{ig_user_id}"
@@ -137,11 +137,12 @@ def _fetch_instagram_profile(ig_user_id: str, access_token: str) -> dict | None:
     if not isinstance(payload, dict):
         return None
 
+    profile_picture_url = payload.get("profile_picture_url") or payload.get("profile_pic")
     return {
         "ig_user_id": ig_user_id,
         "name": payload.get("name"),
         "username": payload.get("username"),
-        "profile_picture_url": payload.get("profile_picture_url"),
+        "profile_picture_url": profile_picture_url,
     }
 
 
@@ -243,6 +244,17 @@ def _instagram_profile_worker_loop() -> None:
                         fetched.get("profile_picture_url"),
                         now,
                     ),
+                )
+                conn.commit()
+            else:
+                c.execute(
+                    """
+                    INSERT INTO instagram_profiles (ig_user_id, updated_at)
+                    VALUES (%s, %s)
+                    ON DUPLICATE KEY UPDATE
+                      updated_at = VALUES(updated_at)
+                    """,
+                    (ig_user_id, now),
                 )
                 conn.commit()
             conn.close()
