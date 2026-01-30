@@ -50,6 +50,7 @@ chat_bp = Blueprint('chat', __name__)
 logger = logging.getLogger(__name__)
 
 BOGOTA_TZ = ZoneInfo('America/Bogota')
+INSTAGRAM_PROFILE_TTL_SECONDS = 6 * 60 * 60
 
 
 def _preferred_url_scheme() -> str:
@@ -79,6 +80,125 @@ LEGACY_STATE_MAP = {
     "bot": "en_flujo",
     "ia_activa": "en_flujo",
 }
+
+
+def _ensure_instagram_profiles_table(cursor) -> None:
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS instagram_profiles (
+          ig_user_id VARCHAR(50) PRIMARY KEY,
+          name VARCHAR(255) NULL,
+          username VARCHAR(255) NULL,
+          profile_picture_url TEXT NULL,
+          updated_at DATETIME NULL
+        ) ENGINE=InnoDB;
+        """
+    )
+
+
+def _fetch_instagram_profile(ig_user_id: str, access_token: str) -> dict | None:
+    if not ig_user_id or not access_token:
+        return None
+    url = f"https://graph.facebook.com/{Config.FACEBOOK_GRAPH_API_VERSION}/{ig_user_id}"
+    params = {
+        "fields": "name,username,profile_picture_url",
+        "access_token": access_token,
+    }
+    headers = {"Authorization": f"Bearer {access_token}"}
+    try:
+        response = requests.get(url, params=params, headers=headers, timeout=15)
+    except requests.RequestException as exc:
+        logger.warning("Error consultando perfil de Instagram: %s", exc)
+        return None
+
+    if not response.ok:
+        logger.warning(
+            "Error consultando perfil de Instagram para %s (HTTP %s)",
+            ig_user_id,
+            response.status_code,
+        )
+        return None
+
+    payload = {}
+    try:
+        payload = response.json()
+    except ValueError:
+        payload = {}
+
+    if not isinstance(payload, dict):
+        return None
+
+    return {
+        "ig_user_id": ig_user_id,
+        "name": payload.get("name"),
+        "username": payload.get("username"),
+        "profile_picture_url": payload.get("profile_picture_url"),
+    }
+
+
+def _get_cached_instagram_profile(
+    cursor,
+    ig_user_id: str,
+    access_token: str | None,
+    *,
+    now: datetime,
+) -> tuple[dict | None, bool]:
+    if not ig_user_id:
+        return None, False
+    _ensure_instagram_profiles_table(cursor)
+    cursor.execute(
+        """
+        SELECT name, username, profile_picture_url, updated_at
+          FROM instagram_profiles
+         WHERE ig_user_id = %s
+        """,
+        (ig_user_id,),
+    )
+    row = cursor.fetchone()
+    cached = None
+    if row:
+        cached = {
+            "ig_user_id": ig_user_id,
+            "name": row[0],
+            "username": row[1],
+            "profile_picture_url": row[2],
+            "updated_at": row[3],
+        }
+
+    if cached and isinstance(cached.get("updated_at"), datetime):
+        age_seconds = (now - cached["updated_at"]).total_seconds()
+        if age_seconds <= INSTAGRAM_PROFILE_TTL_SECONDS:
+            return cached, False
+
+    if not access_token:
+        return cached, False
+
+    fetched = _fetch_instagram_profile(ig_user_id, access_token)
+    if not fetched:
+        return cached, False
+
+    cursor.execute(
+        """
+        INSERT INTO instagram_profiles (ig_user_id, name, username, profile_picture_url, updated_at)
+        VALUES (%s, %s, %s, %s, %s)
+        ON DUPLICATE KEY UPDATE
+          name = VALUES(name),
+          username = VALUES(username),
+          profile_picture_url = VALUES(profile_picture_url),
+          updated_at = VALUES(updated_at)
+        """,
+        (
+            ig_user_id,
+            fetched.get("name"),
+            fetched.get("username"),
+            fetched.get("profile_picture_url"),
+            now,
+        ),
+    )
+    return {
+        **fetched,
+        "updated_at": now,
+    }, True
 EXCLUDED_ROLE_KEYWORDS = {"superadmin", "tiquetes", "soporte"}
 
 
@@ -1358,7 +1478,10 @@ def get_chat_list():
     timeout_seconds = _session_timeout_seconds()
     inactive_assignment_seconds = _inactive_assignment_seconds()
     now = datetime.utcnow()
+    tenant_env = tenants.get_current_tenant_env() or {}
+    instagram_token = (tenant_env.get("INSTAGRAM_TOKEN") or "").strip() or None
     chats = []
+    pending_profile_commit = False
     for numero in numeros:
         # Alias
         c.execute("SELECT nombre FROM alias WHERE numero = %s", (numero,))
@@ -1422,6 +1545,18 @@ def get_chat_list():
                 primer_link = "messenger"
             elif "instagram" in last_tipo_lower:
                 primer_link = "instagram"
+
+        instagram_profile = None
+        is_instagram_chat = bool(primer_link and "instagram" in str(primer_link).lower())
+        if is_instagram_chat:
+            instagram_profile, updated = _get_cached_instagram_profile(
+                c,
+                str(numero),
+                instagram_token,
+                now=now,
+            )
+            if updated:
+                pending_profile_commit = True
 
         # Roles asociados al número y nombre/keyword
         c.execute(
@@ -1552,6 +1687,12 @@ def get_chat_list():
         chats.append({
             "numero": numero,
             "alias":  alias,
+            "is_instagram": is_instagram_chat,
+            "instagram_name": instagram_profile.get("name") if instagram_profile else None,
+            "instagram_username": instagram_profile.get("username") if instagram_profile else None,
+            "instagram_profile_picture_url": (
+                instagram_profile.get("profile_picture_url") if instagram_profile else None
+            ),
             "assigned_user_id": asignado_id,
             "assigned_user_name": asignado_nombre,
             "asesor": requiere_asesor,
@@ -1567,6 +1708,8 @@ def get_chat_list():
             "first_link_url": primer_link,
         })
 
+    if pending_profile_commit:
+        conn.commit()
     conn.close()
     chats.sort(key=lambda chat: chat["last_timestamp"] or "", reverse=True)
     return jsonify(chats)
