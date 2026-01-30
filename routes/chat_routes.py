@@ -105,52 +105,38 @@ def _fetch_instagram_profile(ig_user_id: str, access_token: str) -> dict | None:
     if not ig_user_id or not access_token:
         return None
     params = {
-        "fields": "name,username,profile_picture_url",
+        "fields": "name",
         "access_token": access_token,
     }
-    endpoints = [
-        f"https://graph.instagram.com/{ig_user_id}",
-        f"https://graph.facebook.com/{Config.FACEBOOK_GRAPH_API_VERSION}/{ig_user_id}",
-    ]
-    last_status = None
-    last_error = None
-    for url in endpoints:
-        try:
-            response = requests.get(url, params=params, timeout=15)
-        except requests.RequestException as exc:
-            last_error = exc
-            continue
-
-        last_status = response.status_code
-        if not response.ok:
-            continue
-
-        try:
-            payload = response.json()
-        except ValueError:
-            payload = {}
-
-        if not isinstance(payload, dict):
-            continue
-
-        return {
-            "ig_user_id": ig_user_id,
-            "name": payload.get("name"),
-            "username": payload.get("username"),
-            "profile_picture_url": payload.get("profile_picture_url"),
-        }
-
-    if last_error:
-        logger.warning("Error consultando perfil de Instagram: %s", last_error)
+    url = f"https://graph.facebook.com/{Config.FACEBOOK_GRAPH_API_VERSION}/{ig_user_id}"
+    try:
+        response = requests.get(url, params=params, timeout=15)
+    except requests.RequestException as exc:
+        logger.warning("Error consultando perfil de Instagram: %s", exc)
         return None
 
-    if last_status:
+    if not response.ok:
         logger.warning(
             "Error consultando perfil de Instagram para %s (HTTP %s)",
             ig_user_id,
-            last_status,
+            response.status_code,
         )
-    return None
+        return None
+
+    try:
+        payload = response.json()
+    except ValueError:
+        payload = {}
+
+    if not isinstance(payload, dict):
+        return None
+
+    return {
+        "ig_user_id": ig_user_id,
+        "name": payload.get("name"),
+        "username": None,
+        "profile_picture_url": None,
+    }
 
 
 def _get_cached_instagram_profile(
@@ -1541,7 +1527,11 @@ def get_chat_list():
     inactive_assignment_seconds = _inactive_assignment_seconds()
     now = datetime.utcnow()
     tenant_env = tenants.get_current_tenant_env() or {}
-    instagram_token = (tenant_env.get("INSTAGRAM_TOKEN") or "").strip() or None
+    instagram_token = (
+        (tenant_env.get("INSTAGRAM_PAGE_ACCESS_TOKEN") or "").strip()
+        or (tenant_env.get("PAGE_ACCESS_TOKEN") or "").strip()
+        or None
+    )
     tenant_key = tenants.get_active_tenant_key()
     chats = []
     pending_profile_commit = False
@@ -1754,10 +1744,6 @@ def get_chat_list():
             "alias":  alias,
             "is_instagram": is_instagram_chat,
             "instagram_name": instagram_profile.get("name") if instagram_profile else None,
-            "instagram_username": instagram_profile.get("username") if instagram_profile else None,
-            "instagram_profile_picture_url": (
-                instagram_profile.get("profile_picture_url") if instagram_profile else None
-            ),
             "assigned_user_id": asignado_id,
             "assigned_user_name": asignado_nombre,
             "asesor": requiere_asesor,

@@ -1985,8 +1985,6 @@
         if (chatData.is_instagram) {
           const igName = (chatData.instagram_name || '').trim();
           if (igName) return igName;
-          const igUsername = (chatData.instagram_username || '').trim();
-          if (igUsername) return igUsername;
         }
         return (chatData.numero || '').trim();
       }
