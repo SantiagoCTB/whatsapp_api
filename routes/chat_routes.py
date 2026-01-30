@@ -1533,10 +1533,16 @@ def get_chat_list():
     inactive_assignment_seconds = _inactive_assignment_seconds()
     now = datetime.utcnow()
     tenant_env = tenants.get_current_tenant_env() or {}
+    def _normalize_token(value: str | None) -> str:
+        token = (value or "").strip()
+        if token.lower() in {"none", "null", "undefined"}:
+            return ""
+        return token
+
     instagram_token = (
-        (tenant_env.get("INSTAGRAM_PAGE_ACCESS_TOKEN") or "").strip()
-        or (tenant_env.get("PAGE_ACCESS_TOKEN") or "").strip()
-        or (tenant_env.get("INSTAGRAM_TOKEN") or "").strip()
+        _normalize_token(tenant_env.get("INSTAGRAM_TOKEN"))
+        or _normalize_token(tenant_env.get("INSTAGRAM_PAGE_ACCESS_TOKEN"))
+        or _normalize_token(tenant_env.get("PAGE_ACCESS_TOKEN"))
         or None
     )
     tenant_key = tenants.get_active_tenant_key()
