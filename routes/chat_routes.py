@@ -1540,9 +1540,9 @@ def get_chat_list():
         return token
 
     instagram_token = (
-        _normalize_token(tenant_env.get("INSTAGRAM_TOKEN"))
-        or _normalize_token(tenant_env.get("INSTAGRAM_PAGE_ACCESS_TOKEN"))
+        _normalize_token(tenant_env.get("INSTAGRAM_PAGE_ACCESS_TOKEN"))
         or _normalize_token(tenant_env.get("PAGE_ACCESS_TOKEN"))
+        or _normalize_token(tenant_env.get("INSTAGRAM_TOKEN"))
         or None
     )
     tenant_key = tenants.get_active_tenant_key()
