@@ -105,7 +105,7 @@ def _fetch_instagram_profile(ig_user_id: str, access_token: str) -> dict | None:
     if not ig_user_id or not access_token:
         return None
     params = {
-        "fields": "name",
+        "fields": "name,username,profile_picture_url",
         "access_token": access_token,
     }
     url = f"https://graph.facebook.com/{Config.FACEBOOK_GRAPH_API_VERSION}/{ig_user_id}"
@@ -116,10 +116,16 @@ def _fetch_instagram_profile(ig_user_id: str, access_token: str) -> dict | None:
         return None
 
     if not response.ok:
+        error_payload = None
+        try:
+            error_payload = response.json()
+        except ValueError:
+            error_payload = response.text
         logger.warning(
-            "Error consultando perfil de Instagram para %s (HTTP %s)",
+            "Error consultando perfil de Instagram para %s (HTTP %s) details=%s",
             ig_user_id,
             response.status_code,
+            error_payload,
         )
         return None
 
@@ -134,8 +140,8 @@ def _fetch_instagram_profile(ig_user_id: str, access_token: str) -> dict | None:
     return {
         "ig_user_id": ig_user_id,
         "name": payload.get("name"),
-        "username": None,
-        "profile_picture_url": None,
+        "username": payload.get("username"),
+        "profile_picture_url": payload.get("profile_picture_url"),
     }
 
 
@@ -1527,9 +1533,16 @@ def get_chat_list():
     inactive_assignment_seconds = _inactive_assignment_seconds()
     now = datetime.utcnow()
     tenant_env = tenants.get_current_tenant_env() or {}
+    def _normalize_token(value: str | None) -> str:
+        token = (value or "").strip()
+        if token.lower() in {"none", "null", "undefined"}:
+            return ""
+        return token
+
     instagram_token = (
-        (tenant_env.get("INSTAGRAM_PAGE_ACCESS_TOKEN") or "").strip()
-        or (tenant_env.get("PAGE_ACCESS_TOKEN") or "").strip()
+        _normalize_token(tenant_env.get("INSTAGRAM_TOKEN"))
+        or _normalize_token(tenant_env.get("INSTAGRAM_PAGE_ACCESS_TOKEN"))
+        or _normalize_token(tenant_env.get("PAGE_ACCESS_TOKEN"))
         or None
     )
     tenant_key = tenants.get_active_tenant_key()
