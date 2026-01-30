@@ -84,6 +84,9 @@
     <div class="chatWindow" role="region" aria-label="Zona del chat. Arrastra imágenes para prepararlas antes de enviar." tabindex="0">
       <div class="chat-header" aria-live="polite">
         <button type="button" id="mobileBackBtn" class="chat-header__btn" aria-label="Volver a la lista de chats">←</button>
+        <div id="mobileChatAvatar" class="chat-header__avatar" hidden>
+          <img id="mobileChatAvatarImg" alt="Foto de perfil del usuario" loading="lazy">
+        </div>
         <div class="chat-header__info">
           <span id="mobileChatTitle" class="chat-header__title">Selecciona un chat</span>
           <span id="mobileChatSubtitle" class="chat-header__subtitle"></span>
@@ -554,6 +557,8 @@
       const sidebar = document.querySelector('.sidebar');
       const menuToggle = document.getElementById('menuToggle');
       const mobileBackBtn = document.getElementById('mobileBackBtn');
+      const mobileChatAvatar = document.getElementById('mobileChatAvatar');
+      const mobileChatAvatarImg = document.getElementById('mobileChatAvatarImg');
       const mobileChatTitle = document.getElementById('mobileChatTitle');
       const mobileChatSubtitle = document.getElementById('mobileChatSubtitle');
       const mobileChatActions = document.getElementById('mobileChatActions');
@@ -1970,6 +1975,22 @@
         return `${day}/${month}/${year}`;
       }
 
+      function resolveChatDisplayName(chatData) {
+        if (!chatData) return '';
+        const alias = (chatData.alias || '').trim();
+        if (alias) {
+          if (chatData.is_instagram) return alias;
+          return `${alias} (${chatData.numero || ''})`.trim();
+        }
+        if (chatData.is_instagram) {
+          const igName = (chatData.instagram_name || '').trim();
+          if (igName) return igName;
+          const igUsername = (chatData.instagram_username || '').trim();
+          if (igUsername) return igUsername;
+        }
+        return (chatData.numero || '').trim();
+      }
+
       function renderChatList(data) {
         const getTimestamp = ts => ts ? new Date(ts).getTime() : 0;
         const sorted = Array.isArray(data) ? [...data] : [];
@@ -1996,7 +2017,7 @@
 
           const textLabel = document.createElement('span');
           textLabel.className = 'chat-list-text';
-          textLabel.textContent = c.alias ? `${c.alias} (${c.numero})` : c.numero;
+          textLabel.textContent = resolveChatDisplayName(c);
 
           labelWrapper.appendChild(sourceIcon);
           labelWrapper.appendChild(textLabel);
@@ -2267,17 +2288,34 @@
           mobileChatTitle.textContent = 'Selecciona un chat';
           mobileChatSubtitle.textContent = '';
           mobileChatActions.disabled = true;
+          if (mobileChatAvatar) {
+            mobileChatAvatar.hidden = true;
+          }
+          if (mobileChatAvatarImg) {
+            mobileChatAvatarImg.removeAttribute('src');
+          }
           if (chatFinishButton) {
             chatFinishButton.disabled = true;
           }
           return;
         }
-        const title = chatData.alias ? `${chatData.alias} (${chatData.numero})` : (chatData.numero || '');
+        const title = resolveChatDisplayName(chatData);
         const estadoDef = chatStateDefinitionMap.get(chatData.estado);
         mobileChatTitle.textContent = title || 'Chat';
         const estadoLabel = chatData.estado_label || (estadoDef && estadoDef.label) || chatData.estado;
         mobileChatSubtitle.textContent = estadoLabel ? `Estado: ${estadoLabel}` : '';
         mobileChatActions.disabled = false;
+        if (mobileChatAvatar && mobileChatAvatarImg) {
+          const avatarUrl = (chatData.instagram_profile_picture_url || '').trim();
+          if (avatarUrl) {
+            mobileChatAvatarImg.src = avatarUrl;
+            mobileChatAvatarImg.alt = `Foto de perfil de ${title || 'usuario'}`;
+            mobileChatAvatar.hidden = false;
+          } else {
+            mobileChatAvatar.hidden = true;
+            mobileChatAvatarImg.removeAttribute('src');
+          }
+        }
         if (chatFinishButton) {
           chatFinishButton.disabled = false;
         }
