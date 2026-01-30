@@ -1532,6 +1532,7 @@ def get_chat_list():
     instagram_token = (tenant_env.get("INSTAGRAM_TOKEN") or "").strip() or None
     tenant_key = tenants.get_active_tenant_key()
     chats = []
+    pending_profile_commit = False
     for numero in numeros:
         # Alias
         c.execute("SELECT nombre FROM alias WHERE numero = %s", (numero,))
@@ -1760,6 +1761,8 @@ def get_chat_list():
             "first_link_url": primer_link,
         })
 
+    if pending_profile_commit:
+        conn.commit()
     conn.close()
     chats.sort(key=lambda chat: chat["last_timestamp"] or "", reverse=True)
     return jsonify(chats)
