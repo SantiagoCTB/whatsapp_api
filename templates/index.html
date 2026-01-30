@@ -497,6 +497,9 @@
       let autocorrectTimeout = null;
       let autocorrectController = null;
       let lastAutocorrectedText = '';
+      let botoneraData = [];
+      let pendingBotonDraft = null;
+      let pendingBotonShortcut = '';
       function scheduleAutocorrect(delayOverride) {
         if (!messageInput || !autocorrectEnabled) return;
         const currentText = messageInput.value;
@@ -2553,6 +2556,7 @@
         fetch('/get_botones')
           .then(r=>r.json())
           .then(btns => {
+            botoneraData = Array.isArray(btns) ? btns : [];
             botoneraEl.innerHTML='';
 
             const crearBoton = (boton, label) => {
@@ -2652,6 +2656,96 @@
           });
       }
 
+      function findBotonByShortcut(shortcut) {
+        const normalized = shortcut.trim().toLowerCase();
+        if (!normalized) return null;
+        return botoneraData.find(boton => {
+          const nombre = `${boton.nombre || ''}`.trim().toLowerCase();
+          return nombre === normalized;
+        }) || null;
+      }
+
+      function applyBotonShortcut(shortcut) {
+        const boton = findBotonByShortcut(shortcut);
+        if (!boton) return false;
+        pendingBotonDraft = boton;
+        pendingBotonShortcut = shortcut;
+        const mensaje = boton.mensaje || '';
+        messageInput.value = mensaje;
+        messageInput.focus();
+        messageInput.setSelectionRange(mensaje.length, mensaje.length);
+        return true;
+      }
+
+      function clearPendingBotonDraft() {
+        pendingBotonDraft = null;
+        pendingBotonShortcut = '';
+      }
+
+      function sendPendingBotonDraft() {
+        if (!pendingBotonDraft || !currentChat || isBotoneraSending) return false;
+        isBotoneraSending = true;
+        const boton = pendingBotonDraft;
+        const tipoRespuesta = boton.tipo || 'texto';
+        const mensaje = messageInput.value.trim();
+        const envios = [];
+        const replyTarget = replyTo;
+        replyTo = null;
+        replyPreviewEl.style.display='none';
+        replyPreviewEl.innerHTML='';
+
+        if (['image','video','audio','document'].includes(tipoRespuesta)) {
+          const urls = (boton.media_urls && boton.media_urls.length) ? boton.media_urls : [null];
+          urls.forEach((url, index) => {
+            envios.push(fetch('/send_message', {
+              method:'POST',
+              headers:{'Content-Type':'application/json'},
+              body:JSON.stringify({
+                numero: currentChat,
+                mensaje: index === 0 ? mensaje : '',
+                tipo_respuesta: tipoRespuesta,
+                opciones: url,
+                reply_to_wa_id: replyTarget
+              })
+            }));
+          });
+        } else {
+          envios.push(fetch('/send_message', {
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({
+              numero: currentChat,
+              mensaje,
+              tipo_respuesta: tipoRespuesta,
+              opciones: boton.opciones,
+              reply_to_wa_id: replyTarget
+            })
+          }));
+        }
+
+        Promise.all(envios)
+          .then(async responses => {
+            for (const res of responses) {
+              if (!res.ok) {
+                const msg = await extractSendError(res);
+                throw new Error(msg);
+              }
+            }
+            loadMessages();
+            fetchChatList();
+            isBotoneraSending = false;
+          })
+          .catch(err => {
+            const msg = (err && err.message) ? err.message : 'No se pudo enviar el mensaje';
+            alert(msg);
+            isBotoneraSending = false;
+          })
+          .finally(() => {
+            clearPendingBotonDraft();
+          });
+        return true;
+      }
+
       // Enviar texto
       sendBtn.onclick = () => {
         if (imageDraft) {
@@ -2663,6 +2757,14 @@
           return;
         }
         if (isSending || isSendingImage) return;
+        if (pendingBotonDraft) {
+          const sent = sendPendingBotonDraft();
+          if (sent) {
+            messageInput.value='';
+            messageInput.focus();
+            return;
+          }
+        }
         const txt = messageInput.value.trim();
         if (!txt||!currentChat) return;
         const now = Date.now();
@@ -2730,6 +2832,18 @@
           triggerTypingSignal();
         }, 300);
         const currentValue = messageInput.value || '';
+        const shortcutMatch = currentValue.trim().match(/^\\/(.+)$/);
+        if (shortcutMatch) {
+          const shortcut = shortcutMatch[1].trim();
+          if (shortcut && shortcut !== pendingBotonShortcut) {
+            const applied = applyBotonShortcut(shortcut);
+            if (applied) {
+              return;
+            }
+          }
+        } else if (pendingBotonDraft && !currentValue.trim()) {
+          clearPendingBotonDraft();
+        }
         if (!currentValue.trim()) return;
         const endsWithBoundary = /[\\s.,;:!?)]$/.test(currentValue);
         scheduleAutocorrect(endsWithBoundary ? 150 : 1000);
