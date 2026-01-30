@@ -52,7 +52,9 @@ logger = logging.getLogger(__name__)
 
 BOGOTA_TZ = ZoneInfo('America/Bogota')
 INSTAGRAM_PROFILE_TTL_SECONDS = 6 * 60 * 60
-_instagram_profile_queue: "queue.Queue[tuple[str | None, str, str]]" = queue.Queue()
+_instagram_profile_queue: "queue.Queue[tuple[str | None, str, str, str | None, str | None]]" = (
+    queue.Queue()
+)
 _instagram_profile_inflight: set[tuple[str | None, str]] = set()
 _instagram_profile_lock = threading.Lock()
 _instagram_profile_worker_started = False
@@ -65,6 +67,26 @@ def _preferred_url_scheme() -> str:
     if scheme:
         return str(scheme).strip()
     return "https"
+
+
+def _normalize_token(value: str | None) -> str:
+    token = (value or "").strip()
+    if token.lower() in {"none", "null", "undefined"}:
+        return ""
+    if token.lower().startswith(("bearer ", "oauth ")):
+        token = token.split(None, 1)[-1].strip()
+    return token
+
+
+def _mask_token(token: str | None) -> str:
+    if not token:
+        return "<empty>"
+    trimmed = token.strip()
+    if len(trimmed) <= 10:
+        return f"{trimmed} (len={len(trimmed)})"
+    return f"{trimmed[:6]}…{trimmed[-4:]} (len={len(trimmed)})"
+
+
 MEDIA_ROOT = Config.MEDIA_ROOT
 
 ALLOWED_RULE_TYPES = {
@@ -101,18 +123,29 @@ def _ensure_instagram_profiles_table(cursor) -> None:
     )
 
 
-def _fetch_instagram_profile(ig_user_id: str, access_token: str) -> dict | None:
+def _fetch_instagram_profile(
+    ig_user_id: str,
+    access_token: str,
+    *,
+    token_source: str | None = None,
+    token_mask: str | None = None,
+) -> dict | None:
     if not ig_user_id or not access_token:
         return None
     params = {
-        "fields": "name,username,profile_picture_url",
+        "fields": "name,username",
         "access_token": access_token,
     }
     url = f"https://graph.facebook.com/{Config.FACEBOOK_GRAPH_API_VERSION}/{ig_user_id}"
     try:
         response = requests.get(url, params=params, timeout=15)
     except requests.RequestException as exc:
-        logger.warning("Error consultando perfil de Instagram: %s", exc)
+        logger.warning(
+            "Error consultando perfil de Instagram: %s (token_source=%s token=%s)",
+            exc,
+            token_source,
+            token_mask,
+        )
         return None
 
     if not response.ok:
@@ -122,10 +155,13 @@ def _fetch_instagram_profile(ig_user_id: str, access_token: str) -> dict | None:
         except ValueError:
             error_payload = response.text
         logger.warning(
-            "Error consultando perfil de Instagram para %s (HTTP %s) details=%s",
+            "Error consultando perfil de Instagram para %s (HTTP %s) "
+            "details=%s token_source=%s token=%s",
             ig_user_id,
             response.status_code,
             error_payload,
+            token_source,
+            token_mask,
         )
         return None
 
@@ -141,7 +177,7 @@ def _fetch_instagram_profile(ig_user_id: str, access_token: str) -> dict | None:
         "ig_user_id": ig_user_id,
         "name": payload.get("name"),
         "username": payload.get("username"),
-        "profile_picture_url": payload.get("profile_picture_url"),
+        "profile_picture_url": None,
     }
 
 
@@ -201,6 +237,7 @@ def _enqueue_instagram_profile_fetch(
     tenant_key: str | None,
     ig_user_id: str,
     access_token: str | None,
+    token_source: str | None = None,
 ) -> None:
     if not ig_user_id or not access_token:
         return
@@ -210,12 +247,20 @@ def _enqueue_instagram_profile_fetch(
         if key in _instagram_profile_inflight:
             return
         _instagram_profile_inflight.add(key)
-    _instagram_profile_queue.put((tenant_key, ig_user_id, access_token))
+    _instagram_profile_queue.put(
+        (tenant_key, ig_user_id, access_token, token_source, _mask_token(access_token))
+    )
 
 
 def _instagram_profile_worker_loop() -> None:
     while True:
-        tenant_key, ig_user_id, access_token = _instagram_profile_queue.get()
+        (
+            tenant_key,
+            ig_user_id,
+            access_token,
+            token_source,
+            token_mask,
+        ) = _instagram_profile_queue.get()
         try:
             tenant = tenants.get_tenant(tenant_key) if tenant_key else None
             if tenant:
@@ -224,7 +269,12 @@ def _instagram_profile_worker_loop() -> None:
             c = conn.cursor()
             _ensure_instagram_profiles_table(c)
             now = datetime.utcnow()
-            fetched = _fetch_instagram_profile(ig_user_id, access_token)
+            fetched = _fetch_instagram_profile(
+                ig_user_id,
+                access_token,
+                token_source=token_source,
+                token_mask=token_mask,
+            )
             if fetched:
                 c.execute(
                     """
@@ -245,6 +295,17 @@ def _instagram_profile_worker_loop() -> None:
                     ),
                 )
                 conn.commit()
+            else:
+                c.execute(
+                    """
+                    INSERT INTO instagram_profiles (ig_user_id, updated_at)
+                    VALUES (%s, %s)
+                    ON DUPLICATE KEY UPDATE
+                      updated_at = VALUES(updated_at)
+                    """,
+                    (ig_user_id, now),
+                )
+                conn.commit()
             conn.close()
         except Exception:
             logger.exception("Error procesando perfil de Instagram en segundo plano.")
@@ -253,6 +314,8 @@ def _instagram_profile_worker_loop() -> None:
                 _instagram_profile_inflight.discard((tenant_key, ig_user_id))
             tenants.set_current_tenant(None)
             _instagram_profile_queue.task_done()
+
+
 EXCLUDED_ROLE_KEYWORDS = {"superadmin", "tiquetes", "soporte"}
 
 
@@ -1533,21 +1596,24 @@ def get_chat_list():
     inactive_assignment_seconds = _inactive_assignment_seconds()
     now = datetime.utcnow()
     tenant_env = tenants.get_current_tenant_env() or {}
-    def _normalize_token(value: str | None) -> str:
-        token = (value or "").strip()
-        if token.lower() in {"none", "null", "undefined"}:
-            return ""
-        return token
-
-    instagram_token = (
-        _normalize_token(tenant_env.get("INSTAGRAM_PAGE_ACCESS_TOKEN"))
-        or _normalize_token(tenant_env.get("PAGE_ACCESS_TOKEN"))
-        or _normalize_token(tenant_env.get("INSTAGRAM_TOKEN"))
-        or None
+    token_candidates = (
+        ("INSTAGRAM_PAGE_ACCESS_TOKEN", tenant_env.get("INSTAGRAM_PAGE_ACCESS_TOKEN")),
+        ("PAGE_ACCESS_TOKEN", tenant_env.get("PAGE_ACCESS_TOKEN")),
+        ("MESSENGER_PAGE_ACCESS_TOKEN", tenant_env.get("MESSENGER_PAGE_ACCESS_TOKEN")),
+        ("INSTAGRAM_TOKEN", tenant_env.get("INSTAGRAM_TOKEN")),
     )
+    instagram_token = None
+    instagram_token_source = None
+    for source, raw_token in token_candidates:
+        normalized = _normalize_token(raw_token)
+        if normalized:
+            instagram_token = normalized
+            instagram_token_source = source
+            break
     tenant_key = tenants.get_active_tenant_key()
     chats = []
     pending_profile_commit = False
+    logged_missing_instagram_token = False
     for numero in numeros:
         # Alias
         c.execute("SELECT nombre FROM alias WHERE numero = %s", (numero,))
@@ -1624,7 +1690,19 @@ def get_chat_list():
                     tenant_key=tenant_key,
                     ig_user_id=str(numero),
                     access_token=instagram_token,
+                    token_source=instagram_token_source,
                 )
+            elif not instagram_token and not logged_missing_instagram_token:
+                logger.warning(
+                    "No se encontró page token de Instagram para refrescar perfiles "
+                    "(sources: INSTAGRAM_PAGE_ACCESS_TOKEN=%s PAGE_ACCESS_TOKEN=%s "
+                    "MESSENGER_PAGE_ACCESS_TOKEN=%s INSTAGRAM_TOKEN=%s)",
+                    bool(_normalize_token(tenant_env.get("INSTAGRAM_PAGE_ACCESS_TOKEN"))),
+                    bool(_normalize_token(tenant_env.get("PAGE_ACCESS_TOKEN"))),
+                    bool(_normalize_token(tenant_env.get("MESSENGER_PAGE_ACCESS_TOKEN"))),
+                    bool(_normalize_token(tenant_env.get("INSTAGRAM_TOKEN"))),
+                )
+                logged_missing_instagram_token = True
 
         # Roles asociados al número y nombre/keyword
         c.execute(
