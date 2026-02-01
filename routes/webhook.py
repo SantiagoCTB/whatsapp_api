@@ -2203,9 +2203,10 @@ def dispatch_rule(
     if current_step_norm:
         visited.add(current_step_norm)
 
-    input_text_clean = (input_text or '').strip()
     use_ia = _should_use_ia_for_rule(input_text, current_step)
     if use_ia and not _is_ia_rule_active(active_hours, active_days):
+        use_ia = False
+    if use_ia and current_step_norm == "ia_chat":
         use_ia = False
     if use_ia:
         system_prompt = _combine_system_prompts(_get_ia_system_prompt(), resp)
