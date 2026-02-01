@@ -33,6 +33,12 @@
           <input type="checkbox" id="autocorrectToggle">
           <span>Autocorrección al escribir</span>
         </label>
+        {% if session.get('roles') and 'admin' in session['roles'] %}
+        <label class="settings-toggle">
+          <input type="checkbox" id="aiToggle" {% if ai_enabled %}checked{% endif %}>
+          <span>IA chat activo</span>
+        </label>
+        {% endif %}
       </div>
       <div class="chat-filters">
         <div class="chat-filters__bar">
@@ -254,6 +260,29 @@
             localStorage.setItem(AUTOCORRECT_PREF_KEY, autocorrectEnabled ? 'true' : 'false');
           } catch (err) {
             console.warn('No se pudo guardar la preferencia de autocorrección', err);
+          }
+        });
+      }
+      const aiToggle = document.getElementById('aiToggle');
+      if (aiToggle) {
+        aiToggle.addEventListener('change', async () => {
+          const desiredState = aiToggle.checked;
+          try {
+            const response = await fetch('/toggle_ai_enabled', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ enabled: desiredState }),
+            });
+            const payload = await response.json();
+            if (!response.ok || !payload.ok) {
+              throw new Error(payload.error || 'No se pudo actualizar el estado de la IA');
+            }
+            aiToggle.checked = Boolean(payload.enabled);
+          } catch (err) {
+            aiToggle.checked = !desiredState;
+            alert(err.message || 'No se pudo actualizar el estado de la IA');
           }
         });
       }
