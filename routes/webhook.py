@@ -723,7 +723,7 @@ def _parse_time_range(value: str) -> tuple[int, int] | None:
     return start_total, end_total
 
 
-def _parse_time_ranges(value) -> list[tuple[int, int]]:
+def _parse_time_ranges(value) -> list[tuple[int, int, set[int] | None]]:
     if not value:
         return []
     ranges = []
@@ -731,10 +731,20 @@ def _parse_time_ranges(value) -> list[tuple[int, int]]:
         parts = value
     else:
         parts = re.split(r"[;,]+", str(value))
+    time_range_re = re.compile(r"(\d{1,2}(?::\d{2})?\s*-\s*\d{1,2}(?::\d{2})?)")
     for raw in parts:
-        parsed = _parse_time_range(str(raw).strip())
-        if parsed:
-            ranges.append(parsed)
+        raw_value = str(raw).strip()
+        if not raw_value:
+            continue
+        match = time_range_re.search(raw_value)
+        if not match:
+            continue
+        parsed = _parse_time_range(match.group(0))
+        if not parsed:
+            continue
+        days_part = raw_value[:match.start()].strip()
+        days = _parse_active_days(days_part) if days_part else None
+        ranges.append((parsed[0], parsed[1], days or None))
     return ranges
 
 
@@ -829,18 +839,19 @@ def _is_schedule_active(
     minutes = now.hour * 60 + now.minute
     weekday = now.weekday()
     previous_weekday = (weekday - 1) % 7
-    for start, end in ranges:
+    for start, end, range_days in ranges:
+        applicable_days = range_days if range_days is not None else days
         if not _is_minutes_in_range(minutes, start, end):
             continue
-        if not days:
+        if not applicable_days:
             return True
         if start < end:
-            if weekday in days:
+            if weekday in applicable_days:
                 return True
             continue
-        if minutes >= start and weekday in days:
+        if minutes >= start and weekday in applicable_days:
             return True
-        if minutes < end and previous_weekday in days:
+        if minutes < end and previous_weekday in applicable_days:
             return True
     return False
 

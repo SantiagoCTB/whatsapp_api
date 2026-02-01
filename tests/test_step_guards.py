@@ -275,6 +275,33 @@ def test_is_schedule_active_honors_overnight_ranges():
         datetime(2024, 4, 2, 12, 0, tzinfo=tzinfo),
     )
 
+
+def test_is_schedule_active_supports_day_specific_ranges():
+    tzinfo = ZoneInfo("America/Bogota")
+    hours = "lun-vie 17:30-07:30; sab 14:00-23:59; dom 00:00-23:59; lun 00:00-07:30"
+    days = "lun, mar, mie, jue, vie, sab, dom"
+
+    assert webhook_module._is_schedule_active(
+        hours,
+        days,
+        datetime(2024, 4, 1, 6, 0, tzinfo=tzinfo),
+    )
+    assert webhook_module._is_schedule_active(
+        hours,
+        days,
+        datetime(2024, 4, 6, 15, 0, tzinfo=tzinfo),
+    )
+    assert webhook_module._is_schedule_active(
+        hours,
+        days,
+        datetime(2024, 4, 7, 10, 0, tzinfo=tzinfo),
+    )
+    assert not webhook_module._is_schedule_active(
+        hours,
+        days,
+        datetime(2024, 4, 1, 15, 0, tzinfo=tzinfo),
+    )
+
 def test_advance_steps_unique_chain(monkeypatch, patch_dependencies):
     responses = {
         'intro': [

@@ -77,6 +77,7 @@
     <select id="active_schedule_preset" class="form-control">
         <option value="custom">Personalizado</option>
         <option value="nights">Noches (17:30-07:30)</option>
+        <option value="after_hours_weekend">Noches + fin de semana extendido (sáb 14:00-lun 07:30)</option>
         <option value="all_day">Todo el día (00:00-23:59)</option>
         <option value="business_hours">Horario laboral (08:00-18:00)</option>
     </select>
@@ -893,24 +894,29 @@ window.addEventListener('DOMContentLoaded', () => {
         });
         document.querySelectorAll('.active-day').forEach(el => {
             el.addEventListener('change', () => {
-                updateHiddenScheduleFields();
+                presetSelect.value = 'custom';
+                applyPresetSelection();
             });
         });
         document.getElementById('schedule_days_all')?.addEventListener('click', () => {
             setScheduleDays(['lun', 'mar', 'mie', 'jue', 'vie', 'sab', 'dom']);
-            updateHiddenScheduleFields();
+            presetSelect.value = 'custom';
+            applyPresetSelection();
         });
         document.getElementById('schedule_days_weekdays')?.addEventListener('click', () => {
             setScheduleDays(['lun', 'mar', 'mie', 'jue', 'vie']);
-            updateHiddenScheduleFields();
+            presetSelect.value = 'custom';
+            applyPresetSelection();
         });
         document.getElementById('schedule_days_weekend')?.addEventListener('click', () => {
             setScheduleDays(['sab', 'dom']);
-            updateHiddenScheduleFields();
+            presetSelect.value = 'custom';
+            applyPresetSelection();
         });
         document.getElementById('schedule_days_clear')?.addEventListener('click', () => {
             setScheduleDays([]);
-            updateHiddenScheduleFields();
+            presetSelect.value = 'custom';
+            applyPresetSelection();
         });
         applyPresetSelection();
     }
@@ -947,9 +953,18 @@ function toPrettyJson(value) {
 
 const schedulePresets = {
     nights: { start: '17:30', end: '07:30' },
+    after_hours_weekend: {
+        start: '17:30',
+        end: '07:30',
+        daysList: ['lun', 'mar', 'mie', 'jue', 'vie', 'sab', 'dom'],
+        daysValue: 'lun, mar, mie, jue, vie, sab, dom',
+        hours: 'lun-vie 17:30-07:30; sab 14:00-23:59; dom 00:00-23:59; lun 00:00-07:30',
+    },
     all_day: { start: '00:00', end: '23:59' },
     business_hours: { start: '08:00', end: '18:00' },
 };
+
+let scheduleOverride = null;
 
 function normalizeDayToken(token) {
     const cleaned = (token || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
@@ -990,8 +1005,7 @@ function parseDayList(value) {
 
 function parseHoursRange(value) {
     if (!value) return null;
-    const firstRange = String(value).split(',')[0];
-    const match = firstRange.trim().match(/^(\d{1,2})(?::(\d{2}))?\s*-\s*(\d{1,2})(?::(\d{2}))?$/);
+    const match = String(value).match(/(\d{1,2})(?::(\d{2}))?\s*-\s*(\d{1,2})(?::(\d{2}))?/);
     if (!match) return null;
     const pad = num => String(num).padStart(2, '0');
     const start = `${pad(match[1])}:${pad(match[2] || '00')}`;
@@ -1000,6 +1014,15 @@ function parseHoursRange(value) {
 }
 
 function updateHiddenScheduleFields() {
+    const preset = document.getElementById('active_schedule_preset')?.value;
+    if (preset === 'custom') {
+        scheduleOverride = null;
+    }
+    if (scheduleOverride && scheduleOverride.hours) {
+        document.getElementById('active_hours').value = scheduleOverride.hours;
+        document.getElementById('active_days').value = scheduleOverride.days || '';
+        return;
+    }
     const start = document.getElementById('active_start_time').value;
     const end = document.getElementById('active_end_time').value;
     const days = Array.from(document.querySelectorAll('.active-day:checked')).map(el => el.value);
@@ -1021,12 +1044,21 @@ function applyPresetSelection() {
     if (preset !== 'custom') {
         const presetValue = schedulePresets[preset];
         if (presetValue) {
-            startInput.value = presetValue.start;
-            endInput.value = presetValue.end;
+            scheduleOverride = presetValue.hours ? { hours: presetValue.hours, days: presetValue.daysValue || '' } : null;
+            if (presetValue.start) {
+                startInput.value = presetValue.start;
+            }
+            if (presetValue.end) {
+                endInput.value = presetValue.end;
+            }
+            if (presetValue.daysList) {
+                setScheduleDays(presetValue.daysList);
+            }
         }
         startInput.disabled = true;
         endInput.disabled = true;
     } else {
+        scheduleOverride = null;
         startInput.disabled = false;
         endInput.disabled = false;
     }
