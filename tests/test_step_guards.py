@@ -1,5 +1,6 @@
 import sys
 from datetime import datetime
+from zoneinfo import ZoneInfo
 from types import SimpleNamespace
 
 import pytest
@@ -16,8 +17,9 @@ class DummyCursor:
         self._responses = responses
         self._current_step = None
 
-    def execute(self, query, params):
-        step = params[0]
+    def execute(self, query, params=None):
+        params = params or ()
+        step = params[0] if params else query
         self._current_step = step
         self._result = self._responses.get(step, [])
 
@@ -250,6 +252,28 @@ def test_handle_text_message_delays_ia_chat(monkeypatch):
     assert len(ai_calls) == 1
     assert chain_calls == [("5215559999", "hola")]
     assert update_calls[-1] == ("ia_chat", "espera_usuario")
+
+
+def test_is_schedule_active_honors_overnight_ranges():
+    tzinfo = ZoneInfo("America/Bogota")
+    hours = "17:30-07:30"
+    days = "lun, mar, mie, jue, vie"
+
+    assert webhook_module._is_schedule_active(
+        hours,
+        days,
+        datetime(2024, 4, 2, 6, 15, tzinfo=tzinfo),
+    )
+    assert webhook_module._is_schedule_active(
+        hours,
+        days,
+        datetime(2024, 4, 6, 6, 15, tzinfo=tzinfo),
+    )
+    assert not webhook_module._is_schedule_active(
+        hours,
+        days,
+        datetime(2024, 4, 2, 12, 0, tzinfo=tzinfo),
+    )
 
 def test_advance_steps_unique_chain(monkeypatch, patch_dependencies):
     responses = {
