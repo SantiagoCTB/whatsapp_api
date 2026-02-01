@@ -45,6 +45,7 @@ from services.db import (
     obtener_ultimo_mensaje_cliente_info,
 )
 from services.normalize_text import normalize_text
+from routes.configuracion import _ensure_ia_config_table
 
 chat_bp = Blueprint('chat', __name__)
 logger = logging.getLogger(__name__)
@@ -877,6 +878,35 @@ def index():
         ai_enabled=ai_enabled,
         tenant_name=tenant_name,
     )
+
+
+@chat_bp.route('/toggle_ai_enabled', methods=['POST'])
+def toggle_ai_enabled():
+    if "user" not in session:
+        return jsonify({"ok": False, "error": "No autorizado"}), 401
+    roles = _get_session_roles()
+    if 'admin' not in roles:
+        return jsonify({"ok": False, "error": "Solo administradores"}), 403
+
+    payload = request.get_json(silent=True) or {}
+    enabled_raw = payload.get("enabled")
+    enabled = 1 if str(enabled_raw).lower() in {"1", "true", "t", "yes", "on"} else 0
+
+    conn = get_connection()
+    c = conn.cursor()
+    try:
+        _ensure_ia_config_table(c)
+        c.execute("SELECT id FROM ia_config ORDER BY id DESC LIMIT 1")
+        row = c.fetchone()
+        if row:
+            c.execute("UPDATE ia_config SET enabled = %s WHERE id = %s", (enabled, row[0]))
+        else:
+            c.execute("INSERT INTO ia_config (enabled) VALUES (%s)", (enabled,))
+        conn.commit()
+    finally:
+        conn.close()
+
+    return jsonify({"ok": True, "enabled": bool(enabled)})
 
 @chat_bp.route('/get_chat/<numero>')
 def get_chat(numero):

@@ -106,6 +106,32 @@ IA_CHAT_DAY_ALIASES = {
 }
 
 
+def _table_exists(cursor, table_name: str) -> bool:
+    try:
+        cursor.execute("SHOW TABLES LIKE %s", (table_name,))
+        return cursor.fetchone() is not None
+    except Exception:
+        return False
+
+
+def _is_ai_enabled() -> bool:
+    conn = get_connection()
+    c = conn.cursor()
+    try:
+        if not _table_exists(c, "ia_config"):
+            return True
+        c.execute("SHOW COLUMNS FROM ia_config LIKE 'enabled';")
+        if not c.fetchone():
+            return True
+        c.execute("SELECT enabled FROM ia_config ORDER BY id DESC LIMIT 1")
+        row = c.fetchone()
+        return bool(row[0]) if row else True
+    except Exception:
+        return True
+    finally:
+        conn.close()
+
+
 def _clear_followup_timers(numero: str) -> None:
     with followup_lock:
         timers = followup_timers.pop(numero, [])
@@ -359,6 +385,11 @@ def _send_followup_if_pending(
 
 
 def _schedule_followup_messages(numero: str, message_step: str) -> None:
+    message_step_norm = _normalize_step_name(message_step)
+    if message_step_norm in {"ia", "ia_chat"}:
+        active_hours, active_days = _get_schedule_for_step(message_step, None)
+        if not _is_ia_rule_active(active_hours, active_days):
+            return
     config = _get_ia_followup_config()
     if not config:
         return
@@ -692,7 +723,7 @@ def _parse_time_range(value: str) -> tuple[int, int] | None:
     return start_total, end_total
 
 
-def _parse_time_ranges(value) -> list[tuple[int, int]]:
+def _parse_time_ranges(value) -> list[tuple[int, int, set[int] | None]]:
     if not value:
         return []
     ranges = []
@@ -700,10 +731,20 @@ def _parse_time_ranges(value) -> list[tuple[int, int]]:
         parts = value
     else:
         parts = re.split(r"[;,]+", str(value))
+    time_range_re = re.compile(r"(\d{1,2}(?::\d{2})?\s*-\s*\d{1,2}(?::\d{2})?)")
     for raw in parts:
-        parsed = _parse_time_range(str(raw).strip())
-        if parsed:
-            ranges.append(parsed)
+        raw_value = str(raw).strip()
+        if not raw_value:
+            continue
+        match = time_range_re.search(raw_value)
+        if not match:
+            continue
+        parsed = _parse_time_range(match.group(0))
+        if not parsed:
+            continue
+        days_part = raw_value[:match.start()].strip()
+        days = _parse_active_days(days_part) if days_part else None
+        ranges.append((parsed[0], parsed[1], days or None))
     return ranges
 
 
@@ -793,15 +834,31 @@ def _is_schedule_active(
         now = now.replace(tzinfo=tzinfo)
     else:
         now = now.astimezone(tzinfo)
-    if days and now.weekday() not in days:
-        return False
     if not ranges:
-        return True
+        return not days or now.weekday() in days
     minutes = now.hour * 60 + now.minute
-    return any(_is_minutes_in_range(minutes, start, end) for start, end in ranges)
+    weekday = now.weekday()
+    previous_weekday = (weekday - 1) % 7
+    for start, end, range_days in ranges:
+        applicable_days = range_days if range_days is not None else days
+        if not _is_minutes_in_range(minutes, start, end):
+            continue
+        if not applicable_days:
+            return True
+        if start < end:
+            if weekday in applicable_days:
+                return True
+            continue
+        if minutes >= start and weekday in applicable_days:
+            return True
+        if minutes < end and previous_weekday in applicable_days:
+            return True
+    return False
 
 
 def _is_ia_rule_active(active_hours: str | None, active_days: str | None) -> bool:
+    if not _is_ai_enabled():
+        return False
     if active_hours or active_days:
         return _is_schedule_active(active_hours, active_days)
     schedule = tenants.get_runtime_setting(
@@ -851,6 +908,44 @@ def _rule_schedule_fields(rule) -> tuple[str | None, str | None]:
     active_hours = rule[8] if len(rule) > 8 else None
     active_days = rule[9] if len(rule) > 9 else None
     return active_hours, active_days
+
+
+def _get_schedule_for_step(step: str | None, platform: str | None = None) -> tuple[str | None, str | None]:
+    if not step:
+        return None, None
+    conn = get_connection()
+    c = conn.cursor()
+    try:
+        if platform:
+            filter_sql, filter_params = _platform_filter_sql(platform, step=step)
+            c.execute(
+                f"""
+                SELECT r.active_hours, r.active_days
+                  FROM reglas r
+                 WHERE r.step=%s
+                   AND {filter_sql}
+                 ORDER BY (r.platform = %s) DESC, r.id
+                 LIMIT 1
+                """,
+                (step, *filter_params, platform),
+            )
+        else:
+            c.execute(
+                """
+                SELECT r.active_hours, r.active_days
+                  FROM reglas r
+                 WHERE r.step=%s
+                 ORDER BY r.id
+                 LIMIT 1
+                """,
+                (step,),
+            )
+        row = c.fetchone()
+    finally:
+        conn.close()
+    if not row:
+        return None, None
+    return row[0], row[1]
 
 
 def _ia_history_limit() -> int:
@@ -2093,26 +2188,25 @@ def dispatch_rule(
         visited = set()
     if not platform:
         platform = _resolve_rule_platform(numero)
-    (
-        regla_id,
-        resp,
-        next_step_raw,
-        tipo_resp,
-        media_urls,
-        opts,
-        rol_kw,
-        input_text,
-        active_hours,
-        active_days,
-    ) = regla
+    regla_id = regla[0]
+    resp = regla[1] if len(regla) > 1 else None
+    next_step_raw = regla[2] if len(regla) > 2 else None
+    tipo_resp = regla[3] if len(regla) > 3 else None
+    media_urls = regla[4] if len(regla) > 4 else None
+    opts = regla[5] if len(regla) > 5 else None
+    rol_kw = regla[6] if len(regla) > 6 else None
+    input_text = regla[7] if len(regla) > 7 else None
+    active_hours = regla[8] if len(regla) > 8 else None
+    active_days = regla[9] if len(regla) > 9 else None
     current_step = step or get_current_step(numero)
     current_step_norm = _normalize_step_name(current_step)
     if current_step_norm:
         visited.add(current_step_norm)
 
-    input_text_clean = (input_text or '').strip()
     use_ia = _should_use_ia_for_rule(input_text, current_step)
     if use_ia and not _is_ia_rule_active(active_hours, active_days):
+        use_ia = False
+    if use_ia and current_step_norm == "ia_chat":
         use_ia = False
     if use_ia:
         system_prompt = _combine_system_prompts(_get_ia_system_prompt(), resp)
@@ -2578,6 +2672,8 @@ def handle_text_message(
         current_step = get_current_step(numero)
         current_step_norm = _normalize_step_name(current_step)
         _apply_role_for_step(numero, current_step, platform)
+        if not _is_ia_rule_active(*_get_schedule_for_step(current_step, platform)):
+            return
         if current_step_norm == "ia_chat":
             _reply_with_ai(
                 numero,

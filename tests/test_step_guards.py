@@ -1,5 +1,6 @@
 import sys
 from datetime import datetime
+from zoneinfo import ZoneInfo
 from types import SimpleNamespace
 
 import pytest
@@ -16,8 +17,9 @@ class DummyCursor:
         self._responses = responses
         self._current_step = None
 
-    def execute(self, query, params):
-        step = params[0]
+    def execute(self, query, params=None):
+        params = params or ()
+        step = params[0] if params else query
         self._current_step = step
         self._result = self._responses.get(step, [])
 
@@ -147,7 +149,7 @@ def test_dispatch_rule_invokes_ai_only_for_ia_rule(monkeypatch, patch_dependenci
     assert ai_calls[0][0][0] == '5215551234'
 
 
-def test_dispatch_rule_invokes_ai_for_wildcard_in_ia_step(monkeypatch, patch_dependencies):
+def test_dispatch_rule_sends_response_for_wildcard_in_ia_step(monkeypatch, patch_dependencies):
     responses = {'ia_chat': []}
     monkeypatch.setattr(
         webhook_module,
@@ -159,13 +161,6 @@ def test_dispatch_rule_invokes_ai_for_wildcard_in_ia_step(monkeypatch, patch_dep
         webhook_module,
         'obtener_ultimo_mensaje_cliente',
         lambda *_: 'mensaje cliente',
-    )
-
-    ai_calls = []
-    monkeypatch.setattr(
-        webhook_module,
-        '_reply_with_ai',
-        lambda *args, **kwargs: ai_calls.append((args, kwargs)),
     )
 
     regla = (
@@ -181,8 +176,7 @@ def test_dispatch_rule_invokes_ai_for_wildcard_in_ia_step(monkeypatch, patch_dep
 
     webhook_module.dispatch_rule('5215551234', regla, step='ia_chat')
 
-    assert len(ai_calls) == 1
-    assert ai_calls[0][0][0] == '5215551234'
+    assert patch_dependencies.sent_messages[-1][0] == '5215551234'
 
 
 def test_dispatch_rule_skips_ai_for_non_ia_rules(monkeypatch, patch_dependencies):
@@ -250,6 +244,55 @@ def test_handle_text_message_delays_ia_chat(monkeypatch):
     assert len(ai_calls) == 1
     assert chain_calls == [("5215559999", "hola")]
     assert update_calls[-1] == ("ia_chat", "espera_usuario")
+
+
+def test_is_schedule_active_honors_overnight_ranges():
+    tzinfo = ZoneInfo("America/Bogota")
+    hours = "17:30-07:30"
+    days = "lun, mar, mie, jue, vie"
+
+    assert webhook_module._is_schedule_active(
+        hours,
+        days,
+        datetime(2024, 4, 2, 6, 15, tzinfo=tzinfo),
+    )
+    assert webhook_module._is_schedule_active(
+        hours,
+        days,
+        datetime(2024, 4, 6, 6, 15, tzinfo=tzinfo),
+    )
+    assert not webhook_module._is_schedule_active(
+        hours,
+        days,
+        datetime(2024, 4, 2, 12, 0, tzinfo=tzinfo),
+    )
+
+
+def test_is_schedule_active_supports_day_specific_ranges():
+    tzinfo = ZoneInfo("America/Bogota")
+    hours = "lun-vie 17:30-07:30; sab 14:00-23:59; dom 00:00-23:59; lun 00:00-07:30"
+    days = "lun, mar, mie, jue, vie, sab, dom"
+
+    assert webhook_module._is_schedule_active(
+        hours,
+        days,
+        datetime(2024, 4, 1, 6, 0, tzinfo=tzinfo),
+    )
+    assert webhook_module._is_schedule_active(
+        hours,
+        days,
+        datetime(2024, 4, 6, 15, 0, tzinfo=tzinfo),
+    )
+    assert webhook_module._is_schedule_active(
+        hours,
+        days,
+        datetime(2024, 4, 7, 10, 0, tzinfo=tzinfo),
+    )
+    assert not webhook_module._is_schedule_active(
+        hours,
+        days,
+        datetime(2024, 4, 1, 15, 0, tzinfo=tzinfo),
+    )
 
 def test_advance_steps_unique_chain(monkeypatch, patch_dependencies):
     responses = {
