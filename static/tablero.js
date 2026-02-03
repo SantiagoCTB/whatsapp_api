@@ -112,7 +112,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function buildQuery() {
     const params = new URLSearchParams();
-    if (startInput.value) params.append('start', startInput.value);
+    if (startInput.value) {
+      params.append('start', startInput.value);
+      if (!endInput.value) {
+        params.append('end', new Date().toISOString().slice(0, 10));
+      }
+    }
     if (endInput.value) params.append('end', endInput.value);
     if (limitInput && limitInput.value) params.append('limit', limitInput.value);
     if (rolInput && rolInput.value) {
