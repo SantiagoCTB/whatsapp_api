@@ -264,6 +264,22 @@ document.addEventListener('DOMContentLoaded', () => {
         showCardMessage('graficoTotales', 'Error al cargar datos');
       });
 
+    fetch(`/datos_chats_totales${query}`)
+      .then(response => response.json())
+      .then(data => {
+        const totalElem = document.getElementById('totalChats');
+        if (!data || typeof data.total_chats !== 'number') {
+          if (totalElem) totalElem.textContent = 'No hay datos disponibles';
+          return;
+        }
+        if (totalElem) totalElem.textContent = data.total_chats;
+      })
+      .catch(err => {
+        console.error(err);
+        const totalElem = document.getElementById('totalChats');
+        if (totalElem) totalElem.textContent = 'Error al cargar datos';
+      });
+
     fetch('/datos_roles_total')
       .then(response => response.json())
       .then(data => {
