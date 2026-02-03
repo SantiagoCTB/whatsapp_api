@@ -90,6 +90,7 @@
     <div class="chatWindow" role="region" aria-label="Zona del chat. Arrastra imágenes para prepararlas antes de enviar." tabindex="0">
       <div class="chat-header" aria-live="polite">
         <button type="button" id="mobileBackBtn" class="chat-header__btn" aria-label="Volver a la lista de chats">←</button>
+        <img id="mobileChatAvatar" class="chat-header__avatar" alt="Foto de perfil" hidden>
         <div class="chat-header__info">
           <span id="mobileChatTitle" class="chat-header__title">Selecciona un chat</span>
           <span id="mobileChatSubtitle" class="chat-header__subtitle"></span>
@@ -585,6 +586,7 @@
       const mobileBackBtn = document.getElementById('mobileBackBtn');
       const mobileChatTitle = document.getElementById('mobileChatTitle');
       const mobileChatSubtitle = document.getElementById('mobileChatSubtitle');
+      const mobileChatAvatar = document.getElementById('mobileChatAvatar');
       const mobileChatActions = document.getElementById('mobileChatActions');
       const bodyEl = document.body;
       function updateMobileSidebarState(shouldShowSidebar) {
@@ -629,6 +631,12 @@
             pageY: rect.bottom + 8 + window.scrollY
           };
           openChatContextMenu(coords, chatData);
+        });
+      }
+      if (mobileChatAvatar) {
+        mobileChatAvatar.addEventListener('click', () => {
+          if (mobileChatAvatar.hidden || !mobileChatAvatar.src) return;
+          openImageModal(mobileChatAvatar.src, mobileChatAvatar.alt || 'Foto de perfil');
         });
       }
 
@@ -2023,12 +2031,46 @@
           sourceIcon.alt = sourceInfo.label;
           sourceIcon.title = sourceInfo.label;
 
-          const textLabel = document.createElement('span');
-          textLabel.className = 'chat-list-text';
-          textLabel.textContent = c.alias ? `${c.alias} (${c.numero})` : c.numero;
+          const avatarUrl = c.instagram_profile_pic || '';
+          if (avatarUrl) {
+            const avatar = document.createElement('img');
+            avatar.className = 'chat-profile-avatar';
+            avatar.src = avatarUrl;
+            avatar.alt = c.instagram_username ? `Foto de ${c.instagram_username}` : 'Foto de perfil';
+            avatar.loading = 'lazy';
+            avatar.onerror = () => avatar.remove();
+            labelWrapper.appendChild(avatar);
+          }
 
           labelWrapper.appendChild(sourceIcon);
-          labelWrapper.appendChild(textLabel);
+
+          const textContainer = document.createElement('span');
+          textContainer.className = 'chat-list-texts';
+
+          const textLabel = document.createElement('span');
+          textLabel.className = 'chat-list-text';
+          const primaryName = c.instagram_username || c.alias || c.numero;
+          textLabel.textContent = primaryName;
+
+          const secondaryText = (() => {
+            if (c.alias && c.instagram_username && c.alias !== c.instagram_username) {
+              return c.alias;
+            }
+            if (primaryName !== c.numero) {
+              return c.numero || '';
+            }
+            return '';
+          })();
+
+          textContainer.appendChild(textLabel);
+          if (secondaryText) {
+            const secondaryLabel = document.createElement('span');
+            secondaryLabel.className = 'chat-list-secondary';
+            secondaryLabel.textContent = secondaryText;
+            textContainer.appendChild(secondaryLabel);
+          }
+
+          labelWrapper.appendChild(textContainer);
           li.appendChild(labelWrapper);
           if (c.estado === 'error_flujo') {
             const alertIcon = document.createElement('span');
@@ -2295,17 +2337,33 @@
         if (!chatData) {
           mobileChatTitle.textContent = 'Selecciona un chat';
           mobileChatSubtitle.textContent = '';
+          if (mobileChatAvatar) {
+            mobileChatAvatar.hidden = true;
+            mobileChatAvatar.removeAttribute('src');
+          }
           mobileChatActions.disabled = true;
           if (chatFinishButton) {
             chatFinishButton.disabled = true;
           }
           return;
         }
-        const title = chatData.alias ? `${chatData.alias} (${chatData.numero})` : (chatData.numero || '');
+        const title = chatData.instagram_username || chatData.alias || chatData.numero || '';
         const estadoDef = chatStateDefinitionMap.get(chatData.estado);
         mobileChatTitle.textContent = title || 'Chat';
         const estadoLabel = chatData.estado_label || (estadoDef && estadoDef.label) || chatData.estado;
         mobileChatSubtitle.textContent = estadoLabel ? `Estado: ${estadoLabel}` : '';
+        if (mobileChatAvatar) {
+          if (chatData.instagram_profile_pic) {
+            mobileChatAvatar.hidden = false;
+            mobileChatAvatar.src = chatData.instagram_profile_pic;
+            mobileChatAvatar.alt = chatData.instagram_username
+              ? `Foto de ${chatData.instagram_username}`
+              : 'Foto de perfil';
+          } else {
+            mobileChatAvatar.hidden = true;
+            mobileChatAvatar.removeAttribute('src');
+          }
+        }
         mobileChatActions.disabled = false;
         if (chatFinishButton) {
           chatFinishButton.disabled = false;
