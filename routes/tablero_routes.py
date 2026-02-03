@@ -43,6 +43,21 @@ def _normalize_date_range(start, end):
     return start, end
 
 
+def _apply_tipo_filter(tipos):
+    if not tipos:
+        return [], []
+
+    raw_tipos = [tipo.strip().lower() for tipo in tipos.split(',') if tipo.strip()]
+    allowed = {"cliente", "bot", "asesor"}
+    selected = [tipo for tipo in raw_tipos if tipo in allowed]
+    if not selected:
+        raise ValueError("tipos")
+
+    conditions = ["(" + " OR ".join(["LOWER(m.tipo) LIKE %s"] * len(selected)) + ")"]
+    params = [f"{tipo}%" for tipo in selected]
+    return conditions, params
+
+
 @tablero_bp.route('/tablero')
 def tablero():
     """Renderiza la página del tablero con gráficos de Chart.js."""
@@ -793,6 +808,59 @@ def datos_totales():
     )
 
     return jsonify({"enviados": enviados, "recibidos": recibidos})
+
+
+@tablero_bp.route('/datos_chats_totales')
+def datos_chats_totales():
+    """Devuelve el total de chats distintos."""
+    if "user" not in session:
+        return redirect(url_for('auth.login'))
+
+    start = request.args.get('start')
+    end = request.args.get('end')
+    start, end = _normalize_date_range(start, end)
+    rol = request.args.get('rol', type=int)
+    numero = request.args.get('numero')
+    texto = request.args.get('texto')
+    tipos = request.args.get('tipos')
+
+    conn = get_connection()
+    cur = conn.cursor()
+
+    try:
+        joins, filter_conditions, filter_params = _apply_filters(cur, rol, numero, texto)
+        tipo_conditions, tipo_params = _apply_tipo_filter(tipos)
+    except ValueError as e:
+        conn.close()
+        if str(e) == 'rol':
+            msg = 'Rol'
+        elif str(e) == 'numero':
+            msg = 'Número'
+        else:
+            msg = 'Tipos'
+        return jsonify({"error": f"{msg} no encontrado"}), 400
+
+    query = "SELECT COUNT(DISTINCT m.numero) FROM mensajes m"
+    if joins:
+        query += " " + joins
+
+    conditions = []
+    params = []
+    if start and end:
+        conditions.append("m.timestamp BETWEEN %s AND %s")
+        params.extend([start, end])
+    conditions.extend(filter_conditions)
+    conditions.extend(tipo_conditions)
+    params.extend(filter_params)
+    params.extend(tipo_params)
+    if conditions:
+        query += " WHERE " + " AND ".join(conditions)
+
+    cur.execute(query, params)
+    total = cur.fetchone()[0]
+    conn.close()
+
+    return jsonify({"total_chats": total})
 
 
 @tablero_bp.route('/datos_roles_total')
