@@ -37,6 +37,12 @@ def _apply_filters(cur, rol, numero, texto=None):
     return " ".join(joins), conditions, params
 
 
+def _normalize_date_range(start, end):
+    if start and not end:
+        end = datetime.today().strftime("%Y-%m-%d")
+    return start, end
+
+
 @tablero_bp.route('/tablero')
 def tablero():
     """Renderiza la página del tablero con gráficos de Chart.js."""
@@ -85,6 +91,7 @@ def datos_tablero():
 
     start = request.args.get('start')
     end = request.args.get('end')
+    start, end = _normalize_date_range(start, end)
     rol = request.args.get('rol', type=int)
     numero = request.args.get('numero')
     texto = request.args.get('texto')
@@ -133,6 +140,7 @@ def datos_chats_por_usuario():
 
     start = request.args.get('start')
     end = request.args.get('end')
+    start, end = _normalize_date_range(start, end)
     rol = request.args.get('rol', type=int)
     numero = request.args.get('numero')
     texto = request.args.get('texto')
@@ -193,6 +201,7 @@ def datos_tipos_diarios():
 
     start = request.args.get('start')
     end = request.args.get('end')
+    start, end = _normalize_date_range(start, end)
     rol = request.args.get('rol', type=int)
     numero = request.args.get('numero')
     texto = request.args.get('texto')
@@ -264,6 +273,7 @@ def datos_palabras():
 
     start = request.args.get('start')
     end = request.args.get('end')
+    start, end = _normalize_date_range(start, end)
     rol = request.args.get('rol', type=int)
     numero = request.args.get('numero')
     texto = request.args.get('texto')
@@ -315,6 +325,7 @@ def datos_roles():
 
     start = request.args.get('start')
     end = request.args.get('end')
+    start, end = _normalize_date_range(start, end)
     rol = request.args.get('rol', type=int)
     numero = request.args.get('numero')
     texto = request.args.get('texto')
@@ -374,6 +385,7 @@ def datos_top_numeros():
 
     start = request.args.get('start')
     end = request.args.get('end')
+    start, end = _normalize_date_range(start, end)
     rol = request.args.get('rol', type=int)
     numero = request.args.get('numero')
     texto = request.args.get('texto')
@@ -424,6 +436,7 @@ def datos_mensajes_diarios():
 
     start = request.args.get('start')
     end = request.args.get('end')
+    start, end = _normalize_date_range(start, end)
     rol = request.args.get('rol', type=int)
     numero = request.args.get('numero')
     texto = request.args.get('texto')
@@ -473,6 +486,7 @@ def datos_mensajes_semana():
 
     start = request.args.get('start')
     end = request.args.get('end')
+    start, end = _normalize_date_range(start, end)
     rol = request.args.get('rol', type=int)
     numero = request.args.get('numero')
     texto = request.args.get('texto')
@@ -533,6 +547,7 @@ def datos_mensajes_hora():
 
     start = request.args.get('start')
     end = request.args.get('end')
+    start, end = _normalize_date_range(start, end)
     rol = request.args.get('rol', type=int)
     numero = request.args.get('numero')
     texto = request.args.get('texto')
@@ -582,6 +597,7 @@ def datos_tipos():
 
     start = request.args.get('start')
     end = request.args.get('end')
+    start, end = _normalize_date_range(start, end)
     rol = request.args.get('rol', type=int)
     numero = request.args.get('numero')
     texto = request.args.get('texto')
@@ -642,6 +658,7 @@ def datos_numeros_sin_asesor():
 
     start = request.args.get('start')
     end = request.args.get('end')
+    start, end = _normalize_date_range(start, end)
     rol = request.args.get('rol', type=int)
     numero = request.args.get('numero')
     texto = request.args.get('texto')
@@ -687,6 +704,7 @@ def datos_sin_asesor():
 
     start = request.args.get('start')
     end = request.args.get('end')
+    start, end = _normalize_date_range(start, end)
     rol = request.args.get('rol', type=int)
     numero = request.args.get('numero')
     texto = request.args.get('texto')
@@ -730,6 +748,7 @@ def datos_totales():
 
     start = request.args.get('start')
     end = request.args.get('end')
+    start, end = _normalize_date_range(start, end)
     rol = request.args.get('rol', type=int)
     numero = request.args.get('numero')
     texto = request.args.get('texto')
