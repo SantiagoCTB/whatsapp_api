@@ -107,6 +107,7 @@ IA_CHAT_DAY_ALIASES = {
     "sunday": 6,
 }
 INSTAGRAM_PROFILE_REFRESH = timedelta(hours=24)
+MESSENGER_PROFILE_REFRESH = timedelta(hours=24)
 
 
 def _table_exists(cursor, table_name: str) -> bool:
@@ -524,6 +525,26 @@ def _get_instagram_profile_record(sender_id: str) -> dict | None:
     return {"username": row[0], "profile_pic": row[1], "updated_at": row[2]}
 
 
+def _get_messenger_profile_record(sender_id: str) -> dict | None:
+    conn = get_connection()
+    c = conn.cursor()
+    try:
+        c.execute(
+            """
+            SELECT username, profile_pic, updated_at
+              FROM chat_profiles
+             WHERE numero = %s AND platform = %s
+            """,
+            (sender_id, "messenger"),
+        )
+        row = c.fetchone()
+    finally:
+        conn.close()
+    if not row:
+        return None
+    return {"username": row[0], "profile_pic": row[1], "updated_at": row[2]}
+
+
 def _upsert_instagram_profile(sender_id: str, username: str | None, profile_pic: str | None) -> None:
     conn = get_connection()
     c = conn.cursor()
@@ -544,7 +565,50 @@ def _upsert_instagram_profile(sender_id: str, username: str | None, profile_pic:
         conn.close()
 
 
+def _upsert_messenger_profile(sender_id: str, username: str | None, profile_pic: str | None) -> None:
+    conn = get_connection()
+    c = conn.cursor()
+    try:
+        c.execute(
+            """
+            INSERT INTO chat_profiles (numero, platform, username, profile_pic)
+            VALUES (%s, %s, %s, %s)
+            ON DUPLICATE KEY UPDATE
+              username = VALUES(username),
+              profile_pic = VALUES(profile_pic),
+              updated_at = CURRENT_TIMESTAMP
+            """,
+            (sender_id, "messenger", username, profile_pic),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
 def _maybe_set_instagram_alias(sender_id: str, username: str | None) -> None:
+    if not username:
+        return
+    conn = get_connection()
+    c = conn.cursor()
+    try:
+        c.execute("SELECT nombre FROM alias WHERE numero = %s", (sender_id,))
+        row = c.fetchone()
+        if row and (row[0] or "").strip():
+            return
+        c.execute(
+            """
+            INSERT INTO alias (numero, nombre)
+            VALUES (%s, %s)
+            ON DUPLICATE KEY UPDATE nombre = VALUES(nombre)
+            """,
+            (sender_id, username),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _maybe_set_messenger_alias(sender_id: str, username: str | None) -> None:
     if not username:
         return
     conn = get_connection()
@@ -594,6 +658,38 @@ def _fetch_instagram_user_profile(sender_id: str, access_token: str) -> dict | N
     }
 
 
+def _fetch_messenger_user_profile(sender_id: str, access_token: str) -> dict | None:
+    graph_version = (getattr(Config, "FACEBOOK_GRAPH_API_VERSION", "") or "v19.0").strip()
+    url = f"https://graph.facebook.com/{graph_version}/{sender_id}"
+    params = {"fields": "first_name,last_name,profile_pic,name", "access_token": access_token}
+    try:
+        response = requests.get(url, params=params, timeout=15)
+    except requests.RequestException as exc:
+        logger.warning("No se pudo consultar el perfil de Messenger: %s", exc)
+        return None
+    if not response.ok:
+        logger.warning(
+            "Messenger devolvió un error al consultar perfil: %s",
+            response.text,
+        )
+        return None
+    try:
+        payload = response.json()
+    except ValueError:
+        logger.warning("Respuesta inválida al consultar perfil de Messenger.")
+        return None
+    if not isinstance(payload, dict):
+        return None
+    first_name = payload.get("first_name")
+    last_name = payload.get("last_name")
+    name_parts = [part.strip() for part in (first_name, last_name) if part and str(part).strip()]
+    username = " ".join(name_parts) if name_parts else (payload.get("name") or None)
+    return {
+        "username": username,
+        "profile_pic": payload.get("profile_pic"),
+    }
+
+
 def _ensure_instagram_profile(sender_id: str) -> None:
     if not sender_id:
         return
@@ -614,6 +710,29 @@ def _ensure_instagram_profile(sender_id: str) -> None:
     _upsert_instagram_profile(sender_id, profile.get("username"), profile.get("profile_pic"))
     _maybe_set_instagram_alias(sender_id, profile.get("username"))
 
+
+def _ensure_messenger_profile(sender_id: str) -> None:
+    if not sender_id:
+        return
+    tenant_env = tenants.get_current_tenant_env() or {}
+    access_token = (
+        (tenant_env.get("MESSENGER_PAGE_ACCESS_TOKEN") or "").strip()
+        or (tenant_env.get("MESSENGER_TOKEN") or "").strip()
+    )
+    if not access_token:
+        return
+    cached = _get_messenger_profile_record(sender_id)
+    if cached and cached.get("updated_at"):
+        updated_at = cached["updated_at"]
+        if isinstance(updated_at, datetime):
+            age = datetime.utcnow() - updated_at
+            if age < MESSENGER_PROFILE_REFRESH:
+                return
+    profile = _fetch_messenger_user_profile(sender_id, access_token)
+    if not profile:
+        return
+    _upsert_messenger_profile(sender_id, profile.get("username"), profile.get("profile_pic"))
+    _maybe_set_messenger_alias(sender_id, profile.get("username"))
 
 def _media_root():
     return tenants.get_media_root()
@@ -1840,9 +1959,12 @@ def _handle_messenger_payload(data, summary, channel="messenger"):
                 continue
             recipient_id = (event.get("recipient") or {}).get("id")
             _ensure_tenant_context_for_page(recipient_id, channel)
-            if channel == "instagram" and (message or event.get("postback")):
+            if channel in {"instagram", "messenger"} and (message or event.get("postback")):
                 if not message.get("is_echo"):
-                    _ensure_instagram_profile(sender_id)
+                    if channel == "instagram":
+                        _ensure_instagram_profile(sender_id)
+                    else:
+                        _ensure_messenger_profile(sender_id)
 
             delivery = event.get("delivery") or {}
             if delivery:

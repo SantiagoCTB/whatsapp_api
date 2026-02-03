@@ -2007,6 +2007,19 @@
         return `${day}/${month}/${year}`;
       }
 
+      function resolveProfileFromChat(chat) {
+        const link = (chat.first_link_url || '').toLowerCase();
+        const isMessenger = link.includes('messenger');
+        const isInstagram = link.includes('instagram');
+        const profileUsername = isMessenger
+          ? chat.messenger_username
+          : (isInstagram ? chat.instagram_username : (chat.instagram_username || chat.messenger_username));
+        const profilePic = isMessenger
+          ? chat.messenger_profile_pic
+          : (isInstagram ? chat.instagram_profile_pic : (chat.instagram_profile_pic || chat.messenger_profile_pic));
+        return { profileUsername, profilePic };
+      }
+
       function renderChatList(data) {
         const getTimestamp = ts => ts ? new Date(ts).getTime() : 0;
         const sorted = Array.isArray(data) ? [...data] : [];
@@ -2031,12 +2044,15 @@
           sourceIcon.alt = sourceInfo.label;
           sourceIcon.title = sourceInfo.label;
 
-          const avatarUrl = c.instagram_profile_pic || '';
+          const profileData = resolveProfileFromChat(c);
+          const avatarUrl = profileData.profilePic || '';
           if (avatarUrl) {
             const avatar = document.createElement('img');
             avatar.className = 'chat-profile-avatar';
             avatar.src = avatarUrl;
-            avatar.alt = c.instagram_username ? `Foto de ${c.instagram_username}` : 'Foto de perfil';
+            avatar.alt = profileData.profileUsername
+              ? `Foto de ${profileData.profileUsername}`
+              : 'Foto de perfil';
             avatar.loading = 'lazy';
             avatar.onerror = () => avatar.remove();
             labelWrapper.appendChild(avatar);
@@ -2049,11 +2065,11 @@
 
           const textLabel = document.createElement('span');
           textLabel.className = 'chat-list-text';
-          const primaryName = c.instagram_username || c.alias || c.numero;
+          const primaryName = profileData.profileUsername || c.alias || c.numero;
           textLabel.textContent = primaryName;
 
           const secondaryText = (() => {
-            if (c.alias && c.instagram_username && c.alias !== c.instagram_username) {
+            if (c.alias && profileData.profileUsername && c.alias !== profileData.profileUsername) {
               return c.alias;
             }
             if (primaryName !== c.numero) {
@@ -2347,17 +2363,18 @@
           }
           return;
         }
-        const title = chatData.instagram_username || chatData.alias || chatData.numero || '';
+        const profileData = resolveProfileFromChat(chatData);
+        const title = profileData.profileUsername || chatData.alias || chatData.numero || '';
         const estadoDef = chatStateDefinitionMap.get(chatData.estado);
         mobileChatTitle.textContent = title || 'Chat';
         const estadoLabel = chatData.estado_label || (estadoDef && estadoDef.label) || chatData.estado;
         mobileChatSubtitle.textContent = estadoLabel ? `Estado: ${estadoLabel}` : '';
         if (mobileChatAvatar) {
-          if (chatData.instagram_profile_pic) {
+          if (profileData.profilePic) {
             mobileChatAvatar.hidden = false;
-            mobileChatAvatar.src = chatData.instagram_profile_pic;
-            mobileChatAvatar.alt = chatData.instagram_username
-              ? `Foto de ${chatData.instagram_username}`
+            mobileChatAvatar.src = profileData.profilePic;
+            mobileChatAvatar.alt = profileData.profileUsername
+              ? `Foto de ${profileData.profileUsername}`
               : 'Foto de perfil';
           } else {
             mobileChatAvatar.hidden = true;
