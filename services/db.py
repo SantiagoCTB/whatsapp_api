@@ -864,6 +864,19 @@ def init_db(db_settings: DatabaseSettings | None = None):
     """)
     _ensure_numero_column_length(c, "alias")
 
+    # perfiles de chat (Messenger/Instagram)
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS chat_profiles (
+      numero VARCHAR(128) NOT NULL,
+      platform VARCHAR(20) NOT NULL,
+      username VARCHAR(255),
+      profile_pic TEXT,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      PRIMARY KEY (numero, platform)
+    ) ENGINE=InnoDB;
+    """)
+    _ensure_numero_column_length(c, "chat_profiles", length=128)
+
     # hidden_chats: números ocultos sólo para la vista web
     c.execute("""
     CREATE TABLE IF NOT EXISTS hidden_chats (

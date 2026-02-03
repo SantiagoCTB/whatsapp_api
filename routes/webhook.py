@@ -7,7 +7,7 @@ import mimetypes
 import re
 from urllib.parse import urlparse
 import unicodedata
-from datetime import datetime
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 from flask import (
     Blueprint,
@@ -17,6 +17,7 @@ from flask import (
     url_for,
     has_request_context,
 )
+import requests
 
 from config import Config
 from services import tenants
@@ -43,6 +44,7 @@ from services.whatsapp_api import (
     _resolve_message_channel,
     start_typing_feedback,
     stop_typing_feedback,
+    INSTAGRAM_GRAPH_BASE_URL,
 )
 from services.job_queue import enqueue_transcription
 from services.normalize_text import normalize_text
@@ -104,6 +106,7 @@ IA_CHAT_DAY_ALIASES = {
     "sun": 6,
     "sunday": 6,
 }
+INSTAGRAM_PROFILE_REFRESH = timedelta(hours=24)
 
 
 def _table_exists(cursor, table_name: str) -> bool:
@@ -499,6 +502,117 @@ def _ensure_tenant_context_for_page(page_id: str | None, channel: str) -> None:
     tenant = tenants.find_tenant_by_page_id(page_id)
     if tenant:
         tenants.set_current_tenant(tenant)
+
+
+def _get_instagram_profile_record(sender_id: str) -> dict | None:
+    conn = get_connection()
+    c = conn.cursor()
+    try:
+        c.execute(
+            """
+            SELECT username, profile_pic, updated_at
+              FROM chat_profiles
+             WHERE numero = %s AND platform = %s
+            """,
+            (sender_id, "instagram"),
+        )
+        row = c.fetchone()
+    finally:
+        conn.close()
+    if not row:
+        return None
+    return {"username": row[0], "profile_pic": row[1], "updated_at": row[2]}
+
+
+def _upsert_instagram_profile(sender_id: str, username: str | None, profile_pic: str | None) -> None:
+    conn = get_connection()
+    c = conn.cursor()
+    try:
+        c.execute(
+            """
+            INSERT INTO chat_profiles (numero, platform, username, profile_pic)
+            VALUES (%s, %s, %s, %s)
+            ON DUPLICATE KEY UPDATE
+              username = VALUES(username),
+              profile_pic = VALUES(profile_pic),
+              updated_at = CURRENT_TIMESTAMP
+            """,
+            (sender_id, "instagram", username, profile_pic),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _maybe_set_instagram_alias(sender_id: str, username: str | None) -> None:
+    if not username:
+        return
+    conn = get_connection()
+    c = conn.cursor()
+    try:
+        c.execute("SELECT nombre FROM alias WHERE numero = %s", (sender_id,))
+        row = c.fetchone()
+        if row and (row[0] or "").strip():
+            return
+        c.execute(
+            """
+            INSERT INTO alias (numero, nombre)
+            VALUES (%s, %s)
+            ON DUPLICATE KEY UPDATE nombre = VALUES(nombre)
+            """,
+            (sender_id, username),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _fetch_instagram_user_profile(sender_id: str, access_token: str) -> dict | None:
+    url = f"{INSTAGRAM_GRAPH_BASE_URL}/{sender_id}"
+    params = {"fields": "username,profile_pic", "access_token": access_token}
+    try:
+        response = requests.get(url, params=params, timeout=15)
+    except requests.RequestException as exc:
+        logger.warning("No se pudo consultar el perfil de Instagram: %s", exc)
+        return None
+    if not response.ok:
+        logger.warning(
+            "Instagram devolvió un error al consultar perfil: %s",
+            response.text,
+        )
+        return None
+    try:
+        payload = response.json()
+    except ValueError:
+        logger.warning("Respuesta inválida al consultar perfil de Instagram.")
+        return None
+    if not isinstance(payload, dict):
+        return None
+    return {
+        "username": payload.get("username"),
+        "profile_pic": payload.get("profile_pic"),
+    }
+
+
+def _ensure_instagram_profile(sender_id: str) -> None:
+    if not sender_id:
+        return
+    tenant_env = tenants.get_current_tenant_env() or {}
+    access_token = (tenant_env.get("INSTAGRAM_TOKEN") or "").strip()
+    if not access_token:
+        return
+    cached = _get_instagram_profile_record(sender_id)
+    if cached and cached.get("updated_at"):
+        updated_at = cached["updated_at"]
+        if isinstance(updated_at, datetime):
+            age = datetime.utcnow() - updated_at
+            if age < INSTAGRAM_PROFILE_REFRESH:
+                return
+    profile = _fetch_instagram_user_profile(sender_id, access_token)
+    if not profile:
+        return
+    _upsert_instagram_profile(sender_id, profile.get("username"), profile.get("profile_pic"))
+    _maybe_set_instagram_alias(sender_id, profile.get("username"))
 
 
 def _media_root():
@@ -1702,6 +1816,9 @@ def _handle_messenger_payload(data, summary, channel="messenger"):
                 continue
             recipient_id = (event.get("recipient") or {}).get("id")
             _ensure_tenant_context_for_page(recipient_id, channel)
+            if channel == "instagram" and (message or event.get("postback")):
+                if not message.get("is_echo"):
+                    _ensure_instagram_profile(sender_id)
 
             delivery = event.get("delivery") or {}
             if delivery:

@@ -2023,12 +2023,46 @@
           sourceIcon.alt = sourceInfo.label;
           sourceIcon.title = sourceInfo.label;
 
-          const textLabel = document.createElement('span');
-          textLabel.className = 'chat-list-text';
-          textLabel.textContent = c.alias ? `${c.alias} (${c.numero})` : c.numero;
+          const avatarUrl = c.instagram_profile_pic || '';
+          if (avatarUrl) {
+            const avatar = document.createElement('img');
+            avatar.className = 'chat-profile-avatar';
+            avatar.src = avatarUrl;
+            avatar.alt = c.instagram_username ? `Foto de ${c.instagram_username}` : 'Foto de perfil';
+            avatar.loading = 'lazy';
+            avatar.onerror = () => avatar.remove();
+            labelWrapper.appendChild(avatar);
+          }
 
           labelWrapper.appendChild(sourceIcon);
-          labelWrapper.appendChild(textLabel);
+
+          const textContainer = document.createElement('span');
+          textContainer.className = 'chat-list-texts';
+
+          const textLabel = document.createElement('span');
+          textLabel.className = 'chat-list-text';
+          const primaryName = c.instagram_username || c.alias || c.numero;
+          textLabel.textContent = primaryName;
+
+          const secondaryText = (() => {
+            if (c.alias && c.instagram_username && c.alias !== c.instagram_username) {
+              return c.alias;
+            }
+            if (primaryName !== c.numero) {
+              return c.numero || '';
+            }
+            return '';
+          })();
+
+          textContainer.appendChild(textLabel);
+          if (secondaryText) {
+            const secondaryLabel = document.createElement('span');
+            secondaryLabel.className = 'chat-list-secondary';
+            secondaryLabel.textContent = secondaryText;
+            textContainer.appendChild(secondaryLabel);
+          }
+
+          labelWrapper.appendChild(textContainer);
           li.appendChild(labelWrapper);
           if (c.estado === 'error_flujo') {
             const alertIcon = document.createElement('span');

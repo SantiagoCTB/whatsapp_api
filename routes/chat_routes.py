@@ -1397,6 +1397,18 @@ def get_chat_list():
 
         c.execute(
             """
+            SELECT username, profile_pic
+              FROM chat_profiles
+             WHERE numero = %s AND platform = %s
+            """,
+            (numero, "instagram"),
+        )
+        fila = c.fetchone()
+        instagram_username = fila[0] if fila else None
+        instagram_profile_pic = fila[1] if fila else None
+
+        c.execute(
+            """
             SELECT ca.user_id, COALESCE(NULLIF(u.nombre, ''), u.username)
               FROM chat_assignments ca
               JOIN usuarios u ON ca.user_id = u.id
@@ -1582,6 +1594,8 @@ def get_chat_list():
         chats.append({
             "numero": numero,
             "alias":  alias,
+            "instagram_username": instagram_username,
+            "instagram_profile_pic": instagram_profile_pic,
             "assigned_user_id": asignado_id,
             "assigned_user_name": asignado_nombre,
             "asesor": requiere_asesor,
