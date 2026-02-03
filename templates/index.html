@@ -2068,6 +2068,9 @@
             if (isMessengerChat && c.alias && c.messenger_name && c.alias !== c.messenger_name) {
               return c.alias;
             }
+            if (c.alias && c.messenger_name && c.alias !== c.messenger_name) {
+              return c.alias;
+            }
             if (primaryName !== c.numero) {
               return c.numero || '';
             }
