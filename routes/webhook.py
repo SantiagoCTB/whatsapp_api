@@ -818,6 +818,24 @@ def _rule_has_ia_trigger(value: str | None) -> bool:
     return False
 
 
+def _rule_has_non_ia_inputs(value: str | None) -> bool:
+    if not value:
+        return False
+    for part in _split_input_variants(str(value)):
+        if not _is_ia_trigger(part):
+            return True
+    return False
+
+
+def _rule_input_matches_ia_trigger(text_norm: str | None, rule_input: str | None) -> bool:
+    if not text_norm or not rule_input:
+        return False
+    for part in _split_input_variants(str(rule_input)):
+        if _is_ia_trigger(part) and normalize_text(part) == text_norm:
+            return True
+    return False
+
+
 def _parse_time_range(value: str) -> tuple[int, int] | None:
     if not value:
         return None
@@ -1009,10 +1027,16 @@ def _is_ia_step(step: str | None) -> bool:
     return _normalize_step_name(step) in {'ia', 'ia_chat'}
 
 
-def _should_use_ia_for_rule(input_text: str | None, step: str | None) -> bool:
+def _should_use_ia_for_rule(
+    input_text: str | None,
+    step: str | None,
+    matched_text_norm: str | None = None,
+) -> bool:
     input_text_clean = (input_text or '').strip()
     if _rule_has_ia_trigger(input_text):
-        return True
+        if matched_text_norm is None:
+            return True
+        return _rule_input_matches_ia_trigger(matched_text_norm, input_text)
     return _is_ia_step(step) and input_text_clean == "*"
 
 
@@ -2160,13 +2184,21 @@ def handle_option_reply(numero, option_id, platform: str | None = None):
         if not matches:
             return None
         for row in matches:
-            is_ia = _should_use_ia_for_rule((row[8] or '').strip(), row[0])
+            is_ia = _should_use_ia_for_rule(
+                (row[8] or '').strip(),
+                row[0],
+                matched_text_norm=normalize_text(option_id),
+            )
             if is_ia and not _is_ia_rule_active(row[9], row[10]):
                 continue
             if _normalize_option_value((row[0] or '').strip()) == option_norm:
                 return row
         for row in matches:
-            is_ia = _should_use_ia_for_rule((row[8] or '').strip(), row[0])
+            is_ia = _should_use_ia_for_rule(
+                (row[8] or '').strip(),
+                row[0],
+                matched_text_norm=normalize_text(option_id),
+            )
             if is_ia and not _is_ia_rule_active(row[9], row[10]):
                 continue
             return row
@@ -2188,6 +2220,7 @@ def handle_option_reply(numero, option_id, platform: str | None = None):
             step=effective_step,
             selected_option_id=option_id,
             platform=platform,
+            matched_text_norm=normalize_text(option_id),
         )
         return True
 
@@ -2299,6 +2332,7 @@ def dispatch_rule(
     visited=None,
     selected_option_id=None,
     platform: str | None = None,
+    matched_text_norm: str | None = None,
 ):
     """Envía la respuesta definida en una regla y asigna roles si aplica."""
     if visited is None:
@@ -2320,7 +2354,11 @@ def dispatch_rule(
     if current_step_norm:
         visited.add(current_step_norm)
 
-    use_ia = _should_use_ia_for_rule(input_text, current_step)
+    use_ia = _should_use_ia_for_rule(
+        input_text,
+        current_step,
+        matched_text_norm=matched_text_norm,
+    )
     if use_ia and not _is_ia_rule_active(active_hours, active_days):
         use_ia = False
     if use_ia and current_step_norm == "ia_chat":
@@ -2377,6 +2415,15 @@ def dispatch_rule(
     _schedule_followup_messages(numero, current_step)
     _apply_role_keyword(numero, rol_kw)
     next_step = _resolve_next_step(next_step_raw, selected_option_id, opts)
+    should_defer_ia = (
+        _rule_has_ia_trigger(input_text)
+        and _rule_has_non_ia_inputs(input_text)
+        and not _rule_input_matches_ia_trigger(matched_text_norm, input_text)
+        and _is_ia_rule_active(active_hours, active_days)
+    )
+    if should_defer_ia and not next_step:
+        set_user_step(numero, "ia_chat")
+        return
     advance_steps(numero, next_step, visited=visited, platform=platform)
 
 
@@ -2534,12 +2581,19 @@ def process_step_chain(
         if not patt or patt == '*' or not _input_text_matches(text_norm, patt):
             continue
         active_hours, active_days = _rule_schedule_fields(r)
-        if _should_use_ia_for_rule(patt, step) and not _is_ia_rule_active(
+        if _should_use_ia_for_rule(patt, step, matched_text_norm=text_norm) and not _is_ia_rule_active(
             active_hours,
             active_days,
         ):
             continue
-        dispatch_rule(numero, r, step, visited=visited, platform=platform)
+        dispatch_rule(
+            numero,
+            r,
+            step,
+            visited=visited,
+            platform=platform,
+            matched_text_norm=text_norm,
+        )
         handled = True
         return handled
 
@@ -2576,13 +2630,21 @@ def process_step_chain(
             active_hours = row[10] if len(row) > 10 else None
             active_days = row[11] if len(row) > 11 else None
             if _is_platform_agnostic_rule(step=rule_step, input_text=rule_input):
-                is_ia = _should_use_ia_for_rule(rule_input, rule_step)
+                is_ia = _should_use_ia_for_rule(
+                    rule_input,
+                    rule_step,
+                    matched_text_norm=text_norm,
+                )
                 if is_ia and not _is_ia_rule_active(active_hours, active_days):
                     continue
                 matches.append(row)
                 continue
             if not rule_platform or rule_platform == platform:
-                is_ia = _should_use_ia_for_rule(rule_input, rule_step)
+                is_ia = _should_use_ia_for_rule(
+                    rule_input,
+                    rule_step,
+                    matched_text_norm=text_norm,
+                )
                 if is_ia and not _is_ia_rule_active(active_hours, active_days):
                     continue
                 matches.append(row)
@@ -2596,7 +2658,14 @@ def process_step_chain(
         rule = global_rule[2:]
         effective_step = rule_step or step
         set_user_step(numero, effective_step)
-        dispatch_rule(numero, rule, step=effective_step, visited=visited, platform=platform)
+        dispatch_rule(
+            numero,
+            rule,
+            step=effective_step,
+            visited=visited,
+            platform=platform,
+            matched_text_norm=text_norm,
+        )
         handled = True
         return handled
 
@@ -2605,7 +2674,7 @@ def process_step_chain(
         selected_rule = None
         for r in comodines:
             active_hours, active_days = _rule_schedule_fields(r)
-            if _should_use_ia_for_rule(r[7], step) and not _is_ia_rule_active(
+            if _should_use_ia_for_rule(r[7], step, matched_text_norm=text_norm) and not _is_ia_rule_active(
                 active_hours,
                 active_days,
             ):
@@ -2614,7 +2683,14 @@ def process_step_chain(
             break
         if selected_rule is None:
             return handled
-        dispatch_rule(numero, selected_rule, step, visited=visited, platform=platform)
+        dispatch_rule(
+            numero,
+            selected_rule,
+            step,
+            visited=visited,
+            platform=platform,
+            matched_text_norm=text_norm,
+        )
         # No procesar recursivamente otros comodines; esperar nueva entrada
         handled = True
         return handled

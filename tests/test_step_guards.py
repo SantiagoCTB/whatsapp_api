@@ -212,6 +212,48 @@ def test_dispatch_rule_skips_ai_for_non_ia_rules(monkeypatch, patch_dependencies
     assert patch_dependencies.sent_messages[-1][0] == '5215554321'
 
 
+def test_dispatch_rule_defers_ia_for_mixed_inputs(monkeypatch, patch_dependencies):
+    responses = {'menu': []}
+    monkeypatch.setattr(
+        webhook_module,
+        'get_connection',
+        lambda: DummyConnection(responses),
+    )
+    monkeypatch.setattr(webhook_module, 'advance_steps', lambda *_, **__: None)
+    monkeypatch.setattr(webhook_module, '_is_ia_rule_active', lambda *_, **__: True)
+
+    ai_calls = []
+    monkeypatch.setattr(
+        webhook_module,
+        '_reply_with_ai',
+        lambda *args, **kwargs: ai_calls.append((args, kwargs)),
+    )
+
+    regla = (
+        9,
+        'Hola como estas',
+        None,
+        'texto',
+        None,
+        None,
+        None,
+        'medellin, ia_chat',
+        None,
+        None,
+    )
+
+    webhook_module.dispatch_rule(
+        '5215551234',
+        regla,
+        step='menu',
+        matched_text_norm=webhook_module.normalize_text('medellin'),
+    )
+
+    assert ai_calls == []
+    assert patch_dependencies.sent_messages[-1][1] == 'Hola como estas'
+    assert patch_dependencies.steps_set[-1][1] == 'ia_chat'
+
+
 def test_handle_text_message_delays_ia_chat(monkeypatch):
     now = datetime.now()
     chat_state = {"row": ("ia_chat", now, "ia_chat_pending")}
