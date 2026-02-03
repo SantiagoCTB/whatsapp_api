@@ -362,6 +362,14 @@
       background: var(--bg-sidebar);
       border-bottom: 1px solid var(--border-color);
     }
+    .chat-header__avatar {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      object-fit: cover;
+      flex: 0 0 auto;
+      box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.08);
+    }
     .chat-header__info {
       flex: 1;
       display: flex;

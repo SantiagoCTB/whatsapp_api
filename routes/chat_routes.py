@@ -8,7 +8,7 @@ import shutil
 import subprocess
 import threading
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 import requests
@@ -29,6 +29,7 @@ from services.whatsapp_api import (
     is_typing_feedback_active,
     subir_media,
     _resolve_message_channel,
+    INSTAGRAM_GRAPH_BASE_URL,
 )
 from routes.webhook import (
     _schedule_followup_messages,
@@ -51,6 +52,34 @@ chat_bp = Blueprint('chat', __name__)
 logger = logging.getLogger(__name__)
 
 BOGOTA_TZ = ZoneInfo('America/Bogota')
+INSTAGRAM_PROFILE_REFRESH = timedelta(hours=24)
+
+
+def _fetch_instagram_profile(numero: str, access_token: str) -> dict | None:
+    url = f"{INSTAGRAM_GRAPH_BASE_URL}/{numero}"
+    params = {"fields": "username,profile_pic", "access_token": access_token}
+    try:
+        response = requests.get(url, params=params, timeout=15)
+    except requests.RequestException as exc:
+        logger.warning("No se pudo consultar el perfil de Instagram: %s", exc)
+        return None
+    if not response.ok:
+        logger.warning(
+            "Instagram devolvió un error al consultar perfil: %s",
+            response.text,
+        )
+        return None
+    try:
+        payload = response.json()
+    except ValueError:
+        logger.warning("Respuesta inválida al consultar perfil de Instagram.")
+        return None
+    if not isinstance(payload, dict):
+        return None
+    return {
+        "username": payload.get("username"),
+        "profile_pic": payload.get("profile_pic"),
+    }
 
 
 def _preferred_url_scheme() -> str:
@@ -1388,6 +1417,10 @@ def get_chat_list():
     timeout_seconds = _session_timeout_seconds()
     inactive_assignment_seconds = _inactive_assignment_seconds()
     now = datetime.utcnow()
+    tenant_env = tenants.get_current_tenant_env() or {}
+    instagram_token = (tenant_env.get("INSTAGRAM_TOKEN") or "").strip()
+    refreshed_profiles: set[str] = set()
+    profiles_updated = False
     chats = []
     for numero in numeros:
         # Alias
@@ -1464,6 +1497,60 @@ def get_chat_list():
                 primer_link = "messenger"
             elif "instagram" in last_tipo_lower:
                 primer_link = "instagram"
+
+        c.execute(
+            """
+            SELECT username, profile_pic, updated_at
+              FROM chat_profiles
+             WHERE numero = %s AND platform = %s
+            """,
+            (numero, "instagram"),
+        )
+        fila = c.fetchone()
+        instagram_username = fila[0] if fila else None
+        instagram_profile_pic = fila[1] if fila else None
+        profile_updated_at = fila[2] if fila else None
+        if (
+            primer_link == "instagram"
+            and instagram_token
+            and numero
+            and numero not in refreshed_profiles
+        ):
+            refresh_needed = False
+            if not instagram_username or not instagram_profile_pic:
+                refresh_needed = True
+            elif profile_updated_at and isinstance(profile_updated_at, datetime):
+                age = datetime.utcnow() - profile_updated_at
+                if age > INSTAGRAM_PROFILE_REFRESH:
+                    refresh_needed = True
+            if refresh_needed:
+                refreshed_profiles.add(numero)
+                profile = _fetch_instagram_profile(numero, instagram_token)
+                if profile:
+                    instagram_username = profile.get("username") or instagram_username
+                    instagram_profile_pic = profile.get("profile_pic") or instagram_profile_pic
+                    c.execute(
+                        """
+                        INSERT INTO chat_profiles (numero, platform, username, profile_pic)
+                        VALUES (%s, %s, %s, %s)
+                        ON DUPLICATE KEY UPDATE
+                          username = VALUES(username),
+                          profile_pic = VALUES(profile_pic),
+                          updated_at = CURRENT_TIMESTAMP
+                        """,
+                        (numero, "instagram", instagram_username, instagram_profile_pic),
+                    )
+                    profiles_updated = True
+                    if (not alias or not str(alias).strip()) and instagram_username:
+                        c.execute(
+                            """
+                            INSERT INTO alias (numero, nombre)
+                            VALUES (%s, %s)
+                            ON DUPLICATE KEY UPDATE nombre = VALUES(nombre)
+                            """,
+                            (numero, instagram_username),
+                        )
+                        alias = instagram_username
 
         # Roles asociados al número y nombre/keyword
         c.execute(
@@ -1611,6 +1698,8 @@ def get_chat_list():
             "first_link_url": primer_link,
         })
 
+    if profiles_updated:
+        conn.commit()
     conn.close()
     chats.sort(key=lambda chat: chat["last_timestamp"] or "", reverse=True)
     return jsonify(chats)
