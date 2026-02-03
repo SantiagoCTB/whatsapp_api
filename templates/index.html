@@ -2031,12 +2031,13 @@
           sourceIcon.alt = sourceInfo.label;
           sourceIcon.title = sourceInfo.label;
 
-          const avatarUrl = c.instagram_profile_pic || '';
+          const avatarUrl = c.instagram_profile_pic || c.messenger_profile_pic || '';
           if (avatarUrl) {
             const avatar = document.createElement('img');
             avatar.className = 'chat-profile-avatar';
             avatar.src = avatarUrl;
-            avatar.alt = c.instagram_username ? `Foto de ${c.instagram_username}` : 'Foto de perfil';
+            const avatarName = c.instagram_username || c.messenger_name;
+            avatar.alt = avatarName ? `Foto de ${avatarName}` : 'Foto de perfil';
             avatar.loading = 'lazy';
             avatar.onerror = () => avatar.remove();
             labelWrapper.appendChild(avatar);
@@ -2049,11 +2050,14 @@
 
           const textLabel = document.createElement('span');
           textLabel.className = 'chat-list-text';
-          const primaryName = c.instagram_username || c.alias || c.numero;
+          const primaryName = c.instagram_username || c.messenger_name || c.alias || c.numero;
           textLabel.textContent = primaryName;
 
           const secondaryText = (() => {
             if (c.alias && c.instagram_username && c.alias !== c.instagram_username) {
+              return c.alias;
+            }
+            if (c.alias && c.messenger_name && c.alias !== c.messenger_name) {
               return c.alias;
             }
             if (primaryName !== c.numero) {
@@ -2347,17 +2351,19 @@
           }
           return;
         }
-        const title = chatData.instagram_username || chatData.alias || chatData.numero || '';
+        const title = chatData.instagram_username || chatData.messenger_name || chatData.alias || chatData.numero || '';
         const estadoDef = chatStateDefinitionMap.get(chatData.estado);
         mobileChatTitle.textContent = title || 'Chat';
         const estadoLabel = chatData.estado_label || (estadoDef && estadoDef.label) || chatData.estado;
         mobileChatSubtitle.textContent = estadoLabel ? `Estado: ${estadoLabel}` : '';
         if (mobileChatAvatar) {
-          if (chatData.instagram_profile_pic) {
+          const avatarUrl = chatData.instagram_profile_pic || chatData.messenger_profile_pic;
+          if (avatarUrl) {
             mobileChatAvatar.hidden = false;
-            mobileChatAvatar.src = chatData.instagram_profile_pic;
-            mobileChatAvatar.alt = chatData.instagram_username
-              ? `Foto de ${chatData.instagram_username}`
+            mobileChatAvatar.src = avatarUrl;
+            const avatarName = chatData.instagram_username || chatData.messenger_name;
+            mobileChatAvatar.alt = avatarName
+              ? `Foto de ${avatarName}`
               : 'Foto de perfil';
           } else {
             mobileChatAvatar.hidden = true;
