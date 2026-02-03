@@ -53,6 +53,7 @@ logger = logging.getLogger(__name__)
 
 BOGOTA_TZ = ZoneInfo('America/Bogota')
 INSTAGRAM_PROFILE_REFRESH = timedelta(hours=24)
+MESSENGER_PROFILE_REFRESH = timedelta(hours=24)
 
 
 def _fetch_instagram_profile(numero: str, access_token: str) -> dict | None:
@@ -78,6 +79,33 @@ def _fetch_instagram_profile(numero: str, access_token: str) -> dict | None:
         return None
     return {
         "username": payload.get("username"),
+        "profile_pic": payload.get("profile_pic"),
+    }
+
+
+def _fetch_messenger_profile(numero: str, access_token: str) -> dict | None:
+    url = f"https://graph.facebook.com/{Config.FACEBOOK_GRAPH_API_VERSION}/{numero}"
+    params = {"fields": "name,profile_pic", "access_token": access_token}
+    try:
+        response = requests.get(url, params=params, timeout=15)
+    except requests.RequestException as exc:
+        logger.warning("No se pudo consultar el perfil de Messenger: %s", exc)
+        return None
+    if not response.ok:
+        logger.warning(
+            "Messenger devolvió un error al consultar perfil: %s",
+            response.text,
+        )
+        return None
+    try:
+        payload = response.json()
+    except ValueError:
+        logger.warning("Respuesta inválida al consultar perfil de Messenger.")
+        return None
+    if not isinstance(payload, dict):
+        return None
+    return {
+        "name": payload.get("name"),
         "profile_pic": payload.get("profile_pic"),
     }
 
@@ -1419,7 +1447,12 @@ def get_chat_list():
     now = datetime.utcnow()
     tenant_env = tenants.get_current_tenant_env() or {}
     instagram_token = (tenant_env.get("INSTAGRAM_TOKEN") or "").strip()
-    refreshed_profiles: set[str] = set()
+    messenger_token = (
+        (tenant_env.get("MESSENGER_PAGE_ACCESS_TOKEN") or "").strip()
+        or (tenant_env.get("PAGE_ACCESS_TOKEN") or "").strip()
+        or (tenant_env.get("MESSENGER_TOKEN") or "").strip()
+    )
+    refreshed_profiles: set[tuple[str, str]] = set()
     profiles_updated = False
     chats = []
     for numero in numeros:
@@ -1439,6 +1472,18 @@ def get_chat_list():
         fila = c.fetchone()
         instagram_username = fila[0] if fila else None
         instagram_profile_pic = fila[1] if fila else None
+
+        c.execute(
+            """
+            SELECT username, profile_pic
+              FROM chat_profiles
+             WHERE numero = %s AND platform = %s
+            """,
+            (numero, "messenger"),
+        )
+        fila = c.fetchone()
+        messenger_name = fila[0] if fila else None
+        messenger_profile_pic = fila[1] if fila else None
 
         c.execute(
             """
@@ -1514,7 +1559,7 @@ def get_chat_list():
             primer_link == "instagram"
             and instagram_token
             and numero
-            and numero not in refreshed_profiles
+            and (numero, "instagram") not in refreshed_profiles
         ):
             refresh_needed = False
             if not instagram_username or not instagram_profile_pic:
@@ -1524,7 +1569,7 @@ def get_chat_list():
                 if age > INSTAGRAM_PROFILE_REFRESH:
                     refresh_needed = True
             if refresh_needed:
-                refreshed_profiles.add(numero)
+                refreshed_profiles.add((numero, "instagram"))
                 profile = _fetch_instagram_profile(numero, instagram_token)
                 if profile:
                     instagram_username = profile.get("username") or instagram_username
@@ -1551,6 +1596,60 @@ def get_chat_list():
                             (numero, instagram_username),
                         )
                         alias = instagram_username
+
+        c.execute(
+            """
+            SELECT username, profile_pic, updated_at
+              FROM chat_profiles
+             WHERE numero = %s AND platform = %s
+            """,
+            (numero, "messenger"),
+        )
+        fila = c.fetchone()
+        messenger_name = fila[0] if fila else messenger_name
+        messenger_profile_pic = fila[1] if fila else messenger_profile_pic
+        messenger_profile_updated_at = fila[2] if fila else None
+        if (
+            primer_link == "messenger"
+            and messenger_token
+            and numero
+            and (numero, "messenger") not in refreshed_profiles
+        ):
+            refresh_needed = False
+            if not messenger_name or not messenger_profile_pic:
+                refresh_needed = True
+            elif messenger_profile_updated_at and isinstance(messenger_profile_updated_at, datetime):
+                age = datetime.utcnow() - messenger_profile_updated_at
+                if age > MESSENGER_PROFILE_REFRESH:
+                    refresh_needed = True
+            if refresh_needed:
+                refreshed_profiles.add((numero, "messenger"))
+                profile = _fetch_messenger_profile(numero, messenger_token)
+                if profile:
+                    messenger_name = profile.get("name") or messenger_name
+                    messenger_profile_pic = profile.get("profile_pic") or messenger_profile_pic
+                    c.execute(
+                        """
+                        INSERT INTO chat_profiles (numero, platform, username, profile_pic)
+                        VALUES (%s, %s, %s, %s)
+                        ON DUPLICATE KEY UPDATE
+                          username = VALUES(username),
+                          profile_pic = VALUES(profile_pic),
+                          updated_at = CURRENT_TIMESTAMP
+                        """,
+                        (numero, "messenger", messenger_name, messenger_profile_pic),
+                    )
+                    profiles_updated = True
+                    if (not alias or not str(alias).strip()) and messenger_name:
+                        c.execute(
+                            """
+                            INSERT INTO alias (numero, nombre)
+                            VALUES (%s, %s)
+                            ON DUPLICATE KEY UPDATE nombre = VALUES(nombre)
+                            """,
+                            (numero, messenger_name),
+                        )
+                        alias = messenger_name
 
         # Roles asociados al número y nombre/keyword
         c.execute(
@@ -1683,6 +1782,8 @@ def get_chat_list():
             "alias":  alias,
             "instagram_username": instagram_username,
             "instagram_profile_pic": instagram_profile_pic,
+            "messenger_name": messenger_name,
+            "messenger_profile_pic": messenger_profile_pic,
             "assigned_user_id": asignado_id,
             "assigned_user_name": asignado_nombre,
             "asesor": requiere_asesor,
