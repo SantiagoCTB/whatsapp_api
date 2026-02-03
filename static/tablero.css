@@ -132,16 +132,13 @@
 
 .filters-panel {
   display: none;
-  max-height: 0;
-  overflow: hidden;
-  transition: max-height 0.3s ease;
+  overflow: visible;
   background: #fff;
   border-radius: 8px;
 }
 
 .filters-panel.open {
   display: block;
-  max-height: 500px;
   padding: 1rem;
   margin-bottom: 1rem;
   border: 1px solid var(--border-color);
