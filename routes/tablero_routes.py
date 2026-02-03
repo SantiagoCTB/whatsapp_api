@@ -863,6 +863,72 @@ def datos_chats_totales():
     return jsonify({"total_chats": total})
 
 
+@tablero_bp.route('/datos_chats_por_integracion')
+def datos_chats_por_integracion():
+    """Devuelve la cantidad de chats distintos agrupados por integración."""
+    if "user" not in session:
+        return redirect(url_for('auth.login'))
+
+    start = request.args.get('start')
+    end = request.args.get('end')
+    start, end = _normalize_date_range(start, end)
+    rol = request.args.get('rol', type=int)
+    numero = request.args.get('numero')
+    texto = request.args.get('texto')
+    tipos = request.args.get('tipos')
+
+    conn = get_connection()
+    cur = conn.cursor()
+
+    try:
+        joins, filter_conditions, filter_params = _apply_filters(cur, rol, numero, texto)
+        tipo_conditions, tipo_params = _apply_tipo_filter(tipos)
+    except ValueError as e:
+        conn.close()
+        if str(e) == 'rol':
+            msg = 'Rol'
+        elif str(e) == 'numero':
+            msg = 'Número'
+        else:
+            msg = 'Tipos'
+        return jsonify({"error": f"{msg} no encontrado"}), 400
+
+    query = (
+        """
+        SELECT CASE
+                 WHEN LOWER(m.tipo) LIKE '%messenger%' THEN 'Messenger'
+                 WHEN LOWER(m.tipo) LIKE '%instagram%' THEN 'Instagram'
+                 WHEN LOWER(m.tipo) LIKE '%google%' THEN 'Google'
+                 ELSE 'WhatsApp'
+               END AS integracion,
+               COUNT(DISTINCT m.numero) AS total
+          FROM mensajes m
+        """
+    )
+    if joins:
+        query += " " + joins
+
+    conditions = []
+    params = []
+    if start and end:
+        conditions.append("m.timestamp BETWEEN %s AND %s")
+        params.extend([start, end])
+    conditions.extend(filter_conditions)
+    conditions.extend(tipo_conditions)
+    params.extend(filter_params)
+    params.extend(tipo_params)
+    if conditions:
+        query += " WHERE " + " AND ".join(conditions)
+    query += " GROUP BY integracion ORDER BY total DESC"
+
+    cur.execute(query, params)
+    rows = cur.fetchall()
+    conn.close()
+
+    data = [{"integracion": integracion, "chats": total} for integracion, total in rows]
+    return jsonify(data)
+
+
 @tablero_bp.route('/datos_roles_total')
 def datos_roles_total():
     """Devuelve la cantidad total de roles."""

@@ -11,7 +11,8 @@ document.addEventListener('DOMContentLoaded', () => {
       chartTipos,
       chartTiposDiarios,
       chartSinAsesor,
-      chartNumerosSinAsesor;
+      chartNumerosSinAsesor,
+      chartIntegraciones;
   const commonOptions = {
     animation: { duration: 1000 },
     interaction: { mode: 'nearest', intersect: false },
@@ -705,6 +706,60 @@ document.addEventListener('DOMContentLoaded', () => {
         console.error(err);
         if (chartTipos) chartTipos.destroy();
         showCardMessage('graficoTipos', 'Error al cargar datos');
+      });
+
+    fetch(`/datos_chats_por_integracion${query}`)
+      .then(response => response.json())
+      .then(data => {
+        if (!Array.isArray(data) || data.length === 0) {
+          if (chartIntegraciones) chartIntegraciones.destroy();
+          showCardMessage('graficoIntegraciones', 'No hay datos disponibles');
+          return;
+        }
+        const order = ['WhatsApp', 'Messenger', 'Instagram', 'Google'];
+        const colorMap = {
+          WhatsApp: '#25D366',
+          Messenger: '#0084FF',
+          Instagram: '#E1306C',
+          Google: '#34A853'
+        };
+        const labels = [];
+        const values = [];
+        const colors = [];
+        order.forEach(key => {
+          const entry = data.find(item => item.integracion === key);
+          if (entry) {
+            labels.push(key);
+            values.push(entry.chats);
+            colors.push(colorMap[key] || '#4BC0C0');
+          }
+        });
+        if (!labels.length) {
+          if (chartIntegraciones) chartIntegraciones.destroy();
+          showCardMessage('graficoIntegraciones', 'No hay datos disponibles');
+          return;
+        }
+        if (chartIntegraciones) chartIntegraciones.destroy();
+        showCardMessage('graficoIntegraciones');
+        const ctx = document.getElementById('graficoIntegraciones').getContext('2d');
+        chartIntegraciones = new Chart(ctx, {
+          type: 'pie',
+          data: {
+            labels,
+            datasets: [{
+              data: values,
+              backgroundColor: colors
+            }]
+          },
+          options: {
+            ...commonOptions
+          }
+        });
+      })
+      .catch(err => {
+        console.error(err);
+        if (chartIntegraciones) chartIntegraciones.destroy();
+        showCardMessage('graficoIntegraciones', 'Error al cargar datos');
       });
 
     fetch(`/datos_sin_asesor${query}`)
