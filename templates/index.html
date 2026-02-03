@@ -633,6 +633,12 @@
           openChatContextMenu(coords, chatData);
         });
       }
+      if (mobileChatAvatar) {
+        mobileChatAvatar.addEventListener('click', () => {
+          if (mobileChatAvatar.hidden || !mobileChatAvatar.src) return;
+          openImageModal(mobileChatAvatar.src, mobileChatAvatar.alt || 'Foto de perfil');
+        });
+      }
 
       const COLLAPSED_ICON = '▶';
       const EXPANDED_ICON = '▼';
