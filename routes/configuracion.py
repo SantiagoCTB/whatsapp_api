@@ -2028,6 +2028,89 @@ def instagram_reset_signup():
     return {"ok": True, "message": "Datos de Instagram limpiados."}
 
 
+@config_bp.route('/configuracion/messenger/reset', methods=['POST'])
+def messenger_reset_signup():
+    if not _require_admin():
+        return {"ok": False, "error": "No autorizado"}, 403
+
+    tenant = _resolve_signup_tenant()
+    if not tenant:
+        return {"ok": False, "error": "No se encontró la empresa actual."}, 400
+
+    tenant_env = tenants.get_tenant_env(tenant)
+    env_updates = {key: tenant_env.get(key) for key in tenants.TENANT_ENV_KEYS}
+    env_updates["MESSENGER_TOKEN"] = None
+    env_updates["MESSENGER_PAGE_ID"] = None
+    env_updates["MESSENGER_PAGE_ACCESS_TOKEN"] = None
+    env_updates["PAGE_ID"] = None
+    env_updates["PAGE_ACCESS_TOKEN"] = None
+    if (env_updates.get("PLATFORM") or "").strip().lower() == "messenger":
+        env_updates["PLATFORM"] = None
+    tenants.update_tenant_env(tenant.tenant_key, env_updates)
+
+    metadata_updates = {}
+    raw_metadata = tenant.metadata if isinstance(tenant.metadata, dict) else {}
+    if "messenger_embedded_signup" in raw_metadata:
+        metadata_updates["messenger_embedded_signup"] = None
+
+    page_selection = raw_metadata.get("page_selection")
+    if isinstance(page_selection, dict):
+        updated_selection = dict(page_selection)
+        if "messenger" in updated_selection:
+            updated_selection.pop("messenger", None)
+        if (updated_selection.get("platform") or "").strip().lower() == "messenger":
+            updated_selection.pop("platform", None)
+            updated_selection.pop("page_id", None)
+            updated_selection.pop("page_name", None)
+        metadata_updates["page_selection"] = updated_selection or None
+    elif page_selection is not None:
+        metadata_updates["page_selection"] = None
+
+    if metadata_updates:
+        tenants.update_tenant_metadata(tenant.tenant_key, metadata_updates)
+
+    logger.info(
+        "Datos anteriores de Messenger limpiados desde integraciones",
+        extra={"tenant_key": tenant.tenant_key},
+    )
+    return {"ok": True, "message": "Datos de Messenger limpiados."}
+
+
+@config_bp.route('/configuracion/whatsapp/reset', methods=['POST'])
+def whatsapp_reset_signup():
+    if not _require_admin():
+        return {"ok": False, "error": "No autorizado"}, 403
+
+    tenant = _resolve_signup_tenant()
+    if not tenant:
+        return {"ok": False, "error": "No se encontró la empresa actual."}, 400
+
+    tenant_env = tenants.get_tenant_env(tenant)
+    env_updates = {key: tenant_env.get(key) for key in tenants.TENANT_ENV_KEYS}
+    env_updates["META_TOKEN"] = None
+    env_updates["LONG_LIVED_TOKEN"] = None
+    env_updates["PHONE_NUMBER_ID"] = None
+    env_updates["WABA_ID"] = None
+    env_updates["BUSINESS_ID"] = None
+    tenants.update_tenant_env(tenant.tenant_key, env_updates)
+
+    metadata_updates = {}
+    raw_metadata = tenant.metadata if isinstance(tenant.metadata, dict) else {}
+    if "embedded_signup_payload" in raw_metadata:
+        metadata_updates["embedded_signup_payload"] = None
+    if "whatsapp_business" in raw_metadata:
+        metadata_updates["whatsapp_business"] = None
+
+    if metadata_updates:
+        tenants.update_tenant_metadata(tenant.tenant_key, metadata_updates)
+
+    logger.info(
+        "Datos anteriores de WhatsApp limpiados desde integraciones",
+        extra={"tenant_key": tenant.tenant_key},
+    )
+    return {"ok": True, "message": "Datos de WhatsApp limpiados."}
+
+
 @config_bp.route('/configuracion/signup', methods=['POST'])
 def save_signup():
     if not _require_admin():

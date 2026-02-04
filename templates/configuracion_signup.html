@@ -79,6 +79,10 @@
                 </div>
                 <div id="wa-phone-status" class="help" style="margin-top: 0.5rem"></div>
             </div>
+            <div class="form-row" style="margin-top: 1rem;">
+                <button id="wa-disconnect" class="btn-danger" type="button">Desconectar WhatsApp</button>
+                <div id="wa-disconnect-status" class="help" style="margin-top: 0.5rem"></div>
+            </div>
         </div>
     </div>
 
@@ -107,7 +111,16 @@
             >
                 Abrir signup de Instagram
             </button>
+            <button
+                id="instagram-disconnect"
+                class="btn-danger"
+                type="button"
+                style="margin-left: 0.5rem;"
+            >
+                Desconectar Instagram
+            </button>
             <div id="instagram-signup-status" class="help" style="margin-top: 0.5rem"></div>
+            <div id="instagram-disconnect-status" class="help" style="margin-top: 0.5rem"></div>
             {% else %}
             <button class="btn-primary" disabled>Configura SIGNUP_INSTAGRAM</button>
             <p class="alert alert-error" style="margin-top: 0.5rem">Falta configurar SIGNUP_INSTAGRAM en el entorno.</p>
@@ -170,8 +183,12 @@
                 <div id="messenger-page-status" class="help" style="margin-top: 0.5rem"></div>
             </div>
             <p class="muted" style="margin-top: 0.75rem;">
-                Página actual: <strong>{{ messenger_page_name or messenger_page_id or 'Sin seleccionar' }}</strong>
+                Página actual: <strong id="messenger-page-label">{{ messenger_page_name or messenger_page_id or 'Sin seleccionar' }}</strong>
             </p>
+            <div class="form-row" style="margin-top: 1rem;">
+                <button id="messenger-disconnect" class="btn-danger" type="button">Desconectar Messenger</button>
+                <div id="messenger-disconnect-status" class="help" style="margin-top: 0.5rem"></div>
+            </div>
         </div>
     </div>
 
@@ -232,6 +249,10 @@
             <p class="muted" style="margin-top: 0.75rem;">
                 Cuenta actual: <strong id="instagram-account-label">{{ instagram_account_name or 'Sin configurar' }}</strong>
             </p>
+            <div class="form-row" style="margin-top: 1rem;">
+                <button id="instagram-backfill-disconnect" class="btn-danger" type="button">Desconectar Instagram</button>
+                <div id="instagram-backfill-disconnect-status" class="help" style="margin-top: 0.5rem"></div>
+            </div>
         </div>
     </div>
 </div>
@@ -294,6 +315,8 @@
     const phoneStatus = document.getElementById('wa-phone-status');
     const phoneRefresh = document.getElementById('wa-phone-refresh');
     const phoneSave = document.getElementById('wa-phone-save');
+    const disconnectButton = document.getElementById('wa-disconnect');
+    const disconnectStatus = document.getElementById('wa-disconnect-status');
 
     const updateStatus = (message, isError) => {
       if (!statusBox) return;
@@ -305,6 +328,21 @@
       if (!phoneStatus) return;
       phoneStatus.textContent = message || '';
       phoneStatus.style.color = isError ? '#c0392b' : '#2c3e50';
+    };
+
+    const updateDisconnectStatus = (message, isError) => {
+      if (!disconnectStatus) return;
+      disconnectStatus.textContent = message || '';
+      disconnectStatus.style.color = isError ? '#c0392b' : '#2c3e50';
+    };
+
+    const resetWhatsAppUi = () => {
+      if (phoneSelect) {
+        phoneSelect.innerHTML = '<option value="">Selecciona un número disponible</option>';
+        phoneSelect.disabled = true;
+      }
+      updateStatus('');
+      updatePhoneStatus('Completa el signup para cargar los números disponibles.');
     };
 
     const markHealth = (check, ok, detail) => {
@@ -506,6 +544,33 @@
             }
           })
           .catch(() => updatePhoneStatus('Error al guardar el número.', true));
+      });
+    }
+
+    if (disconnectButton) {
+      disconnectButton.addEventListener('click', async () => {
+        if (!confirm('¿Seguro que deseas desconectar WhatsApp y borrar las credenciales guardadas?')) {
+          return;
+        }
+        disconnectButton.disabled = true;
+        updateDisconnectStatus('Desconectando WhatsApp...', false);
+        try {
+          const response = await fetch('{{ url_for("configuracion.whatsapp_reset_signup") }}', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({}),
+          });
+          const data = await response.json();
+          if (!response.ok || !data.ok) {
+            throw new Error(data.error || 'No se pudieron limpiar los datos anteriores.');
+          }
+          resetWhatsAppUi();
+          updateDisconnectStatus('WhatsApp desconectado correctamente.', false);
+        } catch (err) {
+          updateDisconnectStatus(err.message || 'No se pudieron limpiar los datos anteriores.', true);
+        } finally {
+          disconnectButton.disabled = false;
+        }
       });
     }
   })();
@@ -731,6 +796,64 @@
       statusBoxId: 'messenger-page-status'
     });
 
+    const setupMessengerDisconnect = () => {
+      const disconnectButton = document.getElementById('messenger-disconnect');
+      if (!disconnectButton) return;
+
+      const statusBox = document.getElementById('messenger-disconnect-status');
+      const userTokenInput = document.getElementById('messenger-user-token');
+      const pageTokenInput = document.getElementById('messenger-page-token');
+      const pageSelect = document.getElementById('messenger-page-select');
+      const pageStatus = document.getElementById('messenger-page-status');
+      const embeddedStatus = document.getElementById('messenger-embedded-status');
+      const pageLabel = document.getElementById('messenger-page-label');
+
+      const updateStatus = (message, isError) => {
+        if (!statusBox) return;
+        statusBox.textContent = message || '';
+        statusBox.style.color = isError ? '#c0392b' : '#2c3e50';
+      };
+
+      const resetMessengerUi = () => {
+        if (userTokenInput) userTokenInput.value = '';
+        if (pageTokenInput) pageTokenInput.value = '';
+        if (pageSelect) {
+          pageSelect.innerHTML = '<option value="">Consulta tus páginas para ver opciones</option>';
+          pageSelect.disabled = true;
+          pageSelect.dataset.currentPage = '';
+        }
+        if (pageLabel) pageLabel.textContent = 'Sin seleccionar';
+        if (pageStatus) pageStatus.textContent = '';
+        if (embeddedStatus) embeddedStatus.textContent = '';
+      };
+
+      disconnectButton.addEventListener('click', async () => {
+        if (!confirm('¿Seguro que deseas desconectar Messenger y borrar los datos guardados?')) {
+          return;
+        }
+        disconnectButton.disabled = true;
+        updateStatus('Desconectando Messenger...', false);
+        try {
+          const response = await fetch('{{ url_for("configuracion.messenger_reset_signup") }}', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({}),
+          });
+          const data = await response.json();
+          if (!response.ok || !data.ok) {
+            throw new Error(data.error || 'No se pudieron limpiar los datos anteriores.');
+          }
+          resetMessengerUi();
+          updateStatus('Messenger desconectado correctamente.', false);
+        } catch (err) {
+          updateStatus(err.message || 'No se pudieron limpiar los datos anteriores.', true);
+        } finally {
+          disconnectButton.disabled = false;
+        }
+      });
+    };
+
+    setupMessengerDisconnect();
     const setupInstagramToken = () => {
       const tokenInput = document.getElementById('instagram-user-token');
       const saveButton = document.getElementById('instagram-token-save');
@@ -825,12 +948,22 @@
     if (!trigger) return;
 
     const statusBox = document.getElementById('instagram-signup-status');
+    const disconnectButton = document.getElementById('instagram-disconnect');
+    const disconnectStatus = document.getElementById('instagram-disconnect-status');
+    const backfillDisconnectButton = document.getElementById('instagram-backfill-disconnect');
+    const backfillDisconnectStatus = document.getElementById('instagram-backfill-disconnect-status');
     const signupUrl = trigger.dataset.signupUrl;
 
     const updateStatus = (message, isError) => {
       if (!statusBox) return;
       statusBox.textContent = message || '';
       statusBox.style.color = isError ? '#c0392b' : '#2c3e50';
+    };
+
+    const updateDisconnectStatus = (target, message, isError) => {
+      if (!target) return;
+      target.textContent = message || '';
+      target.style.color = isError ? '#c0392b' : '#2c3e50';
     };
 
     const resetInstagramUi = () => {
@@ -869,6 +1002,31 @@
       }
     };
 
+    const resetInstagram = async ({ button, statusTarget, successMessage }) => {
+      if (!confirm('¿Seguro que deseas desconectar Instagram y borrar los datos guardados?')) {
+        return;
+      }
+      if (button) button.disabled = true;
+      updateDisconnectStatus(statusTarget, 'Desconectando Instagram...', false);
+      try {
+        const response = await fetch('{{ url_for("configuracion.instagram_reset_signup") }}', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({}),
+        });
+        const data = await response.json();
+        if (!response.ok || !data.ok) {
+          throw new Error(data.error || 'No se pudieron limpiar los datos anteriores.');
+        }
+        resetInstagramUi();
+        updateDisconnectStatus(statusTarget, successMessage, false);
+      } catch (err) {
+        updateDisconnectStatus(statusTarget, err.message || 'No se pudieron limpiar los datos anteriores.', true);
+      } finally {
+        if (button) button.disabled = false;
+      }
+    };
+
     trigger.addEventListener('click', async () => {
       if (!signupUrl) {
         updateStatus('Falta configurar SIGNUP_INSTAGRAM.', true);
@@ -896,6 +1054,26 @@
         trigger.disabled = false;
       }
     });
+
+    if (disconnectButton) {
+      disconnectButton.addEventListener('click', () => {
+        resetInstagram({
+          button: disconnectButton,
+          statusTarget: disconnectStatus,
+          successMessage: 'Instagram desconectado correctamente.',
+        });
+      });
+    }
+
+    if (backfillDisconnectButton) {
+      backfillDisconnectButton.addEventListener('click', () => {
+        resetInstagram({
+          button: backfillDisconnectButton,
+          statusTarget: backfillDisconnectStatus,
+          successMessage: 'Instagram desconectado correctamente.',
+        });
+      });
+    }
   })();
 </script>
 {% endblock %}
