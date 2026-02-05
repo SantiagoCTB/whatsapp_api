@@ -1,11 +1,74 @@
 from flask import Blueprint, render_template, request, redirect, session, url_for
 import hashlib
 import re
+import threading
+import time
 from typing import Optional
 from werkzeug.security import check_password_hash, generate_password_hash
+
+from config import Config
 from services.db import get_connection, get_roles_by_user
 
 auth_bp = Blueprint('auth', __name__)
+
+_LOGIN_USERNAME_RE = re.compile(r"^[A-Za-z0-9_.@-]{3,64}$")
+_login_lock = threading.Lock()
+_login_attempts: dict[str, list[float]] = {}
+_login_locked_until: dict[str, float] = {}
+
+
+def _client_ip() -> str:
+    forwarded_for = (request.headers.get("X-Forwarded-For") or "").split(",")[0].strip()
+    remote_addr = (request.remote_addr or "").strip()
+    return forwarded_for or remote_addr or "unknown"
+
+
+def _client_security_key(action: str, username: str) -> str:
+    return f"{action}:{_client_ip()}:{(username or '').strip().lower()}"
+
+
+def _normalize_login_limits() -> tuple[int, int, int]:
+    max_attempts = max(1, int(getattr(Config, "LOGIN_MAX_ATTEMPTS", 5) or 5))
+    window_seconds = max(30, int(getattr(Config, "LOGIN_WINDOW_SECONDS", 300) or 300))
+    lockout_seconds = max(30, int(getattr(Config, "LOGIN_LOCKOUT_SECONDS", 900) or 900))
+    return max_attempts, window_seconds, lockout_seconds
+
+
+def _is_action_locked(security_key: str) -> tuple[bool, int]:
+    _, _, lockout_seconds = _normalize_login_limits()
+    now = time.time()
+    with _login_lock:
+        locked_until = _login_locked_until.get(security_key, 0)
+        if locked_until <= now:
+            _login_locked_until.pop(security_key, None)
+            return False, 0
+        remaining = max(1, int(locked_until - now))
+        remaining = min(remaining, lockout_seconds)
+        return True, remaining
+
+
+def _register_failed_attempt(security_key: str) -> None:
+    max_attempts, window_seconds, lockout_seconds = _normalize_login_limits()
+    now = time.time()
+    with _login_lock:
+        attempts = _login_attempts.get(security_key, [])
+        attempts = [ts for ts in attempts if now - ts <= window_seconds]
+        attempts.append(now)
+        _login_attempts[security_key] = attempts
+        if len(attempts) >= max_attempts:
+            _login_locked_until[security_key] = now + lockout_seconds
+            _login_attempts.pop(security_key, None)
+
+
+def _clear_failed_attempts(security_key: str) -> None:
+    with _login_lock:
+        _login_attempts.pop(security_key, None)
+        _login_locked_until.pop(security_key, None)
+
+
+def _is_valid_username(username: str) -> bool:
+    return bool(_LOGIN_USERNAME_RE.match(username or ""))
+
 
 def _verify_password(stored_hash: str, plain: str) -> bool:
     """
@@ -13,17 +76,13 @@ def _verify_password(stored_hash: str, plain: str) -> bool:
     """
     if not stored_hash:
         return False
-    # Werkz: empieza con "pbkdf2:" o "scrypt:" etc.
     if stored_hash.startswith(("pbkdf2:", "scrypt:", "argon2:")):
         return check_password_hash(stored_hash, plain)
-    # Legacy: sha256 hexdigest sin sal
     legacy = hashlib.sha256((plain or "").encode()).hexdigest()
     return stored_hash == legacy
 
 
 def _password_strength_error(password: str) -> Optional[str]:
-    """Valida reglas básicas de complejidad de contraseña."""
-
     if not password or len(password) < 8:
         return "La nueva contraseña debe tener al menos 8 caracteres."
     if re.search(r"\s", password):
@@ -31,6 +90,7 @@ def _password_strength_error(password: str) -> Optional[str]:
     if not re.search(r"[A-Za-z]", password) or not re.search(r"\d", password):
         return "La nueva contraseña debe incluir letras y números."
     return None
+
 
 @auth_bp.route('/login', methods=['GET', 'POST'])
 def login():
@@ -40,7 +100,33 @@ def login():
     show_change = session.pop('show_change', False)
     if request.method == 'POST':
         username = (request.form.get('username') or "").strip()
+        security_key = _client_security_key("login", username)
+        locked, remaining = _is_action_locked(security_key)
+        if locked:
+            error = (
+                "Demasiados intentos fallidos. "
+                f"Espera {remaining} segundos antes de volver a intentar."
+            )
+            return render_template(
+                'login.html',
+                error=error,
+                success=success_message,
+                change_error=change_error,
+                show_change=show_change,
+            ), 429
+
         password = (request.form.get('password') or "")
+
+        if not _is_valid_username(username):
+            _register_failed_attempt(security_key)
+            error = 'Usuario o contraseña incorrectos'
+            return render_template(
+                'login.html',
+                error=error,
+                success=success_message,
+                change_error=change_error,
+                show_change=show_change,
+            ), 400
 
         def _fetch_user(connection):
             cursor = connection.cursor()
@@ -50,15 +136,12 @@ def login():
             )
             return cursor.fetchone()
 
-        # Primer intento: base de datos del tenant actual (si aplica)
         conn = get_connection()
         try:
             user = _fetch_user(conn)
         finally:
             conn.close()
 
-        # Fallback: base principal para el superadmin (permite entrar aunque el
-        # tenant no lo tenga registrado todavía)
         is_superadmin_login = username.lower() == "superadmin"
         if not user and is_superadmin_login:
             conn_master = get_connection(allow_tenant_context=False)
@@ -71,20 +154,20 @@ def login():
             user_source_allows_tenant_context = True
 
         if user and _verify_password(user[2], password):
-            # user -> (id, username, password)
-            session.permanent = False  # Expira cuando se cierre el navegador
+            _clear_failed_attempts(security_key)
+            session.permanent = False
             session['user'] = user[1]
 
-            # Roles centralizados
             roles = get_roles_by_user(
                 user[0], allow_tenant_context=user_source_allows_tenant_context
             ) or []
             session['roles'] = roles
-            session['rol'] = roles[0] if roles else None  # compatibilidad
+            session['rol'] = roles[0] if roles else None
 
             return redirect(url_for('chat.index'))
-        else:
-            error = 'Usuario o contraseña incorrectos'
+
+        _register_failed_attempt(security_key)
+        error = 'Usuario o contraseña incorrectos'
 
     return render_template(
         'login.html',
@@ -93,6 +176,7 @@ def login():
         change_error=change_error,
         show_change=show_change,
     )
+
 
 @auth_bp.route('/logout')
 def logout():
@@ -106,10 +190,26 @@ def password_change():
     current_password = request.form.get('current_password') or ""
     new_password = request.form.get('new_password') or ""
     confirm_password = request.form.get('confirm_password') or ""
+    security_key = _client_security_key("password-change", username)
+
+    locked, remaining = _is_action_locked(security_key)
+    if locked:
+        return render_template(
+            'login.html',
+            error=None,
+            success=None,
+            change_error=(
+                "Demasiados intentos fallidos de cambio de contraseña. "
+                f"Espera {remaining} segundos para volver a intentar."
+            ),
+            show_change=True,
+        ), 429
 
     error: Optional[str] = None
 
-    if not username or not current_password or not new_password or not confirm_password:
+    if not _is_valid_username(username):
+        error = "Usuario inválido."
+    elif not username or not current_password or not new_password or not confirm_password:
         error = "Todos los campos son obligatorios."
     elif new_password != confirm_password:
         error = "La confirmación de la nueva contraseña no coincide."
@@ -121,6 +221,7 @@ def password_change():
             error = strength_error
 
     if error:
+        _register_failed_attempt(security_key)
         session['change_error'] = error
         session['show_change'] = True
         return redirect(url_for('auth.login'))
@@ -141,9 +242,11 @@ def password_change():
         conn.close()
 
     if error:
+        _register_failed_attempt(security_key)
         session['change_error'] = error
         session['show_change'] = True
     else:
+        _clear_failed_attempts(security_key)
         session['success_message'] = (
             "Contraseña actualizada correctamente. Ahora puedes iniciar sesión con tu nueva contraseña."
         )
