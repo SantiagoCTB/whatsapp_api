@@ -2135,12 +2135,16 @@ def save_signup():
         },
     )
     embedded_code = (payload.get("code") or "").strip()
+    provided_redirect_uri = (payload.get("redirect_uri") or "").strip()
     if embedded_code:
         logger.info(
             "Código embebido recibido",
             extra={"tenant_key": tenant.tenant_key, "code": embedded_code},
         )
-        redirect_uri = _resolve_embedded_signup_redirect_uri(request.base_url)
+        if provided_redirect_uri:
+            redirect_uri = provided_redirect_uri
+        else:
+            redirect_uri = _resolve_embedded_signup_redirect_uri(request.base_url)
         logger.info(
             "Redirect URI embebido para intercambio de token",
             extra={
