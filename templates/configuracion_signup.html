@@ -306,6 +306,7 @@
 
     const facebookAppId = '{{ facebook_app_id or '' }}';
     const configCode = trigger.dataset.configCode;
+    const signupRedirectUri = {{ signup_redirect_uri | tojson }};
     const tenantKey = trigger.dataset.tenant;
     const wabaId = trigger.dataset.wabaId;
     const currentPhoneNumberId = trigger.dataset.phoneNumberId;
@@ -426,18 +427,11 @@
         });
     };
 
-    function handleSignupMessage(event) {
-      if (event.origin !== 'https://www.facebook.com') return;
-      let data = event.data;
-      if (typeof data === 'string') {
-        try { data = JSON.parse(data); } catch (err) { return; }
+    const sendSignupPayload = (rawPayload) => {
+      const payload = Object.assign({}, rawPayload || {});
+      if (signupRedirectUri && !payload.redirect_uri) {
+        payload.redirect_uri = signupRedirectUri;
       }
-
-      if (!data || data.type !== 'WA_EMBEDDED_SIGNUP' || data.event !== 'FINISH') {
-        return;
-      }
-
-      const payload = data.data || {};
 
       const sendPayload = (token) => {
         if (token && !payload.access_token) {
@@ -470,6 +464,19 @@
           sendPayload(token);
         });
       }).catch(() => sendPayload());
+    };
+
+    function handleSignupMessage(event) {
+      if (!event.origin || !event.origin.endsWith('facebook.com')) return;
+      let data = event.data;
+      if (typeof data === 'string') {
+        try { data = JSON.parse(data); } catch (err) { return; }
+      }
+
+      if (!data || data.type !== 'WA_EMBEDDED_SIGNUP' || data.event !== 'FINISH') {
+        return;
+      }
+      sendSignupPayload(data.data || {});
     }
 
     window.addEventListener('message', handleSignupMessage);
@@ -493,6 +500,18 @@
         updateStatus('Abriendo el diálogo de Embedded Signup...');
         FB.login(
           function(response) {
+            const responseCode = response && response.authResponse ? response.authResponse.code : '';
+            const responseToken = response && response.authResponse ? response.authResponse.accessToken : '';
+            if (responseCode) {
+              updateStatus('Código recibido. Intercambiando por token...');
+              sendSignupPayload({ code: responseCode });
+              return;
+            }
+            if (responseToken) {
+              updateStatus('Token recibido. Guardando credenciales...');
+              sendSignupPayload({ access_token: responseToken });
+              return;
+            }
             if (response && response.status === 'connected') {
               updateStatus('Sesión de Facebook detectada. Completa el cuadro de diálogo para continuar.');
             } else {
@@ -503,10 +522,11 @@
             config_id: configCode,
             response_type: 'code',
             override_default_response_type: true,
+            redirect_uri: signupRedirectUri,
           },
         );
       }).catch(() => {
-        const popupUrl = `https://www.facebook.com/v20.0/dialog/oauth?app_id=${encodeURIComponent(facebookAppId)}&config_id=${encodeURIComponent(configCode)}&state=${encodeURIComponent(tenantKey || 'default')}&redirect_uri=${encodeURIComponent(window.location.href)}`;
+        const popupUrl = `https://www.facebook.com/v20.0/dialog/oauth?app_id=${encodeURIComponent(facebookAppId)}&config_id=${encodeURIComponent(configCode)}&state=${encodeURIComponent(tenantKey || 'default')}&redirect_uri=${encodeURIComponent(signupRedirectUri)}`;
         const features = 'width=700,height=800,menubar=no,toolbar=no';
         window.open(popupUrl, 'wa_signup', features);
         updateStatus('Se abrió el flujo de Embedded Signup en una nueva ventana (modo respaldo).');
