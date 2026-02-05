@@ -67,6 +67,10 @@
                 <p class="alert alert-error" style="margin-top: 0.5rem">Falta configurar FACEBOOK_APP_ID en el entorno.</p>
                 {% endif %}
                 <div id="wa-signup-status" class="help" style="margin-top: 0.5rem"></div>
+                <details id="wa-signup-debug-panel" style="margin-top: 0.5rem;">
+                    <summary class="muted">Ver respuesta del Embedded Signup</summary>
+                    <pre id="wa-signup-debug" class="help" style="white-space: pre-wrap; margin: 0.5rem 0 0;"></pre>
+                </details>
             </div>
             <div class="form-row" style="margin-top: 1rem;">
                 <label class="muted" for="wa-phone-select">Número de WhatsApp</label>
@@ -311,6 +315,8 @@
     const wabaId = trigger.dataset.wabaId;
     const currentPhoneNumberId = trigger.dataset.phoneNumberId;
     const statusBox = document.getElementById('wa-signup-status');
+    const debugBox = document.getElementById('wa-signup-debug');
+    const debugPanel = document.getElementById('wa-signup-debug-panel');
     const healthList = document.getElementById('wa-signup-health');
     const phoneSelect = document.getElementById('wa-phone-select');
     const phoneStatus = document.getElementById('wa-phone-status');
@@ -335,6 +341,26 @@
       if (!disconnectStatus) return;
       disconnectStatus.textContent = message || '';
       disconnectStatus.style.color = isError ? '#c0392b' : '#2c3e50';
+    };
+
+    const updateDebug = (label, details) => {
+      if (!debugBox) return;
+      const lines = [label || 'Evento recibido'];
+      if (typeof details !== 'undefined') {
+        if (typeof details === 'string') {
+          lines.push(details);
+        } else {
+          try {
+            lines.push(JSON.stringify(details, null, 2));
+          } catch (err) {
+            lines.push(String(details));
+          }
+        }
+      }
+      debugBox.textContent = lines.join('\n');
+      if (debugPanel) {
+        debugPanel.open = true;
+      }
     };
 
     const resetWhatsAppUi = () => {
@@ -468,6 +494,7 @@
 
     function handleSignupMessage(event) {
       if (!event.origin || !event.origin.endsWith('facebook.com')) return;
+      updateDebug('Mensaje recibido desde Embedded Signup', event.data);
       let data = event.data;
       if (typeof data === 'string') {
         try { data = JSON.parse(data); } catch (err) { return; }
@@ -476,6 +503,7 @@
       if (!data || data.type !== 'WA_EMBEDDED_SIGNUP' || data.event !== 'FINISH') {
         return;
       }
+      updateDebug('Evento FINISH recibido por postMessage', data.data || {});
       sendSignupPayload(data.data || {});
     }
 
@@ -504,16 +532,19 @@
             const responseToken = response && response.authResponse ? response.authResponse.accessToken : '';
             if (responseCode) {
               updateStatus('Código recibido. Intercambiando por token...');
+              updateDebug('FB.login devolvió code', { code: responseCode });
               sendSignupPayload({ code: responseCode });
               return;
             }
             if (responseToken) {
               updateStatus('Token recibido. Guardando credenciales...');
+              updateDebug('FB.login devolvió access_token', { access_token: responseToken });
               sendSignupPayload({ access_token: responseToken });
               return;
             }
             if (response && response.status === 'connected') {
               updateStatus('Sesión de Facebook detectada. Completa el cuadro de diálogo para continuar.');
+              updateDebug('FB.login status connected sin code/token', response);
             } else {
               updateStatus('No se pudo abrir el diálogo de Facebook. Verifica los permisos del navegador.', true);
             }
