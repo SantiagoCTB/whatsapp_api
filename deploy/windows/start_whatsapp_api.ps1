@@ -41,6 +41,11 @@ Write-Output "Generating pre-deploy backup..."
 $backupArgs = @("scripts/backup_databases.py", "--env-file", ".env", "--tag", "windows-deploy")
 Start-Process -FilePath "python" -ArgumentList $backupArgs -NoNewWindow -PassThru -Wait -WorkingDirectory "C:\whatsapp_api"
 
+# Traer los últimos cambios del repositorio antes de reconstruir
+Write-Output "Pulling latest changes from Git..."
+Set-Location "C:\whatsapp_api"
+git pull origin main
+
 # Asegurar DOCKER_HOST (lo tenías repetido; lo dejo una vez)
 $env:DOCKER_HOST = "npipe:////./pipe/docker_engine"
 
@@ -54,7 +59,8 @@ $env:DOCKER_HOST = "npipe:////./pipe/docker_engine"
 # - --build: reconstruye la imagen (si tienes build:)
 # - --force-recreate: recrea contenedores aunque "parezca igual"
 # - --pull always: si usas image: también intenta traer lo último del tag
-& $docker compose -f $composeFile build --pull --no-cache
+# - --no-cache: evita usar capas viejas
+& $docker compose -f $composeFile up -d --build --force-recreate --pull always --no-cache
 
 # Verificación rápida: estado y últimas líneas de logs de web (si existe)
 Write-Output "Compose status:"
