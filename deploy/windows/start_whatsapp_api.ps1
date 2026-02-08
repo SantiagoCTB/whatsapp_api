@@ -16,48 +16,49 @@ Start-Service com.docker.service -ErrorAction SilentlyContinue
 Write-Output "Waiting for Docker to be ready..."
 Start-Sleep -Seconds 10
 
-
 # 🔥 Cerrar TODOS los servicios y procesos MySQL antes de iniciar
 Write-Output "Closing MySQL manually..."
 Get-Service *mysql* -ErrorAction SilentlyContinue | Stop-Service -Force -ErrorAction SilentlyContinue
 Get-Process *mysql* -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
 
-
 # 2️⃣ Iniciar MySQL manualmente (ya que tu servicio falla)
 Write-Output "Starting MySQL manually..."
 
 $mysqlPath = "C:\Program Files\MySQL\MySQL Server 9.4\bin\mysqld.exe"
-$defaults = "C:\ProgramData\MySQL\MySQL Server 9.4\my.ini"
+$defaults  = "C:\ProgramData\MySQL\MySQL Server 9.4\my.ini"
 
 Start-Process -NoNewWindow -FilePath $mysqlPath -ArgumentList "--defaults-file=`"$defaults`" --console"
-
 Start-Sleep -Seconds 8
 
 # 3️⃣ Levantar DOCKER COMPOSE con tu compose.windows.yml
 Write-Output "Starting Docker Compose..."
 
-$docker = "C:\Program Files\Docker\Docker\resources\bin\docker.exe"
+$docker      = "C:\Program Files\Docker\Docker\resources\bin\docker.exe"
 $composeFile = "C:\whatsapp_api\deploy\windows\docker-compose.windows.yml"
-$python = "python"
-$envFile = "C:\whatsapp_api\.env"
-$backupScript = "C:\whatsapp_api\scripts\backup_databases.py"
 
+# Backup pre-deploy (lo mantengo tal cual)
 Write-Output "Generating pre-deploy backup..."
 $backupArgs = @("scripts/backup_databases.py", "--env-file", ".env", "--tag", "windows-deploy")
-Start-Process -FilePath python -ArgumentList $backupArgs -NoNewWindow -PassThru -Wait -WorkingDirectory "C:\whatsapp_api"
+Start-Process -FilePath "python" -ArgumentList $backupArgs -NoNewWindow -PassThru -Wait -WorkingDirectory "C:\whatsapp_api"
+
+# Asegurar DOCKER_HOST (lo tenías repetido; lo dejo una vez)
+$env:DOCKER_HOST = "npipe:////./pipe/docker_engine"
 
 # Primero bajar contenedores huérfanos
 & $docker compose -f $composeFile down --remove-orphans
 
-$env:DOCKER_HOST="npipe:////./pipe/docker_engine"
-& "C:\Program Files\Docker\Docker\resources\bin\docker.exe" network rm whapco_win 2>$null
+# (Opcional) Limpiar red custom si existe
+& $docker network rm whapco_win 2>$null
 
-$env:DOCKER_HOST="npipe:////./pipe/docker_engine"
-& "C:\Program Files\Docker\Docker\resources\bin\docker.exe" compose -f "C:\whatsapp_api\deploy\windows\docker-compose.windows.yml" up -d --build
+# 🔥 CLAVE: forzar recreación y rebuild para que no quede "versión vieja"
+# - --build: reconstruye la imagen (si tienes build:)
+# - --force-recreate: recrea contenedores aunque "parezca igual"
+# - --pull always: si usas image: también intenta traer lo último del tag
+& $docker compose -f $composeFile build --pull --no-cache
 
-# Luego levantar con build si hace falta
-# & $docker compose -f $composeFile up -d --build
+# Verificación rápida: estado y últimas líneas de logs de web (si existe)
+Write-Output "Compose status:"
+& $docker compose -f $composeFile ps
 
 Write-Output "WhatsApp API + MySQL + Docker are now running!"
-
 Stop-Transcript
