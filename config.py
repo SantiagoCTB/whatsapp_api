@@ -176,9 +176,14 @@ class Config:
     )
     PUBLIC_BASE_URL = os.getenv('PUBLIC_BASE_URL', '')
     WHATSAPP_OAUTH_REDIRECT_URI = os.getenv('WHATSAPP_OAUTH_REDIRECT_URI', '')
-    EMBEDDED_SIGNUP_REDIRECT_URI = WHATSAPP_OAUTH_REDIRECT_URI or os.getenv(
+    WHATSAPP_EMBEDDED_SIGNUP_REDIRECT_URI = os.getenv('WHATSAPP_EMBEDDED_SIGNUP_REDIRECT_URI', '')
+    EMBEDDED_SIGNUP_REDIRECT_URI = (
+        WHATSAPP_EMBEDDED_SIGNUP_REDIRECT_URI
+        or WHATSAPP_OAUTH_REDIRECT_URI
+        or os.getenv(
         'EMBEDDED_SIGNUP_REDIRECT_URI',
         'https://app.whapco.site/configuracion/signup',
+        )
     )
     PREFERRED_URL_SCHEME = os.getenv('PREFERRED_URL_SCHEME', 'https')
     IA_HISTORY_LIMIT = int(os.getenv('IA_HISTORY_LIMIT', 30))
