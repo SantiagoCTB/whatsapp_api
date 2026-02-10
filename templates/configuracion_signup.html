@@ -575,7 +575,7 @@
           return;
         }
 
-        updateStatus('Abriendo el diálogo de Embedded Signup...');
+        updateStatus('Abriendo el diálogo de Embedded Signup (SDK oficial de Meta)...');
         FB.login(
           function(response) {
             const responseCode = response && response.authResponse ? response.authResponse.code : '';
@@ -603,7 +603,6 @@
             config_id: configCode,
             response_type: 'code',
             override_default_response_type: true,
-            redirect_uri: signupRedirectUri,
           },
         );
       }).catch(() => {
@@ -757,7 +756,6 @@
             config_id: messengerEmbeddedCode,
             response_type: 'code',
             override_default_response_type: true,
-            redirect_uri: signupRedirectUri,
           },
         );
       }).catch(() => {
