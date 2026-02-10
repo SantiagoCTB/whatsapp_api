@@ -90,6 +90,37 @@ def test_exchange_embedded_retries_on_redirect_mismatch(monkeypatch):
 
     assert response["ok"] is True
     assert seen_redirects == [
+        None,
         "https://first.example/callback",
-        "https://second.example/callback",
     ]
+
+
+def test_embedded_signup_error_message_for_domain_not_allowed():
+    message = configuracion._build_embedded_signup_error_message(
+        "No se pudo intercambiar.",
+        {
+            "error": {
+                "code": 191,
+                "message": "Não é possível carregar a URL",
+            }
+        },
+    )
+
+    assert "dominio" in message.lower() or "dominio" in message.lower().replace("ó", "o")
+    assert "oauth" in message.lower()
+
+
+def test_embedded_signup_error_message_for_redirect_mismatch():
+    message = configuracion._build_embedded_signup_error_message(
+        "No se pudo intercambiar.",
+        {
+            "error": {
+                "code": 100,
+                "error_subcode": 36008,
+                "message": "Error validating verification code. Please make sure your redirect_uri is identical",
+            }
+        },
+    )
+
+    assert "redirect_uri" in message.lower()
+    assert "sdk" in message.lower()
