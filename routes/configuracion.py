@@ -2065,6 +2065,7 @@ def configuracion_signup():
         signup_config_code=Config.SIGNUP_FACEBOOK,
         messenger_embedded_code=Config.MESSENGER_EMBEDDED,
         facebook_app_id=Config.FACEBOOK_APP_ID,
+        facebook_graph_api_version=Config.FACEBOOK_GRAPH_API_VERSION,
         signup_instagram_url=Config.SIGNUP_INSTRAGRAM,
         signup_redirect_uri=signup_redirect_uri,
         tenant_key=tenant_key,
