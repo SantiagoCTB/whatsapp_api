@@ -456,67 +456,45 @@
         });
     };
 
-    const clearWaFallbackTimer = () => {
-      if (waFallbackTimer) {
-        clearTimeout(waFallbackTimer);
-        waFallbackTimer = null;
-      }
-    };
-
-    const scheduleWaFallbackExchange = (rawPayload) => {
-      clearWaFallbackTimer();
-      waFallbackTimer = setTimeout(() => {
-        if (waFinishReceived) return;
-        const payload = rawPayload || {};
-        if (payload.access_token || payload.code) {
-          const flowType = payload.code ? 'code' : 'access_token';
-          updateStatus('No llegó evento FINISH. Intentando finalizar con la respuesta de FB.login...');
-          updateDebug(`Fallback: enviando ${flowType} desde FB.login al no recibir FINISH`, payload);
-          sendSignupPayload(payload);
-          return;
-        }
-        updateStatus('No llegó evento FINISH del Embedded Signup y Facebook no devolvió code/token. Reabre el asistente y completa todos los pasos en Meta.', true);
-        updateDebug('Fallback cancelado: FB.login no devolvió code ni token al no recibir FINISH', payload);
-      }, 2500);
-    };
+    let latestFinishPayload = {};
 
     const sendSignupPayload = (rawPayload) => {
       const payload = Object.assign({}, rawPayload || {});
-      if (signupRedirectUri && !payload.redirect_uri) {
-        payload.redirect_uri = signupRedirectUri;
+      fetch(`{{ url_for('configuracion.save_signup') }}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+        .then((resp) => resp.json())
+        .then((resp) => {
+          if (resp.ok) {
+            updateStatus(resp.message || 'Credenciales guardadas. Recarga la página para ver los cambios.');
+            setTimeout(() => window.location.reload(), 1200);
+          } else {
+            updateStatus(resp.error || 'No se pudieron guardar las credenciales.', true);
+          }
+        })
+        .catch(() => updateStatus('Error al enviar los datos del signup.', true));
+    };
+
+    const handleFbLoginCallback = (response) => {
+      const responseCode = response && response.authResponse ? response.authResponse.code : '';
+      if (responseCode) {
+        const mergedPayload = Object.assign({}, latestFinishPayload || {}, { code: responseCode });
+        updateStatus('Código recibido. Intercambiando credenciales en el servidor...');
+        updateDebug('FB.login devolvió code (flujo oficial)', mergedPayload);
+        sendSignupPayload(mergedPayload);
+        return;
       }
 
-      const sendPayload = (token) => {
-        if (token && !payload.access_token) {
-          payload.access_token = token;
-        }
-        fetch(`{{ url_for('configuracion.save_signup') }}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        })
-          .then((resp) => resp.json())
-          .then((resp) => {
-            if (resp.ok) {
-              updateStatus(resp.message || 'Credenciales guardadas. Recarga la página para ver los cambios.');
-              setTimeout(() => window.location.reload(), 1200);
-            } else {
-              updateStatus(resp.error || 'No se pudieron guardar las credenciales.', true);
-            }
-          })
-          .catch(() => updateStatus('Error al enviar los datos del signup.', true));
-      };
+      if (response && response.status === 'connected') {
+        updateStatus('Sesión de Facebook detectada. Completa el flujo de Embedded Signup.');
+        updateDebug('FB.login status connected sin code', response);
+        return;
+      }
 
-      facebookSdkReady.then((FB) => {
-        if (!FB || !FB.getLoginStatus) {
-          sendPayload();
-          return;
-        }
-        FB.getLoginStatus((response) => {
-          const token = response && response.authResponse ? response.authResponse.accessToken : null;
-          sendPayload(token);
-        });
-      }).catch(() => sendPayload());
+      updateStatus('No se pudo completar el flujo de Embedded Signup en Facebook.', true);
+      updateDebug('FB.login no devolvió code', response || {});
     };
 
     function handleSignupMessage(event) {
@@ -540,13 +518,12 @@
 
       if (eventType === 'FINISH' || eventType === 'FINISH_ONLY_WABA' || eventType === 'FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING') {
         waFinishReceived = true;
-        clearWaFallbackTimer();
-        sendSignupPayload(data.data || {});
+        latestFinishPayload = Object.assign({}, data.data || {});
+        updateStatus('Embedded Signup completado. Esperando callback de Facebook para recibir el code...');
         return;
       }
 
       if (eventType === 'CANCEL') {
-        clearWaFallbackTimer();
         const errorInfo = data && data.data && data.data.error_message
           ? ` (${data.data.error_message})`
           : '';
@@ -567,7 +544,7 @@
       }
 
       waFinishReceived = false;
-      clearWaFallbackTimer();
+      latestFinishPayload = {};
 
       facebookSdkReady.then((FB) => {
         if (!FB || !FB.login) {
@@ -577,39 +554,18 @@
 
         updateStatus('Abriendo el diálogo de Embedded Signup (SDK oficial de Meta)...');
         FB.login(
-          function(response) {
-            const responseCode = response && response.authResponse ? response.authResponse.code : '';
-            const responseToken = response && response.authResponse ? response.authResponse.accessToken : '';
-            if (responseCode) {
-              updateStatus('Sesión iniciada. Esperando evento FINISH del Embedded Signup...');
-              updateDebug('FB.login devolvió code', { code: responseCode });
-              scheduleWaFallbackExchange({ code: responseCode });
-              return;
-            }
-            if (responseToken) {
-              updateStatus('Sesión iniciada. Esperando evento FINISH del Embedded Signup...');
-              updateDebug('FB.login devolvió access_token', { access_token: responseToken });
-              scheduleWaFallbackExchange({ access_token: responseToken });
-              return;
-            }
-            if (response && response.status === 'connected') {
-              updateStatus('Sesión de Facebook detectada. Completa el cuadro de diálogo para continuar.');
-              updateDebug('FB.login status connected sin code/token', response);
-            } else {
-              updateStatus('No se pudo abrir el diálogo de Facebook. Verifica los permisos del navegador.', true);
-            }
-          },
+          handleFbLoginCallback,
           {
             config_id: configCode,
             response_type: 'code',
             override_default_response_type: true,
+            extras: {
+              setup: {},
+            },
           },
         );
       }).catch(() => {
-        const popupUrl = `https://www.facebook.com/{{ facebook_graph_api_version or 'v24.0' }}/dialog/oauth?app_id=${encodeURIComponent(facebookAppId)}&config_id=${encodeURIComponent(configCode)}&state=${encodeURIComponent(tenantKey || 'default')}&redirect_uri=${encodeURIComponent(signupRedirectUri)}`;
-        const features = 'width=700,height=800,menubar=no,toolbar=no';
-        window.open(popupUrl, 'wa_signup', features);
-        updateStatus('Se abrió el flujo de Embedded Signup en una nueva ventana (modo respaldo).');
+        updateStatus('No se pudo cargar el SDK de Facebook. Recarga la página y revisa bloqueadores de scripts/cookies.', true);
       });
     });
 
