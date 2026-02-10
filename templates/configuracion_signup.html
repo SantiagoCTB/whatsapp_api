@@ -468,14 +468,15 @@
       waFallbackTimer = setTimeout(() => {
         if (waFinishReceived) return;
         const payload = rawPayload || {};
-        if (payload.access_token) {
-          updateStatus('No llegó evento FINISH. Intentando guardar con el token de sesión...');
-          updateDebug('Fallback: enviando access_token desde FB.login al no recibir FINISH', payload);
+        if (payload.access_token || payload.code) {
+          const flowType = payload.code ? 'code' : 'access_token';
+          updateStatus('No llegó evento FINISH. Intentando finalizar con la respuesta de FB.login...');
+          updateDebug(`Fallback: enviando ${flowType} desde FB.login al no recibir FINISH`, payload);
           sendSignupPayload(payload);
           return;
         }
-        updateStatus('No llegó evento FINISH del Embedded Signup. Reabre el asistente y completa todos los pasos en Meta.', true);
-        updateDebug('Fallback cancelado: FB.login devolvió code sin FINISH; se evita intercambio para prevenir error 36008', payload);
+        updateStatus('No llegó evento FINISH del Embedded Signup y Facebook no devolvió code/token. Reabre el asistente y completa todos los pasos en Meta.', true);
+        updateDebug('Fallback cancelado: FB.login no devolvió code ni token al no recibir FINISH', payload);
       }, 2500);
     };
 
