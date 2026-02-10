@@ -519,6 +519,13 @@ def _build_embedded_signup_error_message(base_error: str | None, details: dict |
             "Agrega el dominio exacto en Meta App > Settings > Basic > App Domains y en "
             "Facebook Login/Embedded Signup (Valid OAuth Redirect URIs)."
         )
+    if code == 100 and (error.get("error_subcode") == 36008 or "redirect_uri" in meta_message.lower()):
+        return (
+            "Meta rechazó el código porque el redirect_uri no coincide exactamente con el usado en el diálogo OAuth. "
+            "En Embedded Signup con FB.login (SDK), Meta suele usar internamente un redirect_uri de staticxx/facebook; "
+            "por eso el servidor intenta primero intercambiar el code sin redirect_uri y luego con variantes. "
+            "Verifica que fallback_redirect_uri/URL pública estén registradas en Meta y que no haya slash o dominio distinto."
+        )
     if meta_message:
         return f"{message} {meta_message}".strip()
     return message
@@ -548,16 +555,19 @@ def _build_redirect_uri_attempts(redirect_uri: str | None, fallback_uri: str | N
     parsed_primary = urlparse(primary) if primary else None
     parsed_secondary = urlparse(secondary) if secondary else None
 
-    # Primer intento: URI exacta usada por el frontend (debe coincidir 1:1 con Meta).
+    # Primer intento: sin redirect_uri. En FB.login (SDK) Meta puede usar redirect_uri interno (staticxx).
+    add_candidate(None)
+
+    # Segundo intento: URI exacta enviada por frontend/backend.
     add_candidate(primary or None)
 
-    # Segundo intento: URI de respaldo explícita, evitando dominios locales accidentales.
+    # Tercer intento: URI de respaldo explícita, evitando dominios locales accidentales.
     if secondary:
         same_host = bool(parsed_primary and parsed_secondary and parsed_primary.netloc == parsed_secondary.netloc)
         if same_host or not _is_probably_local_hostname(parsed_secondary.hostname):
             add_candidate(secondary)
 
-    # Tercer intento: variante con/sin slash final (solo cuando mantiene mismo host/esquema).
+    # Variantes con/sin slash final (solo para dominios públicos).
     for candidate in (primary, secondary):
         normalized = (candidate or "").strip()
         if not normalized:
@@ -569,7 +579,6 @@ def _build_redirect_uri_attempts(redirect_uri: str | None, fallback_uri: str | N
         alternate = trimmed if trimmed != normalized else f"{normalized}/"
         add_candidate(alternate)
 
-    add_candidate(None)
     return attempts
 
 
