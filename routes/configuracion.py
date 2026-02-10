@@ -5,7 +5,7 @@ import os
 import re
 import uuid
 from datetime import datetime
-from urllib.parse import urlparse
+from urllib.parse import urlparse, unquote
 
 import requests
 from flask import Blueprint, render_template, request, redirect, session, url_for, jsonify
@@ -519,6 +519,21 @@ def _resolve_embedded_signup_redirect_uri(fallback: str) -> str:
     explicit_redirect = (Config.EMBEDDED_SIGNUP_REDIRECT_URI or "").strip()
     if explicit_redirect:
         return explicit_redirect
+
+    signup_url = (Config.SIGNUP_FACEBOOK or "").strip()
+    if signup_url:
+        try:
+            parsed = urlparse(signup_url)
+        except ValueError:
+            parsed = None
+        if parsed and parsed.query:
+            for entry in parsed.query.split("&"):
+                if not entry:
+                    continue
+                key, _, value = entry.partition("=")
+                if key == "redirect_uri" and value:
+                    return unquote(value)
+
     base_url = (Config.PUBLIC_BASE_URL or "").strip().rstrip("/")
     if base_url:
         return f"{base_url}/configuracion/signup"
