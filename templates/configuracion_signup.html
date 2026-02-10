@@ -712,13 +712,11 @@
             const responseCode = response && response.authResponse ? response.authResponse.code : '';
             const responseToken = response && response.authResponse ? response.authResponse.accessToken : '';
             if (responseCode) {
-              updateStatus('Código recibido. Intercambiando por token...');
-              sendMessengerPayload({ code: responseCode });
+              updateStatus('Sesión iniciada en Facebook. Completa el asistente de Embedded Signup para continuar.');
               return;
             }
             if (responseToken) {
-              updateStatus('Token recibido. Guardando credenciales...');
-              sendMessengerPayload({ access_token: responseToken });
+              updateStatus('Sesión iniciada en Facebook. Completa el asistente de Embedded Signup para continuar.');
               return;
             }
             if (response && response.status === 'connected') {
