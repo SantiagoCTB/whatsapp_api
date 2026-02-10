@@ -276,7 +276,7 @@
           appId: '{{ facebook_app_id or '' }}',
           cookie: true,
           xfbml: true,
-          version: 'v20.0'
+          version: '{{ facebook_graph_api_version or 'v24.0' }}'
         });
         FB.AppEvents && FB.AppEvents.logPageView();
         resolve(FB);
@@ -521,19 +521,37 @@
 
     function handleSignupMessage(event) {
       if (!event.origin || !event.origin.endsWith('facebook.com')) return;
-      updateDebug('Mensaje recibido desde Embedded Signup', event.data);
       let data = event.data;
       if (typeof data === 'string') {
-        try { data = JSON.parse(data); } catch (err) { return; }
+        try {
+          data = JSON.parse(data);
+        } catch (err) {
+          updateDebug('Mensaje no JSON recibido desde Embedded Signup', event.data);
+          return;
+        }
       }
 
-      if (!data || data.type !== 'WA_EMBEDDED_SIGNUP' || data.event !== 'FINISH') {
+      if (!data || data.type !== 'WA_EMBEDDED_SIGNUP') {
         return;
       }
-      waFinishReceived = true;
-      clearWaFallbackTimer();
-      updateDebug('Evento FINISH recibido por postMessage', data.data || {});
-      sendSignupPayload(data.data || {});
+
+      const eventType = (data.event || '').toUpperCase();
+      updateDebug(`Evento ${eventType || 'DESCONOCIDO'} recibido por postMessage`, data);
+
+      if (eventType === 'FINISH' || eventType === 'FINISH_ONLY_WABA' || eventType === 'FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING') {
+        waFinishReceived = true;
+        clearWaFallbackTimer();
+        sendSignupPayload(data.data || {});
+        return;
+      }
+
+      if (eventType === 'CANCEL') {
+        clearWaFallbackTimer();
+        const errorInfo = data && data.data && data.data.error_message
+          ? ` (${data.data.error_message})`
+          : '';
+        updateStatus(`El flujo de Embedded Signup se canceló${errorInfo}.`, true);
+      }
     }
 
     window.addEventListener('message', handleSignupMessage);
@@ -589,7 +607,7 @@
           },
         );
       }).catch(() => {
-        const popupUrl = `https://www.facebook.com/v20.0/dialog/oauth?app_id=${encodeURIComponent(facebookAppId)}&config_id=${encodeURIComponent(configCode)}&state=${encodeURIComponent(tenantKey || 'default')}&redirect_uri=${encodeURIComponent(signupRedirectUri)}`;
+        const popupUrl = `https://www.facebook.com/{{ facebook_graph_api_version or 'v24.0' }}/dialog/oauth?app_id=${encodeURIComponent(facebookAppId)}&config_id=${encodeURIComponent(configCode)}&state=${encodeURIComponent(tenantKey || 'default')}&redirect_uri=${encodeURIComponent(signupRedirectUri)}`;
         const features = 'width=700,height=800,menubar=no,toolbar=no';
         window.open(popupUrl, 'wa_signup', features);
         updateStatus('Se abrió el flujo de Embedded Signup en una nueva ventana (modo respaldo).');
@@ -743,7 +761,7 @@
           },
         );
       }).catch(() => {
-        const popupUrl = `https://www.facebook.com/v20.0/dialog/oauth?app_id=${encodeURIComponent(facebookAppId)}&config_id=${encodeURIComponent(messengerEmbeddedCode)}&state=${encodeURIComponent(tenantKey || 'default')}&redirect_uri=${encodeURIComponent(signupRedirectUri)}`;
+        const popupUrl = `https://www.facebook.com/{{ facebook_graph_api_version or 'v24.0' }}/dialog/oauth?app_id=${encodeURIComponent(facebookAppId)}&config_id=${encodeURIComponent(messengerEmbeddedCode)}&state=${encodeURIComponent(tenantKey || 'default')}&redirect_uri=${encodeURIComponent(signupRedirectUri)}`;
         const features = 'width=700,height=800,menubar=no,toolbar=no';
         window.open(popupUrl, 'messenger_signup', features);
         updateStatus('Se abrió el flujo de Embedded Signup de Messenger en una nueva ventana (modo respaldo).');
