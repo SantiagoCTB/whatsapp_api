@@ -5,7 +5,7 @@ import os
 import re
 import uuid
 from datetime import datetime
-from urllib.parse import urlparse
+from urllib.parse import urlparse, unquote
 
 import requests
 from flask import Blueprint, render_template, request, redirect, session, url_for, jsonify
@@ -519,6 +519,21 @@ def _resolve_embedded_signup_redirect_uri(fallback: str) -> str:
     explicit_redirect = (Config.EMBEDDED_SIGNUP_REDIRECT_URI or "").strip()
     if explicit_redirect:
         return explicit_redirect
+
+    signup_url = (Config.SIGNUP_FACEBOOK or "").strip()
+    if signup_url:
+        try:
+            parsed = urlparse(signup_url)
+        except ValueError:
+            parsed = None
+        if parsed and parsed.query:
+            for entry in parsed.query.split("&"):
+                if not entry:
+                    continue
+                key, _, value = entry.partition("=")
+                if key == "redirect_uri" and value:
+                    return unquote(value)
+
     base_url = (Config.PUBLIC_BASE_URL or "").strip().rstrip("/")
     if base_url:
         return f"{base_url}/configuracion/signup"
@@ -2136,6 +2151,8 @@ def save_signup():
     )
     embedded_code = (payload.get("code") or "").strip()
     provided_redirect_uri = (payload.get("redirect_uri") or "").strip()
+    code_exchange_failed = False
+    code_exchange_error = None
     if embedded_code:
         logger.info(
             "Código embebido recibido",
@@ -2166,6 +2183,8 @@ def save_signup():
                 },
             )
         else:
+            code_exchange_failed = True
+            code_exchange_error = token_response.get("error") or "No se pudo intercambiar el código embebido."
             logger.warning(
                 "No se pudo obtener el token desde el código embebido",
                 extra={
@@ -2174,6 +2193,14 @@ def save_signup():
                     "details": token_response.get("details"),
                 },
             )
+
+    resolved_token = (payload.get("access_token") or payload.get("token") or "").strip()
+    if code_exchange_failed and not resolved_token:
+        return {
+            "ok": False,
+            "error": code_exchange_error,
+            "details": token_response.get("details") if isinstance(token_response, dict) else None,
+        }, 400
     logger.info(
         "Token embebido recibido",
         extra={
@@ -2193,14 +2220,14 @@ def save_signup():
     env_updates = {key: current_env.get(key) for key in tenants.TENANT_ENV_KEYS}
     env_updates.update(
         {
-            "META_TOKEN": payload.get("access_token") or payload.get("token"),
-            "LONG_LIVED_TOKEN": payload.get("access_token")
-            or payload.get("long_lived_token"),
-            "PHONE_NUMBER_ID": payload.get("phone_number_id")
-            or payload.get("phone_id"),
-            "WABA_ID": payload.get("waba_id"),
-            "BUSINESS_ID": payload.get("business_id")
-            or payload.get("business_manager_id"),
+            "META_TOKEN": resolved_token or current_env.get("META_TOKEN"),
+            "LONG_LIVED_TOKEN": (payload.get("access_token") or payload.get("long_lived_token") or "").strip()
+            or current_env.get("LONG_LIVED_TOKEN"),
+            "PHONE_NUMBER_ID": (payload.get("phone_number_id") or payload.get("phone_id") or "").strip()
+            or current_env.get("PHONE_NUMBER_ID"),
+            "WABA_ID": (payload.get("waba_id") or "").strip() or current_env.get("WABA_ID"),
+            "BUSINESS_ID": (payload.get("business_id") or payload.get("business_manager_id") or "").strip()
+            or current_env.get("BUSINESS_ID"),
         }
     )
 
