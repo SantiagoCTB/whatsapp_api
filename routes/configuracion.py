@@ -5,7 +5,7 @@ import os
 import re
 import uuid
 from datetime import datetime
-from urllib.parse import urlparse
+from urllib.parse import urlparse, unquote
 
 import requests
 from flask import Blueprint, render_template, request, redirect, session, url_for, jsonify
@@ -410,6 +410,9 @@ def _exchange_embedded_signup_code_for_token(code: str, redirect_uri: str) -> di
             "error": "Falta configurar FACEBOOK_APP_ID o SECRET_PASSWORD_APP.",
         }
 
+    graph_version = (Config.FACEBOOK_GRAPH_API_VERSION or "v24.0").strip() or "v24.0"
+    endpoint = f"https://graph.facebook.com/{graph_version}/oauth/access_token"
+
     params = {
         "client_id": Config.FACEBOOK_APP_ID,
         "client_secret": Config.FACEBOOK_APP_SECRET,
@@ -417,14 +420,33 @@ def _exchange_embedded_signup_code_for_token(code: str, redirect_uri: str) -> di
         "code": code,
     }
 
+    logger.info(
+        "Intercambiando código de Embedded Signup por token (Meta OAuth)",
+        extra={
+            "graph_endpoint": endpoint,
+            "graph_version": graph_version,
+            "redirect_uri": redirect_uri,
+            "code_prefix": code[:12],
+            "code_length": len(code),
+        },
+    )
+
     try:
         response = requests.get(
-            "https://graph.facebook.com/v22.0/oauth/access_token",
+            endpoint,
             params=params,
             timeout=15,
         )
-    except requests.RequestException:
-        logger.warning("No se pudo conectar al endpoint de token de Meta.")
+    except requests.RequestException as exc:
+        logger.warning(
+            "No se pudo conectar al endpoint de token de Meta: %s",
+            exc,
+            extra={
+                "graph_endpoint": endpoint,
+                "graph_version": graph_version,
+                "redirect_uri": redirect_uri,
+            },
+        )
         return {"ok": False, "error": "No se pudo conectar con la API de Meta."}
 
     try:
@@ -433,6 +455,16 @@ def _exchange_embedded_signup_code_for_token(code: str, redirect_uri: str) -> di
         data = {}
 
     if response.status_code >= 400:
+        logger.warning(
+            "Meta rechazó el intercambio de código (status=%s): %s",
+            response.status_code,
+            data,
+            extra={
+                "graph_endpoint": endpoint,
+                "graph_version": graph_version,
+                "redirect_uri": redirect_uri,
+            },
+        )
         return {
             "ok": False,
             "error": "No se pudo intercambiar el código del Embedded Signup.",
@@ -441,6 +473,15 @@ def _exchange_embedded_signup_code_for_token(code: str, redirect_uri: str) -> di
 
     access_token = data.get("access_token")
     if not access_token:
+        logger.warning(
+            "Meta respondió sin access_token en Embedded Signup: %s",
+            data,
+            extra={
+                "graph_endpoint": endpoint,
+                "graph_version": graph_version,
+                "redirect_uri": redirect_uri,
+            },
+        )
         return {
             "ok": False,
             "error": "Meta no devolvió un access_token en la respuesta.",
@@ -516,9 +557,28 @@ def _resolve_instagram_redirect_uri(fallback: str) -> str:
 
 
 def _resolve_embedded_signup_redirect_uri(fallback: str) -> str:
+    whatsapp_explicit_redirect = (getattr(Config, "WHATSAPP_OAUTH_REDIRECT_URI", "") or "").strip()
+    if whatsapp_explicit_redirect:
+        return whatsapp_explicit_redirect
+
     explicit_redirect = (Config.EMBEDDED_SIGNUP_REDIRECT_URI or "").strip()
     if explicit_redirect:
         return explicit_redirect
+
+    signup_url = (Config.SIGNUP_FACEBOOK or "").strip()
+    if signup_url:
+        try:
+            parsed = urlparse(signup_url)
+        except ValueError:
+            parsed = None
+        if parsed and parsed.query:
+            for entry in parsed.query.split("&"):
+                if not entry:
+                    continue
+                key, _, value = entry.partition("=")
+                if key == "redirect_uri" and value:
+                    return unquote(value)
+
     base_url = (Config.PUBLIC_BASE_URL or "").strip().rstrip("/")
     if base_url:
         return f"{base_url}/configuracion/signup"
@@ -2136,6 +2196,8 @@ def save_signup():
     )
     embedded_code = (payload.get("code") or "").strip()
     provided_redirect_uri = (payload.get("redirect_uri") or "").strip()
+    code_exchange_failed = False
+    code_exchange_error = None
     if embedded_code:
         logger.info(
             "Código embebido recibido",
@@ -2166,6 +2228,8 @@ def save_signup():
                 },
             )
         else:
+            code_exchange_failed = True
+            code_exchange_error = token_response.get("error") or "No se pudo intercambiar el código embebido."
             logger.warning(
                 "No se pudo obtener el token desde el código embebido",
                 extra={
@@ -2174,6 +2238,14 @@ def save_signup():
                     "details": token_response.get("details"),
                 },
             )
+
+    resolved_token = (payload.get("access_token") or payload.get("token") or "").strip()
+    if code_exchange_failed and not resolved_token:
+        return {
+            "ok": False,
+            "error": code_exchange_error,
+            "details": token_response.get("details") if isinstance(token_response, dict) else None,
+        }, 400
     logger.info(
         "Token embebido recibido",
         extra={
@@ -2193,14 +2265,14 @@ def save_signup():
     env_updates = {key: current_env.get(key) for key in tenants.TENANT_ENV_KEYS}
     env_updates.update(
         {
-            "META_TOKEN": payload.get("access_token") or payload.get("token"),
-            "LONG_LIVED_TOKEN": payload.get("access_token")
-            or payload.get("long_lived_token"),
-            "PHONE_NUMBER_ID": payload.get("phone_number_id")
-            or payload.get("phone_id"),
-            "WABA_ID": payload.get("waba_id"),
-            "BUSINESS_ID": payload.get("business_id")
-            or payload.get("business_manager_id"),
+            "META_TOKEN": resolved_token or current_env.get("META_TOKEN"),
+            "LONG_LIVED_TOKEN": (payload.get("access_token") or payload.get("long_lived_token") or "").strip()
+            or current_env.get("LONG_LIVED_TOKEN"),
+            "PHONE_NUMBER_ID": (payload.get("phone_number_id") or payload.get("phone_id") or "").strip()
+            or current_env.get("PHONE_NUMBER_ID"),
+            "WABA_ID": (payload.get("waba_id") or "").strip() or current_env.get("WABA_ID"),
+            "BUSINESS_ID": (payload.get("business_id") or payload.get("business_manager_id") or "").strip()
+            or current_env.get("BUSINESS_ID"),
         }
     )
 
