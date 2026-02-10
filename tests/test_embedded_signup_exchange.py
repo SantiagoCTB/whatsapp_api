@@ -220,3 +220,31 @@ def test_messenger_signup_uses_redirect_uri_fallbacks_when_uri_differs(monkeypat
     assert calls["fallback_uri"] == "https://resolved.example/configuracion/signup"
     assert calls["updated_tenant_key"] == "acme"
     assert calls["env_updates"]["MESSENGER_TOKEN"] == "token-from-code"
+
+
+def test_build_redirect_uri_attempts_prioritizes_whatsapp_and_root_domain(monkeypatch):
+    monkeypatch.setattr(configuracion.Config, "WHATSAPP_OAUTH_REDIRECT_URI", "https://app.whapco.site/configuracion/signup")
+
+    attempts = configuracion._build_redirect_uri_attempts(
+        "https://app.whapco.site/configuracion/signup",
+        None,
+    )
+
+    assert attempts[0] == ""
+    assert "https://app.whapco.site/configuracion/signup" in attempts
+    assert "https://app.whapco.site" in attempts
+    assert "https://app.whapco.site/" in attempts
+
+
+def test_build_redirect_uri_attempts_uses_configured_whatsapp_when_primary_differs(monkeypatch):
+    monkeypatch.setattr(configuracion.Config, "WHATSAPP_OAUTH_REDIRECT_URI", "https://app.whapco.site/configuracion/signup")
+
+    attempts = configuracion._build_redirect_uri_attempts(
+        "https://provided.example/configuracion/signup",
+        "https://fallback.example/configuracion/signup",
+    )
+
+    assert attempts[0] == ""
+    assert attempts[1] == "https://provided.example/configuracion/signup"
+    assert attempts[2] == "https://app.whapco.site/configuracion/signup"
+    assert "https://app.whapco.site" in attempts

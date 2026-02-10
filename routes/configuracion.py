@@ -585,6 +585,7 @@ def _build_redirect_uri_attempts(redirect_uri: str | None, fallback_uri: str | N
 
     primary = (redirect_uri or "").strip()
     secondary = (fallback_uri or "").strip()
+    configured_whatsapp_redirect = (getattr(Config, "WHATSAPP_OAUTH_REDIRECT_URI", "") or "").strip()
 
     parsed_primary = urlparse(primary) if primary else None
     parsed_secondary = urlparse(secondary) if secondary else None
@@ -595,14 +596,26 @@ def _build_redirect_uri_attempts(redirect_uri: str | None, fallback_uri: str | N
     # Segundo intento: URI exacta enviada por frontend/backend.
     add_candidate(primary or None)
 
-    # Tercer intento: URI de respaldo explícita, evitando dominios locales accidentales.
+    # Tercer intento: URI principal de WhatsApp definida en entorno.
+    if configured_whatsapp_redirect:
+        add_candidate(configured_whatsapp_redirect)
+
+    # Cuarto intento: URI de respaldo explícita, evitando dominios locales accidentales.
     if secondary:
         same_host = bool(parsed_primary and parsed_secondary and parsed_primary.netloc == parsed_secondary.netloc)
         if same_host or not _is_probably_local_hostname(parsed_secondary.hostname):
             add_candidate(secondary)
 
+    # Quinto intento: dominio principal de WHATSAPP_OAUTH_REDIRECT_URI (https://app.whapco.site)
+    if configured_whatsapp_redirect:
+        parsed_configured = urlparse(configured_whatsapp_redirect)
+        if parsed_configured.scheme and parsed_configured.netloc and not _is_probably_local_hostname(parsed_configured.hostname):
+            root_domain = f"{parsed_configured.scheme}://{parsed_configured.netloc}"
+            add_candidate(root_domain)
+            add_candidate(f"{root_domain}/")
+
     # Variantes con/sin slash final (solo para dominios públicos).
-    for candidate in (primary, secondary):
+    for candidate in (primary, configured_whatsapp_redirect, secondary):
         normalized = (candidate or "").strip()
         if not normalized:
             continue
