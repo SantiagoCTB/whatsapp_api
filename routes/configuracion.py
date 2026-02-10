@@ -502,6 +502,37 @@ def _embedded_signup_is_redirect_mismatch(details: dict | None) -> bool:
     return subcode == 36008 or "redirect_uri" in message
 
 
+def _build_embedded_signup_error_message(base_error: str | None, details: dict | None) -> str:
+    message = (base_error or "No se pudo completar el intercambio del código de Embedded Signup.").strip()
+    if not isinstance(details, dict):
+        return message
+
+    error = details.get("error")
+    if not isinstance(error, dict):
+        return message
+
+    code = error.get("code")
+    meta_message = (error.get("error_user_msg") or error.get("message") or "").strip()
+    if code == 191:
+        return (
+            "Meta rechazó la URL de redirección porque su dominio no está permitido en la app. "
+            "Agrega el dominio exacto en Meta App > Settings > Basic > App Domains y en "
+            "Facebook Login/Embedded Signup (Valid OAuth Redirect URIs)."
+        )
+    if meta_message:
+        return f"{message} {meta_message}".strip()
+    return message
+
+
+def _is_probably_local_hostname(hostname: str | None) -> bool:
+    if not hostname:
+        return True
+    lowered = hostname.strip().lower()
+    if lowered in {"localhost", "127.0.0.1", "::1", "web"}:
+        return True
+    return lowered.endswith(".local")
+
+
 def _build_redirect_uri_attempts(redirect_uri: str | None, fallback_uri: str | None = None) -> list[str]:
     attempts: list[str] = []
 
@@ -511,23 +542,32 @@ def _build_redirect_uri_attempts(redirect_uri: str | None, fallback_uri: str | N
             return
         attempts.append(normalized)
 
-    for candidate in (redirect_uri, fallback_uri):
+    primary = (redirect_uri or "").strip()
+    secondary = (fallback_uri or "").strip()
+
+    parsed_primary = urlparse(primary) if primary else None
+    parsed_secondary = urlparse(secondary) if secondary else None
+
+    # Primer intento: URI exacta usada por el frontend (debe coincidir 1:1 con Meta).
+    add_candidate(primary or None)
+
+    # Segundo intento: URI de respaldo explícita, evitando dominios locales accidentales.
+    if secondary:
+        same_host = bool(parsed_primary and parsed_secondary and parsed_primary.netloc == parsed_secondary.netloc)
+        if same_host or not _is_probably_local_hostname(parsed_secondary.hostname):
+            add_candidate(secondary)
+
+    # Tercer intento: variante con/sin slash final (solo cuando mantiene mismo host/esquema).
+    for candidate in (primary, secondary):
         normalized = (candidate or "").strip()
         if not normalized:
             continue
-
-        add_candidate(normalized)
-
+        parsed = urlparse(normalized)
+        if _is_probably_local_hostname(parsed.hostname):
+            continue
         trimmed = normalized.rstrip("/")
-        if trimmed != normalized:
-            add_candidate(trimmed)
-        else:
-            add_candidate(f"{normalized}/")
-
-        if normalized.startswith("https://"):
-            add_candidate(f"http://{normalized[len('https://'):]}")
-        elif normalized.startswith("http://"):
-            add_candidate(f"https://{normalized[len('http://'):]}")
+        alternate = trimmed if trimmed != normalized else f"{normalized}/"
+        add_candidate(alternate)
 
     add_candidate(None)
     return attempts
@@ -2065,6 +2105,7 @@ def configuracion_signup():
         signup_config_code=Config.SIGNUP_FACEBOOK,
         messenger_embedded_code=Config.MESSENGER_EMBEDDED,
         facebook_app_id=Config.FACEBOOK_APP_ID,
+        facebook_graph_api_version=Config.FACEBOOK_GRAPH_API_VERSION,
         signup_instagram_url=Config.SIGNUP_INSTRAGRAM,
         signup_redirect_uri=signup_redirect_uri,
         tenant_key=tenant_key,
@@ -2312,10 +2353,11 @@ def save_signup():
 
     resolved_token = (payload.get("access_token") or payload.get("token") or "").strip()
     if code_exchange_failed and not resolved_token:
+        details = token_response.get("details") if isinstance(token_response, dict) else None
         return {
             "ok": False,
-            "error": code_exchange_error,
-            "details": token_response.get("details") if isinstance(token_response, dict) else None,
+            "error": _build_embedded_signup_error_message(code_exchange_error, details),
+            "details": details,
         }, 400
     logger.info(
         "Token embebido recibido",
@@ -2528,8 +2570,11 @@ def messenger_signup():
                         or meta_error.get("message")
                         or ""
                     )
-            error_message = token_response.get("error") or "No se pudo intercambiar el código de Messenger."
-            if error_detail:
+            error_message = _build_embedded_signup_error_message(
+                token_response.get("error") or "No se pudo intercambiar el código de Messenger.",
+                token_response.get("details"),
+            )
+            if error_detail and error_detail not in error_message:
                 error_message = f"{error_message} {error_detail}".strip()
             return {
                 "ok": False,
