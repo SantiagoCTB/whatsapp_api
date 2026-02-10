@@ -301,6 +301,7 @@
     const facebookAppId = '{{ facebook_app_id or '' }}';
     const configCode = trigger.dataset.configCode;
     const tenantKey = trigger.dataset.tenant;
+    const signupRedirectUri = '{{ signup_redirect_uri or '' }}';
     const statusBox = document.getElementById('wa-signup-status');
 
     const updateStatus = (message, isError) => {
@@ -321,6 +322,9 @@
       }
 
       const payload = data.data || {};
+      if (signupRedirectUri && !payload.redirect_uri) {
+        payload.redirect_uri = signupRedirectUri;
+      }
       fetch(`/admin/tenants/${tenantKey}/signup`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -369,10 +373,12 @@
             config_id: configCode,
             response_type: 'code',
             override_default_response_type: true,
+            redirect_uri: signupRedirectUri || window.location.href,
           },
         );
       }).catch(() => {
-        const popupUrl = `https://www.facebook.com/v20.0/dialog/oauth?app_id=${encodeURIComponent(facebookAppId)}&config_id=${encodeURIComponent(configCode)}&state=${encodeURIComponent(tenantKey)}&redirect_uri=${encodeURIComponent(window.location.href)}`;
+        const fallbackRedirectUri = signupRedirectUri || window.location.href;
+        const popupUrl = `https://www.facebook.com/v20.0/dialog/oauth?app_id=${encodeURIComponent(facebookAppId)}&config_id=${encodeURIComponent(configCode)}&state=${encodeURIComponent(tenantKey)}&redirect_uri=${encodeURIComponent(fallbackRedirectUri)}`;
         const features = 'width=700,height=800,menubar=no,toolbar=no';
         window.open(popupUrl, 'wa_signup', features);
         updateStatus('Se abrió el flujo de Embedded Signup en una nueva ventana (modo respaldo).');
