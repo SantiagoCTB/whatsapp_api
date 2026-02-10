@@ -8,7 +8,20 @@ if str(ROOT_DIR) not in sys.path:
 from routes import configuracion
 
 
+
+def test_embedded_redirect_uri_uses_whatsapp_embedded_setting(monkeypatch):
+    monkeypatch.setattr(configuracion.Config, "WHATSAPP_EMBEDDED_SIGNUP_REDIRECT_URI", "https://embedded-wa.example/callback")
+    monkeypatch.setattr(configuracion.Config, "WHATSAPP_OAUTH_REDIRECT_URI", "https://wa.example/callback")
+    monkeypatch.setattr(configuracion.Config, "EMBEDDED_SIGNUP_REDIRECT_URI", "https://legacy.example/callback")
+    monkeypatch.setattr(configuracion.Config, "SIGNUP_FACEBOOK", "https://facebook.com/dialog/oauth?redirect_uri=https%3A%2F%2Fquery.example%2Fcb")
+    monkeypatch.setattr(configuracion.Config, "PUBLIC_BASE_URL", "https://base.example")
+
+    resolved = configuracion._resolve_embedded_signup_redirect_uri("https://fallback.example/configuracion/signup")
+
+    assert resolved == "https://embedded-wa.example/callback"
+
 def test_embedded_redirect_uri_uses_whatsapp_oauth_setting(monkeypatch):
+    monkeypatch.setattr(configuracion.Config, "WHATSAPP_EMBEDDED_SIGNUP_REDIRECT_URI", "")
     monkeypatch.setattr(configuracion.Config, "WHATSAPP_OAUTH_REDIRECT_URI", "https://wa.example/callback")
     monkeypatch.setattr(configuracion.Config, "EMBEDDED_SIGNUP_REDIRECT_URI", "https://embedded.example/callback")
     monkeypatch.setattr(configuracion.Config, "SIGNUP_FACEBOOK", "https://facebook.com/dialog/oauth?redirect_uri=https%3A%2F%2Fquery.example%2Fcb")
@@ -20,6 +33,7 @@ def test_embedded_redirect_uri_uses_whatsapp_oauth_setting(monkeypatch):
 
 
 def test_embedded_redirect_uri_uses_explicit_setting(monkeypatch):
+    monkeypatch.setattr(configuracion.Config, "WHATSAPP_EMBEDDED_SIGNUP_REDIRECT_URI", "")
     monkeypatch.setattr(configuracion.Config, "WHATSAPP_OAUTH_REDIRECT_URI", "")
     monkeypatch.setattr(configuracion.Config, "EMBEDDED_SIGNUP_REDIRECT_URI", "https://explicit.example/callback")
     monkeypatch.setattr(configuracion.Config, "SIGNUP_FACEBOOK", "https://facebook.com/dialog/oauth?redirect_uri=https%3A%2F%2Fquery.example%2Fcb")
@@ -31,6 +45,7 @@ def test_embedded_redirect_uri_uses_explicit_setting(monkeypatch):
 
 
 def test_embedded_redirect_uri_falls_back_to_signup_url_redirect(monkeypatch):
+    monkeypatch.setattr(configuracion.Config, "WHATSAPP_EMBEDDED_SIGNUP_REDIRECT_URI", "")
     monkeypatch.setattr(configuracion.Config, "WHATSAPP_OAUTH_REDIRECT_URI", "")
     monkeypatch.setattr(configuracion.Config, "EMBEDDED_SIGNUP_REDIRECT_URI", "")
     monkeypatch.setattr(
@@ -46,6 +61,7 @@ def test_embedded_redirect_uri_falls_back_to_signup_url_redirect(monkeypatch):
 
 
 def test_embedded_redirect_uri_uses_public_base_when_signup_url_has_no_redirect(monkeypatch):
+    monkeypatch.setattr(configuracion.Config, "WHATSAPP_EMBEDDED_SIGNUP_REDIRECT_URI", "")
     monkeypatch.setattr(configuracion.Config, "WHATSAPP_OAUTH_REDIRECT_URI", "")
     monkeypatch.setattr(configuracion.Config, "EMBEDDED_SIGNUP_REDIRECT_URI", "")
     monkeypatch.setattr(configuracion.Config, "SIGNUP_FACEBOOK", "https://www.facebook.com/v24.0/dialog/oauth?client_id=123")

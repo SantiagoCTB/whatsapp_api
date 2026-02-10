@@ -158,6 +158,81 @@ def _url_ok(url):
         return False, None
 
 
+
+
+def _graph_get(path: str, access_token: str, *, params: dict | None = None) -> dict:
+    if not access_token:
+        return {"ok": False, "error": "No se encontró token de acceso para consultar Meta."}
+
+    url = f"https://graph.facebook.com/{Config.FACEBOOK_GRAPH_API_VERSION}/{path.lstrip('/')}"
+    query = dict(params or {})
+    query["access_token"] = access_token
+
+    try:
+        response = requests.get(url, params=query, timeout=20)
+    except requests.RequestException:
+        logger.warning("No se pudo conectar con Graph API", extra={"path": path})
+        return {"ok": False, "error": "No se pudo conectar con la API de Meta."}
+
+    try:
+        payload = response.json()
+    except ValueError:
+        payload = {}
+
+    if response.status_code >= 400:
+        return {
+            "ok": False,
+            "error": "Meta devolvió un error al consultar la información de WhatsApp.",
+            "details": payload,
+        }
+
+    return {"ok": True, "data": payload}
+
+
+def _graph_post(path: str, access_token: str, *, data: dict | None = None) -> dict:
+    if not access_token:
+        return {"ok": False, "error": "No se encontró token de acceso para consultar Meta."}
+
+    url = f"https://graph.facebook.com/{Config.FACEBOOK_GRAPH_API_VERSION}/{path.lstrip('/')}"
+    payload = dict(data or {})
+    payload["access_token"] = access_token
+
+    try:
+        response = requests.post(url, data=payload, timeout=20)
+    except requests.RequestException:
+        logger.warning("No se pudo conectar con Graph API", extra={"path": path})
+        return {"ok": False, "error": "No se pudo conectar con la API de Meta."}
+
+    try:
+        body = response.json()
+    except ValueError:
+        body = {}
+
+    if response.status_code >= 400:
+        return {
+            "ok": False,
+            "error": "Meta devolvió un error al ejecutar la acción sobre WhatsApp.",
+            "details": body,
+        }
+
+    return {"ok": True, "data": body}
+
+
+def _resolve_whatsapp_token_and_business_id(tenant) -> tuple[str, str, dict]:
+    tenant_env = tenants.get_tenant_env(tenant)
+    access_token = (tenant_env.get("META_TOKEN") or tenant_env.get("LONG_LIVED_TOKEN") or "").strip()
+    business_id = (tenant_env.get("BUSINESS_ID") or "").strip()
+    return access_token, business_id, tenant_env
+
+
+def _extract_graph_list(payload: dict) -> list:
+    if not isinstance(payload, dict):
+        return []
+    data = payload.get("data")
+    if isinstance(data, list):
+        return data
+    return []
+
 def _fetch_page_accounts(user_token: str):
     if not user_token:
         return {"ok": False, "error": "Falta el token de usuario para consultar páginas."}
@@ -722,6 +797,10 @@ def _resolve_instagram_redirect_uri(fallback: str) -> str:
 
 
 def _resolve_embedded_signup_redirect_uri(fallback: str) -> str:
+    whatsapp_embedded_redirect = (getattr(Config, "WHATSAPP_EMBEDDED_SIGNUP_REDIRECT_URI", "") or "").strip()
+    if whatsapp_embedded_redirect:
+        return whatsapp_embedded_redirect
+
     whatsapp_explicit_redirect = (getattr(Config, "WHATSAPP_OAUTH_REDIRECT_URI", "") or "").strip()
     if whatsapp_explicit_redirect:
         return whatsapp_explicit_redirect
@@ -2507,6 +2586,142 @@ def whatsapp_phone_numbers():
     response = list_phone_numbers(token, waba_id)
     status = 200 if response.get("ok") else 400
     return response, status
+
+
+@config_bp.route('/configuracion/whatsapp/accounts', methods=['GET'])
+def whatsapp_accounts():
+    if not _require_admin():
+        return {"ok": False, "error": "No autorizado"}, 403
+
+    tenant = _resolve_signup_tenant()
+    if not tenant:
+        return {"ok": False, "error": "No se encontró la empresa actual."}, 400
+
+    token, business_id, _tenant_env = _resolve_whatsapp_token_and_business_id(tenant)
+    if not business_id:
+        return {"ok": False, "error": "Falta BUSINESS_ID para consultar cuentas de WhatsApp."}, 400
+
+    fields = "id,name,currency,owner_business_info"
+    limit = request.args.get("limit", "20")
+
+    client_accounts = _graph_get(
+        f"{business_id}/client_whatsapp_business_accounts",
+        token,
+        params={"fields": fields, "limit": limit},
+    )
+    if not client_accounts.get("ok"):
+        return client_accounts, 400
+
+    owned_accounts = _graph_get(
+        f"{business_id}/owned_whatsapp_business_accounts",
+        token,
+        params={"fields": fields, "limit": limit},
+    )
+    if not owned_accounts.get("ok"):
+        return owned_accounts, 400
+
+    return {
+        "ok": True,
+        "business_id": business_id,
+        "client_accounts": _extract_graph_list(client_accounts.get("data") or {}),
+        "owned_accounts": _extract_graph_list(owned_accounts.get("data") or {}),
+    }
+
+
+@config_bp.route('/configuracion/whatsapp/account-details', methods=['GET'])
+def whatsapp_account_details():
+    if not _require_admin():
+        return {"ok": False, "error": "No autorizado"}, 403
+
+    tenant = _resolve_signup_tenant()
+    if not tenant:
+        return {"ok": False, "error": "No se encontró la empresa actual."}, 400
+
+    token, _business_id, tenant_env = _resolve_whatsapp_token_and_business_id(tenant)
+    waba_id = (request.args.get("waba_id") or tenant_env.get("WABA_ID") or "").strip()
+    if not waba_id:
+        return {"ok": False, "error": "Falta WABA_ID para consultar el detalle de la cuenta."}, 400
+
+    fields = request.args.get("fields") or "id,name,currency,owner_business_info"
+    detail = _graph_get(waba_id, token, params={"fields": fields})
+    if not detail.get("ok"):
+        return detail, 400
+
+    return {"ok": True, "waba_id": waba_id, "account": detail.get("data")}
+
+
+@config_bp.route('/configuracion/whatsapp/message-templates', methods=['GET'])
+def whatsapp_message_templates():
+    if not _require_admin():
+        return {"ok": False, "error": "No autorizado"}, 403
+
+    tenant = _resolve_signup_tenant()
+    if not tenant:
+        return {"ok": False, "error": "No se encontró la empresa actual."}, 400
+
+    token, _business_id, tenant_env = _resolve_whatsapp_token_and_business_id(tenant)
+    waba_id = (request.args.get("waba_id") or tenant_env.get("WABA_ID") or "").strip()
+    if not waba_id:
+        return {"ok": False, "error": "Falta WABA_ID para consultar plantillas."}, 400
+
+    fields = request.args.get("fields") or "language,name,rejected_reason,status,category,sub_category,last_updated_time,components,quality_score"
+    limit = request.args.get("limit", "50")
+    templates = _graph_get(
+        f"{waba_id}/message_templates",
+        token,
+        params={"fields": fields, "limit": limit},
+    )
+    if not templates.get("ok"):
+        return templates, 400
+
+    return {"ok": True, "waba_id": waba_id, "templates": _extract_graph_list(templates.get("data") or {})}
+
+
+@config_bp.route('/configuracion/whatsapp/subscribed-apps', methods=['GET'])
+def whatsapp_subscribed_apps():
+    if not _require_admin():
+        return {"ok": False, "error": "No autorizado"}, 403
+
+    tenant = _resolve_signup_tenant()
+    if not tenant:
+        return {"ok": False, "error": "No se encontró la empresa actual."}, 400
+
+    token, _business_id, tenant_env = _resolve_whatsapp_token_and_business_id(tenant)
+    waba_id = (request.args.get("waba_id") or tenant_env.get("WABA_ID") or "").strip()
+    if not waba_id:
+        return {"ok": False, "error": "Falta WABA_ID para consultar apps suscritas."}, 400
+
+    response = _graph_get(f"{waba_id}/subscribed_apps", token)
+    if not response.get("ok"):
+        return response, 400
+
+    return {"ok": True, "waba_id": waba_id, "apps": _extract_graph_list(response.get("data") or {})}
+
+
+@config_bp.route('/configuracion/whatsapp/subscribe-app', methods=['POST'])
+def whatsapp_subscribe_app():
+    if not _require_admin():
+        return {"ok": False, "error": "No autorizado"}, 403
+
+    tenant = _resolve_signup_tenant()
+    if not tenant:
+        return {"ok": False, "error": "No se encontró la empresa actual."}, 400
+
+    try:
+        payload = request.get_json(force=True) or {}
+    except Exception:
+        payload = {}
+
+    token, _business_id, tenant_env = _resolve_whatsapp_token_and_business_id(tenant)
+    waba_id = (payload.get("waba_id") or tenant_env.get("WABA_ID") or "").strip()
+    if not waba_id:
+        return {"ok": False, "error": "Falta WABA_ID para suscribir la app."}, 400
+
+    response = _graph_post(f"{waba_id}/subscribed_apps", token)
+    if not response.get("ok"):
+        return response, 400
+
+    return {"ok": True, "waba_id": waba_id, "result": response.get("data")}
 
 
 @config_bp.route('/configuracion/whatsapp/phone-number', methods=['POST'])

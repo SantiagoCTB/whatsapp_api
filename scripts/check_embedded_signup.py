@@ -49,6 +49,16 @@ def check_env_vars() -> Iterable[CheckResult]:
         bool(Config.SIGNUP_FACEBOOK),
         _mask_value(Config.SIGNUP_FACEBOOK),
     )
+    whatsapp_redirect = (
+        getattr(Config, "WHATSAPP_EMBEDDED_SIGNUP_REDIRECT_URI", "")
+        or Config.WHATSAPP_OAUTH_REDIRECT_URI
+        or Config.EMBEDDED_SIGNUP_REDIRECT_URI
+    )
+    yield CheckResult(
+        "WHATSAPP_EMBEDDED_SIGNUP_REDIRECT_URI",
+        bool(whatsapp_redirect),
+        _mask_value(whatsapp_redirect),
+    )
     yield CheckResult(
         "DEFAULT_TENANT",
         bool(Config.DEFAULT_TENANT),
@@ -91,6 +101,8 @@ def run() -> int:
                 print(" - Define FACEBOOK_APP_ID en el contenedor web y reinicia.")
             elif item.name == "SIGNUP_FACEBOOK":
                 print(" - Define SIGNUP_FACEBOOK con el config_id provisto por Meta.")
+            elif item.name == "WHATSAPP_EMBEDDED_SIGNUP_REDIRECT_URI":
+                print(" - Define WHATSAPP_EMBEDDED_SIGNUP_REDIRECT_URI con la URL de retorno aprobada en Meta.")
             elif item.name == "DEFAULT_TENANT":
                 print(" - Revisa que DEFAULT_TENANT esté configurado para resolver el tenant actual.")
             elif item.name == "Preferencia de esquema HTTPS":

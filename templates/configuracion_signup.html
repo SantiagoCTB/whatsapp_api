@@ -84,6 +84,21 @@
                 <div id="wa-phone-status" class="help" style="margin-top: 0.5rem"></div>
             </div>
             <div class="form-row" style="margin-top: 1rem;">
+                <label class="muted">Explorar datos de WhatsApp (post-signup)</label>
+                <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                    <button id="wa-accounts-refresh" class="btn-secondary" type="button">Cargar cuentas (client/owned)</button>
+                    <button id="wa-account-detail" class="btn-secondary" type="button">Detalle WABA</button>
+                    <button id="wa-templates-refresh" class="btn-secondary" type="button">Plantillas</button>
+                    <button id="wa-apps-refresh" class="btn-secondary" type="button">Apps suscritas</button>
+                    <button id="wa-app-subscribe" class="btn-primary" type="button">Suscribir app</button>
+                </div>
+                <div id="wa-insights-status" class="help" style="margin-top: 0.5rem"></div>
+                <details id="wa-insights-panel" style="margin-top: 0.5rem;">
+                    <summary class="muted">Ver datos completos de Graph API</summary>
+                    <pre id="wa-insights-debug" class="help" style="white-space: pre-wrap; margin: 0.5rem 0 0;"></pre>
+                </details>
+            </div>
+            <div class="form-row" style="margin-top: 1rem;">
                 <button id="wa-disconnect" class="btn-danger" type="button">Desconectar WhatsApp</button>
                 <div id="wa-disconnect-status" class="help" style="margin-top: 0.5rem"></div>
             </div>
@@ -322,6 +337,14 @@
     const phoneStatus = document.getElementById('wa-phone-status');
     const phoneRefresh = document.getElementById('wa-phone-refresh');
     const phoneSave = document.getElementById('wa-phone-save');
+    const accountsRefreshButton = document.getElementById('wa-accounts-refresh');
+    const accountDetailButton = document.getElementById('wa-account-detail');
+    const templatesRefreshButton = document.getElementById('wa-templates-refresh');
+    const appsRefreshButton = document.getElementById('wa-apps-refresh');
+    const appSubscribeButton = document.getElementById('wa-app-subscribe');
+    const insightsStatus = document.getElementById('wa-insights-status');
+    const insightsDebug = document.getElementById('wa-insights-debug');
+    const insightsPanel = document.getElementById('wa-insights-panel');
     const disconnectButton = document.getElementById('wa-disconnect');
     const disconnectStatus = document.getElementById('wa-disconnect-status');
 
@@ -344,6 +367,26 @@
       if (!disconnectStatus) return;
       disconnectStatus.textContent = message || '';
       disconnectStatus.style.color = isError ? '#c0392b' : '#2c3e50';
+    };
+
+    const updateInsightsStatus = (message, isError) => {
+      if (!insightsStatus) return;
+      insightsStatus.textContent = message || '';
+      insightsStatus.style.color = isError ? '#c0392b' : '#2c3e50';
+    };
+
+    const updateInsightsDebug = (label, details) => {
+      if (!insightsDebug) return;
+      const lines = [label || 'Respuesta de Graph API'];
+      if (typeof details !== 'undefined') {
+        try {
+          lines.push(JSON.stringify(details, null, 2));
+        } catch (err) {
+          lines.push(String(details));
+        }
+      }
+      insightsDebug.textContent = lines.join('\n');
+      if (insightsPanel) insightsPanel.open = true;
     };
 
     const updateDebug = (label, details) => {
@@ -463,7 +506,7 @@
       fetch(`{{ url_for('configuracion.save_signup') }}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(Object.assign({ redirect_uri: signupRedirectUri }, payload)),
       })
         .then((resp) => resp.json())
         .then((resp) => {
@@ -475,6 +518,28 @@
           }
         })
         .catch(() => updateStatus('Error al enviar los datos del signup.', true));
+    };
+
+
+    const fetchWhatsappInsights = (url, options, successLabel) => {
+      updateInsightsStatus('Consultando Graph API...');
+      fetch(url, options || {})
+        .then((resp) => resp.json())
+        .then((resp) => {
+          if (!resp.ok) {
+            updateInsightsStatus(resp.error || 'No se pudo completar la consulta.', true);
+            updateInsightsDebug('Error Graph API', resp);
+            return;
+          }
+          updateInsightsStatus(successLabel || 'Consulta completada.');
+          updateInsightsDebug(successLabel || 'Consulta completada', resp);
+          if (Array.isArray(resp.templates)) {
+            updateStatus(`Plantillas recuperadas: ${resp.templates.length}`);
+          }
+        })
+        .catch(() => {
+          updateInsightsStatus('Error de red al consultar Graph API.', true);
+        });
     };
 
     const handleFbLoginCallback = (response) => {
@@ -498,7 +563,7 @@
     };
 
     function handleSignupMessage(event) {
-      if (!event.origin || !event.origin.endsWith('facebook.com')) return;
+      if (event.origin !== 'https://www.facebook.com' && event.origin !== 'https://web.facebook.com') return;
       let data = event.data;
       if (typeof data === 'string') {
         try {
@@ -560,7 +625,34 @@
             response_type: 'code',
             override_default_response_type: true,
             extras: {
-              setup: {},
+              version: 'v3',
+              sessionInfoVersion: '3',
+              setup: {
+                business: {
+                  id: null,
+                  name: null,
+                  email: null,
+                  phone: { code: null, number: null },
+                  website: null,
+                  address: {
+                    streetAddress1: null,
+                    streetAddress2: null,
+                    city: null,
+                    state: null,
+                    zipPostal: null,
+                    country: null,
+                  },
+                  timezone: null,
+                },
+                phone: {
+                  displayName: null,
+                  category: null,
+                  description: null,
+                },
+                preVerifiedPhone: { ids: null },
+                solutionID: null,
+                whatsAppBusinessAccount: { ids: null },
+              },
             },
           },
         );
@@ -600,6 +692,41 @@
             }
           })
           .catch(() => updatePhoneStatus('Error al guardar el número.', true));
+      });
+    }
+
+
+    if (accountsRefreshButton) {
+      accountsRefreshButton.addEventListener('click', () => {
+        fetchWhatsappInsights(`{{ url_for('configuracion.whatsapp_accounts') }}`, { method: 'GET' }, 'Cuentas de WhatsApp cargadas.');
+      });
+    }
+
+    if (accountDetailButton) {
+      accountDetailButton.addEventListener('click', () => {
+        fetchWhatsappInsights(`{{ url_for('configuracion.whatsapp_account_details') }}`, { method: 'GET' }, 'Detalle de cuenta WABA cargado.');
+      });
+    }
+
+    if (templatesRefreshButton) {
+      templatesRefreshButton.addEventListener('click', () => {
+        fetchWhatsappInsights(`{{ url_for('configuracion.whatsapp_message_templates') }}`, { method: 'GET' }, 'Plantillas de mensajes cargadas.');
+      });
+    }
+
+    if (appsRefreshButton) {
+      appsRefreshButton.addEventListener('click', () => {
+        fetchWhatsappInsights(`{{ url_for('configuracion.whatsapp_subscribed_apps') }}`, { method: 'GET' }, 'Apps suscritas cargadas.');
+      });
+    }
+
+    if (appSubscribeButton) {
+      appSubscribeButton.addEventListener('click', () => {
+        fetchWhatsappInsights(`{{ url_for('configuracion.whatsapp_subscribe_app') }}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({}),
+        }, 'App suscrita correctamente.');
       });
     }
 
@@ -1107,6 +1234,41 @@
         trigger.disabled = false;
       }
     });
+
+
+    if (accountsRefreshButton) {
+      accountsRefreshButton.addEventListener('click', () => {
+        fetchWhatsappInsights(`{{ url_for('configuracion.whatsapp_accounts') }}`, { method: 'GET' }, 'Cuentas de WhatsApp cargadas.');
+      });
+    }
+
+    if (accountDetailButton) {
+      accountDetailButton.addEventListener('click', () => {
+        fetchWhatsappInsights(`{{ url_for('configuracion.whatsapp_account_details') }}`, { method: 'GET' }, 'Detalle de cuenta WABA cargado.');
+      });
+    }
+
+    if (templatesRefreshButton) {
+      templatesRefreshButton.addEventListener('click', () => {
+        fetchWhatsappInsights(`{{ url_for('configuracion.whatsapp_message_templates') }}`, { method: 'GET' }, 'Plantillas de mensajes cargadas.');
+      });
+    }
+
+    if (appsRefreshButton) {
+      appsRefreshButton.addEventListener('click', () => {
+        fetchWhatsappInsights(`{{ url_for('configuracion.whatsapp_subscribed_apps') }}`, { method: 'GET' }, 'Apps suscritas cargadas.');
+      });
+    }
+
+    if (appSubscribeButton) {
+      appSubscribeButton.addEventListener('click', () => {
+        fetchWhatsappInsights(`{{ url_for('configuracion.whatsapp_subscribe_app') }}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({}),
+        }, 'App suscrita correctamente.');
+      });
+    }
 
     if (disconnectButton) {
       disconnectButton.addEventListener('click', () => {
