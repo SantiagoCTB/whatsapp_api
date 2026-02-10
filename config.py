@@ -175,7 +175,8 @@ class Config:
         ),
     )
     PUBLIC_BASE_URL = os.getenv('PUBLIC_BASE_URL', '')
-    EMBEDDED_SIGNUP_REDIRECT_URI = os.getenv(
+    WHATSAPP_OAUTH_REDIRECT_URI = os.getenv('WHATSAPP_OAUTH_REDIRECT_URI', '')
+    EMBEDDED_SIGNUP_REDIRECT_URI = WHATSAPP_OAUTH_REDIRECT_URI or os.getenv(
         'EMBEDDED_SIGNUP_REDIRECT_URI',
         'https://app.whapco.site/configuracion/signup',
     )

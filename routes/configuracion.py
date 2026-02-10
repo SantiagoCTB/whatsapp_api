@@ -557,6 +557,10 @@ def _resolve_instagram_redirect_uri(fallback: str) -> str:
 
 
 def _resolve_embedded_signup_redirect_uri(fallback: str) -> str:
+    whatsapp_explicit_redirect = (getattr(Config, "WHATSAPP_OAUTH_REDIRECT_URI", "") or "").strip()
+    if whatsapp_explicit_redirect:
+        return whatsapp_explicit_redirect
+
     explicit_redirect = (Config.EMBEDDED_SIGNUP_REDIRECT_URI or "").strip()
     if explicit_redirect:
         return explicit_redirect
