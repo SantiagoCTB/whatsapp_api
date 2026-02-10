@@ -325,6 +325,9 @@
     const disconnectButton = document.getElementById('wa-disconnect');
     const disconnectStatus = document.getElementById('wa-disconnect-status');
 
+    let waFinishReceived = false;
+    let waFallbackTimer = null;
+
     const updateStatus = (message, isError) => {
       if (!statusBox) return;
       statusBox.textContent = message || '';
@@ -453,6 +456,29 @@
         });
     };
 
+    const clearWaFallbackTimer = () => {
+      if (waFallbackTimer) {
+        clearTimeout(waFallbackTimer);
+        waFallbackTimer = null;
+      }
+    };
+
+    const scheduleWaFallbackExchange = (rawPayload) => {
+      clearWaFallbackTimer();
+      waFallbackTimer = setTimeout(() => {
+        if (waFinishReceived) return;
+        const payload = rawPayload || {};
+        if (payload.access_token) {
+          updateStatus('No llegó evento FINISH. Intentando guardar con el token de sesión...');
+          updateDebug('Fallback: enviando access_token desde FB.login al no recibir FINISH', payload);
+          sendSignupPayload(payload);
+          return;
+        }
+        updateStatus('No llegó evento FINISH del Embedded Signup. Reabre el asistente y completa todos los pasos en Meta.', true);
+        updateDebug('Fallback cancelado: FB.login devolvió code sin FINISH; se evita intercambio para prevenir error 36008', payload);
+      }, 2500);
+    };
+
     const sendSignupPayload = (rawPayload) => {
       const payload = Object.assign({}, rawPayload || {});
       if (signupRedirectUri && !payload.redirect_uri) {
@@ -503,6 +529,8 @@
       if (!data || data.type !== 'WA_EMBEDDED_SIGNUP' || data.event !== 'FINISH') {
         return;
       }
+      waFinishReceived = true;
+      clearWaFallbackTimer();
       updateDebug('Evento FINISH recibido por postMessage', data.data || {});
       sendSignupPayload(data.data || {});
     }
@@ -519,6 +547,9 @@
         return;
       }
 
+      waFinishReceived = false;
+      clearWaFallbackTimer();
+
       facebookSdkReady.then((FB) => {
         if (!FB || !FB.login) {
           updateStatus('El SDK de Facebook no está listo. Revisa tu conexión y APP_ID.', true);
@@ -531,15 +562,15 @@
             const responseCode = response && response.authResponse ? response.authResponse.code : '';
             const responseToken = response && response.authResponse ? response.authResponse.accessToken : '';
             if (responseCode) {
-              updateStatus('Código recibido. Intercambiando por token...');
+              updateStatus('Sesión iniciada. Esperando evento FINISH del Embedded Signup...');
               updateDebug('FB.login devolvió code', { code: responseCode });
-              sendSignupPayload({ code: responseCode });
+              scheduleWaFallbackExchange({ code: responseCode });
               return;
             }
             if (responseToken) {
-              updateStatus('Token recibido. Guardando credenciales...');
+              updateStatus('Sesión iniciada. Esperando evento FINISH del Embedded Signup...');
               updateDebug('FB.login devolvió access_token', { access_token: responseToken });
-              sendSignupPayload({ access_token: responseToken });
+              scheduleWaFallbackExchange({ access_token: responseToken });
               return;
             }
             if (response && response.status === 'connected') {
