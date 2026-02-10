@@ -2356,20 +2356,23 @@ def save_signup():
             "Código embebido recibido",
             extra={"tenant_key": tenant.tenant_key, "code": embedded_code},
         )
-        if provided_redirect_uri:
-            redirect_uri = provided_redirect_uri
-        else:
-            redirect_uri = _resolve_embedded_signup_redirect_uri(request.base_url)
+        resolved_redirect_uri = _resolve_embedded_signup_redirect_uri(request.base_url)
+        redirect_uri = provided_redirect_uri or resolved_redirect_uri
+        fallback_redirect_uri = None
+        if provided_redirect_uri and resolved_redirect_uri and provided_redirect_uri != resolved_redirect_uri:
+            fallback_redirect_uri = resolved_redirect_uri
         logger.info(
             "Redirect URI embebido para intercambio de token",
             extra={
                 "tenant_key": tenant.tenant_key,
                 "redirect_uri": redirect_uri,
+                "fallback_redirect_uri": fallback_redirect_uri,
             },
         )
-        token_response = _exchange_embedded_signup_code_for_token(
+        token_response = _exchange_embedded_signup_code_with_fallbacks(
             embedded_code,
             redirect_uri,
+            fallback_uri=fallback_redirect_uri,
         )
         if token_response.get("ok"):
             payload["access_token"] = token_response.get("access_token")
