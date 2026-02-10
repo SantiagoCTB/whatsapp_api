@@ -174,3 +174,77 @@ def test_save_signup_uses_redirect_uri_fallbacks_when_uri_differs(monkeypatch):
     assert calls["fallback_uri"] == "https://resolved.example/configuracion/signup"
     assert calls["updated_tenant_key"] == "acme"
     assert calls["env_updates"]["META_TOKEN"] == "token-from-code"
+
+
+def test_messenger_signup_uses_redirect_uri_fallbacks_when_uri_differs(monkeypatch):
+    app = create_app()
+    app.config["TESTING"] = True
+
+    tenant = SimpleNamespace(tenant_key="acme", metadata={})
+    calls = {}
+
+    def fake_exchange(code, redirect_uri, fallback_uri=None):
+        calls["code"] = code
+        calls["redirect_uri"] = redirect_uri
+        calls["fallback_uri"] = fallback_uri
+        return {"ok": True, "access_token": "token-from-code"}
+
+    def fake_update_env(tenant_key, env_updates):
+        calls["updated_tenant_key"] = tenant_key
+        calls["env_updates"] = env_updates
+
+    monkeypatch.setattr(configuracion, "_resolve_signup_tenant", lambda: tenant)
+    monkeypatch.setattr(configuracion, "_resolve_embedded_signup_redirect_uri", lambda _fallback: "https://resolved.example/configuracion/signup")
+    monkeypatch.setattr(configuracion, "_exchange_embedded_signup_code_with_fallbacks", fake_exchange)
+    monkeypatch.setattr(configuracion.tenants, "get_tenant_env", lambda _tenant: {})
+    monkeypatch.setattr(configuracion.tenants, "update_tenant_env", fake_update_env)
+    monkeypatch.setattr(configuracion.tenants, "update_tenant_metadata", lambda *_args, **_kwargs: None)
+
+    with app.test_client() as client:
+        with client.session_transaction() as session:
+            session["user"] = "admin"
+            session["roles"] = ["admin"]
+
+        response = client.post(
+            "/configuracion/messenger/signup",
+            json={
+                "code": "embedded-code",
+                "redirect_uri": "https://provided.example/configuracion/signup",
+            },
+        )
+
+    assert response.status_code == 200
+    assert response.get_json()["ok"] is True
+    assert calls["code"] == "embedded-code"
+    assert calls["redirect_uri"] == "https://provided.example/configuracion/signup"
+    assert calls["fallback_uri"] == "https://resolved.example/configuracion/signup"
+    assert calls["updated_tenant_key"] == "acme"
+    assert calls["env_updates"]["MESSENGER_TOKEN"] == "token-from-code"
+
+
+def test_build_redirect_uri_attempts_prioritizes_whatsapp_and_root_domain(monkeypatch):
+    monkeypatch.setattr(configuracion.Config, "WHATSAPP_OAUTH_REDIRECT_URI", "https://app.whapco.site/configuracion/signup")
+
+    attempts = configuracion._build_redirect_uri_attempts(
+        "https://app.whapco.site/configuracion/signup",
+        None,
+    )
+
+    assert attempts[0] == ""
+    assert "https://app.whapco.site/configuracion/signup" in attempts
+    assert "https://app.whapco.site" in attempts
+    assert "https://app.whapco.site/" in attempts
+
+
+def test_build_redirect_uri_attempts_uses_configured_whatsapp_when_primary_differs(monkeypatch):
+    monkeypatch.setattr(configuracion.Config, "WHATSAPP_OAUTH_REDIRECT_URI", "https://app.whapco.site/configuracion/signup")
+
+    attempts = configuracion._build_redirect_uri_attempts(
+        "https://provided.example/configuracion/signup",
+        "https://fallback.example/configuracion/signup",
+    )
+
+    assert attempts[0] == ""
+    assert attempts[1] == "https://provided.example/configuracion/signup"
+    assert attempts[2] == "https://app.whapco.site/configuracion/signup"
+    assert "https://app.whapco.site" in attempts
