@@ -9,6 +9,15 @@
 <h2>Constructor de Plantillas de WhatsApp</h2>
 <p>Diseña, previsualiza, crea, lista, elimina y envía plantillas sin programar.</p>
 
+<section class="template-card" id="credentialsCard">
+  <h3>Estado de credenciales del tenant</h3>
+  <p id="credentialsSummary">Validando configuración...</p>
+  <ul id="credentialsChecklist"></ul>
+  <div class="action-row">
+    <button id="refreshCredentials" type="button" class="btn-secondary">Revisar credenciales</button>
+  </div>
+</section>
+
 <div class="template-grid">
   <section class="template-card">
     <h3>1) Crear plantilla</h3>
@@ -106,6 +115,8 @@
 <script>
   const createPreview = document.getElementById('createPreview');
   const sendPreview = document.getElementById('sendPreview');
+  const credentialsSummary = document.getElementById('credentialsSummary');
+  const credentialsChecklist = document.getElementById('credentialsChecklist');
 
   function parseLines(text) {
     return (text || '').split('\n').map(v => v.trim()).filter(Boolean);
@@ -113,6 +124,54 @@
 
   function notify(msg, isError = false) {
     alert(isError ? `Error: ${msg}` : msg);
+  }
+
+  function renderCredentialsStatus(result) {
+    credentialsChecklist.innerHTML = '';
+    const configured = result.configured || {};
+    const checks = [
+      ['META_TOKEN', configured.META_TOKEN],
+      ['PHONE_NUMBER_ID', configured.PHONE_NUMBER_ID],
+      ['WABA_ID (opcional)', configured.WABA_ID],
+    ];
+
+    checks.forEach(([label, ok]) => {
+      const li = document.createElement('li');
+      li.textContent = `${ok ? '✅' : '❌'} ${label}`;
+      credentialsChecklist.appendChild(li);
+    });
+
+    (result.warnings || []).forEach((warning) => {
+      const li = document.createElement('li');
+      li.textContent = `⚠️ ${warning}`;
+      credentialsChecklist.appendChild(li);
+    });
+
+    if (result.ready) {
+      credentialsSummary.textContent = 'Todo listo para crear y enviar plantillas con este tenant.';
+      credentialsSummary.style.color = '#0f766e';
+      return;
+    }
+
+    const missing = (result.missing || []).join(', ');
+    credentialsSummary.textContent = missing
+      ? `Faltan parámetros obligatorios: ${missing}.`
+      : 'La configuración no está lista. Revisa los avisos.';
+    credentialsSummary.style.color = '#b91c1c';
+  }
+
+  async function loadCredentialsStatus() {
+    try {
+      const response = await fetch('/api/plantillas/credentials');
+      const result = await response.json();
+      if (!response.ok || !result.ok) {
+        throw new Error(result.error || 'No se pudo validar credenciales');
+      }
+      renderCredentialsStatus(result);
+    } catch (err) {
+      credentialsSummary.textContent = `No se pudo validar credenciales: ${err.message}`;
+      credentialsSummary.style.color = '#b91c1c';
+    }
   }
 
   function createButtonRow() {
@@ -294,5 +353,8 @@
   }
 
   document.getElementById('loadTemplates').addEventListener('click', loadTemplates);
+  document.getElementById('refreshCredentials').addEventListener('click', loadCredentialsStatus);
+
+  loadCredentialsStatus();
 </script>
 {% endblock %}
