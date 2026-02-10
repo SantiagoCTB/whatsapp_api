@@ -93,3 +93,18 @@ def test_exchange_embedded_retries_on_redirect_mismatch(monkeypatch):
         "https://first.example/callback",
         "https://second.example/callback",
     ]
+
+
+def test_embedded_signup_error_message_for_domain_not_allowed():
+    message = configuracion._build_embedded_signup_error_message(
+        "No se pudo intercambiar.",
+        {
+            "error": {
+                "code": 191,
+                "message": "Não é possível carregar a URL",
+            }
+        },
+    )
+
+    assert "dominio" in message.lower() or "dominio" in message.lower().replace("ó", "o")
+    assert "oauth" in message.lower()
