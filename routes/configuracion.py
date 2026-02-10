@@ -433,9 +433,9 @@ def _exchange_embedded_signup_code_for_token(code: str, redirect_uri: str | None
     )
 
     try:
-        response = requests.get(
+        response = requests.post(
             endpoint,
-            params=params,
+            data=params,
             timeout=15,
         )
     except requests.RequestException as exc:
@@ -457,7 +457,7 @@ def _exchange_embedded_signup_code_for_token(code: str, redirect_uri: str | None
 
     if response.status_code >= 400:
         logger.warning(
-            "Meta rechazó el intercambio de código (status=%s): %s",
+            "Meta rechazó el intercambio de código por POST (status=%s): %s",
             response.status_code,
             data,
             extra={
@@ -466,6 +466,40 @@ def _exchange_embedded_signup_code_for_token(code: str, redirect_uri: str | None
                 "redirect_uri": redirect_uri,
             },
         )
+
+        try:
+            fallback_response = requests.get(
+                endpoint,
+                params=params,
+                timeout=15,
+            )
+        except requests.RequestException as exc:
+            logger.warning("No se pudo ejecutar fallback GET de Meta OAuth: %s", exc)
+            fallback_response = None
+
+        if fallback_response is not None:
+            try:
+                fallback_data = fallback_response.json()
+            except ValueError:
+                fallback_data = {}
+
+            if fallback_response.status_code < 400:
+                access_token = fallback_data.get("access_token")
+                if access_token:
+                    return {"ok": True, "access_token": access_token, "raw": fallback_data}
+
+            logger.warning(
+                "Meta rechazó el intercambio de código por GET fallback (status=%s): %s",
+                fallback_response.status_code,
+                fallback_data,
+                extra={
+                    "graph_endpoint": endpoint,
+                    "graph_version": graph_version,
+                    "redirect_uri": redirect_uri,
+                },
+            )
+            data = fallback_data
+
         return {
             "ok": False,
             "error": "No se pudo intercambiar el código del Embedded Signup.",
@@ -2333,10 +2367,9 @@ def save_signup():
                 "redirect_uri": redirect_uri,
             },
         )
-        token_response = _exchange_embedded_signup_code_with_fallbacks(
+        token_response = _exchange_embedded_signup_code_for_token(
             embedded_code,
             redirect_uri,
-            request.base_url,
         )
         if token_response.get("ok"):
             payload["access_token"] = token_response.get("access_token")
@@ -2560,10 +2593,9 @@ def messenger_signup():
             redirect_uri = _resolve_embedded_signup_redirect_uri(
                 url_for("configuracion.configuracion_signup", _external=True)
             )
-        token_response = _exchange_embedded_signup_code_with_fallbacks(
+        token_response = _exchange_embedded_signup_code_for_token(
             embedded_code,
             redirect_uri,
-            url_for("configuracion.configuracion_signup", _external=True),
         )
         if token_response.get("ok"):
             access_token = token_response.get("access_token") or access_token
