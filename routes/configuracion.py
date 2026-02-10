@@ -410,6 +410,9 @@ def _exchange_embedded_signup_code_for_token(code: str, redirect_uri: str) -> di
             "error": "Falta configurar FACEBOOK_APP_ID o SECRET_PASSWORD_APP.",
         }
 
+    graph_version = (Config.FACEBOOK_GRAPH_API_VERSION or "v24.0").strip() or "v24.0"
+    endpoint = f"https://graph.facebook.com/{graph_version}/oauth/access_token"
+
     params = {
         "client_id": Config.FACEBOOK_APP_ID,
         "client_secret": Config.FACEBOOK_APP_SECRET,
@@ -417,14 +420,33 @@ def _exchange_embedded_signup_code_for_token(code: str, redirect_uri: str) -> di
         "code": code,
     }
 
+    logger.info(
+        "Intercambiando código de Embedded Signup por token (Meta OAuth)",
+        extra={
+            "graph_endpoint": endpoint,
+            "graph_version": graph_version,
+            "redirect_uri": redirect_uri,
+            "code_prefix": code[:12],
+            "code_length": len(code),
+        },
+    )
+
     try:
         response = requests.get(
-            "https://graph.facebook.com/v22.0/oauth/access_token",
+            endpoint,
             params=params,
             timeout=15,
         )
-    except requests.RequestException:
-        logger.warning("No se pudo conectar al endpoint de token de Meta.")
+    except requests.RequestException as exc:
+        logger.warning(
+            "No se pudo conectar al endpoint de token de Meta: %s",
+            exc,
+            extra={
+                "graph_endpoint": endpoint,
+                "graph_version": graph_version,
+                "redirect_uri": redirect_uri,
+            },
+        )
         return {"ok": False, "error": "No se pudo conectar con la API de Meta."}
 
     try:
@@ -433,6 +455,16 @@ def _exchange_embedded_signup_code_for_token(code: str, redirect_uri: str) -> di
         data = {}
 
     if response.status_code >= 400:
+        logger.warning(
+            "Meta rechazó el intercambio de código (status=%s): %s",
+            response.status_code,
+            data,
+            extra={
+                "graph_endpoint": endpoint,
+                "graph_version": graph_version,
+                "redirect_uri": redirect_uri,
+            },
+        )
         return {
             "ok": False,
             "error": "No se pudo intercambiar el código del Embedded Signup.",
@@ -441,6 +473,15 @@ def _exchange_embedded_signup_code_for_token(code: str, redirect_uri: str) -> di
 
     access_token = data.get("access_token")
     if not access_token:
+        logger.warning(
+            "Meta respondió sin access_token en Embedded Signup: %s",
+            data,
+            extra={
+                "graph_endpoint": endpoint,
+                "graph_version": graph_version,
+                "redirect_uri": redirect_uri,
+            },
+        )
         return {
             "ok": False,
             "error": "Meta no devolvió un access_token en la respuesta.",
