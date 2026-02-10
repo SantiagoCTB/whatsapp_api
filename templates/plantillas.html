@@ -1,0 +1,298 @@
+{% extends 'base.html' %}
+{% block title %}Plantillas WhatsApp{% endblock %}
+{% block body_class %}page{% endblock %}
+{% block content %}
+<div class="top-right">
+  <a href="{{ url_for('chat.index') }}"><button class="back-btn btn-primary">Volver al inicio</button></a>
+</div>
+
+<h2>Constructor de Plantillas de WhatsApp</h2>
+<p>Diseña, previsualiza, crea, lista, elimina y envía plantillas sin programar.</p>
+
+<div class="template-grid">
+  <section class="template-card">
+    <h3>1) Crear plantilla</h3>
+    <label>Nombre técnico (template_key)</label>
+    <input id="templateKey" placeholder="order_status" />
+
+    <label>Categoría</label>
+    <select id="templateCategory">
+      <option value="UTILITY">UTILITY</option>
+      <option value="MARKETING">MARKETING</option>
+      <option value="AUTHENTICATION">AUTHENTICATION</option>
+    </select>
+
+    <label>Idioma</label>
+    <input id="templateLanguage" value="es_CO" placeholder="es_CO" />
+
+    <label>Formato de parámetros</label>
+    <select id="templateParamFormat">
+      <option value="POSITIONAL">POSITIONAL (&#123;&#123;1&#125;&#125;, &#123;&#123;2&#125;&#125;)</option>
+      <option value="NAMED">NAMED (&#123;&#123;customer_name&#125;&#125;)</option>
+    </select>
+
+    <label class="inline-check"><input type="checkbox" id="headerEnabled" /> Incluir HEADER</label>
+    <div id="headerBlock" hidden>
+      <label>Formato HEADER</label>
+      <select id="headerFormat">
+        <option value="TEXT">TEXT</option>
+        <option value="IMAGE">IMAGE</option>
+        <option value="VIDEO">VIDEO</option>
+        <option value="DOCUMENT">DOCUMENT</option>
+        <option value="LOCATION">LOCATION</option>
+      </select>
+      <label>Texto HEADER (si es TEXT)</label>
+      <input id="headerText" placeholder="Actualización de tu pedido" />
+    </div>
+
+    <label>BODY (obligatorio)</label>
+    <textarea id="bodyText" rows="4" placeholder="Tu pedido #&#123;&#123;1&#125;&#125; ya fue enviado..."></textarea>
+
+    <label>Valores de ejemplo (uno por línea, en orden)</label>
+    <textarea id="bodyExamples" rows="4" placeholder="ABC123&#10;25/08/2026&#10;https://midominio.com/track/ABC123"></textarea>
+
+    <label>FOOTER (opcional)</label>
+    <input id="footerText" placeholder="¿Necesitas ayuda? Responde este mensaje." />
+
+    <h4>Botones (opcional)</h4>
+    <div id="buttonsContainer"></div>
+    <button id="addButton" type="button" class="btn-secondary">Agregar botón</button>
+
+    <div class="action-row">
+      <button id="previewCreate" class="btn-primary" type="button">Previsualizar JSON creación</button>
+      <button id="createTemplate" class="btn-primary" type="button">Crear plantilla</button>
+    </div>
+    <pre id="createPreview" class="json-preview"></pre>
+  </section>
+
+  <section class="template-card">
+    <h3>2) Enviar plantilla</h3>
+    <label>Destinatario (to)</label>
+    <input id="sendTo" placeholder="573001112233" />
+
+    <label>Nombre de plantilla</label>
+    <input id="sendTemplateName" placeholder="order_status" />
+
+    <label>Idioma</label>
+    <input id="sendLanguage" value="es_CO" placeholder="es_CO" />
+
+    <label>Parámetros BODY (uno por línea, en orden)</label>
+    <textarea id="sendBodyParameters" rows="5" placeholder="ABC123&#10;25/08/2026&#10;https://midominio.com/track/ABC123"></textarea>
+
+    <div class="action-row">
+      <button id="previewSend" class="btn-primary" type="button">Previsualizar JSON envío</button>
+      <button id="sendTemplate" class="btn-primary" type="button">Enviar plantilla</button>
+    </div>
+
+    <pre id="sendPreview" class="json-preview"></pre>
+  </section>
+</div>
+
+<section class="template-card">
+  <h3>3) Plantillas existentes</h3>
+  <div class="action-row">
+    <input id="searchTemplate" placeholder="Buscar por nombre" />
+    <select id="listCategory">
+      <option value="">Todas las categorías</option>
+      <option value="UTILITY">UTILITY</option>
+      <option value="MARKETING">MARKETING</option>
+      <option value="AUTHENTICATION">AUTHENTICATION</option>
+    </select>
+    <button id="loadTemplates" type="button" class="btn-primary">Cargar</button>
+  </div>
+  <div id="templatesList"></div>
+</section>
+
+<script>
+  const createPreview = document.getElementById('createPreview');
+  const sendPreview = document.getElementById('sendPreview');
+
+  function parseLines(text) {
+    return (text || '').split('\n').map(v => v.trim()).filter(Boolean);
+  }
+
+  function notify(msg, isError = false) {
+    alert(isError ? `Error: ${msg}` : msg);
+  }
+
+  function createButtonRow() {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'template-button-row';
+    wrapper.innerHTML = `
+      <select class="btn-type">
+        <option value="QUICK_REPLY">QUICK_REPLY</option>
+        <option value="URL">URL</option>
+        <option value="PHONE_NUMBER">PHONE_NUMBER</option>
+      </select>
+      <input class="btn-text" placeholder="Texto botón" />
+      <input class="btn-value" placeholder="URL o teléfono" />
+      <button type="button" class="btn-secondary btn-remove">Quitar</button>
+    `;
+    wrapper.querySelector('.btn-remove').addEventListener('click', () => wrapper.remove());
+    return wrapper;
+  }
+
+  function readButtons() {
+    const rows = document.querySelectorAll('.template-button-row');
+    const buttons = [];
+    rows.forEach(row => {
+      const type = row.querySelector('.btn-type').value;
+      const text = row.querySelector('.btn-text').value.trim();
+      const value = row.querySelector('.btn-value').value.trim();
+      if (!text) return;
+      const item = { type, text };
+      if (type === 'URL') item.url = value;
+      if (type === 'PHONE_NUMBER') item.phone_number = value;
+      buttons.push(item);
+    });
+    return buttons;
+  }
+
+  function buildCreateBody() {
+    return {
+      template_key: document.getElementById('templateKey').value.trim(),
+      category: document.getElementById('templateCategory').value,
+      language: document.getElementById('templateLanguage').value.trim(),
+      parameter_format: document.getElementById('templateParamFormat').value,
+      body_text: document.getElementById('bodyText').value,
+      body_examples: parseLines(document.getElementById('bodyExamples').value),
+      footer_text: document.getElementById('footerText').value,
+      header: {
+        enabled: document.getElementById('headerEnabled').checked,
+        format: document.getElementById('headerFormat').value,
+        text: document.getElementById('headerText').value,
+      },
+      buttons: readButtons(),
+    };
+  }
+
+  function buildSendBody() {
+    return {
+      to: document.getElementById('sendTo').value.trim(),
+      template_name: document.getElementById('sendTemplateName').value.trim(),
+      language_code: document.getElementById('sendLanguage').value.trim(),
+      body_parameters: parseLines(document.getElementById('sendBodyParameters').value),
+    };
+  }
+
+  async function postJson(url, body, method = 'POST') {
+    const response = await fetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: method === 'DELETE' ? null : JSON.stringify(body || {}),
+    });
+    const payload = await response.json();
+    if (!response.ok || !payload.ok) {
+      throw new Error(payload.error || 'Operación no completada');
+    }
+    return payload;
+  }
+
+  document.getElementById('addButton').addEventListener('click', () => {
+    document.getElementById('buttonsContainer').appendChild(createButtonRow());
+  });
+
+  document.getElementById('headerEnabled').addEventListener('change', (e) => {
+    document.getElementById('headerBlock').hidden = !e.target.checked;
+  });
+
+  document.getElementById('previewCreate').addEventListener('click', async () => {
+    try {
+      const result = await postJson('/api/plantillas/preview-create', buildCreateBody());
+      createPreview.textContent = JSON.stringify(result.payload, null, 2);
+    } catch (err) {
+      notify(err.message, true);
+    }
+  });
+
+  document.getElementById('createTemplate').addEventListener('click', async () => {
+    try {
+      const result = await postJson('/api/plantillas', buildCreateBody());
+      notify(result.message || 'Plantilla creada');
+      loadTemplates();
+    } catch (err) {
+      notify(err.message, true);
+    }
+  });
+
+  document.getElementById('previewSend').addEventListener('click', async () => {
+    try {
+      const result = await postJson('/api/plantillas/preview-send', buildSendBody());
+      sendPreview.textContent = JSON.stringify(result.payload, null, 2);
+    } catch (err) {
+      notify(err.message, true);
+    }
+  });
+
+  document.getElementById('sendTemplate').addEventListener('click', async () => {
+    try {
+      const result = await postJson('/api/plantillas/send', buildSendBody());
+      notify(result.message || 'Plantilla enviada');
+    } catch (err) {
+      notify(err.message, true);
+    }
+  });
+
+  async function loadTemplates() {
+    try {
+      const query = new URLSearchParams();
+      const search = document.getElementById('searchTemplate').value.trim();
+      const category = document.getElementById('listCategory').value;
+      if (search) query.set('search', search);
+      if (category) query.set('category', category);
+      const response = await fetch(`/api/plantillas?${query.toString()}`);
+      const result = await response.json();
+      if (!response.ok || !result.ok) {
+        throw new Error(result.error || 'No se pudieron cargar plantillas');
+      }
+      const root = document.getElementById('templatesList');
+      root.innerHTML = '';
+      if (!result.data || result.data.length === 0) {
+        root.textContent = 'No hay plantillas para mostrar.';
+        return;
+      }
+
+      result.data.forEach(item => {
+        const row = document.createElement('div');
+        row.className = 'template-list-row';
+        row.innerHTML = `
+          <div>
+            <strong>${item.name}</strong>
+            <div>Categoría: ${item.category || '-'}</div>
+            <div>Idioma: ${item.language || '-'}</div>
+            <div>Estado: ${item.status || '-'}</div>
+          </div>
+          <div class="action-row">
+            <button type="button" class="btn-secondary btn-fill-send">Usar para enviar</button>
+            <button type="button" class="btn-secondary btn-delete-template">Eliminar</button>
+          </div>
+        `;
+        row.querySelector('.btn-fill-send').addEventListener('click', () => {
+          document.getElementById('sendTemplateName').value = item.name || '';
+          document.getElementById('sendLanguage').value = item.language || 'es_CO';
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        });
+        row.querySelector('.btn-delete-template').addEventListener('click', async () => {
+          if (!confirm(`¿Eliminar la plantilla ${item.name}?`)) return;
+          try {
+            const delRes = await fetch(`/api/plantillas/${encodeURIComponent(item.name)}`, { method: 'DELETE' });
+            const delData = await delRes.json();
+            if (!delRes.ok || !delData.ok) {
+              throw new Error(delData.error || 'No se pudo eliminar');
+            }
+            notify(delData.message || 'Plantilla eliminada');
+            loadTemplates();
+          } catch (err) {
+            notify(err.message, true);
+          }
+        });
+        root.appendChild(row);
+      });
+    } catch (err) {
+      notify(err.message, true);
+    }
+  }
+
+  document.getElementById('loadTemplates').addEventListener('click', loadTemplates);
+</script>
+{% endblock %}
