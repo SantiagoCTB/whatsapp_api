@@ -531,15 +531,13 @@
             const responseCode = response && response.authResponse ? response.authResponse.code : '';
             const responseToken = response && response.authResponse ? response.authResponse.accessToken : '';
             if (responseCode) {
-              updateStatus('Código recibido. Intercambiando por token...');
+              updateStatus('Sesión iniciada en Facebook. Completa el asistente de Embedded Signup para continuar.');
               updateDebug('FB.login devolvió code', { code: responseCode });
-              sendSignupPayload({ code: responseCode });
               return;
             }
             if (responseToken) {
-              updateStatus('Token recibido. Guardando credenciales...');
+              updateStatus('Sesión iniciada en Facebook. Completa el asistente de Embedded Signup para continuar.');
               updateDebug('FB.login devolvió access_token', { access_token: responseToken });
-              sendSignupPayload({ access_token: responseToken });
               return;
             }
             if (response && response.status === 'connected') {
@@ -687,13 +685,11 @@
             const responseCode = response && response.authResponse ? response.authResponse.code : '';
             const responseToken = response && response.authResponse ? response.authResponse.accessToken : '';
             if (responseCode) {
-              updateStatus('Código recibido. Intercambiando por token...');
-              sendMessengerPayload({ code: responseCode });
+              updateStatus('Sesión iniciada en Facebook. Completa el asistente de Embedded Signup para continuar.');
               return;
             }
             if (responseToken) {
-              updateStatus('Token recibido. Guardando credenciales...');
-              sendMessengerPayload({ access_token: responseToken });
+              updateStatus('Sesión iniciada en Facebook. Completa el asistente de Embedded Signup para continuar.');
               return;
             }
             if (response && response.status === 'connected') {
