@@ -401,7 +401,7 @@ def _exchange_instagram_code_for_token(code: str, redirect_uri: str) -> dict:
     return {"ok": True, "access_token": long_token, "is_long_lived": True, "raw": long_data}
 
 
-def _exchange_embedded_signup_code_for_token(code: str, redirect_uri: str) -> dict:
+def _exchange_embedded_signup_code_for_token(code: str, redirect_uri: str | None) -> dict:
     if not code:
         return {"ok": False, "error": "Código de autorización vacío."}
     if not Config.FACEBOOK_APP_ID or not Config.FACEBOOK_APP_SECRET:
@@ -416,9 +416,10 @@ def _exchange_embedded_signup_code_for_token(code: str, redirect_uri: str) -> di
     params = {
         "client_id": Config.FACEBOOK_APP_ID,
         "client_secret": Config.FACEBOOK_APP_SECRET,
-        "redirect_uri": redirect_uri,
         "code": code,
     }
+    if redirect_uri:
+        params["redirect_uri"] = redirect_uri
 
     logger.info(
         "Intercambiando código de Embedded Signup por token (Meta OAuth)",
@@ -488,6 +489,48 @@ def _exchange_embedded_signup_code_for_token(code: str, redirect_uri: str) -> di
         }
 
     return {"ok": True, "access_token": access_token, "raw": data}
+
+
+def _embedded_signup_is_redirect_mismatch(details: dict | None) -> bool:
+    if not isinstance(details, dict):
+        return False
+    error = details.get("error")
+    if not isinstance(error, dict):
+        return False
+    subcode = error.get("error_subcode")
+    message = (error.get("message") or "").lower()
+    return subcode == 36008 or "redirect_uri" in message
+
+
+def _exchange_embedded_signup_code_with_fallbacks(code: str, redirect_uri: str, fallback_uri: str | None = None) -> dict:
+    attempts = []
+    for candidate in (redirect_uri, fallback_uri, None):
+        normalized = (candidate or "").strip()
+        if normalized in attempts:
+            continue
+        attempts.append(normalized)
+
+    last_response = None
+    for attempt_uri in attempts:
+        attempt_label = attempt_uri or "<empty>"
+        logger.info(
+            "Intentando intercambio de Embedded Signup",
+            extra={"redirect_uri": attempt_label, "code_prefix": code[:12], "code_length": len(code)},
+        )
+        response = _exchange_embedded_signup_code_for_token(code, attempt_uri or None)
+        if response.get("ok"):
+            return response
+
+        last_response = response
+        if not _embedded_signup_is_redirect_mismatch(response.get("details")):
+            return response
+
+        logger.warning(
+            "Fallo por redirect_uri; se intentará otra variante",
+            extra={"redirect_uri": attempt_label, "details": response.get("details")},
+        )
+
+    return last_response or {"ok": False, "error": "No se pudo intercambiar el código del Embedded Signup."}
 
 
 def _handle_instagram_oauth_code(code: str, redirect_uri: str) -> dict:
@@ -2214,8 +2257,10 @@ def save_signup():
                 "redirect_uri": redirect_uri,
             },
         )
-        token_response = _exchange_embedded_signup_code_for_token(
-            embedded_code, redirect_uri
+        token_response = _exchange_embedded_signup_code_with_fallbacks(
+            embedded_code,
+            redirect_uri,
+            request.base_url,
         )
         if token_response.get("ok"):
             payload["access_token"] = token_response.get("access_token")
@@ -2438,8 +2483,10 @@ def messenger_signup():
             redirect_uri = _resolve_embedded_signup_redirect_uri(
                 url_for("configuracion.configuracion_signup", _external=True)
             )
-        token_response = _exchange_embedded_signup_code_for_token(
-            embedded_code, redirect_uri
+        token_response = _exchange_embedded_signup_code_with_fallbacks(
+            embedded_code,
+            redirect_uri,
+            url_for("configuracion.configuracion_signup", _external=True),
         )
         if token_response.get("ok"):
             access_token = token_response.get("access_token") or access_token
