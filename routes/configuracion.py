@@ -2136,6 +2136,8 @@ def save_signup():
     )
     embedded_code = (payload.get("code") or "").strip()
     provided_redirect_uri = (payload.get("redirect_uri") or "").strip()
+    code_exchange_failed = False
+    code_exchange_error = None
     if embedded_code:
         logger.info(
             "Código embebido recibido",
@@ -2166,6 +2168,8 @@ def save_signup():
                 },
             )
         else:
+            code_exchange_failed = True
+            code_exchange_error = token_response.get("error") or "No se pudo intercambiar el código embebido."
             logger.warning(
                 "No se pudo obtener el token desde el código embebido",
                 extra={
@@ -2174,6 +2178,14 @@ def save_signup():
                     "details": token_response.get("details"),
                 },
             )
+
+    resolved_token = (payload.get("access_token") or payload.get("token") or "").strip()
+    if code_exchange_failed and not resolved_token:
+        return {
+            "ok": False,
+            "error": code_exchange_error,
+            "details": token_response.get("details") if isinstance(token_response, dict) else None,
+        }, 400
     logger.info(
         "Token embebido recibido",
         extra={
@@ -2193,14 +2205,14 @@ def save_signup():
     env_updates = {key: current_env.get(key) for key in tenants.TENANT_ENV_KEYS}
     env_updates.update(
         {
-            "META_TOKEN": payload.get("access_token") or payload.get("token"),
-            "LONG_LIVED_TOKEN": payload.get("access_token")
-            or payload.get("long_lived_token"),
-            "PHONE_NUMBER_ID": payload.get("phone_number_id")
-            or payload.get("phone_id"),
-            "WABA_ID": payload.get("waba_id"),
-            "BUSINESS_ID": payload.get("business_id")
-            or payload.get("business_manager_id"),
+            "META_TOKEN": resolved_token or current_env.get("META_TOKEN"),
+            "LONG_LIVED_TOKEN": (payload.get("access_token") or payload.get("long_lived_token") or "").strip()
+            or current_env.get("LONG_LIVED_TOKEN"),
+            "PHONE_NUMBER_ID": (payload.get("phone_number_id") or payload.get("phone_id") or "").strip()
+            or current_env.get("PHONE_NUMBER_ID"),
+            "WABA_ID": (payload.get("waba_id") or "").strip() or current_env.get("WABA_ID"),
+            "BUSINESS_ID": (payload.get("business_id") or payload.get("business_manager_id") or "").strip()
+            or current_env.get("BUSINESS_ID"),
         }
     )
 
