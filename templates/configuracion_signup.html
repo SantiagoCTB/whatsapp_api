@@ -467,10 +467,16 @@
       clearWaFallbackTimer();
       waFallbackTimer = setTimeout(() => {
         if (waFinishReceived) return;
-        updateStatus('No llegó evento FINISH. Intentando guardar con el code/token del login...');
-        updateDebug('Fallback: enviando payload desde FB.login al no recibir FINISH', rawPayload || {});
-        sendSignupPayload(rawPayload || {});
-      }, 1500);
+        const payload = rawPayload || {};
+        if (payload.access_token) {
+          updateStatus('No llegó evento FINISH. Intentando guardar con el token de sesión...');
+          updateDebug('Fallback: enviando access_token desde FB.login al no recibir FINISH', payload);
+          sendSignupPayload(payload);
+          return;
+        }
+        updateStatus('No llegó evento FINISH del Embedded Signup. Reabre el asistente y completa todos los pasos en Meta.', true);
+        updateDebug('Fallback cancelado: FB.login devolvió code sin FINISH; se evita intercambio para prevenir error 36008', payload);
+      }, 2500);
     };
 
     const sendSignupPayload = (rawPayload) => {
@@ -556,13 +562,13 @@
             const responseCode = response && response.authResponse ? response.authResponse.code : '';
             const responseToken = response && response.authResponse ? response.authResponse.accessToken : '';
             if (responseCode) {
-              updateStatus('Sesión iniciada. Esperando finalización del Embedded Signup...');
+              updateStatus('Sesión iniciada. Esperando evento FINISH del Embedded Signup...');
               updateDebug('FB.login devolvió code', { code: responseCode });
               scheduleWaFallbackExchange({ code: responseCode });
               return;
             }
             if (responseToken) {
-              updateStatus('Sesión iniciada. Esperando finalización del Embedded Signup...');
+              updateStatus('Sesión iniciada. Esperando evento FINISH del Embedded Signup...');
               updateDebug('FB.login devolvió access_token', { access_token: responseToken });
               scheduleWaFallbackExchange({ access_token: responseToken });
               return;
