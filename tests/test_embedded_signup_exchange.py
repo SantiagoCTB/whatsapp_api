@@ -1,4 +1,5 @@
 from pathlib import Path
+from types import SimpleNamespace
 import sys
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
@@ -6,6 +7,7 @@ if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
 from routes import configuracion
+from app import create_app
 
 
 class _Response:
@@ -126,3 +128,49 @@ def test_embedded_signup_error_message_for_redirect_mismatch():
 
     assert "redirect_uri" in message.lower()
     assert "sdk" in message.lower()
+
+
+def test_save_signup_uses_redirect_uri_fallbacks_when_uri_differs(monkeypatch):
+    app = create_app()
+    app.config["TESTING"] = True
+
+    tenant = SimpleNamespace(tenant_key="acme", metadata={})
+    calls = {}
+
+    def fake_exchange(code, redirect_uri, fallback_uri=None):
+        calls["code"] = code
+        calls["redirect_uri"] = redirect_uri
+        calls["fallback_uri"] = fallback_uri
+        return {"ok": True, "access_token": "token-from-code"}
+
+    def fake_update_env(tenant_key, env_updates):
+        calls["updated_tenant_key"] = tenant_key
+        calls["env_updates"] = env_updates
+
+    monkeypatch.setattr(configuracion, "_resolve_signup_tenant", lambda: tenant)
+    monkeypatch.setattr(configuracion, "_resolve_embedded_signup_redirect_uri", lambda _fallback: "https://resolved.example/configuracion/signup")
+    monkeypatch.setattr(configuracion, "_exchange_embedded_signup_code_with_fallbacks", fake_exchange)
+    monkeypatch.setattr(configuracion.tenants, "get_tenant_env", lambda _tenant: {})
+    monkeypatch.setattr(configuracion.tenants, "update_tenant_env", fake_update_env)
+    monkeypatch.setattr(configuracion.tenants, "update_tenant_metadata", lambda *_args, **_kwargs: None)
+
+    with app.test_client() as client:
+        with client.session_transaction() as session:
+            session["user"] = "admin"
+            session["roles"] = ["admin"]
+
+        response = client.post(
+            "/configuracion/signup",
+            json={
+                "code": "embedded-code",
+                "redirect_uri": "https://provided.example/configuracion/signup",
+            },
+        )
+
+    assert response.status_code == 200
+    assert response.get_json()["ok"] is True
+    assert calls["code"] == "embedded-code"
+    assert calls["redirect_uri"] == "https://provided.example/configuracion/signup"
+    assert calls["fallback_uri"] == "https://resolved.example/configuracion/signup"
+    assert calls["updated_tenant_key"] == "acme"
+    assert calls["env_updates"]["META_TOKEN"] == "token-from-code"
