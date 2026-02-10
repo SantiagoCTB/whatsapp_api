@@ -502,13 +502,39 @@ def _embedded_signup_is_redirect_mismatch(details: dict | None) -> bool:
     return subcode == 36008 or "redirect_uri" in message
 
 
-def _exchange_embedded_signup_code_with_fallbacks(code: str, redirect_uri: str, fallback_uri: str | None = None) -> dict:
-    attempts = []
-    for candidate in (redirect_uri, fallback_uri, None):
-        normalized = (candidate or "").strip()
+def _build_redirect_uri_attempts(redirect_uri: str | None, fallback_uri: str | None = None) -> list[str]:
+    attempts: list[str] = []
+
+    def add_candidate(value: str | None):
+        normalized = (value or "").strip()
         if normalized in attempts:
-            continue
+            return
         attempts.append(normalized)
+
+    for candidate in (redirect_uri, fallback_uri):
+        normalized = (candidate or "").strip()
+        if not normalized:
+            continue
+
+        add_candidate(normalized)
+
+        trimmed = normalized.rstrip("/")
+        if trimmed != normalized:
+            add_candidate(trimmed)
+        else:
+            add_candidate(f"{normalized}/")
+
+        if normalized.startswith("https://"):
+            add_candidate(f"http://{normalized[len('https://'):]}")
+        elif normalized.startswith("http://"):
+            add_candidate(f"https://{normalized[len('http://'):]}")
+
+    add_candidate(None)
+    return attempts
+
+
+def _exchange_embedded_signup_code_with_fallbacks(code: str, redirect_uri: str, fallback_uri: str | None = None) -> dict:
+    attempts = _build_redirect_uri_attempts(redirect_uri, fallback_uri)
 
     last_response = None
     for attempt_uri in attempts:
