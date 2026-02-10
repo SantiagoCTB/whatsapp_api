@@ -21,6 +21,17 @@ def _require_login():
     return "user" in session
 
 
+def _extract_graph_error_message(payload: dict | None) -> str | None:
+    if not isinstance(payload, dict):
+        return None
+    error = payload.get("error")
+    if isinstance(error, dict):
+        message = error.get("message")
+        if message:
+            return str(message)
+    return None
+
+
 def _tenant_whatsapp_env() -> tuple[str, str, str]:
     env = tenants.get_current_tenant_env() or {}
     token = str(env.get("META_TOKEN") or "").strip()
@@ -30,8 +41,6 @@ def _tenant_whatsapp_env() -> tuple[str, str, str]:
     missing = []
     if not token:
         missing.append("META_TOKEN")
-    if not waba_id:
-        missing.append("WABA_ID")
     if not phone_id:
         missing.append("PHONE_NUMBER_ID")
     if missing:
@@ -40,6 +49,32 @@ def _tenant_whatsapp_env() -> tuple[str, str, str]:
         )
 
     return token, waba_id, phone_id
+
+
+def _resolve_waba_id(token: str, waba_id: str, phone_id: str) -> str:
+    if waba_id:
+        return waba_id
+
+    response = requests.get(
+        f"{GRAPH_BASE_URL}/{phone_id}",
+        params={"fields": "whatsapp_business_account", "access_token": token},
+        timeout=20,
+    )
+    payload = response.json() if response.content else {}
+
+    if response.status_code >= 400:
+        details = _extract_graph_error_message(payload)
+        raise RuntimeError(
+            "No se pudo resolver WABA_ID desde PHONE_NUMBER_ID. "
+            + (details or "Verifica que el token tenga permisos de WhatsApp Management.")
+        )
+
+    resolved = str((payload.get("whatsapp_business_account") or {}).get("id") or "").strip()
+    if not resolved:
+        raise RuntimeError(
+            "No se encontró whatsapp_business_account para el PHONE_NUMBER_ID configurado."
+        )
+    return resolved
 
 
 @plantillas_bp.route("/plantillas", methods=["GET"])
@@ -77,6 +112,47 @@ def preview_send_template_payload():
     return {"ok": True, "payload": send_payload}
 
 
+@plantillas_bp.route("/api/plantillas/credentials", methods=["GET"])
+def template_credentials_status():
+    if not _require_login():
+        return {"ok": False, "error": "No autorizado"}, 403
+
+    env = tenants.get_current_tenant_env() or {}
+    token = str(env.get("META_TOKEN") or "").strip()
+    waba_id = str(env.get("WABA_ID") or "").strip()
+    phone_id = str(env.get("PHONE_NUMBER_ID") or "").strip()
+
+    missing = []
+    if not token:
+        missing.append("META_TOKEN")
+    if not phone_id:
+        missing.append("PHONE_NUMBER_ID")
+
+    resolved_waba_id = ""
+    warnings = []
+    if not missing:
+        try:
+            resolved_waba_id = _resolve_waba_id(token, waba_id, phone_id)
+            if not waba_id:
+                warnings.append(
+                    "WABA_ID no está configurado. Se resolvió automáticamente usando PHONE_NUMBER_ID."
+                )
+        except RuntimeError as exc:
+            warnings.append(str(exc))
+
+    return {
+        "ok": True,
+        "ready": len(missing) == 0 and bool(resolved_waba_id),
+        "missing": missing,
+        "warnings": warnings,
+        "configured": {
+            "META_TOKEN": bool(token),
+            "PHONE_NUMBER_ID": bool(phone_id),
+            "WABA_ID": bool(waba_id),
+        },
+    }
+
+
 @plantillas_bp.route("/api/plantillas", methods=["GET"])
 def list_templates():
     if not _require_login():
@@ -86,7 +162,8 @@ def list_templates():
     category = (request.args.get("category") or "").strip().upper()
 
     try:
-        token, waba_id, _ = _tenant_whatsapp_env()
+        token, waba_id, phone_id = _tenant_whatsapp_env()
+        waba_id = _resolve_waba_id(token, waba_id, phone_id)
     except RuntimeError as exc:
         return {"ok": False, "error": str(exc)}, 400
 
@@ -107,11 +184,15 @@ def list_templates():
     payload = response.json() if response.content else {}
 
     if response.status_code >= 400:
+        details = _extract_graph_error_message(payload)
         logger.warning(
             "Error listando plantillas",
             extra={"status": response.status_code, "payload": payload},
         )
-        return {"ok": False, "error": "No se pudieron listar las plantillas.", "details": payload}, 400
+        message = "No se pudieron listar las plantillas."
+        if details:
+            message = f"{message} {details}"
+        return {"ok": False, "error": message, "details": payload}, 400
 
     return {"ok": True, "data": payload.get("data", []), "paging": payload.get("paging")}
 
@@ -123,7 +204,8 @@ def create_template():
 
     data = request.get_json(silent=True) or {}
     try:
-        token, waba_id, _ = _tenant_whatsapp_env()
+        token, waba_id, phone_id = _tenant_whatsapp_env()
+        waba_id = _resolve_waba_id(token, waba_id, phone_id)
         create_payload = build_template_create_payload(data)
     except (RuntimeError, TemplateValidationError) as exc:
         return {"ok": False, "error": str(exc)}, 400
@@ -137,11 +219,15 @@ def create_template():
     payload = response.json() if response.content else {}
 
     if response.status_code >= 400:
+        details = _extract_graph_error_message(payload)
         logger.warning(
             "Error creando plantilla",
             extra={"status": response.status_code, "payload": payload, "template": create_payload.get("name")},
         )
-        return {"ok": False, "error": "No se pudo crear la plantilla.", "details": payload}, 400
+        message = "No se pudo crear la plantilla."
+        if details:
+            message = f"{message} {details}"
+        return {"ok": False, "error": message, "details": payload}, 400
 
     return {"ok": True, "message": "Plantilla creada y enviada a aprobación.", "data": payload}
 
@@ -167,11 +253,15 @@ def send_template():
     payload = response.json() if response.content else {}
 
     if response.status_code >= 400:
+        details = _extract_graph_error_message(payload)
         logger.warning(
             "Error enviando plantilla",
             extra={"status": response.status_code, "payload": payload, "template": send_payload.get("template", {}).get("name")},
         )
-        return {"ok": False, "error": "No se pudo enviar la plantilla.", "details": payload}, 400
+        message = "No se pudo enviar la plantilla."
+        if details:
+            message = f"{message} {details}"
+        return {"ok": False, "error": message, "details": payload}, 400
 
     return {"ok": True, "message": "Plantilla enviada correctamente.", "data": payload}
 
@@ -182,7 +272,8 @@ def delete_template(template_name: str):
         return {"ok": False, "error": "No autorizado"}, 403
 
     try:
-        token, waba_id, _ = _tenant_whatsapp_env()
+        token, waba_id, phone_id = _tenant_whatsapp_env()
+        waba_id = _resolve_waba_id(token, waba_id, phone_id)
     except RuntimeError as exc:
         return {"ok": False, "error": str(exc)}, 400
 
@@ -194,10 +285,14 @@ def delete_template(template_name: str):
     payload = response.json() if response.content else {}
 
     if response.status_code >= 400:
+        details = _extract_graph_error_message(payload)
         logger.warning(
             "Error eliminando plantilla",
             extra={"status": response.status_code, "payload": payload, "template": template_name},
         )
-        return {"ok": False, "error": "No se pudo eliminar la plantilla.", "details": payload}, 400
+        message = "No se pudo eliminar la plantilla."
+        if details:
+            message = f"{message} {details}"
+        return {"ok": False, "error": message, "details": payload}, 400
 
     return {"ok": True, "message": "Plantilla eliminada.", "data": payload}
