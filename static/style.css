@@ -2113,3 +2113,60 @@
     right: 8px;
   }
 }
+
+.template-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  margin-bottom: 20px;
+}
+
+.template-card {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 16px;
+}
+
+.template-card label {
+  display: block;
+  font-weight: 600;
+  margin-top: 10px;
+}
+
+.template-card input,
+.template-card select,
+.template-card textarea {
+  width: 100%;
+  margin-top: 6px;
+}
+
+.action-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+
+.json-preview {
+  background: #0f172a;
+  color: #d1d5db;
+  padding: 10px;
+  border-radius: 8px;
+  max-height: 280px;
+  overflow: auto;
+}
+
+.template-button-row,
+.template-list-row {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 10px;
+  margin-top: 8px;
+}
+
+.inline-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}

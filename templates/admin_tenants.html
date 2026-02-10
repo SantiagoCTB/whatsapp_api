@@ -216,6 +216,10 @@
       </div>
       <div>
         <h3>Integraciones</h3>
+        {% set tenant_metadata = selected_tenant.metadata if selected_tenant.metadata is mapping else {} %}
+        {% set instagram_account = tenant_metadata.get('instagram_account') if tenant_metadata.get('instagram_account') is mapping else {} %}
+        {% set page_selection = tenant_metadata.get('page_selection') if tenant_metadata.get('page_selection') is mapping else {} %}
+        {% set messenger_selection = page_selection.get('messenger') if page_selection.get('messenger') is mapping else {} %}
         <div class="meta-grid">
           <div><strong>WABA_ID:</strong> {{ tenant_env.get('WABA_ID') or '—' }}</div>
           <div><strong>BUSINESS_ID:</strong> {{ tenant_env.get('BUSINESS_ID') or '—' }}</div>
@@ -223,10 +227,10 @@
           <div><strong>Token largo:</strong> {{ tenant_env.get('LONG_LIVED_TOKEN') or tenant_env.get('META_TOKEN') or '—' }}</div>
           <div><strong>Page ID (Messenger):</strong> {{ tenant_env.get('MESSENGER_PAGE_ID') or tenant_env.get('PAGE_ID') or '—' }}</div>
           <div><strong>Instagram account ID:</strong> {{ tenant_env.get('INSTAGRAM_ACCOUNT_ID') or tenant_env.get('INSTAGRAM_PAGE_ID') or '—' }}</div>
-          <div><strong>Cuenta Instagram:</strong> {{ (selected_tenant.metadata.get('instagram_account', {}).get('username') if selected_tenant.metadata else None) or (selected_tenant.metadata.get('instagram_account', {}).get('id') if selected_tenant.metadata else None) or '—' }}</div>
+          <div><strong>Cuenta Instagram:</strong> {{ instagram_account.get('username') or instagram_account.get('id') or '—' }}</div>
           <div><strong>Plataforma legacy:</strong> {{ tenant_env.get('PLATFORM') or '—' }}</div>
-          <div><strong>Page name (Messenger):</strong> {{ (selected_tenant.metadata.get('page_selection', {}).get('messenger', {}).get('page_name') if selected_tenant.metadata else None) or '—' }}</div>
-          <div><strong>Business info:</strong> {{ (selected_tenant.metadata.get('whatsapp_business') if selected_tenant.metadata else {}) or '—' }}</div>
+          <div><strong>Page name (Messenger):</strong> {{ messenger_selection.get('page_name') or '—' }}</div>
+          <div><strong>Business info:</strong> {{ tenant_metadata.get('whatsapp_business') or '—' }}</div>
         </div>
         <p class="help">Usa el Embedded Signup para generar las credenciales directamente desde Meta y guardarlas en este tenant.</p>
         <button
