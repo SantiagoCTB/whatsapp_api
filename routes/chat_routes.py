@@ -260,6 +260,207 @@ def _select_matching_rule(rules, text_norm: str | None):
     return wildcard
 
 
+def _build_in_clause_params(values: list):
+    if not values:
+        return None, None
+    placeholders = ','.join(['%s'] * len(values))
+    return placeholders, tuple(values)
+
+
+def _fetch_aliases(cursor, numeros: list[str]) -> dict[str, str]:
+    placeholders, params = _build_in_clause_params(numeros)
+    if not placeholders:
+        return {}
+    cursor.execute(
+        f"SELECT numero, nombre FROM alias WHERE numero IN ({placeholders})",
+        params,
+    )
+    return {row[0]: row[1] for row in cursor.fetchall() if row and row[0]}
+
+
+def _fetch_instagram_profiles(cursor, numeros: list[str]) -> dict[str, tuple[str | None, str | None, datetime | None]]:
+    placeholders, params = _build_in_clause_params(numeros)
+    if not placeholders:
+        return {}
+    cursor.execute(
+        f"""
+        SELECT numero, username, profile_pic, updated_at
+          FROM chat_profiles
+         WHERE platform = %s
+           AND numero IN ({placeholders})
+        """,
+        ("instagram", *params),
+    )
+    return {
+        row[0]: (row[1], row[2], row[3])
+        for row in cursor.fetchall()
+        if row and row[0]
+    }
+
+
+def _fetch_chat_assignments(cursor, numeros: list[str]) -> dict[str, tuple[int | None, str | None]]:
+    placeholders, params = _build_in_clause_params(numeros)
+    if not placeholders:
+        return {}
+    cursor.execute(
+        f"""
+        SELECT ca.numero, ca.user_id, COALESCE(NULLIF(u.nombre, ''), u.username)
+          FROM chat_assignments ca
+          JOIN usuarios u ON ca.user_id = u.id
+         WHERE ca.numero IN ({placeholders})
+        """,
+        params,
+    )
+    return {
+        row[0]: (int(row[1]) if row[1] is not None else None, row[2])
+        for row in cursor.fetchall()
+        if row and row[0]
+    }
+
+
+def _fetch_last_messages(cursor, numeros: list[str]) -> dict[str, tuple[str, datetime | None, str | None]]:
+    placeholders, params = _build_in_clause_params(numeros)
+    if not placeholders:
+        return {}
+    cursor.execute(
+        f"""
+        SELECT m.numero, m.mensaje, m.timestamp, m.tipo
+          FROM mensajes m
+          JOIN (
+                SELECT numero, MAX(id) AS max_id
+                  FROM mensajes
+                 WHERE numero IN ({placeholders})
+                 GROUP BY numero
+               ) latest
+            ON latest.max_id = m.id
+        """,
+        params,
+    )
+    return {
+        row[0]: (row[1] or "", row[2], row[3])
+        for row in cursor.fetchall()
+        if row and row[0]
+    }
+
+
+def _fetch_first_link_by_chat(cursor, numeros: list[str]) -> dict[str, str]:
+    placeholders, params = _build_in_clause_params(numeros)
+    if not placeholders:
+        return {}
+    cursor.execute(
+        f"""
+        SELECT m.numero, m.link_url
+          FROM mensajes m
+          JOIN (
+                SELECT numero, MIN(id) AS min_id
+                  FROM mensajes
+                 WHERE numero IN ({placeholders})
+                   AND link_url IS NOT NULL
+                   AND link_url <> ''
+                 GROUP BY numero
+               ) first_link
+            ON first_link.min_id = m.id
+        """,
+        params,
+    )
+    return {
+        row[0]: row[1]
+        for row in cursor.fetchall()
+        if row and row[0] and row[1]
+    }
+
+
+def _fetch_first_client_type_by_chat(cursor, numeros: list[str]) -> dict[str, str]:
+    placeholders, params = _build_in_clause_params(numeros)
+    if not placeholders:
+        return {}
+    cursor.execute(
+        f"""
+        SELECT m.numero, m.tipo
+          FROM mensajes m
+          JOIN (
+                SELECT numero, MIN(id) AS min_id
+                  FROM mensajes
+                 WHERE numero IN ({placeholders})
+                   AND (tipo = 'cliente' OR tipo LIKE 'cliente_%')
+                 GROUP BY numero
+               ) first_client
+            ON first_client.min_id = m.id
+        """,
+        params,
+    )
+    return {
+        row[0]: row[1]
+        for row in cursor.fetchall()
+        if row and row[0] and row[1]
+    }
+
+
+def _fetch_chat_roles(cursor, numeros: list[str]) -> dict[str, tuple[str | None, list[str]]]:
+    placeholders, params = _build_in_clause_params(numeros)
+    if not placeholders:
+        return {}
+    cursor.execute(
+        f"""
+        SELECT cr.numero,
+               GROUP_CONCAT(cr.role_id) AS ids,
+               GROUP_CONCAT(COALESCE(r.keyword, r.name) ORDER BY r.id) AS nombres
+          FROM chat_roles cr
+          LEFT JOIN roles r ON cr.role_id = r.id
+         WHERE cr.numero IN ({placeholders})
+         GROUP BY cr.numero
+        """,
+        params,
+    )
+    roles_by_chat = {}
+    for row in cursor.fetchall():
+        if not row or not row[0]:
+            continue
+        role_ids_text = row[1]
+        role_names_text = row[2]
+        role_keywords = [n.strip() for n in role_names_text.split(',')] if role_names_text else []
+        role_keywords = [kw for kw in role_keywords if kw and kw not in EXCLUDED_ROLE_KEYWORDS]
+        roles_by_chat[row[0]] = (role_ids_text, role_keywords)
+    return roles_by_chat
+
+
+def _fetch_chat_states(cursor, numeros: list[str]) -> dict[str, tuple[str | None, datetime | None, str | None]]:
+    placeholders, params = _build_in_clause_params(numeros)
+    if not placeholders:
+        return {}
+    cursor.execute(
+        f"SELECT numero, step, last_activity, estado FROM chat_state WHERE numero IN ({placeholders})",
+        params,
+    )
+    return {
+        row[0]: (row[1], row[2], row[3])
+        for row in cursor.fetchall()
+        if row and row[0]
+    }
+
+
+def _fetch_user_role_keywords(cursor, user_ids: list[int]) -> dict[int, list[str]]:
+    placeholders, params = _build_in_clause_params(user_ids)
+    if not placeholders:
+        return {}
+    cursor.execute(
+        f"""
+        SELECT ur.user_id, r.keyword
+          FROM user_roles ur
+          JOIN roles r ON ur.role_id = r.id
+         WHERE ur.user_id IN ({placeholders})
+           AND r.keyword NOT IN ('superadmin', 'tiquetes', 'soporte')
+        """,
+        params,
+    )
+    keywords: dict[int, list[str]] = {}
+    for row in cursor.fetchall():
+        if not row or row[0] is None or not row[1]:
+            continue
+        keywords.setdefault(int(row[0]), []).append(row[1])
+    return keywords
+
+
 def _rule_is_invalid(rule, cursor) -> bool:
     tipo = (rule[3] or '').strip().lower()
     if tipo not in ALLOWED_RULE_TYPES:
@@ -1421,70 +1622,41 @@ def get_chat_list():
     instagram_token = (tenant_env.get("INSTAGRAM_TOKEN") or "").strip()
     refreshed_profiles: set[str] = set()
     profiles_updated = False
+
+    aliases_by_chat = _fetch_aliases(c, numeros)
+    instagram_profiles = _fetch_instagram_profiles(c, numeros)
+    assignments_by_chat = _fetch_chat_assignments(c, numeros)
+    last_messages = _fetch_last_messages(c, numeros)
+    first_links = _fetch_first_link_by_chat(c, numeros)
+    first_client_types = _fetch_first_client_type_by_chat(c, numeros)
+    roles_by_chat = _fetch_chat_roles(c, numeros)
+    states_by_chat = _fetch_chat_states(c, numeros)
+    rules_cache: dict[str, list] = {}
+    assigned_user_ids = [uid for uid, _name in assignments_by_chat.values() if uid]
+    user_role_keywords = _fetch_user_role_keywords(c, assigned_user_ids)
+
     chats = []
     for numero in numeros:
-        # Alias
-        c.execute("SELECT nombre FROM alias WHERE numero = %s", (numero,))
-        fila = c.fetchone()
-        alias = fila[0] if fila else None
+        alias = aliases_by_chat.get(numero)
 
-        c.execute(
-            """
-            SELECT username, profile_pic
-              FROM chat_profiles
-             WHERE numero = %s AND platform = %s
-            """,
-            (numero, "instagram"),
-        )
-        fila = c.fetchone()
-        instagram_username = fila[0] if fila else None
-        instagram_profile_pic = fila[1] if fila else None
+        profile = instagram_profiles.get(numero)
+        instagram_username = profile[0] if profile else None
+        instagram_profile_pic = profile[1] if profile else None
+        profile_updated_at = profile[2] if profile else None
 
-        c.execute(
-            """
-            SELECT ca.user_id, COALESCE(NULLIF(u.nombre, ''), u.username)
-              FROM chat_assignments ca
-              JOIN usuarios u ON ca.user_id = u.id
-             WHERE ca.numero = %s
-            """,
-            (numero,),
-        )
-        fila_asignado = c.fetchone()
+        fila_asignado = assignments_by_chat.get(numero)
         asignado_id = fila_asignado[0] if fila_asignado else None
         asignado_nombre = fila_asignado[1] if fila_asignado else None
 
-        # Último mensaje y su timestamp
-        c.execute(
-            "SELECT mensaje, timestamp, tipo FROM mensajes WHERE numero = %s "
-            "ORDER BY timestamp DESC LIMIT 1",
-            (numero,)
-        )
-        fila = c.fetchone()
-        last_ts = _to_bogota_iso(fila[1]) if fila and fila[1] else None
-        last_ts_raw = fila[1] if fila else None
-        ultimo = fila[0] if fila else ""
-        last_tipo = fila[2] if fila else None
+        last = last_messages.get(numero)
+        ultimo = last[0] if last else ""
+        last_ts_raw = last[1] if last else None
+        last_tipo = last[2] if last else None
+        last_ts = _to_bogota_iso(last_ts_raw) if last_ts_raw else None
         requiere_asesor = "asesor" in ultimo.lower()
 
-        c.execute(
-            "SELECT link_url FROM mensajes WHERE numero = %s "
-            "ORDER BY timestamp ASC, id ASC LIMIT 1",
-            (numero,),
-        )
-        fila = c.fetchone()
-        primer_link = fila[0] if fila else ""
-        c.execute(
-            """
-            SELECT tipo FROM mensajes
-             WHERE numero = %s
-               AND (tipo = 'cliente' OR tipo LIKE 'cliente_%')
-             ORDER BY timestamp ASC, id ASC
-             LIMIT 1
-            """,
-            (numero,),
-        )
-        fila = c.fetchone()
-        primer_tipo = fila[0] if fila else ""
+        primer_link = first_links.get(numero) or ""
+        primer_tipo = first_client_types.get(numero) or ""
         if not primer_link and primer_tipo:
             primer_tipo_lower = str(primer_tipo).lower()
             if "messenger" in primer_tipo_lower:
@@ -1498,18 +1670,6 @@ def get_chat_list():
             elif "instagram" in last_tipo_lower:
                 primer_link = "instagram"
 
-        c.execute(
-            """
-            SELECT username, profile_pic, updated_at
-              FROM chat_profiles
-             WHERE numero = %s AND platform = %s
-            """,
-            (numero, "instagram"),
-        )
-        fila = c.fetchone()
-        instagram_username = fila[0] if fila else None
-        instagram_profile_pic = fila[1] if fila else None
-        profile_updated_at = fila[2] if fila else None
         if (
             primer_link == "instagram"
             and instagram_token
@@ -1552,34 +1712,16 @@ def get_chat_list():
                         )
                         alias = instagram_username
 
-        # Roles asociados al número y nombre/keyword
-        c.execute(
-            """
-            SELECT GROUP_CONCAT(cr.role_id) AS ids,
-                   GROUP_CONCAT(COALESCE(r.keyword, r.name) ORDER BY r.id) AS nombres
-            FROM chat_roles cr
-            LEFT JOIN roles r ON cr.role_id = r.id
-            WHERE cr.numero = %s
-            """,
-            (numero,),
-        )
-        fila_roles = c.fetchone()
-        roles = fila_roles[0] if fila_roles else None
-        nombres_roles = fila_roles[1] if fila_roles else None
+        role_data = roles_by_chat.get(numero)
+        roles = role_data[0] if role_data else None
+        role_keywords = list(role_data[1]) if role_data else []
         role_ids_for_chat = [int(role_id) for role_id in roles.split(',')] if roles else []
-        role_keywords = [n.strip() for n in nombres_roles.split(',')] if nombres_roles else []
-        role_keywords = [kw for kw in role_keywords if kw and kw not in EXCLUDED_ROLE_KEYWORDS]
         inicial_rol = role_keywords[0][0].upper() if role_keywords else None
 
-        # Estado actual del chat
-        c.execute(
-            "SELECT step, last_activity, estado FROM chat_state WHERE numero = %s",
-            (numero,),
-        )
-        fila_estado = c.fetchone()
-        step = fila_estado[0] if fila_estado else None
-        last_activity = fila_estado[1] if fila_estado else None
-        stored_estado = fila_estado[2] if fila_estado else None
+        state_data = states_by_chat.get(numero)
+        step = state_data[0] if state_data else None
+        last_activity = state_data[1] if state_data else None
+        stored_estado = state_data[2] if state_data else None
 
         estado = None
         closed_estado = _maybe_close_expired_session(
@@ -1622,16 +1764,19 @@ def get_chat_list():
                 if not step:
                     estado = "asesor"
                 else:
-                    c.execute(
-                        """
-                        SELECT id, input_text, siguiente_step, tipo, opciones
-                          FROM reglas
-                         WHERE step = %s
-                         ORDER BY id
-                        """,
-                        (step,),
-                    )
-                    rules = c.fetchall()
+                    rules = rules_cache.get(step)
+                    if rules is None:
+                        c.execute(
+                            """
+                            SELECT id, input_text, siguiente_step, tipo, opciones
+                              FROM reglas
+                             WHERE step = %s
+                             ORDER BY id
+                            """,
+                            (step,),
+                        )
+                        rules = c.fetchall()
+                        rules_cache[step] = rules
                     if not rules:
                         estado = "asesor"
                     else:
@@ -1657,20 +1802,12 @@ def get_chat_list():
                 if assignment:
                     asignado_id = int(assignment["user_id"])
                     asignado_nombre = assignment["username"]
+                    if asignado_id not in user_role_keywords:
+                        fetched_keywords = _fetch_user_role_keywords(c, [asignado_id])
+                        user_role_keywords.update(fetched_keywords)
 
         if asignado_id:
-            c.execute(
-                """
-                SELECT r.keyword
-                  FROM user_roles ur
-                  JOIN roles r ON ur.role_id = r.id
-                 WHERE ur.user_id = %s
-                   AND r.keyword NOT IN ('superadmin', 'tiquetes', 'soporte')
-                """,
-                (asignado_id,),
-            )
-            assigned_roles = [row[0] for row in c.fetchall() if row and row[0]]
-            for keyword in assigned_roles:
+            for keyword in user_role_keywords.get(asignado_id, []):
                 if keyword not in role_keywords:
                     role_keywords.append(keyword)
             if role_keywords and not inicial_rol:
@@ -1697,7 +1834,6 @@ def get_chat_list():
             "last_message": ultimo,
             "first_link_url": primer_link,
         })
-
     if profiles_updated:
         conn.commit()
     conn.close()
