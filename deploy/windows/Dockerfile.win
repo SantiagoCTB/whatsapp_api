@@ -35,6 +35,13 @@ RUN powershell -NoProfile -ExecutionPolicy Bypass -Command `
     Get-Content certs\agestion-net.crt, certs\cabundle.crt | Set-Content -Encoding ascii certs\fullchain.crt
 
 # =========================
+# Metadata de build para trazabilidad de versión
+# =========================
+ARG APP_COMMIT=unknown
+LABEL org.opencontainers.image.revision=${APP_COMMIT}
+ENV APP_COMMIT=${APP_COMMIT}
+
+# =========================
 # 4) TLS directo en 8000
 # =========================
 ENV PORT=8000
