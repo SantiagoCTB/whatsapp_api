@@ -56,12 +56,11 @@ $env:DOCKER_HOST = "npipe:////./pipe/docker_engine"
 & $docker network rm whapco_win 2>$null
 
 # 🔥 CLAVE: forzar recreación y rebuild para que no quede "versión vieja"
-# - build --no-cache: evita usar capas viejas (compose up no soporta --no-cache)
-# - --pull: intenta traer capas base más recientes
-& $docker compose -f $composeFile build --no-cache --pull
-
+# - --build: reconstruye la imagen (si tienes build:)
 # - --force-recreate: recrea contenedores aunque "parezca igual"
-& $docker compose -f $composeFile up -d --force-recreate
+# - --pull always: si usas image: también intenta traer lo último del tag
+# - --no-cache: evita usar capas viejas
+& $docker compose -f $composeFile up -d --build --force-recreate --pull always --no-cache
 
 # Verificación rápida: estado y últimas líneas de logs de web (si existe)
 Write-Output "Compose status:"

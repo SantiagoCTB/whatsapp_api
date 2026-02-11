@@ -6,14 +6,14 @@ SHELL ["cmd", "/S", "/C"]
 WORKDIR C:\app
 
 # =========================
-# 0) Instalar FFmpeg (Windows)
+# 0) Instalar FFmpeg (Windows) via Chocolatey
 # =========================
-ARG FFMPEG_URL=https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip
-ARG FFMPEG_URL_FALLBACK=https://github.com/GyanD/codexffmpeg/releases/download/2025-01-08-git-251de1791e/ffmpeg-2025-01-08-git-251de1791e-essentials_build.zip
+# 0) Copiar ffmpeg desde el repo al contenedor
+COPY ffmpeg-8.0.1 C:\ffmpeg-8.0.1
 
-RUN powershell -NoProfile -ExecutionPolicy Bypass -Command "& { $ErrorActionPreference = 'Stop'; [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; $urls = @($env:FFMPEG_URL, $env:FFMPEG_URL_FALLBACK); $downloaded = $false; foreach ($url in $urls) { if ([string]::IsNullOrWhiteSpace($url)) { continue }; try { Invoke-WebRequest -Uri $url -OutFile C:\ffmpeg.zip -UseBasicParsing; $downloaded = $true; break; } catch { Write-Host ('Error descargando FFmpeg desde ' + $url + ': ' + $_.Exception.Message); } }; if (-not $downloaded) { Write-Host 'Reintentando descarga de FFmpeg ignorando validación TLS...'; [System.Net.ServicePointManager]::ServerCertificateValidationCallback = { $true }; foreach ($url in $urls) { if ([string]::IsNullOrWhiteSpace($url)) { continue }; try { Invoke-WebRequest -Uri $url -OutFile C:\ffmpeg.zip -UseBasicParsing; $downloaded = $true; break; } catch { Write-Host ('Segundo intento falló para ' + $url + ': ' + $_.Exception.Message); } } }; if (-not $downloaded) { throw 'No se pudo descargar FFmpeg desde ninguna URL configurada.' }; Expand-Archive -Path C:\ffmpeg.zip -DestinationPath C:\ffmpeg -Force; $ffmpegDirs = Get-ChildItem -Path C:\ffmpeg -Directory; if (-not $ffmpegDirs -or $ffmpegDirs.Count -eq 0) { throw 'No se encontró el directorio de FFmpeg tras descomprimir.' }; $ffmpegDir = $ffmpegDirs[0]; setx /M PATH ($env:PATH + ';' + $ffmpegDir.FullName + '\bin') ^| Out-Null; Remove-Item C:\ffmpeg.zip -Force }"
-
-RUN where ffmpeg && ffmpeg -version
+# 1) Agregar ffmpeg/bin al PATH (para que "ffmpeg" funcione)
+RUN setx /M PATH "%PATH%;C:\ffmpeg-8.0.1\bin" `
+ && ffmpeg -version
 
 # =========================
 # 1) Dependencias Python
@@ -31,14 +31,8 @@ COPY . .
 # =========================
 # 3) Construir fullchain
 # =========================
-RUN powershell -NoProfile -ExecutionPolicy Bypass -Command "& { Get-Content certs\agestion-net.crt, certs\cabundle.crt ^| Set-Content -Encoding ascii certs\fullchain.crt }"
-
-# =========================
-# Metadata de build para trazabilidad de versión
-# =========================
-ARG APP_COMMIT=unknown
-LABEL org.opencontainers.image.revision=${APP_COMMIT}
-ENV APP_COMMIT=${APP_COMMIT}
+RUN powershell -NoProfile -ExecutionPolicy Bypass -Command `
+    Get-Content certs\agestion-net.crt, certs\cabundle.crt | Set-Content -Encoding ascii certs\fullchain.crt
 
 # =========================
 # 4) TLS directo en 8000
