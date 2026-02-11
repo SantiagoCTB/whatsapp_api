@@ -9,24 +9,8 @@ WORKDIR C:\app
 # 0) Instalar FFmpeg (opcional en Windows)
 # =========================
 # Si falla la descarga/instalación, el build continúa sin FFmpeg.
-RUN powershell -NoProfile -ExecutionPolicy Bypass -Command `
-    "$ErrorActionPreference = 'Continue'; `
-    try { `
-      [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; `
-      $zip = 'C:\ffmpeg.zip'; `
-      $dst = 'C:\ffmpeg'; `
-      Invoke-WebRequest -Uri 'https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip' -OutFile $zip -UseBasicParsing; `
-      Expand-Archive -Path $zip -DestinationPath $dst -Force; `
-      $ffmpegBin = Get-ChildItem $dst -Directory | Select-Object -First 1; `
-      if ($ffmpegBin -and (Test-Path (Join-Path $ffmpegBin.FullName 'bin\ffmpeg.exe'))) { `
-        setx /M PATH ('%PATH%;' + (Join-Path $ffmpegBin.FullName 'bin')); `
-        Write-Host 'FFmpeg instalado correctamente.'; `
-      } else { `
-        Write-Host 'FFmpeg no encontrado después de extraer; se continúa sin FFmpeg.'; `
-      } `
-    } catch { `
-      Write-Host 'No se pudo instalar FFmpeg. Se continúa sin FFmpeg.'; `
-    }"
+COPY deploy/windows/install_ffmpeg_optional.ps1 C:\install_ffmpeg_optional.ps1
+RUN powershell -NoProfile -ExecutionPolicy Bypass -File C:\install_ffmpeg_optional.ps1
 
 # =========================
 # 1) Dependencias Python
@@ -42,10 +26,9 @@ RUN python -m pip install --upgrade pip `
 COPY . .
 
 # =========================
-# 3) Construir fullchain
+# 3) Construir fullchain (si hay certificados)
 # =========================
-RUN powershell -NoProfile -ExecutionPolicy Bypass -Command `
-    Get-Content certs\agestion-net.crt, certs\cabundle.crt | Set-Content -Encoding ascii certs\fullchain.crt
+RUN powershell -NoProfile -ExecutionPolicy Bypass -Command "if ((Test-Path 'certs\agestion-net.crt') -and (Test-Path 'certs\cabundle.crt')) { Get-Content certs\agestion-net.crt, certs\cabundle.crt | Set-Content -Encoding ascii certs\fullchain.crt; Write-Host 'fullchain.crt generado'; } else { Write-Host 'No se encontraron certificados; se omite fullchain.crt'; }"
 
 # =========================
 # 4) TLS directo en 8000
