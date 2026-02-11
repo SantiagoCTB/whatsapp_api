@@ -8,9 +8,6 @@
 $LogFile = "C:\whatsapp_api\startup.log"
 Start-Transcript -Path $LogFile -Append
 
-$ErrorActionPreference = "Stop"
-Set-StrictMode -Version Latest
-
 # 1️⃣ Asegurar que Docker Desktop Service está iniciado
 Write-Output "Starting Docker service..."
 Start-Service com.docker.service -ErrorAction SilentlyContinue
@@ -45,52 +42,29 @@ $backupArgs = @("scripts/backup_databases.py", "--env-file", ".env", "--tag", "w
 Start-Process -FilePath "python" -ArgumentList $backupArgs -NoNewWindow -PassThru -Wait -WorkingDirectory "C:\whatsapp_api"
 
 # Traer los últimos cambios del repositorio antes de reconstruir
-# Usamos fetch + reset para garantizar que despliegue exactamente lo que está
-# en origin/main (evita quedarse con código viejo por merges pendientes).
-Write-Output "Syncing repository with origin/main..."
+Write-Output "Pulling latest changes from Git..."
 Set-Location "C:\whatsapp_api"
-git fetch --all --prune
-git reset --hard origin/main
-git clean -fd
-
-$currentCommit = (git rev-parse --short HEAD)
-Write-Output "Deploying commit: $currentCommit"
+git pull origin main
 
 # Asegurar DOCKER_HOST (lo tenías repetido; lo dejo una vez)
 $env:DOCKER_HOST = "npipe:////./pipe/docker_engine"
 
-# Primero bajar contenedores, imágenes y volúmenes del stack para eliminar estado viejo
-Write-Output "Removing current stack (containers/images/volumes)..."
-& $docker compose -f $composeFile down --remove-orphans --volumes --rmi all
-
-# Limpiar cachés globales de build/imágenes para evitar reutilizar capas antiguas
-Write-Output "Pruning Docker build cache and dangling images..."
-& $docker builder prune -af
-& $docker image prune -af
-& $docker system prune -af --volumes
+# Primero bajar contenedores huérfanos
+& $docker compose -f $composeFile down --remove-orphans
 
 # (Opcional) Limpiar red custom si existe
 & $docker network rm whapco_win 2>$null
 
-# Reconstrucción total sin caché + recreación forzada
-Write-Output "Building images from scratch..."
-& $docker compose -f $composeFile build --no-cache --pull --build-arg APP_COMMIT=$currentCommit
-
-Write-Output "Starting fresh containers..."
-& $docker compose -f $composeFile up -d --force-recreate --renew-anon-volumes
+# 🔥 CLAVE: forzar recreación y rebuild para que no quede "versión vieja"
+# - --build: reconstruye la imagen (si tienes build:)
+# - --force-recreate: recrea contenedores aunque "parezca igual"
+# - --pull always: si usas image: también intenta traer lo último del tag
+# - --no-cache: evita usar capas viejas
+& $docker compose -f $composeFile up -d --build --force-recreate --pull always --no-cache
 
 # Verificación rápida: estado y últimas líneas de logs de web (si existe)
 Write-Output "Compose status:"
 & $docker compose -f $composeFile ps
-
-Write-Output "Compose images:"
-& $docker compose -f $composeFile images
-
-Write-Output "Container commit label (org.opencontainers.image.revision):"
-$webContainer = (& $docker compose -f $composeFile ps -q web).Trim()
-if ($webContainer) {
-  & $docker inspect -f '{{ index .Config.Labels "org.opencontainers.image.revision" }}' $webContainer
-}
 
 Write-Output "WhatsApp API + MySQL + Docker are now running!"
 Stop-Transcript
