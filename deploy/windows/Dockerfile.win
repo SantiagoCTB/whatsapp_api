@@ -6,14 +6,20 @@ SHELL ["cmd", "/S", "/C"]
 WORKDIR C:\app
 
 # =========================
-# 0) Instalar FFmpeg (Windows) via Chocolatey
+# 0) Instalar FFmpeg (Windows)
 # =========================
-# 0) Copiar ffmpeg desde el repo al contenedor
-COPY ffmpeg-8.0.1 C:\ffmpeg-8.0.1
+ARG FFMPEG_URL=https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip
 
-# 1) Agregar ffmpeg/bin al PATH (para que "ffmpeg" funcione)
-RUN setx /M PATH "%PATH%;C:\ffmpeg-8.0.1\bin" `
- && ffmpeg -version
+RUN powershell -NoProfile -ExecutionPolicy Bypass -Command `
+    $ErrorActionPreference = 'Stop'; `
+    Invoke-WebRequest -Uri $env:FFMPEG_URL -OutFile C:\ffmpeg.zip; `
+    Expand-Archive -Path C:\ffmpeg.zip -DestinationPath C:\ffmpeg -Force; `
+    $ffmpegDir = Get-ChildItem -Path C:\ffmpeg -Directory | Select-Object -First 1; `
+    if (-not $ffmpegDir) { throw 'No se encontró el directorio de FFmpeg tras descomprimir.' }; `
+    setx /M PATH ($env:PATH + ';' + $ffmpegDir.FullName + '\bin') | Out-Null; `
+    Remove-Item C:\ffmpeg.zip -Force
+
+RUN where ffmpeg && ffmpeg -version
 
 # =========================
 # 1) Dependencias Python
