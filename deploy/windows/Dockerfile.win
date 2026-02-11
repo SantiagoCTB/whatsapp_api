@@ -6,14 +6,27 @@ SHELL ["cmd", "/S", "/C"]
 WORKDIR C:\app
 
 # =========================
-# 0) Instalar FFmpeg (Windows) via Chocolatey
+# 0) Instalar FFmpeg (opcional en Windows)
 # =========================
-# 0) Copiar ffmpeg desde el repo al contenedor
-COPY ffmpeg-8.0.1 C:\ffmpeg-8.0.1
-
-# 1) Agregar ffmpeg/bin al PATH (para que "ffmpeg" funcione)
-RUN setx /M PATH "%PATH%;C:\ffmpeg-8.0.1\bin" `
- && ffmpeg -version
+# Si falla la descarga/instalación, el build continúa sin FFmpeg.
+RUN powershell -NoProfile -ExecutionPolicy Bypass -Command `
+    "$ErrorActionPreference = 'Continue'; `
+    try { `
+      [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; `
+      $zip = 'C:\ffmpeg.zip'; `
+      $dst = 'C:\ffmpeg'; `
+      Invoke-WebRequest -Uri 'https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip' -OutFile $zip -UseBasicParsing; `
+      Expand-Archive -Path $zip -DestinationPath $dst -Force; `
+      $ffmpegBin = Get-ChildItem $dst -Directory | Select-Object -First 1; `
+      if ($ffmpegBin -and (Test-Path (Join-Path $ffmpegBin.FullName 'bin\ffmpeg.exe'))) { `
+        setx /M PATH ('%PATH%;' + (Join-Path $ffmpegBin.FullName 'bin')); `
+        Write-Host 'FFmpeg instalado correctamente.'; `
+      } else { `
+        Write-Host 'FFmpeg no encontrado después de extraer; se continúa sin FFmpeg.'; `
+      } `
+    } catch { `
+      Write-Host 'No se pudo instalar FFmpeg. Se continúa sin FFmpeg.'; `
+    }"
 
 # =========================
 # 1) Dependencias Python
