@@ -30,4 +30,3 @@ git pull origin main
 
 # Levantar con el compose de linux
 docker compose -f deploy/linux/docker-compose.yml up -d --build
-

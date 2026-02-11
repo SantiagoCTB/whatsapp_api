@@ -42,9 +42,16 @@ $backupArgs = @("scripts/backup_databases.py", "--env-file", ".env", "--tag", "w
 Start-Process -FilePath "python" -ArgumentList $backupArgs -NoNewWindow -PassThru -Wait -WorkingDirectory "C:\whatsapp_api"
 
 # Traer los últimos cambios del repositorio antes de reconstruir
-Write-Output "Pulling latest changes from Git..."
+# Usamos fetch + reset para garantizar que despliegue exactamente lo que está
+# en origin/main (evita quedarse con código viejo por merges pendientes).
+Write-Output "Syncing repository with origin/main..."
 Set-Location "C:\whatsapp_api"
-git pull origin main
+git fetch --all --prune
+git reset --hard origin/main
+git clean -fd
+
+$currentCommit = (git rev-parse --short HEAD)
+Write-Output "Deploying commit: $currentCommit"
 
 # Asegurar DOCKER_HOST (lo tenías repetido; lo dejo una vez)
 $env:DOCKER_HOST = "npipe:////./pipe/docker_engine"
