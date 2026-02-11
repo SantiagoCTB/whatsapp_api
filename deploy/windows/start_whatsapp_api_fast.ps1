@@ -7,8 +7,28 @@
 $LogFile = "C:\whatsapp_api\startup-fast.log"
 Start-Transcript -Path $LogFile -Append
 
+trap {
+  try { Stop-Transcript | Out-Null } catch {}
+  throw
+}
+
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
+
+
+function Invoke-External {
+  param(
+    [Parameter(Mandatory = $true)]
+    [scriptblock]$Command,
+    [Parameter(Mandatory = $true)]
+    [string]$Description
+  )
+
+  & $Command
+  if ($LASTEXITCODE -ne 0) {
+    throw "$Description failed with exit code $LASTEXITCODE"
+  }
+}
 
 Write-Output "Starting Docker service..."
 Start-Service com.docker.service -ErrorAction SilentlyContinue
@@ -41,21 +61,28 @@ Write-Output "Deploying commit: $currentCommit"
 $env:DOCKER_HOST = "npipe:////./pipe/docker_engine"
 
 Write-Output "Rebuilding web image without full cleanup..."
-& $docker compose -f $composeFile build --pull --build-arg APP_COMMIT=$currentCommit web
+Invoke-External -Description "Docker compose build web" -Command { & $docker compose -f $composeFile build --pull --build-arg APP_COMMIT=$currentCommit web }
 
 Write-Output "Updating running containers (no deps, no forced volume renewal)..."
-& $docker compose -f $composeFile up -d --no-deps web
+Invoke-External -Description "Docker compose up web" -Command { & $docker compose -f $composeFile up -d --no-deps web }
 
 Write-Output "Compose status:"
-& $docker compose -f $composeFile ps
+Invoke-External -Description "Docker compose ps" -Command { & $docker compose -f $composeFile ps }
 
 Write-Output "Compose images:"
-& $docker compose -f $composeFile images
+Invoke-External -Description "Docker compose images" -Command { & $docker compose -f $composeFile images }
 
 Write-Output "Container commit label (org.opencontainers.image.revision):"
-$webContainer = (& $docker compose -f $composeFile ps -q web).Trim()
+$webContainerRaw = & $docker compose -f $composeFile ps -q web
+if ($LASTEXITCODE -ne 0) {
+  throw "Docker compose ps -q web failed with exit code $LASTEXITCODE"
+}
+
+$webContainer = if ($webContainerRaw) { "$webContainerRaw".Trim() } else { "" }
 if ($webContainer) {
-  & $docker inspect -f '{{ index .Config.Labels "org.opencontainers.image.revision" }}' $webContainer
+  Invoke-External -Description "Docker inspect web container label" -Command { & $docker inspect -f '{{ index .Config.Labels "org.opencontainers.image.revision" }}' $webContainer }
+} else {
+  Write-Output "No running 'web' container found after fast deploy."
 }
 
 Write-Output "Fast deploy completed successfully."

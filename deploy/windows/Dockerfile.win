@@ -10,14 +10,7 @@ WORKDIR C:\app
 # =========================
 ARG FFMPEG_URL=https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip
 
-RUN powershell -NoProfile -ExecutionPolicy Bypass -Command `
-    $ErrorActionPreference = 'Stop'; `
-    Invoke-WebRequest -Uri $env:FFMPEG_URL -OutFile C:\ffmpeg.zip; `
-    Expand-Archive -Path C:\ffmpeg.zip -DestinationPath C:\ffmpeg -Force; `
-    $ffmpegDir = Get-ChildItem -Path C:\ffmpeg -Directory | Select-Object -First 1; `
-    if (-not $ffmpegDir) { throw 'No se encontró el directorio de FFmpeg tras descomprimir.' }; `
-    setx /M PATH ($env:PATH + ';' + $ffmpegDir.FullName + '\bin') | Out-Null; `
-    Remove-Item C:\ffmpeg.zip -Force
+RUN powershell -NoProfile -ExecutionPolicy Bypass -Command "& { $ErrorActionPreference = 'Stop'; Invoke-WebRequest -Uri $env:FFMPEG_URL -OutFile C:\ffmpeg.zip; Expand-Archive -Path C:\ffmpeg.zip -DestinationPath C:\ffmpeg -Force; $ffmpegDirs = Get-ChildItem -Path C:\ffmpeg -Directory; if (-not $ffmpegDirs -or $ffmpegDirs.Count -eq 0) { throw 'No se encontró el directorio de FFmpeg tras descomprimir.' }; $ffmpegDir = $ffmpegDirs[0]; setx /M PATH ($env:PATH + ';' + $ffmpegDir.FullName + '\bin') ^| Out-Null; Remove-Item C:\ffmpeg.zip -Force }"
 
 RUN where ffmpeg && ffmpeg -version
 
@@ -37,8 +30,7 @@ COPY . .
 # =========================
 # 3) Construir fullchain
 # =========================
-RUN powershell -NoProfile -ExecutionPolicy Bypass -Command `
-    Get-Content certs\agestion-net.crt, certs\cabundle.crt | Set-Content -Encoding ascii certs\fullchain.crt
+RUN powershell -NoProfile -ExecutionPolicy Bypass -Command "& { Get-Content certs\agestion-net.crt, certs\cabundle.crt ^| Set-Content -Encoding ascii certs\fullchain.crt }"
 
 # =========================
 # Metadata de build para trazabilidad de versión
