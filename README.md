@@ -206,6 +206,9 @@ Si se utilizan para pruebas locales, realiza copias de seguridad en un almacenam
 * Define la carpeta donde se guardarán las copias en el `.env` usando la variable `BACKUP_ROOT` (por ejemplo: `\\Svrkiryapp\001 agestion\2025 BACK UP\AGESTION\LEADS`). Si no se define, se usará por defecto la carpeta padre del proyecto.
 * El script `scripts/backup_databases.py` genera un volcado independiente por cada base (control y tenants) en una ruta con jerarquía `<BACKUP_ROOT>/<db_name>/<AAAA-MM-DD>/<db_name>_YYYYMMDD_HHMMSS.sql`.
 * El despliegue en Linux y Windows ejecuta automáticamente un respaldo antes de actualizar (scripts `deploy/linux/deploy.sh` y `deploy/windows/start_whatsapp_api.ps1`).
+* En Windows tienes dos modos de despliegue:
+  * `deploy/windows/start_whatsapp_api.ps1`: despliegue completo limpiando contenedores, imágenes y volúmenes del stack.
+  * `deploy/windows/start_whatsapp_api_fast.ps1`: despliegue rápido sin limpieza total de Docker (ideal para actualizaciones frecuentes).
 * Para un respaldo manual ejecuta: `python scripts/backup_databases.py --env-file .env`.
 * Para programar una copia diaria a la medianoche agrega una entrada cron similar a: `0 0 * * * cd /opt/whapco && /usr/bin/python3 scripts/backup_databases.py --env-file /opt/whapco/.env --tag cron >> /var/log/whapco-backup.log 2>&1`.
 
