@@ -44,10 +44,11 @@ def check_env_vars() -> Iterable[CheckResult]:
         bool(Config.FACEBOOK_APP_ID),
         _mask_value(Config.FACEBOOK_APP_ID),
     )
+    config_id = Config.WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID or Config.SIGNUP_FACEBOOK
     yield CheckResult(
-        "SIGNUP_FACEBOOK",
-        bool(Config.SIGNUP_FACEBOOK),
-        _mask_value(Config.SIGNUP_FACEBOOK),
+        "WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID",
+        bool(config_id),
+        _mask_value(config_id),
     )
     whatsapp_redirect = (
         getattr(Config, "WHATSAPP_EMBEDDED_SIGNUP_REDIRECT_URI", "")
@@ -99,8 +100,8 @@ def run() -> int:
         for item in failing:
             if item.name == "FACEBOOK_APP_ID":
                 print(" - Define FACEBOOK_APP_ID en el contenedor web y reinicia.")
-            elif item.name == "SIGNUP_FACEBOOK":
-                print(" - Define SIGNUP_FACEBOOK con el config_id provisto por Meta.")
+            elif item.name == "WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID":
+                print(" - Define WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID con el config_id provisto por Meta (o usa SIGNUP_FACEBOOK).")
             elif item.name == "WHATSAPP_EMBEDDED_SIGNUP_REDIRECT_URI":
                 print(" - Define WHATSAPP_EMBEDDED_SIGNUP_REDIRECT_URI con la URL de retorno aprobada en Meta.")
             elif item.name == "DEFAULT_TENANT":

@@ -61,7 +61,7 @@
                 <p class="alert alert-error" style="margin-top: 0.5rem">No se pudo identificar el tenant actual.</p>
                 {% endif %}
                 {% if not signup_config_code %}
-                <p class="alert alert-error" style="margin-top: 0.5rem">Falta configurar SIGNUP_FACEBOOK en el entorno.</p>
+                <p class="alert alert-error" style="margin-top: 0.5rem">Falta configurar WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID (o SIGNUP_FACEBOOK) en el entorno.</p>
                 {% endif %}
                 {% if not facebook_app_id %}
                 <p class="alert alert-error" style="margin-top: 0.5rem">Falta configurar FACEBOOK_APP_ID en el entorno.</p>
@@ -604,7 +604,7 @@
         return;
       }
       if (!configCode) {
-        updateStatus('Falta configurar SIGNUP_FACEBOOK.', true);
+        updateStatus('Falta configurar WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID (o SIGNUP_FACEBOOK).', true);
         return;
       }
 

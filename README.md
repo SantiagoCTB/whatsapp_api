@@ -166,7 +166,7 @@ estos pasos desde el contenedor web:
    python scripts/check_embedded_signup.py
    ```
 
-   Esto valida la presencia de `FACEBOOK_APP_ID`, `SIGNUP_FACEBOOK`,
+   Esto valida la presencia de `FACEBOOK_APP_ID`, `WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID` (o `SIGNUP_FACEBOOK`),
    `WHATSAPP_EMBEDDED_SIGNUP_REDIRECT_URI`, la resolución DNS hacia Facebook y
    que el esquema preferido sea HTTPS.
 
