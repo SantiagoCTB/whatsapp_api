@@ -2218,7 +2218,7 @@ def configuracion_signup():
         extra={
             "tenant_key": tenant_key,
             "facebook_app_id_configured": bool(Config.FACEBOOK_APP_ID),
-            "signup_config_code_present": bool(Config.SIGNUP_FACEBOOK),
+            "signup_config_code_present": bool(Config.WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID or Config.SIGNUP_FACEBOOK),
         },
     )
     signup_redirect_uri = _resolve_embedded_signup_redirect_uri(request.base_url)
@@ -2237,7 +2237,7 @@ def configuracion_signup():
 
     return render_template(
         'configuracion_signup.html',
-        signup_config_code=Config.SIGNUP_FACEBOOK,
+        signup_config_code=(Config.WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID or Config.SIGNUP_FACEBOOK),
         messenger_embedded_code=Config.MESSENGER_EMBEDDED,
         facebook_app_id=Config.FACEBOOK_APP_ID,
         facebook_graph_api_version=Config.FACEBOOK_GRAPH_API_VERSION,
