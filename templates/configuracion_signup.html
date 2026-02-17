@@ -530,11 +530,17 @@
 
     const fetchWabaApprovalStatus = () => {
       if (!wabaId) return Promise.resolve();
-      return fetch(`{{ url_for('configuracion.whatsapp_account_details') }}?fields=id,name,status`)
+      return fetch(`{{ url_for('configuracion.whatsapp_account_details') }}?fields=id,name,status,owner_business_info`)
         .then((resp) => resp.json())
         .then((resp) => {
           if (!resp.ok) return;
-          const rawStatus = resp && resp.account ? resp.account.status : '';
+          const account = (resp && resp.account) || {};
+          const onboardingStatus = account
+            && account.owner_business_info
+            && account.owner_business_info.marketing_messages_onboarding_status
+            ? account.owner_business_info.marketing_messages_onboarding_status.status
+            : '';
+          const rawStatus = onboardingStatus || account.status || '';
           const friendlyStatus = getFriendlyWabaStatus(rawStatus);
           if (friendlyStatus) {
             updatePhoneStatus(`Estado del número en WABA: ${friendlyStatus}`);
