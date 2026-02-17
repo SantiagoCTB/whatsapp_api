@@ -375,12 +375,35 @@
       insightsStatus.style.color = isError ? '#c0392b' : '#2c3e50';
     };
 
+    const normalizeMetaStatus = (value, fieldName) => {
+      if (typeof value !== 'string') return value;
+      if (value === 'NOT_STARTED' && (!fieldName || fieldName.toLowerCase() === 'status')) {
+        return 'En aprobación';
+      }
+      return value;
+    };
+
+    const localizeMetaStatuses = (value, fieldName) => {
+      if (Array.isArray(value)) {
+        return value.map((item) => localizeMetaStatuses(item));
+      }
+      if (!value || typeof value !== 'object') {
+        return normalizeMetaStatus(value, fieldName);
+      }
+
+      const localized = {};
+      Object.entries(value).forEach(([key, nestedValue]) => {
+        localized[key] = localizeMetaStatuses(nestedValue, key);
+      });
+      return localized;
+    };
+
     const updateInsightsDebug = (label, details) => {
       if (!insightsDebug) return;
       const lines = [label || 'Respuesta de Graph API'];
       if (typeof details !== 'undefined') {
         try {
-          lines.push(JSON.stringify(details, null, 2));
+          lines.push(JSON.stringify(localizeMetaStatuses(details), null, 2));
         } catch (err) {
           lines.push(String(details));
         }
@@ -480,9 +503,9 @@
     };
 
     const fetchPhoneNumbers = () => {
-      if (!phoneSelect) return;
+      if (!phoneSelect) return Promise.resolve();
       updatePhoneStatus('Consultando números disponibles...');
-      fetch(`{{ url_for('configuracion.whatsapp_phone_numbers') }}`)
+      return fetch(`{{ url_for('configuracion.whatsapp_phone_numbers') }}`)
         .then((resp) => resp.json())
         .then((resp) => {
           if (!resp.ok) {
@@ -497,6 +520,27 @@
           updatePhoneStatus('Error al consultar los números.', true);
           phoneSelect.disabled = true;
         });
+    };
+
+    const getFriendlyWabaStatus = (statusValue) => {
+      if (typeof statusValue !== 'string') return '';
+      if (statusValue === 'NOT_STARTED') return 'En aprobación';
+      return statusValue;
+    };
+
+    const fetchWabaApprovalStatus = () => {
+      if (!wabaId) return Promise.resolve();
+      return fetch(`{{ url_for('configuracion.whatsapp_account_details') }}?fields=id,name,status`)
+        .then((resp) => resp.json())
+        .then((resp) => {
+          if (!resp.ok) return;
+          const rawStatus = resp && resp.account ? resp.account.status : '';
+          const friendlyStatus = getFriendlyWabaStatus(rawStatus);
+          if (friendlyStatus) {
+            updatePhoneStatus(`Estado del número en WABA: ${friendlyStatus}`);
+          }
+        })
+        .catch(() => {});
     };
 
     let latestFinishPayload = {};
@@ -662,13 +706,15 @@
     });
 
     if (wabaId) {
-      fetchPhoneNumbers();
+      fetchPhoneNumbers().finally(() => fetchWabaApprovalStatus());
     } else {
       updatePhoneStatus('Completa el signup para cargar los números disponibles.');
     }
 
     if (phoneRefresh) {
-      phoneRefresh.addEventListener('click', fetchPhoneNumbers);
+      phoneRefresh.addEventListener('click', () => {
+        fetchPhoneNumbers().finally(() => fetchWabaApprovalStatus());
+      });
     }
 
     if (phoneSave) {
