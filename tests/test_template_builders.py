@@ -9,6 +9,7 @@ import pytest
 
 from services.template_builders import (
     TemplateValidationError,
+    build_flow_send_payload,
     build_template_create_payload,
     build_template_send_payload,
 )
@@ -60,3 +61,34 @@ def test_build_template_send_payload_builds_template_message():
     assert payload["template"]["name"] == "order_status"
     assert payload["template"]["components"][0]["type"] == "body"
     assert payload["template"]["components"][0]["parameters"][0]["text"] == "ABC123"
+
+
+
+def test_build_flow_send_payload_with_flow_id():
+    payload = build_flow_send_payload(
+        {
+            "to": "573001112233",
+            "flow_cta": "Abrir flow",
+            "flow_id": "123456",
+            "flow_body": "Completa tus datos",
+            "flow_action_payload": '{"screen":"WELCOME"}',
+        }
+    )
+
+    assert payload["type"] == "interactive"
+    assert payload["interactive"]["type"] == "flow"
+    params = payload["interactive"]["action"]["parameters"]
+    assert params["flow_id"] == "123456"
+    assert params["flow_action_payload"]["screen"] == "WELCOME"
+
+
+def test_build_flow_send_payload_requires_single_identifier():
+    with pytest.raises(TemplateValidationError):
+        build_flow_send_payload(
+            {
+                "to": "573001112233",
+                "flow_cta": "Abrir flow",
+                "flow_id": "123",
+                "flow_name": "mi_flow",
+            }
+        )

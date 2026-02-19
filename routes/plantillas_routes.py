@@ -6,6 +6,7 @@ from flask import Blueprint, jsonify, render_template, request, session
 from services import tenants
 from services.template_builders import (
     TemplateValidationError,
+    build_flow_send_payload,
     build_template_create_payload,
     build_template_send_payload,
 )
@@ -111,6 +112,21 @@ def preview_send_template_payload():
 
     return {"ok": True, "payload": send_payload}
 
+
+
+
+@plantillas_bp.route("/api/plantillas/preview-send-flow", methods=["POST"])
+def preview_send_flow_payload():
+    if not _require_login():
+        return {"ok": False, "error": "No autorizado"}, 403
+
+    payload = request.get_json(silent=True) or {}
+    try:
+        send_payload = build_flow_send_payload(payload)
+    except TemplateValidationError as exc:
+        return {"ok": False, "error": str(exc)}, 400
+
+    return {"ok": True, "payload": send_payload}
 
 @plantillas_bp.route("/api/plantillas/credentials", methods=["GET"])
 def template_credentials_status():
@@ -265,6 +281,41 @@ def send_template():
 
     return {"ok": True, "message": "Plantilla enviada correctamente.", "data": payload}
 
+
+
+
+@plantillas_bp.route("/api/plantillas/send-flow", methods=["POST"])
+def send_flow():
+    if not _require_login():
+        return {"ok": False, "error": "No autorizado"}, 403
+
+    data = request.get_json(silent=True) or {}
+    try:
+        token, _, phone_id = _tenant_whatsapp_env()
+        send_payload = build_flow_send_payload(data)
+    except (RuntimeError, TemplateValidationError) as exc:
+        return {"ok": False, "error": str(exc)}, 400
+
+    response = requests.post(
+        f"{GRAPH_BASE_URL}/{phone_id}/messages",
+        params={"access_token": token},
+        json=send_payload,
+        timeout=20,
+    )
+    payload = response.json() if response.content else {}
+
+    if response.status_code >= 400:
+        details = _extract_graph_error_message(payload)
+        logger.warning(
+            "Error enviando flow",
+            extra={"status": response.status_code, "payload": payload, "flow": send_payload.get("interactive", {}).get("action", {}).get("parameters", {})},
+        )
+        message = "No se pudo enviar el flow."
+        if details:
+            message = f"{message} {details}"
+        return {"ok": False, "error": message, "details": payload}, 400
+
+    return {"ok": True, "message": "Flow enviado correctamente.", "data": payload}
 
 @plantillas_bp.route("/api/plantillas/<string:template_name>", methods=["DELETE"])
 def delete_template(template_name: str):

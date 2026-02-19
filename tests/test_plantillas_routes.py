@@ -108,3 +108,66 @@ def test_create_template_resolves_waba_id(monkeypatch):
 
     assert response.status_code == 200
     assert captured["url"].endswith("/resolved-waba/message_templates")
+
+
+
+def test_preview_send_flow_payload(monkeypatch):
+    app = _app_with_login()
+
+    monkeypatch.setattr(
+        plantillas_routes,
+        "build_flow_send_payload",
+        lambda payload: {"type": "interactive", "interactive": {"type": "flow"}, "input": payload},
+    )
+
+    with app.test_client() as client:
+        response = client.post("/api/plantillas/preview-send-flow", json={"to": "57", "flow_cta": "Abrir", "flow_id": "1"})
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["ok"] is True
+    assert payload["payload"]["interactive"]["type"] == "flow"
+
+
+def test_send_flow_uses_messages_endpoint(monkeypatch):
+    app = _app_with_login()
+
+    monkeypatch.setattr(
+        plantillas_routes.tenants,
+        "get_current_tenant_env",
+        lambda: {"META_TOKEN": "token", "PHONE_NUMBER_ID": "phone", "WABA_ID": ""},
+    )
+    monkeypatch.setattr(
+        plantillas_routes,
+        "build_flow_send_payload",
+        lambda _: {
+            "messaging_product": "whatsapp",
+            "to": "573001112233",
+            "type": "interactive",
+            "interactive": {"type": "flow"},
+        },
+    )
+
+    captured = {}
+
+    class _FakeResponse:
+        status_code = 200
+        content = b"{}"
+
+        def json(self):
+            return {"messages": [{"id": "wamid.1"}]}
+
+    def _fake_post(url, params=None, json=None, timeout=20):
+        captured["url"] = url
+        captured["params"] = params
+        captured["json"] = json
+        return _FakeResponse()
+
+    monkeypatch.setattr(plantillas_routes.requests, "post", _fake_post)
+
+    with app.test_client() as client:
+        response = client.post("/api/plantillas/send-flow", json={"to": "57"})
+
+    assert response.status_code == 200
+    assert captured["url"].endswith("/phone/messages")
+    assert captured["json"]["interactive"]["type"] == "flow"

@@ -95,10 +95,56 @@
 
     <pre id="sendPreview" class="json-preview"></pre>
   </section>
+
+  <section class="template-card">
+    <h3>3) Enviar flow</h3>
+    <label>Destinatario (to)</label>
+    <input id="flowTo" placeholder="573001112233" />
+
+    <label>CTA del flow (flow_cta)</label>
+    <input id="flowCta" placeholder="Abrir flow" />
+
+    <label>ID del flow (flow_id)</label>
+    <input id="flowId" placeholder="123456789" />
+
+    <label>Nombre del flow (flow_name)</label>
+    <input id="flowName" placeholder="mi_flow" />
+
+    <label>Texto body</label>
+    <input id="flowBody" value="Continuemos" placeholder="Continuemos" />
+
+    <label>Header (opcional)</label>
+    <input id="flowHeader" placeholder="Completa tus datos" />
+
+    <label>Footer (opcional)</label>
+    <input id="flowFooter" placeholder="Puedes cancelarlo cuando quieras" />
+
+    <label>flow_message_version</label>
+    <input id="flowMessageVersion" value="3" placeholder="3" />
+
+    <label>mode (opcional)</label>
+    <input id="flowMode" placeholder="draft o published" />
+
+    <label>flow_token (opcional)</label>
+    <input id="flowToken" placeholder="token opcional" />
+
+    <label>flow_action (opcional)</label>
+    <input id="flowAction" placeholder="navigate / data_exchange" />
+
+    <label>flow_action_payload (JSON opcional)</label>
+    <textarea id="flowActionPayload" rows="4" placeholder='{"screen":"WELCOME"}'></textarea>
+
+    <div class="action-row">
+      <button id="previewSendFlow" class="btn-primary" type="button">Previsualizar JSON flow</button>
+      <button id="sendFlow" class="btn-primary" type="button">Enviar flow</button>
+    </div>
+
+    <pre id="sendFlowPreview" class="json-preview"></pre>
+  </section>
 </div>
 
 <section class="template-card">
-  <h3>3) Plantillas existentes</h3>
+  <h3>4) Plantillas existentes</h3>
   <div class="action-row">
     <input id="searchTemplate" placeholder="Buscar por nombre" />
     <select id="listCategory">
@@ -117,6 +163,7 @@
   const sendPreview = document.getElementById('sendPreview');
   const credentialsSummary = document.getElementById('credentialsSummary');
   const credentialsChecklist = document.getElementById('credentialsChecklist');
+  const sendFlowPreview = document.getElementById('sendFlowPreview');
 
   function parseLines(text) {
     return (text || '').split('\n').map(v => v.trim()).filter(Boolean);
@@ -234,6 +281,24 @@
     };
   }
 
+
+  function buildSendFlowBody() {
+    return {
+      to: document.getElementById('flowTo').value.trim(),
+      flow_cta: document.getElementById('flowCta').value.trim(),
+      flow_id: document.getElementById('flowId').value.trim(),
+      flow_name: document.getElementById('flowName').value.trim(),
+      flow_body: document.getElementById('flowBody').value.trim(),
+      flow_header: document.getElementById('flowHeader').value.trim(),
+      flow_footer: document.getElementById('flowFooter').value.trim(),
+      flow_message_version: document.getElementById('flowMessageVersion').value.trim(),
+      mode: document.getElementById('flowMode').value.trim(),
+      flow_token: document.getElementById('flowToken').value.trim(),
+      flow_action: document.getElementById('flowAction').value.trim(),
+      flow_action_payload: document.getElementById('flowActionPayload').value.trim(),
+    };
+  }
+
   async function postJson(url, body, method = 'POST') {
     const response = await fetch(url, {
       method,
@@ -287,6 +352,24 @@
     try {
       const result = await postJson('/api/plantillas/send', buildSendBody());
       notify(result.message || 'Plantilla enviada');
+    } catch (err) {
+      notify(err.message, true);
+    }
+  });
+
+  document.getElementById('previewSendFlow').addEventListener('click', async () => {
+    try {
+      const result = await postJson('/api/plantillas/preview-send-flow', buildSendFlowBody());
+      sendFlowPreview.textContent = JSON.stringify(result.payload, null, 2);
+    } catch (err) {
+      notify(err.message, true);
+    }
+  });
+
+  document.getElementById('sendFlow').addEventListener('click', async () => {
+    try {
+      const result = await postJson('/api/plantillas/send-flow', buildSendFlowBody());
+      notify(result.message || 'Flow enviado');
     } catch (err) {
       notify(err.message, true);
     }
