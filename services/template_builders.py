@@ -1,3 +1,4 @@
+import json
 import re
 from typing import Any
 
@@ -182,4 +183,73 @@ def build_template_send_payload(payload: dict[str, Any]) -> dict[str, Any]:
             "language": {"code": language_code},
             "components": components,
         },
+    }
+
+
+def build_flow_send_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    to = str(payload.get("to") or "").strip()
+    if not to:
+        raise TemplateValidationError("El destinatario (to) es obligatorio.")
+
+    flow_cta = str(payload.get("flow_cta") or "").strip()
+    if not flow_cta:
+        raise TemplateValidationError("flow_cta es obligatorio para enviar un Flow.")
+
+    flow_id = str(payload.get("flow_id") or "").strip()
+    flow_name = str(payload.get("flow_name") or "").strip()
+    if bool(flow_id) == bool(flow_name):
+        raise TemplateValidationError("Debes indicar solamente flow_id o flow_name, no ambos.")
+
+    parameters: dict[str, Any] = {
+        "flow_message_version": str(payload.get("flow_message_version") or "3").strip() or "3",
+        "flow_cta": flow_cta,
+    }
+    if flow_id:
+        parameters["flow_id"] = flow_id
+    if flow_name:
+        parameters["flow_name"] = flow_name
+
+    for key in ("mode", "flow_token", "flow_action"):
+        value = str(payload.get(key) or "").strip()
+        if value:
+            parameters[key] = value
+
+    action_payload = payload.get("flow_action_payload")
+    if isinstance(action_payload, str):
+        action_payload = action_payload.strip()
+        if action_payload:
+            try:
+                action_payload = json.loads(action_payload)
+            except Exception as exc:  # pragma: no cover - controlado por validación externa
+                raise TemplateValidationError("flow_action_payload debe ser JSON válido.") from exc
+        else:
+            action_payload = None
+    if action_payload is not None:
+        if not isinstance(action_payload, dict):
+            raise TemplateValidationError("flow_action_payload debe ser un objeto JSON.")
+        parameters["flow_action_payload"] = action_payload
+
+    body_text = str(payload.get("flow_body") or payload.get("body_text") or "Continuemos").strip() or "Continuemos"
+    interactive: dict[str, Any] = {
+        "type": "flow",
+        "body": {"text": body_text},
+        "action": {
+            "name": "flow",
+            "parameters": parameters,
+        },
+    }
+
+    header_text = str(payload.get("flow_header") or "").strip()
+    if header_text:
+        interactive["header"] = {"type": "text", "text": header_text}
+
+    footer_text = str(payload.get("flow_footer") or "").strip()
+    if footer_text:
+        interactive["footer"] = {"text": footer_text}
+
+    return {
+        "messaging_product": "whatsapp",
+        "to": to,
+        "type": "interactive",
+        "interactive": interactive,
     }
