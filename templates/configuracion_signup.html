@@ -783,6 +783,35 @@
       });
     }
 
+    if (phoneDeregister) {
+      phoneDeregister.addEventListener('click', () => {
+        if (!phoneSelect || !phoneSelect.value) {
+          updatePhoneStatus('Selecciona un número para eliminar.', true);
+          return;
+        }
+        executePhoneNumberAction('deregister', phoneSelect.value, 'Número eliminado correctamente.');
+      });
+    }
+
+    if (phoneRegister) {
+      phoneRegister.addEventListener('click', () => {
+        if (!phoneSelect || !phoneSelect.value) {
+          updatePhoneStatus('Selecciona un número para registrar.', true);
+          return;
+        }
+        executePhoneNumberAction('register', phoneSelect.value, 'Número registrado correctamente.');
+      });
+    }
+
+    if (phoneDeregister) {
+      phoneDeregister.addEventListener('click', () => {
+        if (!phoneSelect || !phoneSelect.value) {
+          updatePhoneStatus('Selecciona un número para eliminar.', true);
+          return;
+        }
+        executePhoneNumberAction('deregister', phoneSelect.value, 'Número eliminado correctamente.');
+      });
+    }
 
     if (phoneRegister) {
       phoneRegister.addEventListener('click', () => {
