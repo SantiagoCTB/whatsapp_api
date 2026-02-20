@@ -102,6 +102,7 @@ def test_whatsapp_subscribe_app_calls_graph_post(monkeypatch):
     def fake_graph_post(path, access_token, data=None):
         calls["path"] = path
         calls["access_token"] = access_token
+        calls["data"] = data
         return {"ok": True, "data": {"success": True}}
 
     monkeypatch.setattr(configuracion, "_graph_post", fake_graph_post)
@@ -134,6 +135,7 @@ def test_whatsapp_phone_number_action_register(monkeypatch):
     def fake_graph_post(path, access_token, data=None):
         calls["path"] = path
         calls["access_token"] = access_token
+        calls["data"] = data
         return {"ok": True, "data": {"success": True}}
 
     monkeypatch.setattr(configuracion, "_graph_post", fake_graph_post)
@@ -147,6 +149,7 @@ def test_whatsapp_phone_number_action_register(monkeypatch):
     assert payload["action"] == "register"
     assert calls["path"] == "123456/register"
     assert calls["access_token"] == "token"
+    assert calls["data"] == {"messaging_product": "whatsapp"}
 
 
 def test_whatsapp_phone_number_action_deregister_requires_action(monkeypatch):

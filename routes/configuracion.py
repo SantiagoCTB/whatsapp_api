@@ -241,7 +241,11 @@ def _whatsapp_phone_number_action(phone_number_id: str, action: str, access_toke
         return {"ok": False, "error": "Falta PHONE_NUMBER_ID para ejecutar la acción."}
     if normalized_action not in {"register", "deregister"}:
         return {"ok": False, "error": "Acción inválida para el número de WhatsApp."}
-    return _graph_post(f"{normalized_phone_number_id}/{normalized_action}", access_token)
+    return _graph_post(
+        f"{normalized_phone_number_id}/{normalized_action}",
+        access_token,
+        data={"messaging_product": "whatsapp"},
+    )
 
 def _fetch_page_accounts(user_token: str):
     if not user_token:
