@@ -114,3 +114,58 @@ def test_whatsapp_subscribe_app_calls_graph_post(monkeypatch):
     assert payload["ok"] is True
     assert calls["path"] == "waba-123/subscribed_apps"
     assert calls["access_token"] == "token"
+
+
+def test_whatsapp_phone_number_action_register(monkeypatch):
+    app = create_app()
+    app.config["TESTING"] = True
+
+    tenant = SimpleNamespace(tenant_key="acme", metadata={})
+
+    monkeypatch.setattr(configuracion, "_resolve_signup_tenant", lambda: tenant)
+    monkeypatch.setattr(
+        configuracion.tenants,
+        "get_tenant_env",
+        lambda _tenant: {"META_TOKEN": "token", "PHONE_NUMBER_ID": "123456"},
+    )
+
+    calls = {}
+
+    def fake_graph_post(path, access_token, data=None):
+        calls["path"] = path
+        calls["access_token"] = access_token
+        return {"ok": True, "data": {"success": True}}
+
+    monkeypatch.setattr(configuracion, "_graph_post", fake_graph_post)
+
+    client = _admin_client(app)
+    response = client.post("/configuracion/whatsapp/phone-number-action", json={"action": "register"})
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["ok"] is True
+    assert payload["action"] == "register"
+    assert calls["path"] == "123456/register"
+    assert calls["access_token"] == "token"
+
+
+def test_whatsapp_phone_number_action_deregister_requires_action(monkeypatch):
+    app = create_app()
+    app.config["TESTING"] = True
+
+    tenant = SimpleNamespace(tenant_key="acme", metadata={})
+
+    monkeypatch.setattr(configuracion, "_resolve_signup_tenant", lambda: tenant)
+    monkeypatch.setattr(
+        configuracion.tenants,
+        "get_tenant_env",
+        lambda _tenant: {"LONG_LIVED_TOKEN": "token", "PHONE_NUMBER_ID": "123456"},
+    )
+
+    client = _admin_client(app)
+    response = client.post("/configuracion/whatsapp/phone-number-action", json={"action": "invalid"})
+
+    assert response.status_code == 400
+    payload = response.get_json()
+    assert payload["ok"] is False
+    assert "Acción inválida" in payload["error"]
