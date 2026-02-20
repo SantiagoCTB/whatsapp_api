@@ -233,6 +233,20 @@ def _extract_graph_list(payload: dict) -> list:
         return data
     return []
 
+
+def _whatsapp_phone_number_action(phone_number_id: str, action: str, access_token: str) -> dict:
+    normalized_phone_number_id = (phone_number_id or "").strip()
+    normalized_action = (action or "").strip().lower()
+    if not normalized_phone_number_id:
+        return {"ok": False, "error": "Falta PHONE_NUMBER_ID para ejecutar la acción."}
+    if normalized_action not in {"register", "deregister"}:
+        return {"ok": False, "error": "Acción inválida para el número de WhatsApp."}
+    return _graph_post(
+        f"{normalized_phone_number_id}/{normalized_action}",
+        access_token,
+        data={"messaging_product": "whatsapp"},
+    )
+
 def _fetch_page_accounts(user_token: str):
     if not user_token:
         return {"ok": False, "error": "Falta el token de usuario para consultar páginas."}
@@ -2752,6 +2766,39 @@ def whatsapp_save_phone_number():
         "ok": True,
         "message": "Número de WhatsApp actualizado.",
         "env": tenants.get_tenant_env(tenant),
+    }
+
+
+@config_bp.route('/configuracion/whatsapp/phone-number-action', methods=['POST'])
+def whatsapp_phone_number_action():
+    if not _require_admin():
+        return {"ok": False, "error": "No autorizado"}, 403
+
+    tenant = _resolve_signup_tenant()
+    if not tenant:
+        return {"ok": False, "error": "No se encontró la empresa actual."}, 400
+
+    try:
+        payload = request.get_json(force=True) or {}
+    except Exception:
+        return {"ok": False, "error": "Payload inválido"}, 400
+
+    current_env = tenants.get_tenant_env(tenant)
+    token = (current_env.get("META_TOKEN") or current_env.get("LONG_LIVED_TOKEN") or "").strip()
+    phone_number_id = (payload.get("phone_number_id") or current_env.get("PHONE_NUMBER_ID") or "").strip()
+    action = (payload.get("action") or "").strip().lower()
+
+    graph_response = _whatsapp_phone_number_action(phone_number_id, action, token)
+    if not graph_response.get("ok"):
+        return graph_response, 400
+
+    action_label = "registrado" if action == "register" else "eliminado"
+    return {
+        "ok": True,
+        "action": action,
+        "phone_number_id": phone_number_id,
+        "message": f"Número {action_label} correctamente.",
+        "result": graph_response.get("data"),
     }
 
 

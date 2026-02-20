@@ -80,6 +80,8 @@
                 <div style="display: flex; gap: 0.5rem;">
                     <button id="wa-phone-refresh" class="btn-secondary" type="button">Actualizar lista</button>
                     <button id="wa-phone-save" class="btn-primary" type="button">Guardar número</button>
+                    <button id="wa-phone-register" class="btn-primary" type="button">Registrar número</button>
+                    <button id="wa-phone-deregister" class="btn-danger" type="button">Eliminar número</button>
                 </div>
                 <div id="wa-phone-status" class="help" style="margin-top: 0.5rem"></div>
             </div>
@@ -337,6 +339,8 @@
     const phoneStatus = document.getElementById('wa-phone-status');
     const phoneRefresh = document.getElementById('wa-phone-refresh');
     const phoneSave = document.getElementById('wa-phone-save');
+    const phoneRegister = document.getElementById('wa-phone-register');
+    const phoneDeregister = document.getElementById('wa-phone-deregister');
     const accountsRefreshButton = document.getElementById('wa-accounts-refresh');
     const accountDetailButton = document.getElementById('wa-account-detail');
     const templatesRefreshButton = document.getElementById('wa-templates-refresh');
@@ -551,6 +555,35 @@
 
     let latestFinishPayload = {};
 
+    const executePhoneNumberAction = (action, phoneNumberId, successMessage) => {
+      const resolvedPhoneNumberId = (phoneNumberId || (phoneSelect && phoneSelect.value) || '').trim();
+      if (!resolvedPhoneNumberId) {
+        updatePhoneStatus('Selecciona un número para continuar.', true);
+        return Promise.resolve({ ok: false });
+      }
+      updatePhoneStatus(action === 'register' ? 'Registrando número en WhatsApp...' : 'Eliminando número de WhatsApp...');
+      return fetch(`{{ url_for('configuracion.whatsapp_phone_number_action') }}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, phone_number_id: resolvedPhoneNumberId }),
+      })
+        .then((resp) => resp.json())
+        .then((resp) => {
+          if (!resp.ok) {
+            updatePhoneStatus(resp.error || 'No se pudo ejecutar la acción sobre el número.', true);
+            updateDebug('Error en acción manual de número', resp);
+            return resp;
+          }
+          updatePhoneStatus(successMessage || resp.message || 'Acción ejecutada correctamente.');
+          updateDebug('Respuesta de acción sobre número', resp);
+          return resp;
+        })
+        .catch(() => {
+          updatePhoneStatus('Error al ejecutar la acción sobre el número.', true);
+          return { ok: false };
+        });
+    };
+
     const sendSignupPayload = (rawPayload) => {
       const payload = Object.assign({}, rawPayload || {});
       fetch(`{{ url_for('configuracion.save_signup') }}`, {
@@ -561,8 +594,11 @@
         .then((resp) => resp.json())
         .then((resp) => {
           if (resp.ok) {
-            updateStatus(resp.message || 'Credenciales guardadas. Recarga la página para ver los cambios.');
-            setTimeout(() => window.location.reload(), 1200);
+            const savedPhoneNumberId = (resp.env && resp.env.PHONE_NUMBER_ID) || payload.phone_number_id || payload.phone_id || '';
+            updateStatus(resp.message || 'Credenciales guardadas. Ejecutando registro del número...');
+            executePhoneNumberAction('register', savedPhoneNumberId, 'Número registrado correctamente.').finally(() => {
+              setTimeout(() => window.location.reload(), 1200);
+            });
           } else {
             updateStatus(resp.error || 'No se pudieron guardar las credenciales.', true);
           }
@@ -747,6 +783,26 @@
       });
     }
 
+
+    if (phoneRegister) {
+      phoneRegister.addEventListener('click', () => {
+        if (!phoneSelect || !phoneSelect.value) {
+          updatePhoneStatus('Selecciona un número para registrar.', true);
+          return;
+        }
+        executePhoneNumberAction('register', phoneSelect.value, 'Número registrado correctamente.');
+      });
+    }
+
+    if (phoneDeregister) {
+      phoneDeregister.addEventListener('click', () => {
+        if (!phoneSelect || !phoneSelect.value) {
+          updatePhoneStatus('Selecciona un número para eliminar.', true);
+          return;
+        }
+        executePhoneNumberAction('deregister', phoneSelect.value, 'Número eliminado correctamente.');
+      });
+    }
 
     if (accountsRefreshButton) {
       accountsRefreshButton.addEventListener('click', () => {
