@@ -234,17 +234,22 @@ def _extract_graph_list(payload: dict) -> list:
     return []
 
 
-def _whatsapp_phone_number_action(phone_number_id: str, action: str, access_token: str) -> dict:
+def _whatsapp_phone_number_action(phone_number_id: str, action: str, access_token: str, *, pin: str | None = None) -> dict:
     normalized_phone_number_id = (phone_number_id or "").strip()
     normalized_action = (action or "").strip().lower()
     if not normalized_phone_number_id:
         return {"ok": False, "error": "Falta PHONE_NUMBER_ID para ejecutar la acción."}
     if normalized_action not in {"register", "deregister"}:
         return {"ok": False, "error": "Acción inválida para el número de WhatsApp."}
+    payload = {"messaging_product": "whatsapp"}
+    normalized_pin = (pin or "").strip()
+    if normalized_action == "register" and normalized_pin:
+        payload["pin"] = normalized_pin
+
     return _graph_post(
         f"{normalized_phone_number_id}/{normalized_action}",
         access_token,
-        data={"messaging_product": "whatsapp"},
+        data=payload,
     )
 
 def _fetch_page_accounts(user_token: str):
@@ -2787,8 +2792,9 @@ def whatsapp_phone_number_action():
     token = (current_env.get("META_TOKEN") or current_env.get("LONG_LIVED_TOKEN") or "").strip()
     phone_number_id = (payload.get("phone_number_id") or current_env.get("PHONE_NUMBER_ID") or "").strip()
     action = (payload.get("action") or "").strip().lower()
+    pin = (payload.get("pin") or "").strip()
 
-    graph_response = _whatsapp_phone_number_action(phone_number_id, action, token)
+    graph_response = _whatsapp_phone_number_action(phone_number_id, action, token, pin=pin)
     if not graph_response.get("ok"):
         return graph_response, 400
 
