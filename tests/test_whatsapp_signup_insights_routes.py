@@ -210,3 +210,51 @@ def test_whatsapp_phone_number_action_register_includes_pin(monkeypatch):
     assert calls["path"] == "123456/register"
     assert calls["access_token"] == "token"
     assert calls["data"] == {"messaging_product": "whatsapp", "pin": "123456"}
+
+
+def test_messenger_pages_accepts_page_token_in_user_token_field(monkeypatch):
+    app = create_app()
+    app.config["TESTING"] = True
+
+    tenant = SimpleNamespace(tenant_key="acme", metadata={})
+
+    monkeypatch.setattr(configuracion, "_resolve_signup_tenant", lambda: tenant)
+    monkeypatch.setattr(
+        configuracion.tenants,
+        "get_tenant_env",
+        lambda _tenant: {},
+    )
+
+    saved = {}
+
+    def fake_update_env(tenant_key, env_updates):
+        saved["tenant_key"] = tenant_key
+        saved["env_updates"] = env_updates
+
+    monkeypatch.setattr(configuracion.tenants, "update_tenant_env", fake_update_env)
+    monkeypatch.setattr(
+        configuracion,
+        "_fetch_page_accounts",
+        lambda _token: {"ok": False, "error": "No se pudieron obtener las páginas."},
+    )
+    monkeypatch.setattr(
+        configuracion,
+        "_fetch_page_from_token",
+        lambda token: {
+            "ok": True,
+            "page": {"id": "page-123", "name": "Mi Página", "access_token": token},
+        },
+    )
+
+    client = _admin_client(app)
+    response = client.post(
+        "/configuracion/messenger/pages",
+        json={"platform": "messenger", "user_access_token": "EAAB-manual-page-token"},
+    )
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["ok"] is True
+    assert payload["pages"] == [{"id": "page-123", "name": "Mi Página"}]
+    assert saved["tenant_key"] == "acme"
+    assert saved["env_updates"]["MESSENGER_TOKEN"] == "EAAB-manual-page-token"

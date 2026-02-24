@@ -348,6 +348,30 @@ def _fetch_page_from_token(page_token: str):
     }
 
 
+def _resolve_messenger_pages_from_token(user_token: str) -> dict:
+    """Resuelve páginas para Messenger tolerando tokens pegados manualmente.
+
+    Prioriza el flujo estándar de token de usuario (`/me/accounts`) y, cuando
+    ese token realmente corresponde a una página, cae al flujo `/me` para evitar
+    que la UI falle al usar token manual.
+    """
+
+    pages_response = _fetch_page_accounts(user_token)
+    if pages_response.get("ok"):
+        return pages_response
+
+    page_response = _fetch_page_from_token(user_token)
+    if not page_response.get("ok"):
+        return pages_response
+
+    page = page_response.get("page") or {}
+    return {
+        "ok": True,
+        "pages": [page],
+        "used_page_token": True,
+    }
+
+
 def _fetch_instagram_user(user_token: str):
     if not user_token:
         return {"ok": False, "error": "Falta el token de usuario para consultar Instagram."}
@@ -2845,7 +2869,7 @@ def messenger_pages():
             "pages": [{"id": page.get("id"), "name": page.get("name")}],
         }
 
-    response = _fetch_page_accounts(token)
+    response = _resolve_messenger_pages_from_token(token)
     if not response.get("ok"):
         return response, 400
 
@@ -2975,7 +2999,7 @@ def messenger_save_page():
         if not page_id:
             return {"ok": False, "error": "Selecciona una página válida."}, 400
         token = _resolve_page_user_token(platform, tenant_env, provided_token)
-        response = _fetch_page_accounts(token)
+        response = _resolve_messenger_pages_from_token(token)
         if not response.get("ok"):
             return response, 400
 
