@@ -82,6 +82,22 @@ def _fetch_instagram_profile(numero: str, access_token: str) -> dict | None:
     }
 
 
+def _touch_instagram_profile_refresh(
+    cursor,
+    numero: str,
+    username: str | None,
+    profile_pic: str | None,
+) -> None:
+    cursor.execute(
+        """
+        INSERT INTO chat_profiles (numero, platform, username, profile_pic)
+        VALUES (%s, %s, %s, %s)
+        ON DUPLICATE KEY UPDATE updated_at = CURRENT_TIMESTAMP
+        """,
+        (numero, "instagram", username, profile_pic),
+    )
+
+
 def _preferred_url_scheme() -> str:
     scheme = tenants.get_runtime_setting(
         "PREFERRED_URL_SCHEME", default=Config.PREFERRED_URL_SCHEME
@@ -1676,31 +1692,20 @@ def get_chat_list():
             and numero
             and numero not in refreshed_profiles
         ):
-            refresh_needed = False
-            if not instagram_username or not instagram_profile_pic:
-                refresh_needed = True
-            elif profile_updated_at and isinstance(profile_updated_at, datetime):
+            refresh_needed = True
+            if profile_updated_at and isinstance(profile_updated_at, datetime):
                 age = datetime.utcnow() - profile_updated_at
-                if age > INSTAGRAM_PROFILE_REFRESH:
-                    refresh_needed = True
+                refresh_needed = age > INSTAGRAM_PROFILE_REFRESH
             if refresh_needed:
                 refreshed_profiles.add(numero)
                 profile = _fetch_instagram_profile(numero, instagram_token)
+                upsert_username = instagram_username
+                upsert_profile_pic = instagram_profile_pic
                 if profile:
                     instagram_username = profile.get("username") or instagram_username
                     instagram_profile_pic = profile.get("profile_pic") or instagram_profile_pic
-                    c.execute(
-                        """
-                        INSERT INTO chat_profiles (numero, platform, username, profile_pic)
-                        VALUES (%s, %s, %s, %s)
-                        ON DUPLICATE KEY UPDATE
-                          username = VALUES(username),
-                          profile_pic = VALUES(profile_pic),
-                          updated_at = CURRENT_TIMESTAMP
-                        """,
-                        (numero, "instagram", instagram_username, instagram_profile_pic),
-                    )
-                    profiles_updated = True
+                    upsert_username = instagram_username
+                    upsert_profile_pic = instagram_profile_pic
                     if (not alias or not str(alias).strip()) and instagram_username:
                         c.execute(
                             """
@@ -1711,6 +1716,13 @@ def get_chat_list():
                             (numero, instagram_username),
                         )
                         alias = instagram_username
+                _touch_instagram_profile_refresh(
+                    c,
+                    numero,
+                    upsert_username,
+                    upsert_profile_pic,
+                )
+                profiles_updated = True
 
         role_data = roles_by_chat.get(numero)
         roles = role_data[0] if role_data else None
