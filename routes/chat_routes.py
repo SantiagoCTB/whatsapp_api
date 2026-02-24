@@ -1501,12 +1501,12 @@ def send_message():
                 'error': error_message
             }), 400
         elapsed_seconds = (datetime.utcnow() - last_client_ts).total_seconds()
-        if elapsed_seconds > 24 * 3600:
-            error_message = (
-                'El usuario de Instagram tiene que haber enviado mensajes a esta cuenta antes de escribirle.'
-                if is_instagram_chat
-                else 'El usuario de Facebook tiene que haber enviado mensajes a esta página antes de escribirle.'
-            )
+        window_seconds = 7 * 24 * 3600 if is_instagram_chat else 24 * 3600
+        if elapsed_seconds > window_seconds:
+            if is_instagram_chat:
+                error_message = 'La ventana de atención humana de Instagram (7 días) expiró. Solicita un nuevo mensaje del usuario.'
+            else:
+                error_message = 'El usuario de Facebook tiene que haber enviado mensajes a esta página antes de escribirle.'
             return jsonify({
                 'error': error_message
             }), 400
