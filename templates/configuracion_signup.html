@@ -357,6 +357,7 @@
 
     let waFinishReceived = false;
     let waFallbackTimer = null;
+    let waFlowActive = false;
 
     const updateStatus = (message, isError) => {
       if (!statusBox) return;
@@ -656,12 +657,16 @@
     };
 
     const handleFbLoginCallback = (response) => {
+      if (!waFlowActive) {
+        return;
+      }
       const responseCode = response && response.authResponse ? response.authResponse.code : '';
       if (responseCode) {
         const mergedPayload = Object.assign({}, latestFinishPayload || {}, { code: responseCode });
         updateStatus('Código recibido. Intercambiando credenciales en el servidor...');
         updateDebug('FB.login devolvió code (flujo oficial)', mergedPayload);
         sendSignupPayload(mergedPayload);
+        waFlowActive = false;
         return;
       }
 
@@ -673,9 +678,11 @@
 
       updateStatus('No se pudo completar el flujo de Embedded Signup en Facebook.', true);
       updateDebug('FB.login no devolvió code', response || {});
+      waFlowActive = false;
     };
 
     function handleSignupMessage(event) {
+      if (!waFlowActive) return;
       if (event.origin !== 'https://www.facebook.com' && event.origin !== 'https://web.facebook.com') return;
       let data = event.data;
       if (typeof data === 'string') {
@@ -702,6 +709,7 @@
       }
 
       if (eventType === 'CANCEL') {
+        waFlowActive = false;
         const errorInfo = data && data.data && data.data.error_message
           ? ` (${data.data.error_message})`
           : '';
@@ -723,10 +731,12 @@
 
       waFinishReceived = false;
       latestFinishPayload = {};
+      waFlowActive = true;
 
       facebookSdkReady.then((FB) => {
         if (!FB || !FB.login) {
           updateStatus('El SDK de Facebook no está listo. Revisa tu conexión y APP_ID.', true);
+          waFlowActive = false;
           return;
         }
 
@@ -770,6 +780,7 @@
           },
         );
       }).catch(() => {
+        waFlowActive = false;
         updateStatus('No se pudo cargar el SDK de Facebook. Recarga la página y revisa bloqueadores de scripts/cookies.', true);
       });
     });
@@ -952,6 +963,8 @@
     const signupRedirectUri = {{ signup_redirect_uri | tojson }};
     const tenantKey = messengerTrigger.dataset.tenant;
     const statusBox = document.getElementById('messenger-embedded-status');
+    let messengerCodeHandled = false;
+    let messengerFlowActive = false;
 
     const updateStatus = (message, isError) => {
       if (!statusBox) return;
@@ -980,6 +993,37 @@
         .catch(() => updateStatus('Error al enviar los datos del signup.', true));
     };
 
+    const parseMessengerCodeFromMessage = (rawData) => {
+      if (!rawData || typeof rawData !== 'string') return '';
+
+      const normalized = rawData.trim().replace(/^#/, '').replace(/^\?/, '');
+      if (!normalized) return '';
+
+      const params = new URLSearchParams(normalized);
+      return (params.get('code') || '').trim();
+    };
+
+    const handleMessengerCode = (code, source) => {
+      const normalizedCode = (code || '').trim();
+      if (!normalizedCode || messengerCodeHandled || !messengerFlowActive) return;
+
+      messengerCodeHandled = true;
+      updateStatus('Código de Messenger recibido. Intercambiando token en el servidor...');
+      sendMessengerPayload({ code: normalizedCode, source });
+      messengerFlowActive = false;
+    };
+
+    window.addEventListener('message', (event) => {
+      if (!messengerFlowActive) return;
+      if (event.origin !== 'https://www.facebook.com' && event.origin !== 'https://web.facebook.com') return;
+
+      const rawData = typeof event.data === 'string' ? event.data : '';
+      const parsedCode = parseMessengerCodeFromMessage(rawData);
+      if (parsedCode) {
+        handleMessengerCode(parsedCode, 'post_message_querystring');
+      }
+    });
+
     messengerTrigger.addEventListener('click', function() {
       if (!facebookAppId) {
         updateStatus('Falta configurar FACEBOOK_APP_ID.', true);
@@ -990,9 +1034,13 @@
         return;
       }
 
+      messengerCodeHandled = false;
+      messengerFlowActive = true;
+
       facebookSdkReady.then((FB) => {
         if (!FB || !FB.login) {
           updateStatus('El SDK de Facebook no está listo. Revisa tu conexión y APP_ID.', true);
+          messengerFlowActive = false;
           return;
         }
 
@@ -1003,21 +1051,24 @@
             const responseCode = response && response.authResponse ? response.authResponse.code : '';
             const responseToken = response && response.authResponse ? response.authResponse.accessToken : '';
             if (responseCode) {
-              updateStatus('Sesión iniciada en Facebook. Completa el asistente de Embedded Signup para continuar.');
+              handleMessengerCode(responseCode, 'fb_login_auth_response');
               return;
             }
             if (responseToken) {
               updateStatus('Sesión iniciada en Facebook. Completa el asistente de Embedded Signup para continuar.');
+              messengerFlowActive = false;
               return;
             }
             if (response && response.status === 'connected') {
               updateStatus('Sesión de Facebook detectada. Completa el cuadro de diálogo para continuar.');
+              messengerFlowActive = false;
               return;
             }
             const errorMessage = response && response.error_message
               ? `No se completó el flujo: ${response.error_message}`
               : 'No se completó el flujo de Facebook. Verifica permisos y redirección.';
             updateStatus(errorMessage, true);
+            messengerFlowActive = false;
           },
           {
             config_id: messengerEmbeddedCode,
@@ -1026,6 +1077,7 @@
           },
         );
       }).catch(() => {
+        messengerFlowActive = false;
         const popupUrl = `https://www.facebook.com/{{ facebook_graph_api_version or 'v24.0' }}/dialog/oauth?app_id=${encodeURIComponent(facebookAppId)}&config_id=${encodeURIComponent(messengerEmbeddedCode)}&state=${encodeURIComponent(tenantKey || 'default')}&redirect_uri=${encodeURIComponent(signupRedirectUri)}`;
         const features = 'width=700,height=800,menubar=no,toolbar=no';
         window.open(popupUrl, 'messenger_signup', features);
