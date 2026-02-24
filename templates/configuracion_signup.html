@@ -952,6 +952,7 @@
     const signupRedirectUri = {{ signup_redirect_uri | tojson }};
     const tenantKey = messengerTrigger.dataset.tenant;
     const statusBox = document.getElementById('messenger-embedded-status');
+    let messengerCodeHandled = false;
 
     const updateStatus = (message, isError) => {
       if (!statusBox) return;
@@ -980,6 +981,35 @@
         .catch(() => updateStatus('Error al enviar los datos del signup.', true));
     };
 
+    const parseMessengerCodeFromMessage = (rawData) => {
+      if (!rawData || typeof rawData !== 'string') return '';
+
+      const normalized = rawData.trim().replace(/^#/, '').replace(/^\?/, '');
+      if (!normalized) return '';
+
+      const params = new URLSearchParams(normalized);
+      return (params.get('code') || '').trim();
+    };
+
+    const handleMessengerCode = (code, source) => {
+      const normalizedCode = (code || '').trim();
+      if (!normalizedCode || messengerCodeHandled) return;
+
+      messengerCodeHandled = true;
+      updateStatus('Código de Messenger recibido. Intercambiando token en el servidor...');
+      sendMessengerPayload({ code: normalizedCode, source });
+    };
+
+    window.addEventListener('message', (event) => {
+      if (event.origin !== 'https://www.facebook.com' && event.origin !== 'https://web.facebook.com') return;
+
+      const rawData = typeof event.data === 'string' ? event.data : '';
+      const parsedCode = parseMessengerCodeFromMessage(rawData);
+      if (parsedCode) {
+        handleMessengerCode(parsedCode, 'post_message_querystring');
+      }
+    });
+
     messengerTrigger.addEventListener('click', function() {
       if (!facebookAppId) {
         updateStatus('Falta configurar FACEBOOK_APP_ID.', true);
@@ -989,6 +1019,8 @@
         updateStatus('Falta configurar MESSENGER_EMBEDDED.', true);
         return;
       }
+
+      messengerCodeHandled = false;
 
       facebookSdkReady.then((FB) => {
         if (!FB || !FB.login) {
@@ -1003,7 +1035,7 @@
             const responseCode = response && response.authResponse ? response.authResponse.code : '';
             const responseToken = response && response.authResponse ? response.authResponse.accessToken : '';
             if (responseCode) {
-              updateStatus('Sesión iniciada en Facebook. Completa el asistente de Embedded Signup para continuar.');
+              handleMessengerCode(responseCode, 'fb_login_auth_response');
               return;
             }
             if (responseToken) {
