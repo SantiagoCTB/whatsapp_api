@@ -467,7 +467,31 @@ def _messenger_window_open(numero: str) -> bool:
 
 
 def _instagram_window_open(numero: str) -> bool:
-    return _messenger_window_open(numero)
+    return _instagram_human_agent_window_open(numero)
+
+
+def _instagram_elapsed_seconds(numero: str) -> float | None:
+    last_client_info = obtener_ultimo_mensaje_cliente_info(numero)
+    if not last_client_info:
+        return None
+    last_ts = last_client_info.get("timestamp")
+    if not isinstance(last_ts, datetime):
+        return None
+    return (datetime.utcnow() - last_ts).total_seconds()
+
+
+def _instagram_human_agent_window_open(numero: str) -> bool:
+    elapsed_seconds = _instagram_elapsed_seconds(numero)
+    if elapsed_seconds is None:
+        return False
+    return elapsed_seconds <= 7 * 24 * 3600
+
+
+def _instagram_should_use_human_agent_tag(numero: str) -> bool:
+    elapsed_seconds = _instagram_elapsed_seconds(numero)
+    if elapsed_seconds is None:
+        return False
+    return elapsed_seconds > 24 * 3600 and elapsed_seconds <= 7 * 24 * 3600
 
 
 def _extract_error_details(response: requests.Response) -> Dict[str, Any]:
@@ -913,7 +937,7 @@ def enviar_mensaje(
         if not _instagram_window_open(numero):
             return _result(
                 False,
-                "El usuario de Instagram tiene que haber enviado mensajes a esta cuenta antes de escribirle.",
+                "La ventana de atención humana de Instagram (7 días) expiró. Solicita un nuevo mensaje del usuario o usa plantilla de WhatsApp.",
             )
 
         url = f"{INSTAGRAM_GRAPH_BASE_URL}/{runtime['page_id']}/messages"
@@ -926,6 +950,9 @@ def enviar_mensaje(
             "recipient": {"id": numero},
             "message": {},
         }
+        if _instagram_should_use_human_agent_tag(numero):
+            payload["messaging_type"] = "MESSAGE_TAG"
+            payload["tag"] = "HUMAN_AGENT"
         if reply_to_wa_id:
             payload["reply_to"] = {"mid": reply_to_wa_id}
 
