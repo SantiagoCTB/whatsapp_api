@@ -52,6 +52,39 @@ def test_whatsapp_accounts_returns_client_and_owned(monkeypatch):
     assert payload["owned_accounts"][0]["id"] == "waba-owned-1"
 
 
+def test_whatsapp_businesses_calls_me_businesses(monkeypatch):
+    app = create_app()
+    app.config["TESTING"] = True
+
+    tenant = SimpleNamespace(tenant_key="acme", metadata={})
+
+    monkeypatch.setattr(configuracion, "_resolve_signup_tenant", lambda: tenant)
+    monkeypatch.setattr(
+        configuracion.tenants,
+        "get_tenant_env",
+        lambda _tenant: {"META_TOKEN": "token", "BUSINESS_ID": "biz-123"},
+    )
+
+    calls = {}
+
+    def fake_graph_get(path, access_token, params=None):
+        calls["path"] = path
+        calls["access_token"] = access_token
+        calls["params"] = params
+        return {"ok": True, "data": {"data": [{"id": "biz-1", "name": "Negocio ACME"}]}}
+
+    monkeypatch.setattr(configuracion, "_graph_get", fake_graph_get)
+
+    client = _admin_client(app)
+    response = client.get("/configuracion/whatsapp/businesses")
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["ok"] is True
+    assert calls["path"] == "me/businesses"
+    assert calls["access_token"] == "token"
+    assert payload["businesses"][0]["id"] == "biz-1"
+
 def test_whatsapp_message_templates_uses_tenant_waba(monkeypatch):
     app = create_app()
     app.config["TESTING"] = True
