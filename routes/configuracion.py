@@ -2671,6 +2671,33 @@ def whatsapp_accounts():
     }
 
 
+@config_bp.route('/configuracion/whatsapp/businesses', methods=['GET'])
+def whatsapp_businesses():
+    if not _require_admin():
+        return {"ok": False, "error": "No autorizado"}, 403
+
+    tenant = _resolve_signup_tenant()
+    if not tenant:
+        return {"ok": False, "error": "No se encontró la empresa actual."}, 400
+
+    token, _business_id, _tenant_env = _resolve_whatsapp_token_and_business_id(tenant)
+
+    fields = request.args.get("fields") or "id,name,verification_status,vertical"
+    limit = request.args.get("limit", "20")
+    response = _graph_get(
+        "me/businesses",
+        token,
+        params={"fields": fields, "limit": limit},
+    )
+    if not response.get("ok"):
+        return response, 400
+
+    return {
+        "ok": True,
+        "businesses": _extract_graph_list(response.get("data") or {}),
+    }
+
+
 @config_bp.route('/configuracion/whatsapp/account-details', methods=['GET'])
 def whatsapp_account_details():
     if not _require_admin():

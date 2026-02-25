@@ -93,6 +93,7 @@
                     <button id="wa-accounts-refresh" class="btn-secondary" type="button">Cargar cuentas (client/owned)</button>
                     <button id="wa-account-detail" class="btn-secondary" type="button">Detalle WABA</button>
                     <button id="wa-templates-refresh" class="btn-secondary" type="button">Plantillas</button>
+                    <button id="wa-businesses-refresh" class="btn-secondary" type="button">Negocios</button>
                     <button id="wa-apps-refresh" class="btn-secondary" type="button">Apps suscritas</button>
                     <button id="wa-app-subscribe" class="btn-primary" type="button">Suscribir app</button>
                 </div>
@@ -347,6 +348,7 @@
     const accountsRefreshButton = document.getElementById('wa-accounts-refresh');
     const accountDetailButton = document.getElementById('wa-account-detail');
     const templatesRefreshButton = document.getElementById('wa-templates-refresh');
+    const businessesRefreshButton = document.getElementById('wa-businesses-refresh');
     const appsRefreshButton = document.getElementById('wa-apps-refresh');
     const appSubscribeButton = document.getElementById('wa-app-subscribe');
     const insightsStatus = document.getElementById('wa-insights-status');
@@ -906,6 +908,12 @@
     if (templatesRefreshButton) {
       templatesRefreshButton.addEventListener('click', () => {
         fetchWhatsappInsights(`{{ url_for('configuracion.whatsapp_message_templates') }}`, { method: 'GET' }, 'Plantillas de mensajes cargadas.');
+      });
+    }
+
+    if (businessesRefreshButton) {
+      businessesRefreshButton.addEventListener('click', () => {
+        fetchWhatsappInsights(`{{ url_for('configuracion.whatsapp_businesses') }}`, { method: 'GET' }, 'Negocios cargados.');
       });
     }
 
@@ -1487,6 +1495,12 @@
     if (templatesRefreshButton) {
       templatesRefreshButton.addEventListener('click', () => {
         fetchWhatsappInsights(`{{ url_for('configuracion.whatsapp_message_templates') }}`, { method: 'GET' }, 'Plantillas de mensajes cargadas.');
+      });
+    }
+
+    if (businessesRefreshButton) {
+      businessesRefreshButton.addEventListener('click', () => {
+        fetchWhatsappInsights(`{{ url_for('configuracion.whatsapp_businesses') }}`, { method: 'GET' }, 'Negocios cargados.');
       });
     }
 
