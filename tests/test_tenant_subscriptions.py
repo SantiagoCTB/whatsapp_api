@@ -114,3 +114,21 @@ def test_superadmin_can_update_subscription_from_admin_panel(monkeypatch):
     assert captured["tenant_key"] == "acme"
     assert captured["payload"]["paid_until"] == "2030-12-31"
     assert captured["payload"]["monthly_limit"] == 1500
+
+
+def test_expired_membership_blocks_requests_with_legacy_admin_role(monkeypatch):
+    app = create_app()
+
+    monkeypatch.setattr(tenants, "get_current_tenant", lambda: _tenant({"paid_until": "2000-01-01"}))
+    monkeypatch.setattr(tenants, "is_tenant_subscription_active", lambda tenant: False)
+
+    client = app.test_client()
+    with client.session_transaction() as sess:
+        sess["user"] = "admin"
+        sess["roles"] = []
+        sess["rol"] = "admin"
+
+    response = client.get("/")
+
+    assert response.status_code == 403
+    assert "Membresía vencida" in response.get_data(as_text=True)

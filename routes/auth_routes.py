@@ -158,7 +158,7 @@ def login():
             roles = get_roles_by_user(
                 user[0], allow_tenant_context=user_source_allows_tenant_context
             ) or []
-            role_keywords = set(roles)
+            role_keywords = {str(role).strip().lower() for role in roles if role}
             tenant = tenants.get_current_tenant()
             if tenant and 'superadmin' not in role_keywords and not tenants.is_tenant_subscription_active(tenant):
                 error = (

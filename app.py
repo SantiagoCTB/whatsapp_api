@@ -228,7 +228,11 @@ def create_app():
             return
 
         roles = set(session.get("roles", []) or [])
-        if "superadmin" in roles:
+        legacy_role = session.get("rol")
+        if legacy_role:
+            roles.add(legacy_role)
+        normalized_roles = {str(role).strip().lower() for role in roles if role}
+        if "superadmin" in normalized_roles:
             return
 
         if not tenants.is_tenant_subscription_active(tenant):
