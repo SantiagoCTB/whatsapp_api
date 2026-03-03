@@ -88,9 +88,25 @@
       <div><strong>DB:</strong> {{ selected_tenant.db_name }} en {{ selected_tenant.db_host }}:{{ selected_tenant.db_port }}</div>
       <div><strong>Usuario BD:</strong> {{ selected_tenant.db_user }}</div>
       <div><strong>Metadata:</strong> {{ selected_tenant.metadata or '{}' }}</div>
+      <div><strong>Estado membresía:</strong> {% if tenant_subscription.get('paid_until') %}Activa hasta {{ tenant_subscription.get('paid_until') }}{% else %}Sin pago registrado{% endif %}</div>
+      <div><strong>Ciclo actual:</strong> {{ tenant_subscription.get('billing_cycle') }}</div>
+      <div><strong>Contador mensual:</strong> {{ tenant_subscription.get('monthly_counter', 0) }}</div>
     </div>
 
     <div class="admin-grid">
+      <div>
+        <h3>Suscripción</h3>
+        <form method="post" action="{{ url_for('tenant_admin.update_tenant_subscription', tenant_key=selected_tenant.tenant_key) }}" class="form-grid">
+          <label>Pagado hasta
+            <input type="date" name="paid_until" value="{{ tenant_subscription.get('paid_until') or '' }}" />
+          </label>
+          <label>Límite mensual (opcional)
+            <input type="number" min="0" name="monthly_limit" value="{{ tenant_subscription.get('monthly_limit') if tenant_subscription.get('monthly_limit') is not none else '' }}" placeholder="Sin límite" />
+          </label>
+          <p class="help">Si no hay fecha de pago o ya venció, los usuarios de la empresa no podrán entrar.</p>
+          <button type="submit" class="btn primary">Guardar suscripción</button>
+        </form>
+      </div>
       <div>
         <h3>Usuarios y roles</h3>
         <table class="table">

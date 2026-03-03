@@ -7,6 +7,7 @@ from typing import Optional
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from config import Config
+from services import tenants
 from services.db import get_connection, get_roles_by_user
 
 auth_bp = Blueprint('auth', __name__)
@@ -154,13 +155,26 @@ def login():
             user_source_allows_tenant_context = True
 
         if user and _verify_password(user[2], password):
-            _clear_failed_attempts(security_key)
-            session.permanent = False
-            session['user'] = user[1]
-
             roles = get_roles_by_user(
                 user[0], allow_tenant_context=user_source_allows_tenant_context
             ) or []
+            role_keywords = set(roles)
+            tenant = tenants.get_current_tenant()
+            if tenant and 'superadmin' not in role_keywords and not tenants.is_tenant_subscription_active(tenant):
+                error = (
+                    'Tu membresía está vencida. Contacta al administrador para renovar el pago.'
+                )
+                return render_template(
+                    'login.html',
+                    error=error,
+                    success=success_message,
+                    change_error=change_error,
+                    show_change=show_change,
+                ), 403
+
+            _clear_failed_attempts(security_key)
+            session.permanent = False
+            session['user'] = user[1]
             session['roles'] = roles
             session['rol'] = roles[0] if roles else None
 
