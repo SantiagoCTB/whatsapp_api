@@ -7,6 +7,7 @@ import json
 import logging
 import os
 import posixpath
+from datetime import date
 from dataclasses import dataclass
 from typing import Dict, List, Mapping
 from flask import Request
@@ -430,6 +431,68 @@ def update_tenant_env(tenant_key: str, env_updates: Mapping | None) -> TenantInf
     updated_tenant = update_tenant_metadata(tenant_key, metadata)
     _trigger_page_backfill_if_needed(previous_env, updated_tenant)
     return updated_tenant
+
+
+def _current_billing_cycle(reference_date: date | None = None) -> str:
+    current = reference_date or date.today()
+    return current.strftime("%Y-%m")
+
+
+def get_tenant_subscription(tenant: TenantInfo | None) -> dict:
+    metadata = tenant.metadata if tenant and isinstance(tenant.metadata, dict) else {}
+    subscription = metadata.get("subscription") if isinstance(metadata.get("subscription"), dict) else {}
+    normalized = dict(subscription or {})
+    normalized.setdefault("monthly_counter", 0)
+    normalized.setdefault("monthly_limit", None)
+    normalized.setdefault("billing_cycle", _current_billing_cycle())
+    normalized.setdefault("paid_until", None)
+    return normalized
+
+
+def ensure_monthly_counter_current(tenant: TenantInfo | None, *, reference_date: date | None = None) -> dict:
+    if not tenant:
+        return get_tenant_subscription(None)
+
+    current_cycle = _current_billing_cycle(reference_date)
+    subscription = get_tenant_subscription(tenant)
+    if subscription.get("billing_cycle") == current_cycle:
+        return subscription
+
+    subscription["billing_cycle"] = current_cycle
+    subscription["monthly_counter"] = 0
+    updated = update_tenant_subscription(tenant.tenant_key, subscription)
+    return get_tenant_subscription(updated)
+
+
+def update_tenant_subscription(tenant_key: str, subscription_updates: Mapping | None) -> TenantInfo:
+    tenant = get_tenant(tenant_key)
+    if not tenant:
+        raise TenantNotFoundError(f"No se encontró la empresa '{tenant_key}'.")
+
+    subscription = get_tenant_subscription(tenant)
+    if subscription_updates:
+        subscription.update(dict(subscription_updates))
+
+    metadata = dict(tenant.metadata or {})
+    metadata["subscription"] = subscription
+    return update_tenant_metadata(tenant_key, metadata)
+
+
+def is_tenant_subscription_active(tenant: TenantInfo | None, *, reference_date: date | None = None) -> bool:
+    if not tenant:
+        return True
+
+    subscription = get_tenant_subscription(tenant)
+    paid_until_raw = (subscription.get("paid_until") or "").strip() if subscription.get("paid_until") else ""
+    if not paid_until_raw:
+        return False
+
+    try:
+        paid_until = date.fromisoformat(paid_until_raw)
+    except ValueError:
+        return False
+
+    return paid_until >= (reference_date or date.today())
 
 
 def _normalize_platform(value: str | None) -> str | None:
@@ -931,6 +994,10 @@ __all__ = [
     "update_tenant_metadata",
     "create_or_update_tenant_user",
     "get_runtime_setting",
+    "is_tenant_subscription_active",
+    "update_tenant_subscription",
+    "ensure_monthly_counter_current",
+    "get_tenant_subscription",
     "TENANT_ENV_KEYS",
     "delete_tenant",
 ]

@@ -208,6 +208,36 @@ def create_app():
         tenants.set_current_tenant(tenant)
         tenants.set_current_tenant_env(tenants.get_tenant_env(tenant))
 
+
+    @app.before_request
+    def enforce_subscription_access():
+        endpoint = request.endpoint or ""
+        if endpoint.startswith("static"):
+            return
+        if endpoint.startswith("auth."):
+            return
+        if endpoint.startswith("tenant_admin."):
+            return
+        if endpoint.startswith("landing."):
+            return
+        if endpoint.startswith("webhook."):
+            return
+
+        tenant = tenants.get_current_tenant()
+        if not tenant:
+            return
+
+        roles = set(session.get("roles", []) or [])
+        legacy_role = session.get("rol")
+        if legacy_role:
+            roles.add(legacy_role)
+        normalized_roles = {str(role).strip().lower() for role in roles if role}
+        if "superadmin" in normalized_roles:
+            return
+
+        if not tenants.is_tenant_subscription_active(tenant):
+            abort(403, description="Membresía vencida. Renueva el pago para acceder.")
+
     @app.teardown_request
     def clear_tenant_context(exc):
         tenants.clear_current_tenant()
