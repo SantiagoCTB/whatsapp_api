@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+from datetime import date
 from flask import Blueprint, abort, redirect, render_template, request, session, url_for
 
 from config import Config
@@ -63,6 +64,9 @@ def dashboard():
     tenant_roles = tenants.get_tenant_roles(selected_tenant) if selected_tenant else []
     tenant_users = tenants.list_tenant_users(selected_tenant) if selected_tenant else []
     tenant_env = tenants.get_tenant_env(selected_tenant) if selected_tenant else {}
+    tenant_subscription = (
+        tenants.ensure_monthly_counter_current(selected_tenant) if selected_tenant else {}
+    )
 
     message = request.args.get("msg")
     error = request.args.get("error")
@@ -74,10 +78,70 @@ def dashboard():
         tenant_roles=tenant_roles,
         tenant_users=tenant_users,
         tenant_env=tenant_env,
+        tenant_subscription=tenant_subscription,
         signup_config_code=Config.SIGNUP_FACEBOOK,
         facebook_app_id=Config.FACEBOOK_APP_ID,
         message=message,
         error=error,
+    )
+
+
+@tenant_admin_bp.route("/<tenant_key>/subscription", methods=["POST"])
+def update_tenant_subscription(tenant_key: str):
+    tenant = tenants.get_tenant(tenant_key)
+    if not tenant:
+        abort(404)
+
+    paid_until_raw = (request.form.get("paid_until") or "").strip()
+    monthly_limit_raw = (request.form.get("monthly_limit") or "").strip()
+
+    if paid_until_raw:
+        try:
+            date.fromisoformat(paid_until_raw)
+        except ValueError:
+            return redirect(
+                url_for(
+                    "tenant_admin.dashboard",
+                    tenant=tenant_key,
+                    error="La fecha de pago debe tener formato YYYY-MM-DD.",
+                )
+            )
+
+    monthly_limit = None
+    if monthly_limit_raw:
+        try:
+            monthly_limit = int(monthly_limit_raw)
+        except ValueError:
+            return redirect(
+                url_for(
+                    "tenant_admin.dashboard",
+                    tenant=tenant_key,
+                    error="El límite mensual debe ser un número entero.",
+                )
+            )
+        if monthly_limit < 0:
+            return redirect(
+                url_for(
+                    "tenant_admin.dashboard",
+                    tenant=tenant_key,
+                    error="El límite mensual no puede ser negativo.",
+                )
+            )
+
+    tenants.update_tenant_subscription(
+        tenant_key,
+        {
+            "paid_until": paid_until_raw or None,
+            "monthly_limit": monthly_limit,
+        },
+    )
+
+    return redirect(
+        url_for(
+            "tenant_admin.dashboard",
+            tenant=tenant_key,
+            msg="Suscripción actualizada correctamente.",
+        )
     )
 
 
