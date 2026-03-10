@@ -204,19 +204,23 @@
             <small>Separa por comas o saltos de línea. Si lo dejas vacío, se usarán keywords por defecto.</small>
         </div>
         <div class="form-row">
-            <label for="conversion_cta_flow_rule_id">Flow (opcional)</label>
-            <select id="conversion_cta_flow_rule_id" name="conversion_cta_flow_rule_id">
+            <label for="conversion_cta_flow_id">Flow existente en WhatsApp (opcional)</label>
+            <select id="conversion_cta_flow_id" name="conversion_cta_flow_id">
                 <option value="">Sin flow</option>
-                {% for rule in flow_rules or [] %}
+                {% for flow in available_flows or [] %}
                 <option
-                    value="{{ rule.id }}"
-                    {% if ia_config and ia_config.conversion_cta_flow_rule_id == rule.id %}selected{% endif %}
+                    value="{{ flow.id }}"
+                    {% if selected_conversion_flow_id and selected_conversion_flow_id == flow.id %}selected{% endif %}
                 >
-                    #{{ rule.id }} · {{ rule.step or 'sin step' }} · {{ rule.input_text or 'sin input' }}
+                    {{ flow.name }} · {{ flow.id }} · {{ flow.status }}
                 </option>
                 {% endfor %}
             </select>
-            <small>Si eliges un flow, se prioriza sobre mensaje/media.</small>
+            {% if available_flows_error %}
+            <small>{{ available_flows_error }}</small>
+            {% else %}
+            <small>Se listan únicamente flows ya creados en Meta para este WABA.</small>
+            {% endif %}
         </div>
         <div class="form-row">
             <label for="conversion_cta_message">Mensaje de texto (opcional)</label>
