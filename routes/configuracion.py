@@ -1002,6 +1002,13 @@ def _ensure_ia_config_table(cursor):
             pdf_ingest_started_at DATETIME NULL,
             pdf_ingest_finished_at DATETIME NULL,
             pdf_ingest_error TEXT NULL,
+            conversion_cta_enabled TINYINT(1) NOT NULL DEFAULT 0,
+            conversion_cta_message TEXT NULL,
+            conversion_cta_media_url TEXT NULL,
+            conversion_cta_media_tipo VARCHAR(20) NULL,
+            conversion_cta_flow_rule_id INT NULL,
+            conversion_cta_flow_options TEXT NULL,
+            conversion_cta_keywords TEXT NULL,
             created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
         ) ENGINE=InnoDB;
         """
@@ -1133,6 +1140,81 @@ def _ensure_ia_config_table(cursor):
             "ALTER TABLE ia_config ADD COLUMN pdf_ingest_error TEXT NULL AFTER pdf_ingest_finished_at;"
         )
 
+    cursor.execute("SHOW COLUMNS FROM ia_config LIKE 'conversion_cta_enabled';")
+    if cursor.fetchone() is None:
+        cursor.execute(
+            "ALTER TABLE ia_config ADD COLUMN conversion_cta_enabled TINYINT(1) NOT NULL DEFAULT 0 AFTER pdf_ingest_error;"
+        )
+
+    cursor.execute("SHOW COLUMNS FROM ia_config LIKE 'conversion_cta_message';")
+    if cursor.fetchone() is None:
+        cursor.execute(
+            "ALTER TABLE ia_config ADD COLUMN conversion_cta_message TEXT NULL AFTER conversion_cta_enabled;"
+        )
+
+    cursor.execute("SHOW COLUMNS FROM ia_config LIKE 'conversion_cta_media_url';")
+    if cursor.fetchone() is None:
+        cursor.execute(
+            "ALTER TABLE ia_config ADD COLUMN conversion_cta_media_url TEXT NULL AFTER conversion_cta_message;"
+        )
+
+    cursor.execute("SHOW COLUMNS FROM ia_config LIKE 'conversion_cta_media_tipo';")
+    if cursor.fetchone() is None:
+        cursor.execute(
+            "ALTER TABLE ia_config ADD COLUMN conversion_cta_media_tipo VARCHAR(20) NULL AFTER conversion_cta_media_url;"
+        )
+
+    cursor.execute("SHOW COLUMNS FROM ia_config LIKE 'conversion_cta_flow_rule_id';")
+    if cursor.fetchone() is None:
+        cursor.execute(
+            "ALTER TABLE ia_config ADD COLUMN conversion_cta_flow_rule_id INT NULL AFTER conversion_cta_media_tipo;"
+        )
+
+    cursor.execute("SHOW COLUMNS FROM ia_config LIKE 'conversion_cta_flow_options';")
+    if cursor.fetchone() is None:
+        cursor.execute(
+            "ALTER TABLE ia_config ADD COLUMN conversion_cta_flow_options TEXT NULL AFTER conversion_cta_flow_rule_id;"
+        )
+
+    cursor.execute("SHOW COLUMNS FROM ia_config LIKE 'conversion_cta_keywords';")
+    if cursor.fetchone() is None:
+        cursor.execute(
+            "ALTER TABLE ia_config ADD COLUMN conversion_cta_keywords TEXT NULL AFTER conversion_cta_flow_options;"
+        )
+
+
+def _list_flow_rules(cursor):
+    try:
+        cursor.execute(
+            """
+            SELECT id, step, input_text, respuesta, opciones
+              FROM reglas
+             WHERE tipo = 'flow'
+          ORDER BY id DESC
+            """
+        )
+    except Exception:
+        return []
+
+    flow_rules = []
+    for row in cursor.fetchall() or []:
+        try:
+            options = json.loads(row[4]) if row[4] else {}
+        except (TypeError, ValueError):
+            options = {}
+        if not isinstance(options, dict):
+            continue
+        flow_rules.append(
+            {
+                "id": row[0],
+                "step": row[1],
+                "input_text": row[2],
+                "respuesta": row[3],
+                "options": options,
+            }
+        )
+    return flow_rules
+
 
 def _get_ia_config(cursor):
     keys = [
@@ -1162,6 +1244,13 @@ def _get_ia_config(cursor):
         "pdf_ingest_started_at",
         "pdf_ingest_finished_at",
         "pdf_ingest_error",
+        "conversion_cta_enabled",
+        "conversion_cta_message",
+        "conversion_cta_media_url",
+        "conversion_cta_media_tipo",
+        "conversion_cta_flow_rule_id",
+        "conversion_cta_flow_options",
+        "conversion_cta_keywords",
     ]
 
     queries = [
@@ -1173,7 +1262,11 @@ def _get_ia_config(cursor):
                    followup_media_tipo_1, followup_media_tipo_2, followup_media_tipo_3,
                    pdf_filename, pdf_original_name, pdf_mime, pdf_size, pdf_uploaded_at,
                    pdf_source_url, pdf_ingest_state, pdf_ingest_started_at, pdf_ingest_finished_at,
-                   pdf_ingest_error
+                   pdf_ingest_error,
+                   conversion_cta_enabled, conversion_cta_message,
+                   conversion_cta_media_url, conversion_cta_media_tipo,
+                   conversion_cta_flow_rule_id, conversion_cta_flow_options,
+                   conversion_cta_keywords
               FROM ia_config
           ORDER BY id DESC
              LIMIT 1
@@ -1185,7 +1278,11 @@ def _get_ia_config(cursor):
             SELECT id, model_name, model_token, enabled, system_prompt, business_description,
                    pdf_filename, pdf_original_name, pdf_mime, pdf_size, pdf_uploaded_at,
                    pdf_source_url, pdf_ingest_state, pdf_ingest_started_at, pdf_ingest_finished_at,
-                   pdf_ingest_error
+                   pdf_ingest_error,
+                   conversion_cta_enabled, conversion_cta_message,
+                   conversion_cta_media_url, conversion_cta_media_tipo,
+                   conversion_cta_flow_rule_id, conversion_cta_flow_options,
+                   conversion_cta_keywords
               FROM ia_config
           ORDER BY id DESC
              LIMIT 1
@@ -1207,6 +1304,13 @@ def _get_ia_config(cursor):
                 "pdf_ingest_started_at",
                 "pdf_ingest_finished_at",
                 "pdf_ingest_error",
+                "conversion_cta_enabled",
+                "conversion_cta_message",
+                "conversion_cta_media_url",
+                "conversion_cta_media_tipo",
+                "conversion_cta_flow_rule_id",
+                "conversion_cta_flow_options",
+                "conversion_cta_keywords",
             ],
         ),
         (
@@ -1894,6 +1998,7 @@ def configuracion_ia():
         conn.commit()
 
         ia_config = _get_ia_config(c)
+        flow_rules = _list_flow_rules(c)
         pdf_url = None
         if ia_config and ia_config.get('pdf_filename'):
             pdf_filename = ia_config['pdf_filename']
@@ -1925,6 +2030,43 @@ def configuracion_ia():
             followup_media_tipo_1 = (request.form.get('followup_media_tipo_1') or '').strip() or None
             followup_media_tipo_2 = (request.form.get('followup_media_tipo_2') or '').strip() or None
             followup_media_tipo_3 = (request.form.get('followup_media_tipo_3') or '').strip() or None
+            conversion_cta_enabled = (
+                1 if request.form.get('conversion_cta_enabled') in {'on', '1', 'true', 't'} else 0
+            )
+            conversion_cta_message = (request.form.get('conversion_cta_message') or '').strip() or None
+            conversion_cta_media_url = (request.form.get('conversion_cta_media_url') or '').strip() or None
+            conversion_cta_media_file = request.files.get('conversion_cta_media_file')
+            conversion_cta_media_tipo = (
+                request.form.get('conversion_cta_media_tipo') or ''
+            ).strip() or None
+            conversion_cta_flow_rule_id = request.form.get('conversion_cta_flow_rule_id')
+            conversion_cta_keywords = (request.form.get('conversion_cta_keywords') or '').strip() or None
+            if conversion_cta_keywords:
+                tokens = [
+                    token.strip().lower()
+                    for token in re.split(r"[,\n]+", conversion_cta_keywords)
+                    if token.strip()
+                ]
+                conversion_cta_keywords = ", ".join(dict.fromkeys(tokens)) or None
+            try:
+                conversion_cta_flow_rule_id = int(conversion_cta_flow_rule_id)
+            except (TypeError, ValueError):
+                conversion_cta_flow_rule_id = None
+
+            conversion_cta_flow_options = None
+            if conversion_cta_flow_rule_id:
+                flow_rule = next(
+                    (rule for rule in flow_rules if rule['id'] == conversion_cta_flow_rule_id),
+                    None,
+                )
+                if flow_rule:
+                    conversion_cta_flow_options = json.dumps(
+                        flow_rule.get('options') or {},
+                        ensure_ascii=False,
+                    )
+                else:
+                    conversion_cta_flow_rule_id = None
+
             followup_interval_minutes = request.form.get('followup_interval_minutes')
             try:
                 followup_interval_minutes = int(followup_interval_minutes)
@@ -2043,6 +2185,9 @@ def configuracion_ia():
                 followup_media_url_3 = _save_followup_media(
                     followup_media_file_3, followup_media_url_3
                 )
+                conversion_cta_media_url = _save_followup_media(
+                    conversion_cta_media_file, conversion_cta_media_url
+                )
 
             if not error_message:
                 ingest_state = ia_config.get("pdf_ingest_state") if ia_config else None
@@ -2090,7 +2235,14 @@ def configuracion_ia():
                                pdf_ingest_state = %s,
                                pdf_ingest_started_at = %s,
                                pdf_ingest_finished_at = %s,
-                               pdf_ingest_error = %s
+                               pdf_ingest_error = %s,
+                               conversion_cta_enabled = %s,
+                               conversion_cta_message = %s,
+                               conversion_cta_media_url = %s,
+                               conversion_cta_media_tipo = %s,
+                               conversion_cta_flow_rule_id = %s,
+                               conversion_cta_flow_options = %s,
+                               conversion_cta_keywords = %s
                          WHERE id = %s
                         """,
                         (
@@ -2119,6 +2271,13 @@ def configuracion_ia():
                             ingest_started_at,
                             ingest_finished_at,
                             ingest_error_detail,
+                            conversion_cta_enabled,
+                            conversion_cta_message,
+                            conversion_cta_media_url,
+                            conversion_cta_media_tipo,
+                            conversion_cta_flow_rule_id,
+                            conversion_cta_flow_options,
+                            conversion_cta_keywords,
                             ia_config['id'],
                         ),
                     )
@@ -2133,8 +2292,12 @@ def configuracion_ia():
                              followup_media_tipo_1, followup_media_tipo_2, followup_media_tipo_3,
                              pdf_filename, pdf_original_name,
                              pdf_mime, pdf_size, pdf_uploaded_at, pdf_source_url, pdf_ingest_state,
-                             pdf_ingest_started_at, pdf_ingest_finished_at, pdf_ingest_error)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                             pdf_ingest_started_at, pdf_ingest_finished_at, pdf_ingest_error,
+                             conversion_cta_enabled, conversion_cta_message,
+                             conversion_cta_media_url, conversion_cta_media_tipo,
+                             conversion_cta_flow_rule_id, conversion_cta_flow_options,
+                             conversion_cta_keywords)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                         """,
                         (
                             ia_model,
@@ -2162,6 +2325,13 @@ def configuracion_ia():
                             ingest_started_at,
                             ingest_finished_at,
                             ingest_error_detail,
+                            conversion_cta_enabled,
+                            conversion_cta_message,
+                            conversion_cta_media_url,
+                            conversion_cta_media_tipo,
+                            conversion_cta_flow_rule_id,
+                            conversion_cta_flow_options,
+                            conversion_cta_keywords,
                         ),
                     )
 
@@ -2219,6 +2389,7 @@ def configuracion_ia():
             'configuracion_ia.html',
             ia_config=ia_config,
             pdf_url=pdf_url,
+            flow_rules=flow_rules,
             status_message=status_message,
             error_message=error_message,
         )

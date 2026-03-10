@@ -188,6 +188,119 @@ def _get_ia_followup_config() -> dict | None:
     }
 
 
+def _get_ia_conversion_cta_config() -> dict | None:
+    conn = get_connection()
+    c = conn.cursor()
+    try:
+        c.execute(
+            """
+            SELECT conversion_cta_enabled,
+                   conversion_cta_message,
+                   conversion_cta_media_url,
+                   conversion_cta_media_tipo,
+                   conversion_cta_flow_options,
+                   conversion_cta_keywords
+              FROM ia_config
+          ORDER BY id DESC
+             LIMIT 1
+            """
+        )
+        row = c.fetchone()
+    except Exception:
+        row = None
+    finally:
+        conn.close()
+
+    if not row:
+        return None
+
+    flow_options = None
+    if row[4]:
+        try:
+            parsed = json.loads(row[4])
+        except (TypeError, ValueError):
+            parsed = None
+        if isinstance(parsed, dict):
+            flow_options = parsed
+
+    keywords = []
+    raw_keywords = (row[5] or "").strip()
+    if raw_keywords:
+        keywords = [
+            token.strip().lower()
+            for token in re.split(r"[,\n]+", raw_keywords)
+            if token.strip()
+        ]
+
+    return {
+        "enabled": bool(row[0]),
+        "message": (row[1] or "").strip(),
+        "media_url": (row[2] or "").strip(),
+        "media_tipo": (row[3] or "").strip(),
+        "flow_options": flow_options,
+        "keywords": keywords,
+    }
+
+
+def _should_trigger_conversion_cta(user_text: str, keywords: list[str] | None = None) -> bool:
+    normalized = (user_text or "").lower()
+    trigger_keywords = [keyword.strip().lower() for keyword in (keywords or []) if keyword and keyword.strip()]
+    if not trigger_keywords:
+        trigger_keywords = [
+            "comprar",
+            "compra",
+            "precio",
+            "cotiz",
+            "probar",
+            "prueba",
+            "demo",
+            "agendar",
+            "quiero",
+            "me interesa",
+            "contratar",
+        ]
+    return any(trigger in normalized for trigger in trigger_keywords)
+
+
+def _send_conversion_cta_if_needed(numero: str, user_text: str, message_step: str) -> None:
+    config = _get_ia_conversion_cta_config()
+    if not config or not config.get("enabled"):
+        return
+
+    if not _should_trigger_conversion_cta(user_text, config.get("keywords")):
+        return
+
+    flow_options = config.get("flow_options")
+    if isinstance(flow_options, dict) and flow_options:
+        flow_message = config.get("message") or "Continuemos con tu solicitud"
+        enviar_mensaje(
+            numero,
+            flow_message,
+            tipo="bot",
+            tipo_respuesta="flow",
+            opciones=flow_options,
+            step=message_step,
+        )
+        return
+
+    media_url = config.get("media_url")
+    media_tipo = config.get("media_tipo")
+    message = config.get("message")
+    if media_url and media_tipo:
+        enviar_mensaje(
+            numero,
+            message or "",
+            tipo="bot",
+            tipo_respuesta=media_tipo,
+            opciones=media_url,
+            step=message_step,
+        )
+        return
+
+    if message:
+        enviar_mensaje(numero, message, tipo="bot", step=message_step)
+
+
 def _get_last_message_info(numero: str) -> dict | None:
     conn = get_connection()
     c = conn.cursor()
@@ -1569,6 +1682,7 @@ def _reply_with_ai_image(
         return False
 
     enviar_mensaje(numero, response, tipo="bot", step=message_step)
+    _send_conversion_cta_if_needed(numero, prompt, message_step)
     message_step_norm = _normalize_step_name(message_step)
     _schedule_followup_messages(numero, message_step)
     media_pages = None
@@ -1713,6 +1827,7 @@ def _reply_with_ai(
         return False
 
     enviar_mensaje(numero, response, tipo="bot", step=message_step)
+    _send_conversion_cta_if_needed(numero, prompt, message_step)
     message_step_norm = _normalize_step_name(message_step)
     _schedule_followup_messages(numero, message_step)
     media_pages = pages
