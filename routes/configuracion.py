@@ -1183,37 +1183,59 @@ def _ensure_ia_config_table(cursor):
         )
 
 
-def _list_flow_rules(cursor):
-    try:
-        cursor.execute(
-            """
-            SELECT id, step, input_text, respuesta, opciones
-              FROM reglas
-             WHERE tipo = 'flow'
-          ORDER BY id DESC
-            """
-        )
-    except Exception:
-        return []
+def _resolve_waba_id_for_tenant(access_token: str, tenant_env: dict) -> str:
+    waba_id = (tenant_env.get("WABA_ID") or "").strip()
+    if waba_id:
+        return waba_id
 
-    flow_rules = []
-    for row in cursor.fetchall() or []:
-        try:
-            options = json.loads(row[4]) if row[4] else {}
-        except (TypeError, ValueError):
-            options = {}
-        if not isinstance(options, dict):
+    phone_number_id = (tenant_env.get("PHONE_NUMBER_ID") or "").strip()
+    if not phone_number_id:
+        return ""
+
+    response = _graph_get(
+        phone_number_id,
+        access_token,
+        params={"fields": "whatsapp_business_account"},
+    )
+    if not response.get("ok"):
+        return ""
+
+    payload = response.get("data") or {}
+    return str((payload.get("whatsapp_business_account") or {}).get("id") or "").strip()
+
+
+def _list_existing_whatsapp_flows(tenant) -> tuple[list[dict], str | None]:
+    access_token, _, tenant_env = _resolve_whatsapp_token_and_business_id(tenant)
+    if not access_token:
+        return [], "No se encontró token de Meta para consultar flows existentes."
+
+    waba_id = _resolve_waba_id_for_tenant(access_token, tenant_env)
+    if not waba_id:
+        return [], "No se encontró WABA_ID para consultar flows existentes."
+
+    response = _graph_get(
+        f"{waba_id}/flows",
+        access_token,
+        params={"fields": "id,name,status,categories"},
+    )
+    if not response.get("ok"):
+        return [], "No se pudieron consultar los flows existentes en Meta."
+
+    flows = []
+    for raw in _extract_graph_list(response.get("data") or {}):
+        flow_id = str((raw or {}).get("id") or "").strip()
+        if not flow_id:
             continue
-        flow_rules.append(
+        flows.append(
             {
-                "id": row[0],
-                "step": row[1],
-                "input_text": row[2],
-                "respuesta": row[3],
-                "options": options,
+                "id": flow_id,
+                "name": str((raw or {}).get("name") or "").strip() or "Sin nombre",
+                "status": str((raw or {}).get("status") or "").strip() or "UNKNOWN",
             }
         )
-    return flow_rules
+
+    flows.sort(key=lambda item: item["name"].lower())
+    return flows, None
 
 
 def _get_ia_config(cursor):
@@ -1998,7 +2020,22 @@ def configuracion_ia():
         conn.commit()
 
         ia_config = _get_ia_config(c)
-        flow_rules = _list_flow_rules(c)
+        available_flows, available_flows_error = _list_existing_whatsapp_flows(
+            tenants.get_current_tenant()
+        )
+        selected_conversion_flow_id = None
+        raw_flow_options = (ia_config or {}).get('conversion_cta_flow_options')
+        if raw_flow_options:
+            try:
+                parsed_flow_options = json.loads(raw_flow_options)
+            except (TypeError, ValueError):
+                parsed_flow_options = None
+            if isinstance(parsed_flow_options, dict):
+                selected_conversion_flow_id = str(
+                    parsed_flow_options.get('flow_id')
+                    or parsed_flow_options.get('flow_name')
+                    or ''
+                ).strip() or None
         pdf_url = None
         if ia_config and ia_config.get('pdf_filename'):
             pdf_filename = ia_config['pdf_filename']
@@ -2039,7 +2076,7 @@ def configuracion_ia():
             conversion_cta_media_tipo = (
                 request.form.get('conversion_cta_media_tipo') or ''
             ).strip() or None
-            conversion_cta_flow_rule_id = request.form.get('conversion_cta_flow_rule_id')
+            conversion_cta_flow_id = (request.form.get('conversion_cta_flow_id') or '').strip()
             conversion_cta_keywords = (request.form.get('conversion_cta_keywords') or '').strip() or None
             if conversion_cta_keywords:
                 tokens = [
@@ -2048,24 +2085,26 @@ def configuracion_ia():
                     if token.strip()
                 ]
                 conversion_cta_keywords = ", ".join(dict.fromkeys(tokens)) or None
-            try:
-                conversion_cta_flow_rule_id = int(conversion_cta_flow_rule_id)
-            except (TypeError, ValueError):
-                conversion_cta_flow_rule_id = None
+            conversion_cta_flow_rule_id = None
 
             conversion_cta_flow_options = None
-            if conversion_cta_flow_rule_id:
-                flow_rule = next(
-                    (rule for rule in flow_rules if rule['id'] == conversion_cta_flow_rule_id),
+            if conversion_cta_flow_id:
+                selected_flow = next(
+                    (flow for flow in available_flows if flow['id'] == conversion_cta_flow_id),
                     None,
                 )
-                if flow_rule:
+                if selected_flow:
+                    flow_name = selected_flow.get('name') or 'Flow'
+                    flow_cta = f"Abrir {flow_name}".strip()
+                    flow_cta = flow_cta[:30] if len(flow_cta) > 30 else flow_cta
                     conversion_cta_flow_options = json.dumps(
-                        flow_rule.get('options') or {},
+                        {
+                            'flow_message_version': '3',
+                            'flow_id': selected_flow['id'],
+                            'flow_cta': flow_cta or 'Abrir flow',
+                        },
                         ensure_ascii=False,
                     )
-                else:
-                    conversion_cta_flow_rule_id = None
 
             followup_interval_minutes = request.form.get('followup_interval_minutes')
             try:
@@ -2389,7 +2428,9 @@ def configuracion_ia():
             'configuracion_ia.html',
             ia_config=ia_config,
             pdf_url=pdf_url,
-            flow_rules=flow_rules,
+            available_flows=available_flows,
+            available_flows_error=available_flows_error,
+            selected_conversion_flow_id=selected_conversion_flow_id,
             status_message=status_message,
             error_message=error_message,
         )
