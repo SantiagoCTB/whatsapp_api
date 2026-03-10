@@ -625,3 +625,63 @@ def test_rule_sequence_respects_order_with_ai_and_flow(monkeypatch, patch_depend
     assert steps == ['iniciar', 'flow_step']
     assert len(ai_calls) == 1
     assert patch_dependencies.steps_set[-1][1] == 'flow_step'
+
+
+def test_reply_with_ai_prioritizes_conversion_cta(monkeypatch):
+    sent_messages = []
+
+    monkeypatch.setattr(webhook_module, 'obtener_historial_chat', lambda *_, **__: [])
+    monkeypatch.setattr(webhook_module, '_get_ia_system_prompt', lambda: 'prompt sistema')
+
+    def fake_cta(numero, user_text, step):
+        sent_messages.append((numero, 'cta', step, user_text))
+        return True
+
+    monkeypatch.setattr(webhook_module, '_send_conversion_cta_if_needed', fake_cta)
+
+    def fail_generate(*_, **__):
+        raise AssertionError('No debe generar respuesta IA cuando CTA fue enviada')
+
+    monkeypatch.setattr(webhook_module, 'generate_response', fail_generate)
+
+    result = webhook_module._reply_with_ai(
+        '5215557777',
+        'quiero comprar ahora',
+        set_step=False,
+        message_step='ia',
+    )
+
+    assert result is True
+    assert sent_messages == [('5215557777', 'cta', 'ia', 'quiero comprar ahora')]
+
+
+def test_reply_with_ai_image_prioritizes_conversion_cta(monkeypatch):
+    sent_messages = []
+
+    monkeypatch.setattr(webhook_module, 'obtener_historial_chat', lambda *_, **__: [])
+    monkeypatch.setattr(webhook_module, '_get_ia_system_prompt', lambda: 'prompt sistema')
+
+    def fake_cta(numero, user_text, step):
+        sent_messages.append((numero, 'cta', step, user_text))
+        return True
+
+    monkeypatch.setattr(webhook_module, '_send_conversion_cta_if_needed', fake_cta)
+
+    def fail_generate(*_, **__):
+        raise AssertionError('No debe generar respuesta IA con imagen cuando CTA fue enviada')
+
+    monkeypatch.setattr(webhook_module, 'generate_response_with_image', fail_generate)
+    monkeypatch.setattr(webhook_module, '_normalize_media_url', lambda url: url)
+
+    result = webhook_module._reply_with_ai_image(
+        '5215558888',
+        media_url='https://example.com/catalogo.jpg',
+        set_step=False,
+        message_step='ia',
+    )
+
+    assert result is True
+    assert sent_messages
+    assert sent_messages[0][0] == '5215558888'
+    assert sent_messages[0][1] == 'cta'
+    assert sent_messages[0][2] == 'ia'

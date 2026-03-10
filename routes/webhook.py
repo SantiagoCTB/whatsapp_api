@@ -262,13 +262,13 @@ def _should_trigger_conversion_cta(user_text: str, keywords: list[str] | None = 
     return any(trigger in normalized for trigger in trigger_keywords)
 
 
-def _send_conversion_cta_if_needed(numero: str, user_text: str, message_step: str) -> None:
+def _send_conversion_cta_if_needed(numero: str, user_text: str, message_step: str) -> bool:
     config = _get_ia_conversion_cta_config()
     if not config or not config.get("enabled"):
-        return
+        return False
 
     if not _should_trigger_conversion_cta(user_text, config.get("keywords")):
-        return
+        return False
 
     flow_options = config.get("flow_options")
     if isinstance(flow_options, dict) and flow_options:
@@ -281,7 +281,7 @@ def _send_conversion_cta_if_needed(numero: str, user_text: str, message_step: st
             opciones=flow_options,
             step=message_step,
         )
-        return
+        return True
 
     media_url = config.get("media_url")
     media_tipo = config.get("media_tipo")
@@ -295,10 +295,13 @@ def _send_conversion_cta_if_needed(numero: str, user_text: str, message_step: st
             opciones=media_url,
             step=message_step,
         )
-        return
+        return True
 
     if message:
         enviar_mensaje(numero, message, tipo="bot", step=message_step)
+        return True
+
+    return False
 
 
 def _get_last_message_info(numero: str) -> dict | None:
@@ -1658,6 +1661,13 @@ def _reply_with_ai_image(
     if not message_step:
         message_step = "ia" if set_step else get_current_step(numero)
 
+    if _send_conversion_cta_if_needed(numero, (prompt_prefix or "").strip() or "El usuario envió una imagen.", message_step):
+        logger.info(
+            "CTA de conversión enviada; se omite respuesta IA con imagen",
+            extra={"numero": numero, "step": message_step},
+        )
+        return True
+
     base_prompt = (prompt_prefix or "").strip() or (
         "El usuario envió una imagen. "
         "Lee el contenido como se procesa el catálogo y "
@@ -1682,7 +1692,6 @@ def _reply_with_ai_image(
         return False
 
     enviar_mensaje(numero, response, tipo="bot", step=message_step)
-    _send_conversion_cta_if_needed(numero, prompt, message_step)
     message_step_norm = _normalize_step_name(message_step)
     _schedule_followup_messages(numero, message_step)
     media_pages = None
@@ -1778,6 +1787,14 @@ def _reply_with_ai(
 
     if not message_step:
         message_step = "ia" if set_step else get_current_step(numero)
+
+    if _send_conversion_cta_if_needed(numero, prompt, message_step):
+        logger.info(
+            "CTA de conversión enviada; se omite respuesta IA",
+            extra={"numero": numero, "step": message_step},
+        )
+        return True
+
     catalog_context, pages = _catalog_context_for_prompt(prompt)
     if not catalog_context and not allow_empty_catalog:
         logger.warning(
@@ -1827,7 +1844,6 @@ def _reply_with_ai(
         return False
 
     enviar_mensaje(numero, response, tipo="bot", step=message_step)
-    _send_conversion_cta_if_needed(numero, prompt, message_step)
     message_step_norm = _normalize_step_name(message_step)
     _schedule_followup_messages(numero, message_step)
     media_pages = pages
