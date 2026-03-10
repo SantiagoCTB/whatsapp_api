@@ -50,6 +50,19 @@ def _save_followup_media(media_file, media_url):
     return media_url
 
 
+def _build_catalog_storage_name(original_name: str | None = None) -> str:
+    """Genera un nombre único para cada catálogo PDF subido.
+
+    Evita reutilizar `catalogo.pdf` para reducir el riesgo de usar archivos
+    anteriores por caché o por procesos concurrentes.
+    """
+
+    safe_name = secure_filename(original_name or "")
+    base = os.path.splitext(safe_name)[0] if safe_name else "catalogo"
+    suffix = datetime.utcnow().strftime("%Y%m%d%H%M%S")
+    return f"{base}_{suffix}_{uuid.uuid4().hex[:8]}.pdf"
+
+
 def _require_admin():
     # Debe haber usuario logueado y el rol 'admin' en la lista de roles
     return "user" in session and 'admin' in (session.get('roles') or [])
@@ -1923,8 +1936,6 @@ def configuracion_ia():
             pdf_file = request.files.get('catalogo_pdf')
             pdf_dir = _media_root()
             os.makedirs(pdf_dir, exist_ok=True)
-            stored_catalog_name = 'catalogo.pdf'
-
             new_pdf = None
             old_pdf_path = None
 
@@ -1956,7 +1967,7 @@ def configuracion_ia():
                 elif mime and 'pdf' not in mime:
                     error_message = 'El archivo subido no parece ser un PDF válido.'
                 else:
-                    stored_name = stored_catalog_name
+                    stored_name = _build_catalog_storage_name(filename)
                     path = os.path.join(pdf_dir, stored_name)
                     pdf_file.save(path)
                     pdf_size = os.path.getsize(path)
@@ -1984,7 +1995,7 @@ def configuracion_ia():
                     parsed = urlparse(catalog_url)
                     base_name = os.path.basename(parsed.path) or 'catalogo.pdf'
                     filename = secure_filename(base_name) or 'catalogo.pdf'
-                    stored_name = stored_catalog_name
+                    stored_name = _build_catalog_storage_name(filename)
                     path = os.path.join(pdf_dir, stored_name)
                     try:
                         with requests.get(catalog_url, stream=True, timeout=120) as resp:
