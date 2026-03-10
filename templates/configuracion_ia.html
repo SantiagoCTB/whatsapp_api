@@ -187,6 +187,73 @@
         </div>
     </section>
 
+    <section class="card config-section followup-card">
+        <div class="config-section-header">
+            <h3>Llamado a la acción</h3>
+            <p class="muted">Define qué se envía cuando la IA detecta intención de conversión (compra, demo, prueba, etc.).</p>
+        </div>
+        <div class="form-row checkbox-row">
+            <label for="conversion_cta_enabled" class="checkbox-label">
+                <input type="checkbox" id="conversion_cta_enabled" name="conversion_cta_enabled" value="1" {% if ia_config and ia_config.conversion_cta_enabled %}checked{% endif %}>
+                Activar llamado a la acción automático
+            </label>
+        </div>
+        <div class="form-row">
+            <label for="conversion_cta_keywords">Keywords de conversión</label>
+            <textarea id="conversion_cta_keywords" name="conversion_cta_keywords" rows="2" placeholder="comprar, precio, demo, prueba, cotizar">{{ ia_config.conversion_cta_keywords or '' if ia_config else '' }}</textarea>
+            <small>Separa por comas o saltos de línea. Si lo dejas vacío, se usarán keywords por defecto.</small>
+        </div>
+        <div class="form-row">
+            <label for="conversion_cta_flow_rule_id">Flow (opcional)</label>
+            <select id="conversion_cta_flow_rule_id" name="conversion_cta_flow_rule_id">
+                <option value="">Sin flow</option>
+                {% for rule in flow_rules or [] %}
+                <option
+                    value="{{ rule.id }}"
+                    {% if ia_config and ia_config.conversion_cta_flow_rule_id == rule.id %}selected{% endif %}
+                >
+                    #{{ rule.id }} · {{ rule.step or 'sin step' }} · {{ rule.input_text or 'sin input' }}
+                </option>
+                {% endfor %}
+            </select>
+            <small>Si eliges un flow, se prioriza sobre mensaje/media.</small>
+        </div>
+        <div class="form-row">
+            <label for="conversion_cta_message">Mensaje de texto (opcional)</label>
+            <textarea id="conversion_cta_message" name="conversion_cta_message" rows="3" placeholder="¡Excelente! Te comparto el siguiente paso para avanzar con tu compra o demo.">{{ ia_config.conversion_cta_message or '' if ia_config else '' }}</textarea>
+        </div>
+        <div class="form-row">
+            <label for="conversion_cta_media_tipo">Tipo de media (opcional)</label>
+            <select id="conversion_cta_media_tipo" name="conversion_cta_media_tipo">
+                <option value="" {% if not ia_config or not ia_config.conversion_cta_media_tipo %}selected{% endif %}>Sin media</option>
+                <option value="image" {% if ia_config and ia_config.conversion_cta_media_tipo == 'image' %}selected{% endif %}>Imagen</option>
+                <option value="video" {% if ia_config and ia_config.conversion_cta_media_tipo == 'video' %}selected{% endif %}>Video</option>
+                <option value="audio" {% if ia_config and ia_config.conversion_cta_media_tipo == 'audio' %}selected{% endif %}>Audio</option>
+                <option value="document" {% if ia_config and ia_config.conversion_cta_media_tipo == 'document' %}selected{% endif %}>Documento</option>
+            </select>
+        </div>
+        <div class="form-row">
+            <label for="conversion_cta_media_url">URL de media (opcional)</label>
+            <input
+                type="text"
+                id="conversion_cta_media_url"
+                name="conversion_cta_media_url"
+                placeholder="https://..."
+                value="{{ ia_config.conversion_cta_media_url or '' if ia_config else '' }}"
+            >
+        </div>
+        <div class="form-row">
+            <label for="conversion_cta_media_file">o subir media</label>
+            <input
+                type="file"
+                id="conversion_cta_media_file"
+                name="conversion_cta_media_file"
+                accept="image/*,video/*,audio/*,application/pdf"
+            >
+            <small>Si configuras flow, el sistema enviará primero el flow.</small>
+        </div>
+    </section>
+
     <section class="card config-section">
         <h3>Catálogo</h3>
         <div class="form-row">
