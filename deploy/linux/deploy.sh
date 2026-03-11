@@ -1,7 +1,6 @@
 #!/bin/bash
 set -e
 
-
 cd /opt/whapco
 
 # Exportar todas las variables del .env al entorno
@@ -30,3 +29,17 @@ git pull origin main
 
 # Levantar con el compose de linux
 docker compose -f deploy/linux/docker-compose.yml up -d --build
+
+# Intentar renovación de certificados y recargar nginx
+set +e
+docker compose -f deploy/linux/docker-compose.yml run --rm certbot \
+  renew --webroot -w /var/www/certbot
+RENEW_STATUS=$?
+set -e
+
+if [ $RENEW_STATUS -ne 0 ]; then
+  echo "Advertencia: No se pudo renovar certificados durante el deploy. Revisa DNS/puertos y certificados existentes." >&2
+else
+  docker compose -f deploy/linux/docker-compose.yml exec -T nginx nginx -s reload
+  echo "Certificados revisados/renovados y Nginx recargado."
+fi
