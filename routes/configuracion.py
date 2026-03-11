@@ -1,6 +1,7 @@
 import importlib.util
 import json
 import logging
+import mimetypes
 import os
 import re
 import uuid
@@ -264,6 +265,127 @@ def _whatsapp_phone_number_action(phone_number_id: str, action: str, access_toke
         access_token,
         data=payload,
     )
+
+
+def _resolve_whatsapp_phone_number_id(payload: dict, tenant_env: dict) -> str:
+    return (
+        (payload.get("phone_number_id") if isinstance(payload, dict) else "")
+        or tenant_env.get("PHONE_NUMBER_ID")
+        or ""
+    ).strip()
+
+
+def _build_whatsapp_profile_update(payload: dict) -> dict:
+    profile = {}
+    for field in ("about", "address", "description", "email", "vertical"):
+        if field in payload:
+            value = payload.get(field)
+            profile[field] = (value or "").strip() if isinstance(value, str) else value
+
+    if "profile_picture_handle" in payload:
+        profile["profile_picture_handle"] = (payload.get("profile_picture_handle") or "").strip()
+
+    websites = payload.get("websites")
+    if isinstance(websites, list):
+        normalized = [str(url).strip() for url in websites if str(url).strip()]
+        profile["websites"] = normalized
+    elif isinstance(websites, str):
+        normalized = [part.strip() for part in websites.split(",") if part.strip()]
+        profile["websites"] = normalized
+    elif "website" in payload and isinstance(payload.get("website"), str):
+        website = payload.get("website", "").strip()
+        profile["websites"] = [website] if website else []
+
+    return profile
+
+
+def _upload_file_to_meta(access_token: str, app_id: str, upload_file) -> dict:
+    filename = secure_filename(upload_file.filename or "") or f"profile_{uuid.uuid4().hex}.bin"
+    mime_type = upload_file.mimetype or mimetypes.guess_type(filename)[0] or "application/octet-stream"
+    file_bytes = upload_file.read() or b""
+    if not file_bytes:
+        return {"ok": False, "error": "El archivo de foto está vacío."}
+
+    upload_start_url = f"https://graph.facebook.com/{Config.FACEBOOK_GRAPH_API_VERSION}/{app_id}/uploads"
+    try:
+        upload_start_response = requests.post(
+            upload_start_url,
+            data={
+                "file_name": filename,
+                "file_length": len(file_bytes),
+                "file_type": mime_type,
+                "access_token": access_token,
+            },
+            timeout=30,
+        )
+    except requests.RequestException:
+        logger.warning("No se pudo iniciar la subida de archivo a Graph API")
+        return {"ok": False, "error": "No se pudo iniciar la subida del archivo en Meta."}
+
+    try:
+        upload_start_payload = upload_start_response.json()
+    except ValueError:
+        upload_start_payload = {}
+
+    if upload_start_response.status_code >= 400:
+        return {
+            "ok": False,
+            "error": "Meta rechazó la creación de la sesión de subida.",
+            "details": upload_start_payload,
+        }
+
+    upload_id = (upload_start_payload.get("id") or "").strip()
+    if not upload_id:
+        return {
+            "ok": False,
+            "error": "Meta no devolvió el ID de sesión para subir el archivo.",
+            "details": upload_start_payload,
+        }
+
+    upload_file_url = f"https://graph.facebook.com/{Config.FACEBOOK_GRAPH_API_VERSION}/{upload_id}"
+    try:
+        upload_response = requests.post(
+            upload_file_url,
+            params={"access_token": access_token},
+            headers={
+                "Authorization": f"OAuth {access_token}",
+                "file_offset": "0",
+                "Content-Type": mime_type,
+            },
+            data=file_bytes,
+            timeout=60,
+        )
+    except requests.RequestException:
+        logger.warning("No se pudo completar la subida binaria a Graph API")
+        return {"ok": False, "error": "No se pudo completar la subida del archivo en Meta."}
+
+    try:
+        upload_payload = upload_response.json()
+    except ValueError:
+        upload_payload = {}
+
+    if upload_response.status_code >= 400:
+        return {
+            "ok": False,
+            "error": "Meta rechazó el archivo subido.",
+            "details": upload_payload,
+        }
+
+    handle = (upload_payload.get("h") or "").strip()
+    if not handle:
+        return {
+            "ok": False,
+            "error": "Meta no devolvió el handle del archivo subido.",
+            "details": upload_payload,
+        }
+
+    return {
+        "ok": True,
+        "upload_id": upload_id,
+        "handle": handle,
+        "file_name": filename,
+        "mime_type": mime_type,
+    }
 
 def _fetch_page_accounts(user_token: str):
     if not user_token:
@@ -2989,6 +3111,98 @@ def whatsapp_subscribed_apps():
         return response, 400
 
     return {"ok": True, "waba_id": waba_id, "apps": _extract_graph_list(response.get("data") or {})}
+
+
+@config_bp.route('/configuracion/whatsapp/business-profile', methods=['GET'])
+def whatsapp_business_profile():
+    if not _require_admin():
+        return {"ok": False, "error": "No autorizado"}, 403
+
+    tenant = _resolve_signup_tenant()
+    if not tenant:
+        return {"ok": False, "error": "No se encontró la empresa actual."}, 400
+
+    token, _business_id, tenant_env = _resolve_whatsapp_token_and_business_id(tenant)
+    phone_number_id = (request.args.get("phone_number_id") or tenant_env.get("PHONE_NUMBER_ID") or "").strip()
+    if not phone_number_id:
+        return {"ok": False, "error": "Falta PHONE_NUMBER_ID para consultar el perfil."}, 400
+
+    response = _graph_get(
+        f"{phone_number_id}/whatsapp_business_profile",
+        token,
+        params={"fields": "about,address,description,email,profile_picture_url,websites,vertical"},
+    )
+    if not response.get("ok"):
+        return response, 400
+
+    data = response.get("data") if isinstance(response.get("data"), dict) else {}
+    profile_items = _extract_graph_list(data)
+    profile = profile_items[0] if profile_items else {}
+    return {"ok": True, "phone_number_id": phone_number_id, "profile": profile}
+
+
+@config_bp.route('/configuracion/whatsapp/business-profile', methods=['POST'])
+def whatsapp_update_business_profile():
+    if not _require_admin():
+        return {"ok": False, "error": "No autorizado"}, 403
+
+    tenant = _resolve_signup_tenant()
+    if not tenant:
+        return {"ok": False, "error": "No se encontró la empresa actual."}, 400
+
+    try:
+        payload = request.get_json(force=True) or {}
+    except Exception:
+        return {"ok": False, "error": "Payload inválido"}, 400
+
+    token, _business_id, tenant_env = _resolve_whatsapp_token_and_business_id(tenant)
+    phone_number_id = _resolve_whatsapp_phone_number_id(payload, tenant_env)
+    if not phone_number_id:
+        return {"ok": False, "error": "Falta PHONE_NUMBER_ID para actualizar el perfil."}, 400
+
+    profile = _build_whatsapp_profile_update(payload)
+    if not profile:
+        return {"ok": False, "error": "No se recibieron campos para actualizar el perfil."}, 400
+
+    response = _graph_post(
+        f"{phone_number_id}/whatsapp_business_profile",
+        token,
+        data={"messaging_product": "whatsapp", **profile},
+    )
+    if not response.get("ok"):
+        return response, 400
+
+    return {
+        "ok": True,
+        "phone_number_id": phone_number_id,
+        "message": "Perfil de WhatsApp actualizado.",
+        "result": response.get("data"),
+    }
+
+
+@config_bp.route('/configuracion/whatsapp/business-profile/photo-upload', methods=['POST'])
+def whatsapp_upload_business_profile_photo():
+    if not _require_admin():
+        return {"ok": False, "error": "No autorizado"}, 403
+
+    tenant = _resolve_signup_tenant()
+    if not tenant:
+        return {"ok": False, "error": "No se encontró la empresa actual."}, 400
+
+    upload_file = request.files.get("file")
+    if not upload_file or not upload_file.filename:
+        return {"ok": False, "error": "Adjunta una imagen para la foto de perfil."}, 400
+
+    token, _business_id, _tenant_env = _resolve_whatsapp_token_and_business_id(tenant)
+    app_id = (Config.FACEBOOK_APP_ID or "").strip()
+    if not app_id:
+        return {"ok": False, "error": "Falta FACEBOOK_APP_ID para subir archivos a Meta."}, 400
+
+    upload_response = _upload_file_to_meta(token, app_id, upload_file)
+    if not upload_response.get("ok"):
+        return upload_response, 400
+
+    return {"ok": True, **upload_response}
 
 
 @config_bp.route('/configuracion/whatsapp/subscribe-app', methods=['POST'])
