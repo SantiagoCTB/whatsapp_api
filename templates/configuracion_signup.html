@@ -104,6 +104,28 @@
                 </details>
             </div>
             <div class="form-row" style="margin-top: 1rem;">
+                <label class="muted">Perfil de WhatsApp Business</label>
+                <label class="muted" for="wa-profile-about">Acerca de (about)</label>
+                <input id="wa-profile-about" type="text" maxlength="139" placeholder="Atención por WhatsApp">
+                <label class="muted" for="wa-profile-description">Descripción</label>
+                <textarea id="wa-profile-description" rows="2" placeholder="Describe tu negocio"></textarea>
+                <label class="muted" for="wa-profile-address">Dirección</label>
+                <input id="wa-profile-address" type="text" placeholder="Calle 123, Ciudad">
+                <label class="muted" for="wa-profile-email">Email</label>
+                <input id="wa-profile-email" type="email" placeholder="contacto@empresa.com">
+                <label class="muted" for="wa-profile-websites">Websites (separadas por coma)</label>
+                <input id="wa-profile-websites" type="text" placeholder="https://empresa.com, https://tienda.empresa.com">
+                <label class="muted" for="wa-profile-vertical">Categoría (vertical)</label>
+                <input id="wa-profile-vertical" type="text" placeholder="OTHER">
+                <label class="muted" for="wa-profile-photo">Foto de perfil (se sube primero a Meta)</label>
+                <input id="wa-profile-photo" type="file" accept="image/*">
+                <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                    <button id="wa-profile-load" class="btn-secondary" type="button">Cargar perfil</button>
+                    <button id="wa-profile-save" class="btn-primary" type="button">Guardar perfil</button>
+                </div>
+                <div id="wa-profile-status" class="help" style="margin-top: 0.5rem"></div>
+            </div>
+            <div class="form-row" style="margin-top: 1rem;">
                 <button id="wa-disconnect" class="btn-danger" type="button">Desconectar WhatsApp</button>
                 <div id="wa-disconnect-status" class="help" style="margin-top: 0.5rem"></div>
             </div>
@@ -351,6 +373,16 @@
     const businessesRefreshButton = document.getElementById('wa-businesses-refresh');
     const appsRefreshButton = document.getElementById('wa-apps-refresh');
     const appSubscribeButton = document.getElementById('wa-app-subscribe');
+    const profileLoadButton = document.getElementById('wa-profile-load');
+    const profileSaveButton = document.getElementById('wa-profile-save');
+    const profileStatus = document.getElementById('wa-profile-status');
+    const profileAbout = document.getElementById('wa-profile-about');
+    const profileDescription = document.getElementById('wa-profile-description');
+    const profileAddress = document.getElementById('wa-profile-address');
+    const profileEmail = document.getElementById('wa-profile-email');
+    const profileWebsites = document.getElementById('wa-profile-websites');
+    const profileVertical = document.getElementById('wa-profile-vertical');
+    const profilePhoto = document.getElementById('wa-profile-photo');
     const insightsStatus = document.getElementById('wa-insights-status');
     const insightsDebug = document.getElementById('wa-insights-debug');
     const insightsPanel = document.getElementById('wa-insights-panel');
@@ -383,6 +415,12 @@
       if (!insightsStatus) return;
       insightsStatus.textContent = message || '';
       insightsStatus.style.color = isError ? '#c0392b' : '#2c3e50';
+    };
+
+    const updateProfileStatus = (message, isError) => {
+      if (!profileStatus) return;
+      profileStatus.textContent = message || '';
+      profileStatus.style.color = isError ? '#c0392b' : '#2c3e50';
     };
 
     const normalizeMetaStatus = (value, fieldName) => {
@@ -557,6 +595,86 @@
           }
         })
         .catch(() => {});
+    };
+
+    const fillProfileFields = (profile) => {
+      const data = profile || {};
+      if (profileAbout) profileAbout.value = data.about || '';
+      if (profileDescription) profileDescription.value = data.description || '';
+      if (profileAddress) profileAddress.value = data.address || '';
+      if (profileEmail) profileEmail.value = data.email || '';
+      if (profileVertical) profileVertical.value = data.vertical || '';
+      if (profileWebsites) {
+        const websites = Array.isArray(data.websites) ? data.websites : [];
+        profileWebsites.value = websites.join(', ');
+      }
+    };
+
+    const loadBusinessProfile = () => {
+      updateProfileStatus('Consultando perfil de WhatsApp...');
+      return fetch(`{{ url_for('configuracion.whatsapp_business_profile') }}`)
+        .then((resp) => resp.json())
+        .then((resp) => {
+          if (!resp.ok) {
+            updateProfileStatus(resp.error || 'No se pudo cargar el perfil.', true);
+            return;
+          }
+          fillProfileFields(resp.profile || {});
+          updateProfileStatus('Perfil cargado correctamente.');
+        })
+        .catch(() => {
+          updateProfileStatus('Error al consultar el perfil.', true);
+        });
+    };
+
+    const uploadProfilePhotoIfNeeded = async () => {
+      if (!profilePhoto || !profilePhoto.files || !profilePhoto.files.length) {
+        return null;
+      }
+
+      const formData = new FormData();
+      formData.append('file', profilePhoto.files[0]);
+
+      const response = await fetch(`{{ url_for('configuracion.whatsapp_upload_business_profile_photo') }}`, {
+        method: 'POST',
+        body: formData,
+      });
+      const payload = await response.json();
+      if (!response.ok || !payload.ok) {
+        throw new Error(payload.error || 'No se pudo subir la foto de perfil a Meta.');
+      }
+      return payload.handle;
+    };
+
+    const saveBusinessProfile = async () => {
+      const websites = (profileWebsites && profileWebsites.value ? profileWebsites.value : '')
+        .split(',')
+        .map((item) => item.trim())
+        .filter(Boolean);
+
+      const body = {
+        about: profileAbout ? profileAbout.value : '',
+        description: profileDescription ? profileDescription.value : '',
+        address: profileAddress ? profileAddress.value : '',
+        email: profileEmail ? profileEmail.value : '',
+        websites,
+        vertical: profileVertical ? profileVertical.value : '',
+      };
+
+      const profilePictureHandle = await uploadProfilePhotoIfNeeded();
+      if (profilePictureHandle) {
+        body.profile_picture_handle = profilePictureHandle;
+      }
+
+      const response = await fetch(`{{ url_for('configuracion.whatsapp_update_business_profile') }}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const payload = await response.json();
+      if (!response.ok || !payload.ok) {
+        throw new Error(payload.error || 'No se pudo actualizar el perfil de WhatsApp.');
+      }
     };
 
     let latestFinishPayload = {};
@@ -789,8 +907,34 @@
 
     if (wabaId) {
       fetchPhoneNumbers().finally(() => fetchWabaApprovalStatus());
+      loadBusinessProfile();
     } else {
       updatePhoneStatus('Completa el signup para cargar los números disponibles.');
+      updateProfileStatus('Completa el signup para cargar el perfil.');
+    }
+
+    if (profileLoadButton) {
+      profileLoadButton.addEventListener('click', () => {
+        loadBusinessProfile();
+      });
+    }
+
+    if (profileSaveButton) {
+      profileSaveButton.addEventListener('click', async () => {
+        profileSaveButton.disabled = true;
+        updateProfileStatus('Guardando perfil de WhatsApp...');
+        try {
+          await saveBusinessProfile();
+          updateProfileStatus('Perfil de WhatsApp actualizado correctamente.');
+          if (profilePhoto) {
+            profilePhoto.value = '';
+          }
+        } catch (err) {
+          updateProfileStatus(err.message || 'No se pudo actualizar el perfil.', true);
+        } finally {
+          profileSaveButton.disabled = false;
+        }
+      });
     }
 
     if (phoneRefresh) {
