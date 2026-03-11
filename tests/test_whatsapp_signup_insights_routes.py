@@ -245,6 +245,118 @@ def test_whatsapp_phone_number_action_register_includes_pin(monkeypatch):
     assert calls["data"] == {"messaging_product": "whatsapp", "pin": "123456"}
 
 
+def test_whatsapp_business_profile_get(monkeypatch):
+    app = create_app()
+    app.config["TESTING"] = True
+
+    tenant = SimpleNamespace(tenant_key="acme", metadata={})
+
+    monkeypatch.setattr(configuracion, "_resolve_signup_tenant", lambda: tenant)
+    monkeypatch.setattr(
+        configuracion.tenants,
+        "get_tenant_env",
+        lambda _tenant: {"META_TOKEN": "token", "PHONE_NUMBER_ID": "123456"},
+    )
+
+    def fake_graph_get(path, access_token, params=None):
+        assert path == "123456/whatsapp_business_profile"
+        assert access_token == "token"
+        assert "fields" in (params or {})
+        return {"ok": True, "data": {"data": [{"about": "Hola", "websites": ["https://acme.test"]}]}}
+
+    monkeypatch.setattr(configuracion, "_graph_get", fake_graph_get)
+
+    client = _admin_client(app)
+    response = client.get("/configuracion/whatsapp/business-profile")
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["ok"] is True
+    assert payload["profile"]["about"] == "Hola"
+
+
+def test_whatsapp_business_profile_post(monkeypatch):
+    app = create_app()
+    app.config["TESTING"] = True
+
+    tenant = SimpleNamespace(tenant_key="acme", metadata={})
+
+    monkeypatch.setattr(configuracion, "_resolve_signup_tenant", lambda: tenant)
+    monkeypatch.setattr(
+        configuracion.tenants,
+        "get_tenant_env",
+        lambda _tenant: {"META_TOKEN": "token", "PHONE_NUMBER_ID": "123456"},
+    )
+
+    calls = {}
+
+    def fake_graph_post(path, access_token, data=None):
+        calls["path"] = path
+        calls["access_token"] = access_token
+        calls["data"] = data
+        return {"ok": True, "data": {"success": True}}
+
+    monkeypatch.setattr(configuracion, "_graph_post", fake_graph_post)
+
+    client = _admin_client(app)
+    response = client.post(
+        "/configuracion/whatsapp/business-profile",
+        json={
+            "about": "Atención 24/7",
+            "description": "Soporte",
+            "website": "https://acme.test",
+            "profile_picture_handle": "2:c2FtcGxl",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["ok"] is True
+    assert calls["path"] == "123456/whatsapp_business_profile"
+    assert calls["access_token"] == "token"
+    assert calls["data"]["messaging_product"] == "whatsapp"
+    assert calls["data"]["about"] == "Atención 24/7"
+    assert calls["data"]["websites"] == ["https://acme.test"]
+    assert calls["data"]["profile_picture_handle"] == "2:c2FtcGxl"
+
+
+def test_whatsapp_business_profile_photo_upload(monkeypatch):
+    app = create_app()
+    app.config["TESTING"] = True
+
+    tenant = SimpleNamespace(tenant_key="acme", metadata={})
+
+    monkeypatch.setattr(configuracion, "_resolve_signup_tenant", lambda: tenant)
+    monkeypatch.setattr(
+        configuracion.tenants,
+        "get_tenant_env",
+        lambda _tenant: {"META_TOKEN": "token"},
+    )
+    monkeypatch.setattr(configuracion.Config, "FACEBOOK_APP_ID", "app-123")
+
+    def fake_upload(access_token, app_id, upload_file):
+        assert access_token == "token"
+        assert app_id == "app-123"
+        assert upload_file.filename == "avatar.png"
+        return {"ok": True, "upload_id": "upload:1", "handle": "2:abc"}
+
+    monkeypatch.setattr(configuracion, "_upload_file_to_meta", fake_upload)
+
+    from io import BytesIO
+
+    client = _admin_client(app)
+    response = client.post(
+        "/configuracion/whatsapp/business-profile/photo-upload",
+        data={"file": (BytesIO(b"image-bytes"), "avatar.png")},
+        content_type="multipart/form-data",
+    )
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["ok"] is True
+    assert payload["handle"] == "2:abc"
+
+
 def test_messenger_pages_accepts_page_token_in_user_token_field(monkeypatch):
     app = create_app()
     app.config["TESTING"] = True
