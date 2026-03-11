@@ -1,7 +1,6 @@
 #!/bin/bash
 set -e
 
-
 cd /opt/whapco
 
 # Exportar todas las variables del .env al entorno

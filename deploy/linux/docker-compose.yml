@@ -35,6 +35,18 @@ services:
       - whapco_net
     restart: unless-stopped
 
+  certbot:
+    image: certbot/certbot:latest
+    volumes:
+      - /etc/letsencrypt:/etc/letsencrypt
+      - certbot_webroot:/var/www/certbot
+    entrypoint: >
+      sh -c "trap exit TERM; while :; do
+      certbot renew --webroot -w /var/www/certbot --quiet --deploy-hook 'chmod -R 755 /etc/letsencrypt/live /etc/letsencrypt/archive' || true;
+      sleep 12h;
+      done"
+    restart: unless-stopped
+
   mysql:
     image: mysql:8.0
     container_name: whapco_mysql
@@ -60,3 +72,4 @@ networks:
 
 volumes:
   mysql_data:
+  certbot_webroot:

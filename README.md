@@ -155,6 +155,31 @@ genere URLs externas correctas. El ejemplo de `deploy/linux/nginx/nginx.conf`
 ya envía ese encabezado. Si necesitas forzar un esquema específico, define la
 variable de entorno `PREFERRED_URL_SCHEME=https`.
 
+
+### Renovación automática de certificados (Let's Encrypt)
+
+El stack de `deploy/linux/docker-compose.yml` incluye un servicio `certbot` que
+renueva certificados cada 12 horas usando el challenge `webroot` y comparte la
+ruta `/.well-known/acme-challenge/` con Nginx.
+
+* Para la primera emisión (si aún no existe el certificado) ejecuta:
+
+  ```bash
+  docker compose -f deploy/linux/docker-compose.yml run --rm certbot certonly \
+    --webroot -w /var/www/certbot \
+    -d whapco.site -d app.whapco.site \
+    --email TU_EMAIL --agree-tos --no-eff-email
+  ```
+
+* Luego levanta/reinicia Nginx:
+
+  ```bash
+  docker compose -f deploy/linux/docker-compose.yml up -d nginx
+  ```
+
+* El script `deploy/linux/deploy.sh` ahora intenta una renovación en cada
+  despliegue y recarga Nginx al completarse.
+
 ## Diagnóstico rápido para Embedded Signup
 
 Si el cuadro de login de Facebook no aparece en `/configuracion/signup`, sigue
