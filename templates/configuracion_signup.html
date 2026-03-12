@@ -1521,6 +1521,7 @@
     const backfillDisconnectButton = document.getElementById('instagram-backfill-disconnect');
     const backfillDisconnectStatus = document.getElementById('instagram-backfill-disconnect-status');
     const signupUrl = trigger.dataset.signupUrl;
+    const tenantKey = {{ tenant_key | tojson }};
 
     const updateStatus = (message, isError) => {
       if (!statusBox) return;
@@ -1615,7 +1616,20 @@
         }
         resetInstagramUi();
         updateStatus('Datos limpiados. Abriendo el signup de Instagram...', false);
-        window.open(signupUrl, '_blank', 'noopener');
+        let resolvedSignupUrl = signupUrl;
+        try {
+          const parsedUrl = new URL(signupUrl, window.location.origin);
+          const stateValue = tenantKey
+            ? `instagram_oauth:${tenantKey}`
+            : 'instagram_oauth';
+          parsedUrl.searchParams.set('state', stateValue);
+          parsedUrl.searchParams.set('oauth_provider', 'instagram');
+          resolvedSignupUrl = parsedUrl.toString();
+        } catch (error) {
+          console.warn('No se pudo enriquecer la URL de signup de Instagram con state/oauth_provider', error);
+        }
+
+        window.open(resolvedSignupUrl, '_blank', 'noopener');
       } catch (err) {
         updateStatus(err.message || 'No se pudieron limpiar los datos anteriores.', true);
       } finally {

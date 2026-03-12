@@ -1,6 +1,7 @@
 from pathlib import Path
 from types import SimpleNamespace
 import sys
+import time
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 if str(ROOT_DIR) not in sys.path:
@@ -218,8 +219,176 @@ def test_messenger_signup_uses_redirect_uri_fallbacks_when_uri_differs(monkeypat
     assert calls["code"] == "embedded-code"
     assert calls["redirect_uri"] == "https://provided.example/configuracion/signup"
     assert calls["fallback_uri"] == "https://resolved.example/configuracion/signup"
-    assert calls["updated_tenant_key"] == "acme"
-    assert calls["env_updates"]["MESSENGER_TOKEN"] == "token-from-code"
+
+
+def test_configuracion_signup_ignores_non_instagram_oauth_codes(monkeypatch):
+    app = create_app()
+    app.config["TESTING"] = True
+
+    monkeypatch.setattr(configuracion, "_resolve_signup_tenant", lambda: SimpleNamespace(tenant_key="acme", metadata={}))
+    monkeypatch.setattr(configuracion.tenants, "get_tenant_env", lambda _tenant: {})
+
+    called = {"instagram_handler": False}
+
+    def fake_handle(_code, _redirect_uri):
+        called["instagram_handler"] = True
+        return {"ok": True, "access_token": "token"}
+
+    monkeypatch.setattr(configuracion, "_handle_instagram_oauth_code", fake_handle)
+
+    with app.test_client() as client:
+        with client.session_transaction() as session:
+            session["user"] = "admin"
+            session["roles"] = ["admin"]
+
+        response = client.get(
+            "/configuracion/signup",
+            query_string={"code": "meta-embedded-code", "state": "acme"},
+        )
+
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith("/configuracion/signup")
+    assert called["instagram_handler"] is False
+
+
+def test_configuracion_signup_processes_instagram_oauth_code_when_marked(monkeypatch):
+    app = create_app()
+    app.config["TESTING"] = True
+
+    monkeypatch.setattr(configuracion, "_resolve_signup_tenant", lambda: SimpleNamespace(tenant_key="acme", metadata={}))
+    monkeypatch.setattr(configuracion.tenants, "get_tenant_env", lambda _tenant: {})
+
+    calls = {}
+
+    def fake_handle(code, redirect_uri):
+        calls["code"] = code
+        calls["redirect_uri"] = redirect_uri
+        return {"ok": True, "access_token": "token"}
+
+    monkeypatch.setattr(configuracion, "_handle_instagram_oauth_code", fake_handle)
+    monkeypatch.setattr(configuracion, "_resolve_instagram_redirect_uri", lambda _fallback: "https://app.example/configuracion/signup")
+
+    with app.test_client() as client:
+        with client.session_transaction() as session:
+            session["user"] = "admin"
+            session["roles"] = ["admin"]
+
+        response = client.get(
+            "/configuracion/signup",
+            query_string={"code": "ig-code", "oauth_provider": "instagram"},
+        )
+
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith("/configuracion/signup")
+    assert calls["code"] == "ig-code"
+    assert calls["redirect_uri"] == "https://app.example/configuracion/signup"
+
+
+def test_configuracion_signup_processes_instagram_oauth_code_when_pending_in_session(monkeypatch):
+    app = create_app()
+    app.config["TESTING"] = True
+
+    monkeypatch.setattr(configuracion, "_resolve_signup_tenant", lambda: SimpleNamespace(tenant_key="acme", metadata={}))
+    monkeypatch.setattr(configuracion.tenants, "get_tenant_env", lambda _tenant: {})
+
+    calls = {}
+
+    def fake_handle(code, redirect_uri):
+        calls["code"] = code
+        calls["redirect_uri"] = redirect_uri
+        return {"ok": True, "access_token": "token"}
+
+    monkeypatch.setattr(configuracion, "_handle_instagram_oauth_code", fake_handle)
+    monkeypatch.setattr(configuracion, "_resolve_instagram_redirect_uri", lambda _fallback: "https://app.example/configuracion/signup")
+
+    with app.test_client() as client:
+        with client.session_transaction() as session:
+            session["user"] = "admin"
+            session["roles"] = ["admin"]
+            session["instagram_oauth_pending_at"] = time.time()
+
+        response = client.get(
+            "/configuracion/signup",
+            query_string={"code": "ig-code-without-marker"},
+        )
+
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith("/configuracion/signup")
+    assert calls["code"] == "ig-code-without-marker"
+    assert calls["redirect_uri"] == "https://app.example/configuracion/signup"
+
+
+
+def test_fetch_instagram_user_uses_graph_instagram_me_without_version(monkeypatch):
+    captured = {}
+
+    def fake_get(url, params=None, headers=None, timeout=None):
+        captured["url"] = url
+        captured["params"] = params or {}
+        captured["headers"] = headers or {}
+        return _Response(status_code=200, payload={"id": "1784", "username": "acme"})
+
+    monkeypatch.setattr(configuracion.requests, "get", fake_get)
+
+    response = configuracion._fetch_instagram_user("ig-user-token")
+
+    assert response["ok"] is True
+    assert captured["url"] == "https://graph.instagram.com/me"
+    assert captured["params"]["access_token"] == "ig-user-token"
+    assert captured["params"]["fields"] == "user_id,id,username,account_type"
+
+
+
+
+def test_fetch_instagram_user_falls_back_to_facebook_me_accounts(monkeypatch):
+    calls = {"count": 0}
+
+    def fake_get(url, params=None, headers=None, timeout=None):
+        calls["count"] += 1
+        if calls["count"] == 1:
+            return _Response(
+                status_code=400,
+                payload={"error": {"code": 100, "message": "Unsupported request - method type: get", "type": "IGApiException"}},
+            )
+
+        assert url == f"https://graph.facebook.com/{configuracion.Config.FACEBOOK_GRAPH_API_VERSION}/me/accounts"
+        return _Response(
+            status_code=200,
+            payload={
+                "data": [
+                    {
+                        "id": "123456789",
+                        "name": "Acme Page",
+                        "instagram_business_account": {"id": "178414", "username": "acme.ig"},
+                    }
+                ]
+            },
+        )
+
+    monkeypatch.setattr(configuracion.requests, "get", fake_get)
+
+    response = configuracion._fetch_instagram_user("fb-user-token")
+
+    assert response["ok"] is True
+    assert response["account"]["id"] == "178414"
+    assert response["account"]["username"] == "acme.ig"
+    assert response["account"]["user_id"] == "123456789"
+
+
+def test_fetch_instagram_user_surfaces_error_payload(monkeypatch):
+    def fake_get(url, params=None, headers=None, timeout=None):
+        return _Response(
+            status_code=400,
+            payload={"error": {"message": "Unsupported get request."}},
+        )
+
+    monkeypatch.setattr(configuracion.requests, "get", fake_get)
+
+    response = configuracion._fetch_instagram_user("bad-token")
+
+    assert response["ok"] is False
+    assert response["error"] == "No se pudo obtener la cuenta de Instagram."
+    assert response["details"]["message"] == "Unsupported get request."
 
 
 def test_build_redirect_uri_attempts_prioritizes_whatsapp_and_root_domain(monkeypatch):
