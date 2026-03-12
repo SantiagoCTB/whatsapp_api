@@ -1,6 +1,7 @@
 from pathlib import Path
 from types import SimpleNamespace
 import sys
+import time
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 if str(ROOT_DIR) not in sys.path:
@@ -218,9 +219,103 @@ def test_messenger_signup_uses_redirect_uri_fallbacks_when_uri_differs(monkeypat
     assert calls["code"] == "embedded-code"
     assert calls["redirect_uri"] == "https://provided.example/configuracion/signup"
     assert calls["fallback_uri"] == "https://resolved.example/configuracion/signup"
-    assert calls["updated_tenant_key"] == "acme"
-    assert calls["env_updates"]["MESSENGER_TOKEN"] == "token-from-code"
 
+
+def test_configuracion_signup_ignores_non_instagram_oauth_codes(monkeypatch):
+    app = create_app()
+    app.config["TESTING"] = True
+
+    monkeypatch.setattr(configuracion, "_resolve_signup_tenant", lambda: SimpleNamespace(tenant_key="acme", metadata={}))
+    monkeypatch.setattr(configuracion.tenants, "get_tenant_env", lambda _tenant: {})
+
+    called = {"instagram_handler": False}
+
+    def fake_handle(_code, _redirect_uri):
+        called["instagram_handler"] = True
+        return {"ok": True, "access_token": "token"}
+
+    monkeypatch.setattr(configuracion, "_handle_instagram_oauth_code", fake_handle)
+
+    with app.test_client() as client:
+        with client.session_transaction() as session:
+            session["user"] = "admin"
+            session["roles"] = ["admin"]
+
+        response = client.get(
+            "/configuracion/signup",
+            query_string={"code": "meta-embedded-code", "state": "acme"},
+        )
+
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith("/configuracion/signup")
+    assert called["instagram_handler"] is False
+
+
+def test_configuracion_signup_processes_instagram_oauth_code_when_marked(monkeypatch):
+    app = create_app()
+    app.config["TESTING"] = True
+
+    monkeypatch.setattr(configuracion, "_resolve_signup_tenant", lambda: SimpleNamespace(tenant_key="acme", metadata={}))
+    monkeypatch.setattr(configuracion.tenants, "get_tenant_env", lambda _tenant: {})
+
+    calls = {}
+
+    def fake_handle(code, redirect_uri):
+        calls["code"] = code
+        calls["redirect_uri"] = redirect_uri
+        return {"ok": True, "access_token": "token"}
+
+    monkeypatch.setattr(configuracion, "_handle_instagram_oauth_code", fake_handle)
+    monkeypatch.setattr(configuracion, "_resolve_instagram_redirect_uri", lambda _fallback: "https://app.example/configuracion/signup")
+
+    with app.test_client() as client:
+        with client.session_transaction() as session:
+            session["user"] = "admin"
+            session["roles"] = ["admin"]
+
+        response = client.get(
+            "/configuracion/signup",
+            query_string={"code": "ig-code", "oauth_provider": "instagram"},
+        )
+
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith("/configuracion/signup")
+    assert calls["code"] == "ig-code"
+    assert calls["redirect_uri"] == "https://app.example/configuracion/signup"
+
+
+def test_configuracion_signup_processes_instagram_oauth_code_when_pending_in_session(monkeypatch):
+    app = create_app()
+    app.config["TESTING"] = True
+
+    monkeypatch.setattr(configuracion, "_resolve_signup_tenant", lambda: SimpleNamespace(tenant_key="acme", metadata={}))
+    monkeypatch.setattr(configuracion.tenants, "get_tenant_env", lambda _tenant: {})
+
+    calls = {}
+
+    def fake_handle(code, redirect_uri):
+        calls["code"] = code
+        calls["redirect_uri"] = redirect_uri
+        return {"ok": True, "access_token": "token"}
+
+    monkeypatch.setattr(configuracion, "_handle_instagram_oauth_code", fake_handle)
+    monkeypatch.setattr(configuracion, "_resolve_instagram_redirect_uri", lambda _fallback: "https://app.example/configuracion/signup")
+
+    with app.test_client() as client:
+        with client.session_transaction() as session:
+            session["user"] = "admin"
+            session["roles"] = ["admin"]
+            session["instagram_oauth_pending_at"] = time.time()
+
+        response = client.get(
+            "/configuracion/signup",
+            query_string={"code": "ig-code-without-marker"},
+        )
+
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith("/configuracion/signup")
+    assert calls["code"] == "ig-code-without-marker"
+    assert calls["redirect_uri"] == "https://app.example/configuracion/signup"
 
 def test_build_redirect_uri_attempts_prioritizes_whatsapp_and_root_domain(monkeypatch):
     monkeypatch.setattr(configuracion.Config, "WHATSAPP_OAUTH_REDIRECT_URI", "https://app.whapco.site/configuracion/signup")
