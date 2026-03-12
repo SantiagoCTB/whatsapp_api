@@ -646,3 +646,57 @@ def test_build_redirect_uri_attempts_uses_configured_whatsapp_when_primary_diffe
     assert attempts[1] == "https://provided.example/configuracion/signup"
     assert attempts[2] == "https://app.whapco.site/configuracion/signup"
     assert "https://app.whapco.site" in attempts
+
+
+def test_exchange_instagram_code_accepts_data_wrapped_response(monkeypatch):
+    def fake_post(url, data=None, timeout=None):
+        return _Response(
+            status_code=200,
+            payload={"data": [{"access_token": "wrapped-token", "user_id": "1020"}]},
+        )
+
+    monkeypatch.setattr(configuracion.Config, "INSTAGRAM_APP_ID", "ig-app")
+    monkeypatch.setattr(configuracion.Config, "INSTAGRAM_APP_SECRET", "ig-secret")
+    monkeypatch.setattr(configuracion.Config, "INSTAGRAM_OAUTH_TOKEN_URL", "https://api.instagram.com/oauth/access_token")
+    monkeypatch.setattr(configuracion.requests, "post", fake_post)
+    monkeypatch.setattr(
+        configuracion.requests,
+        "get",
+        lambda *_args, **_kwargs: _Response(status_code=400, payload={"error": {"message": "skip long-lived"}}),
+    )
+
+    response = configuracion._exchange_instagram_code_for_token("abc", "https://app.example/configuracion/signup")
+
+    assert response["ok"] is True
+    assert response["access_token"] == "wrapped-token"
+
+
+def test_handle_instagram_oauth_uses_user_id_as_account_id_when_id_is_missing(monkeypatch):
+    tenant = SimpleNamespace(tenant_key="acme", metadata={})
+    captured = {}
+
+    monkeypatch.setattr(configuracion, "_resolve_signup_tenant", lambda: tenant)
+    monkeypatch.setattr(
+        configuracion,
+        "_exchange_instagram_code_for_token",
+        lambda _code, _uri: {"ok": True, "access_token": "ig-token", "is_long_lived": True},
+    )
+    monkeypatch.setattr(
+        configuracion,
+        "_fetch_instagram_user",
+        lambda _token: {"ok": True, "account": {"user_id": "178414", "username": "acme.ig"}},
+    )
+    monkeypatch.setattr(configuracion.tenants, "get_tenant_env", lambda _tenant: {})
+
+    def fake_update_env(_tenant_key, env_updates):
+        captured["env_updates"] = env_updates
+
+    monkeypatch.setattr(configuracion.tenants, "update_tenant_env", fake_update_env)
+    monkeypatch.setattr(configuracion.tenants, "update_tenant_metadata", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(configuracion.tenants, "trigger_page_backfill_for_platform", lambda *_args, **_kwargs: None)
+
+    response = configuracion._handle_instagram_oauth_code("abc", "https://app.example/configuracion/signup")
+
+    assert response["ok"] is True
+    assert captured["env_updates"]["INSTAGRAM_ACCOUNT_ID"] == "178414"
+    assert captured["env_updates"]["INSTAGRAM_PAGE_ID"] == "178414"

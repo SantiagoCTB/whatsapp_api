@@ -665,7 +665,13 @@ def _exchange_instagram_code_for_token(code: str, redirect_uri: str) -> dict:
             "token_url": token_url,
         }
 
-    access_token = data.get("access_token")
+    token_payload = data
+    if isinstance(data, dict) and isinstance(data.get("data"), list) and data.get("data"):
+        first_entry = data["data"][0]
+        if isinstance(first_entry, dict):
+            token_payload = first_entry
+
+    access_token = token_payload.get("access_token") if isinstance(token_payload, dict) else None
     if not access_token:
         return {"ok": False, "error": "Instagram no devolvió un access_token."}
 
@@ -977,8 +983,9 @@ def _handle_instagram_oauth_code(code: str, redirect_uri: str) -> dict:
     tenant_env = tenants.get_tenant_env(tenant)
     env_updates = {key: tenant_env.get(key) for key in tenants.TENANT_ENV_KEYS}
     env_updates["INSTAGRAM_TOKEN"] = access_token
-    if account.get("id"):
-        env_updates["INSTAGRAM_ACCOUNT_ID"] = account.get("id")
+    account_id = account.get("id") or account.get("user_id")
+    if account_id:
+        env_updates["INSTAGRAM_ACCOUNT_ID"] = account_id
     if account.get("user_id") or account.get("id"):
         env_updates["INSTAGRAM_PAGE_ID"] = account.get("user_id") or account.get("id")
     tenants.update_tenant_env(tenant.tenant_key, env_updates)
