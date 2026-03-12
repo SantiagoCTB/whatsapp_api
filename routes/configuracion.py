@@ -974,6 +974,18 @@ def _resolve_instagram_redirect_uri(fallback: str) -> str:
     return fallback
 
 
+def _is_instagram_oauth_callback(args) -> bool:
+    provider = (args.get("oauth_provider") or "").strip().lower()
+    if provider == "instagram":
+        return True
+
+    state = (args.get("state") or "").strip().lower()
+    if not state:
+        return False
+
+    return state == "instagram" or state.startswith("instagram:") or state.startswith("instagram_oauth:")
+
+
 def _resolve_embedded_signup_redirect_uri(fallback: str) -> str:
     whatsapp_embedded_redirect = (getattr(Config, "WHATSAPP_EMBEDDED_SIGNUP_REDIRECT_URI", "") or "").strip()
     if whatsapp_embedded_redirect:
@@ -2568,6 +2580,17 @@ def configuracion_signup():
     oauth_code = (request.args.get("code") or "").strip()
     oauth_state = (request.args.get("state") or "").strip()
     if oauth_code:
+        if not _is_instagram_oauth_callback(request.args):
+            logger.info(
+                "Código OAuth recibido en /configuracion/signup sin marcador de Instagram; se ignora para evitar conflictos con Embedded Signup",
+                extra={
+                    "tenant_key": tenants.get_active_tenant_key(),
+                    "oauth_state": oauth_state,
+                    "has_oauth_provider": bool((request.args.get("oauth_provider") or "").strip()),
+                },
+            )
+            return redirect(url_for("configuracion.configuracion_signup"))
+
         logger.info(
             "Código OAuth recibido en configuración de signup",
             extra={
