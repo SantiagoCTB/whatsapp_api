@@ -512,6 +512,8 @@ def _fetch_instagram_user(user_token: str):
     if not user_token:
         return {"ok": False, "error": "Falta el token de usuario para consultar Instagram."}
 
+    token_preview = f"{user_token[:10]}..." if len(user_token) > 10 else user_token
+
     # Primer intento: endpoint de Instagram Basic Display.
     # Algunos tokens aceptan Authorization header y otros requieren query param access_token,
     # por eso enviamos ambos para maximizar compatibilidad.
@@ -521,6 +523,11 @@ def _fetch_instagram_user(user_token: str):
         "access_token": user_token,
     }
     headers = {"Authorization": f"Bearer {user_token}"}
+
+    logger.info(
+        "Consultando cuenta de Instagram en graph.instagram.com/me",
+        extra={"token_preview": token_preview, "fields": params.get("fields")},
+    )
 
     try:
         response = requests.get(url, params=params, headers=headers, timeout=15)
@@ -535,9 +542,18 @@ def _fetch_instagram_user(user_token: str):
         payload = {}
 
     if response.status_code < 400 and isinstance(payload, dict) and payload.get("id"):
+        logger.info(
+            "Cuenta de Instagram resuelta en endpoint primario",
+            extra={"instagram_account_id": payload.get("id"), "instagram_username": payload.get("username")},
+        )
         return {"ok": True, "account": payload}
 
     details = payload.get("error") if isinstance(payload, dict) else None
+    if response.status_code >= 400:
+        logger.warning(
+            "Fallo graph.instagram.com/me; se intentará fallback por páginas",
+            extra={"status_code": response.status_code, "details": details, "token_preview": token_preview},
+        )
 
     # Fallback: tokens provenientes de Embedded Signup/Facebook suelen no ser válidos
     # contra graph.instagram.com/me y responden "Unsupported request - method type: get".
@@ -560,6 +576,15 @@ def _fetch_instagram_user(user_token: str):
         except ValueError:
             fallback_payload = {}
 
+        logger.info(
+            "Respuesta fallback /me/accounts para Instagram",
+            extra={
+                "status_code": fallback_response.status_code,
+                "has_data": bool(isinstance(fallback_payload, dict) and fallback_payload.get("data")),
+                "token_preview": token_preview,
+            },
+        )
+
         if fallback_response.status_code < 400:
             pages = []
             if isinstance(fallback_payload, dict):
@@ -577,7 +602,26 @@ def _fetch_instagram_user(user_token: str):
                     "page_name": page.get("name"),
                     "account_type": "BUSINESS",
                 }
+                logger.info(
+                    "Cuenta de Instagram resuelta por fallback de páginas",
+                    extra={
+                        "page_id": page.get("id"),
+                        "page_name": page.get("name"),
+                        "instagram_account_id": ig_account.get("id"),
+                        "instagram_username": ig_account.get("username"),
+                    },
+                )
                 return {"ok": True, "account": account}
+
+            logger.warning(
+                "Fallback /me/accounts no devolvió instagram_business_account",
+                extra={"pages_count": len(pages), "token_preview": token_preview},
+            )
+        else:
+            logger.warning(
+                "Fallback /me/accounts falló",
+                extra={"status_code": fallback_response.status_code, "details": fallback_payload.get("error") if isinstance(fallback_payload, dict) else fallback_payload},
+            )
 
     if response.status_code >= 400:
         return {
@@ -611,6 +655,17 @@ def _exchange_instagram_code_for_token(code: str, redirect_uri: str) -> dict:
     token_url = (Config.INSTAGRAM_OAUTH_TOKEN_URL or "").strip() or "https://api.instagram.com/oauth/access_token"
     supports_long_lived = "api.instagram.com" in token_url
 
+    logger.info(
+        "Intercambiando código OAuth de Instagram por token",
+        extra={
+            "token_url": token_url,
+            "redirect_uri": redirect_uri,
+            "supports_long_lived": supports_long_lived,
+            "code_prefix": code[:12],
+            "code_length": len(code),
+        },
+    )
+
     try:
         response = requests.post(
             token_url,
@@ -627,6 +682,10 @@ def _exchange_instagram_code_for_token(code: str, redirect_uri: str) -> dict:
         data = {}
 
     if response.status_code >= 400:
+        logger.warning(
+            "Instagram OAuth devolvió error al intercambiar código",
+            extra={"status_code": response.status_code, "details": data, "token_url": token_url},
+        )
         if "api.instagram.com" in token_url:
             fallback_url = (
                 f"https://graph.facebook.com/{Config.FACEBOOK_GRAPH_API_VERSION}/oauth/access_token"
@@ -650,6 +709,10 @@ def _exchange_instagram_code_for_token(code: str, redirect_uri: str) -> dict:
                 if fallback_response.status_code < 400:
                     access_token = fallback_data.get("access_token")
                     if access_token:
+                        logger.info(
+                            "Token de Instagram obtenido por fallback de Graph Facebook",
+                            extra={"token_url": fallback_url, "status_code": fallback_response.status_code},
+                        )
                         return {
                             "ok": True,
                             "access_token": access_token,
@@ -658,6 +721,11 @@ def _exchange_instagram_code_for_token(code: str, redirect_uri: str) -> dict:
                             "token_url": fallback_url,
                         }
 
+                logger.warning(
+                    "Fallback de token OAuth en Graph Facebook falló",
+                    extra={"status_code": fallback_response.status_code, "details": fallback_data, "token_url": fallback_url},
+                )
+
         return {
             "ok": False,
             "error": "No se pudo intercambiar el código de Instagram.",
@@ -665,11 +733,22 @@ def _exchange_instagram_code_for_token(code: str, redirect_uri: str) -> dict:
             "token_url": token_url,
         }
 
-    access_token = data.get("access_token")
+    token_payload = data
+    if isinstance(data, dict) and isinstance(data.get("data"), list) and data.get("data"):
+        first_entry = data["data"][0]
+        if isinstance(first_entry, dict):
+            token_payload = first_entry
+
+    access_token = token_payload.get("access_token") if isinstance(token_payload, dict) else None
     if not access_token:
+        logger.warning(
+            "Respuesta de token OAuth de Instagram sin access_token",
+            extra={"token_url": token_url, "raw": data},
+        )
         return {"ok": False, "error": "Instagram no devolvió un access_token."}
 
     if not supports_long_lived:
+        logger.info("Token de Instagram obtenido (sin intercambio a token largo).")
         return {"ok": True, "access_token": access_token, "is_long_lived": False, "raw": data}
 
     try:
@@ -699,6 +778,10 @@ def _exchange_instagram_code_for_token(code: str, redirect_uri: str) -> dict:
         return {"ok": True, "access_token": access_token, "is_long_lived": False, "raw": data}
 
     long_token = long_data.get("access_token") or access_token
+    logger.info(
+        "Token largo de Instagram obtenido correctamente",
+        extra={"expires_in": long_data.get("expires_in"), "token_type": long_data.get("token_type")},
+    )
     return {"ok": True, "access_token": long_token, "is_long_lived": True, "raw": long_data}
 
 
@@ -969,16 +1052,26 @@ def _handle_instagram_oauth_code(code: str, redirect_uri: str) -> dict:
     if not access_token:
         return {"ok": False, "error": "No se obtuvo un token de Instagram válido."}
 
+    logger.info(
+        "Token de Instagram obtenido; iniciando resolución de cuenta",
+        extra={"is_long_lived": token_response.get("is_long_lived")},
+    )
+
     account_response = _fetch_instagram_user(access_token)
     if not account_response.get("ok"):
+        logger.warning(
+            "No se pudo resolver cuenta de Instagram después de obtener token",
+            extra={"error": account_response.get("error"), "details": account_response.get("details")},
+        )
         return account_response
 
     account = account_response.get("account") or {}
     tenant_env = tenants.get_tenant_env(tenant)
     env_updates = {key: tenant_env.get(key) for key in tenants.TENANT_ENV_KEYS}
     env_updates["INSTAGRAM_TOKEN"] = access_token
-    if account.get("id"):
-        env_updates["INSTAGRAM_ACCOUNT_ID"] = account.get("id")
+    account_id = account.get("id") or account.get("user_id")
+    if account_id:
+        env_updates["INSTAGRAM_ACCOUNT_ID"] = account_id
     if account.get("user_id") or account.get("id"):
         env_updates["INSTAGRAM_PAGE_ID"] = account.get("user_id") or account.get("id")
     tenants.update_tenant_env(tenant.tenant_key, env_updates)
