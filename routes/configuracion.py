@@ -512,7 +512,7 @@ def _fetch_instagram_user(user_token: str):
     if not user_token:
         return {"ok": False, "error": "Falta el token de usuario para consultar Instagram."}
 
-    # El endpoint de Instagram Basic Display usa graph.instagram.com/me (sin versión en path).
+    # Primer intento: endpoint de Instagram Basic Display.
     # Algunos tokens aceptan Authorization header y otros requieren query param access_token,
     # por eso enviamos ambos para maximizar compatibilidad.
     url = "https://graph.instagram.com/me"
@@ -534,18 +534,59 @@ def _fetch_instagram_user(user_token: str):
     except ValueError:
         payload = {}
 
+    if response.status_code < 400 and isinstance(payload, dict) and payload.get("id"):
+        return {"ok": True, "account": payload}
+
+    details = payload.get("error") if isinstance(payload, dict) else None
+
+    # Fallback: tokens provenientes de Embedded Signup/Facebook suelen no ser válidos
+    # contra graph.instagram.com/me y responden "Unsupported request - method type: get".
+    # En ese caso consultamos páginas del usuario y buscamos instagram_business_account.
+    fallback_url = f"https://graph.facebook.com/{Config.FACEBOOK_GRAPH_API_VERSION}/me/accounts"
+    fallback_params = {
+        "fields": "id,name,access_token,instagram_business_account{id,username}",
+        "access_token": user_token,
+    }
+
+    try:
+        fallback_response = requests.get(fallback_url, params=fallback_params, timeout=15)
+    except requests.RequestException:
+        fallback_response = None
+
+    fallback_payload = {}
+    if fallback_response is not None:
+        try:
+            fallback_payload = fallback_response.json()
+        except ValueError:
+            fallback_payload = {}
+
+        if fallback_response.status_code < 400:
+            pages = []
+            if isinstance(fallback_payload, dict):
+                pages = fallback_payload.get("data") or []
+            for page in pages:
+                if not isinstance(page, dict):
+                    continue
+                ig_account = page.get("instagram_business_account") or {}
+                if not ig_account.get("id"):
+                    continue
+                account = {
+                    "id": ig_account.get("id"),
+                    "username": ig_account.get("username"),
+                    "user_id": page.get("id"),
+                    "page_name": page.get("name"),
+                    "account_type": "BUSINESS",
+                }
+                return {"ok": True, "account": account}
+
     if response.status_code >= 400:
-        details = payload.get("error") if isinstance(payload, dict) else None
         return {
             "ok": False,
             "error": "No se pudo obtener la cuenta de Instagram.",
             "details": details,
         }
 
-    if not isinstance(payload, dict) or not payload.get("id"):
-        return {"ok": False, "error": "No se encontró una cuenta de Instagram asociada."}
-
-    return {"ok": True, "account": payload}
+    return {"ok": False, "error": "No se encontró una cuenta de Instagram asociada."}
 
 
 def _exchange_instagram_code_for_token(code: str, redirect_uri: str) -> dict:
