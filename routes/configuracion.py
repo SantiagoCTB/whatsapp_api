@@ -512,8 +512,14 @@ def _fetch_instagram_user(user_token: str):
     if not user_token:
         return {"ok": False, "error": "Falta el token de usuario para consultar Instagram."}
 
-    url = f"https://graph.instagram.com/{Config.FACEBOOK_GRAPH_API_VERSION}/me"
-    params = {"fields": "user_id,id,username,account_type"}
+    # El endpoint de Instagram Basic Display usa graph.instagram.com/me (sin versión en path).
+    # Algunos tokens aceptan Authorization header y otros requieren query param access_token,
+    # por eso enviamos ambos para maximizar compatibilidad.
+    url = "https://graph.instagram.com/me"
+    params = {
+        "fields": "user_id,id,username,account_type",
+        "access_token": user_token,
+    }
     headers = {"Authorization": f"Bearer {user_token}"}
 
     try:
