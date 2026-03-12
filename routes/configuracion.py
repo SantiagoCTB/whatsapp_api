@@ -4,6 +4,7 @@ import logging
 import mimetypes
 import os
 import re
+import time
 import uuid
 from datetime import datetime
 from urllib.parse import urlparse, unquote
@@ -972,6 +973,36 @@ def _resolve_instagram_redirect_uri(fallback: str) -> str:
         if key == "redirect_uri" and value:
             return value
     return fallback
+
+
+def _is_instagram_oauth_callback(args) -> bool:
+    provider = (args.get("oauth_provider") or "").strip().lower()
+    if provider == "instagram":
+        return True
+
+    state = (args.get("state") or "").strip().lower()
+    if not state:
+        return False
+
+    return state == "instagram" or state.startswith("instagram:") or state.startswith("instagram_oauth:")
+
+
+def _instagram_oauth_pending_in_session(max_age_seconds: int = 900) -> bool:
+    started_at = session.get("instagram_oauth_pending_at")
+    if not started_at:
+        return False
+
+    try:
+        elapsed = time.time() - float(started_at)
+    except (TypeError, ValueError):
+        session.pop("instagram_oauth_pending_at", None)
+        return False
+
+    if elapsed < 0 or elapsed > max_age_seconds:
+        session.pop("instagram_oauth_pending_at", None)
+        return False
+
+    return True
 
 
 def _resolve_embedded_signup_redirect_uri(fallback: str) -> str:
@@ -2568,6 +2599,20 @@ def configuracion_signup():
     oauth_code = (request.args.get("code") or "").strip()
     oauth_state = (request.args.get("state") or "").strip()
     if oauth_code:
+        instagram_callback_marked = _is_instagram_oauth_callback(request.args)
+        instagram_pending = _instagram_oauth_pending_in_session()
+        if not instagram_callback_marked and not instagram_pending:
+            logger.info(
+                "Código OAuth recibido en /configuracion/signup sin marcador de Instagram; se ignora para evitar conflictos con Embedded Signup",
+                extra={
+                    "tenant_key": tenants.get_active_tenant_key(),
+                    "oauth_state": oauth_state,
+                    "has_oauth_provider": bool((request.args.get("oauth_provider") or "").strip()),
+                    "instagram_pending": instagram_pending,
+                },
+            )
+            return redirect(url_for("configuracion.configuracion_signup"))
+
         logger.info(
             "Código OAuth recibido en configuración de signup",
             extra={
@@ -2589,6 +2634,7 @@ def configuracion_signup():
         else:
             session["instagram_oauth_status"] = "Token de Instagram obtenido desde OAuth."
             session["instagram_oauth_token"] = result.get("access_token")
+        session.pop("instagram_oauth_pending_at", None)
         return redirect(url_for("configuracion.configuracion_signup"))
 
     tenant = _resolve_signup_tenant()
@@ -2713,6 +2759,7 @@ def instagram_reset_signup():
     session.pop("instagram_oauth_token", None)
     session.pop("instagram_oauth_error", None)
     session.pop("instagram_oauth_error_details", None)
+    session["instagram_oauth_pending_at"] = time.time()
 
     logger.info(
         "Datos anteriores de Instagram limpiados antes de iniciar embedded signup",
