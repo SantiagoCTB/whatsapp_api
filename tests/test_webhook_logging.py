@@ -116,3 +116,81 @@ def test_webhook_logs_duplicate_message(client, caplog, monkeypatch):
     assert request_log is not None
     assert 'message_ids' in request_log.message
     assert 'ABCD...90' in request_log.message
+
+
+def test_webhook_referral_bootstraps_rules(client, monkeypatch):
+    class Cursor:
+        def __init__(self):
+            self.last_query = ''
+
+        def execute(self, query, params):
+            self.last_query = query
+
+        def fetchone(self):
+            if 'SELECT 1 FROM mensajes_procesados' in self.last_query:
+                return None
+            return None
+
+        def close(self):
+            pass
+
+    class Connection:
+        def __init__(self):
+            self._cursor = Cursor()
+
+        def cursor(self):
+            return self._cursor
+
+        def close(self):
+            pass
+
+        def commit(self):
+            pass
+
+    calls = []
+
+    monkeypatch.setattr(webhook_module, 'get_connection', lambda: Connection())
+    monkeypatch.setattr(webhook_module, 'get_chat_state', lambda *_: None)
+    monkeypatch.setattr(webhook_module, 'get_current_step', lambda *_: None)
+    monkeypatch.setattr(webhook_module, 'guardar_mensaje', lambda *_, **__: 1)
+    monkeypatch.setattr(webhook_module, 'update_chat_state', lambda *_, **__: None)
+    monkeypatch.setattr(webhook_module, 'start_typing_feedback', lambda *_, **__: None)
+    monkeypatch.setattr(
+        webhook_module,
+        'handle_text_message',
+        lambda numero, texto, save=True, platform=None: calls.append((numero, texto, save, platform)),
+    )
+
+    response = client.post(
+        '/webhook',
+        json={
+            'object': 'whatsapp_business_account',
+            'entry': [
+                {
+                    'changes': [
+                        {
+                            'value': {
+                                'messages': [
+                                    {
+                                        'id': 'wamid.test_referral_001',
+                                        'from': '573103884607',
+                                        'type': 'referral',
+                                        'referral': {
+                                            'source_url': 'https://fb.me/4jDjvZdTD',
+                                            'headline': 'Whapco',
+                                            'body': 'Promo',
+                                            'thumbnail_url': 'https://example.com/thumb.jpg',
+                                        },
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                }
+            ],
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json == {'status': 'received'}
+    assert calls == [('573103884607', '', False, None)]

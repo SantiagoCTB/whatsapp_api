@@ -3227,6 +3227,7 @@ def webhook():
                     update_chat_state(from_number, step, estado_update)
                     if not agent_mode:
                         start_typing_feedback(from_number, wa_id)
+                        handle_text_message(from_number, "", save=False)
                     continue
 
                 # AUDIO
