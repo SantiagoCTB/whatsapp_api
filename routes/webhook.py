@@ -45,6 +45,7 @@ from services.whatsapp_api import (
     start_typing_feedback,
     stop_typing_feedback,
     INSTAGRAM_GRAPH_BASE_URL,
+    API_VERSION,
 )
 from services.job_queue import enqueue_transcription
 from services.normalize_text import normalize_text
@@ -66,6 +67,8 @@ pending_timers     = {}
 cache_lock         = threading.Lock()
 followup_timers    = {}
 followup_lock      = threading.Lock()
+unattended_alert_timers = {}
+unattended_alert_lock = threading.Lock()
 
 MAX_AUTO_STEPS = 25
 PLATFORM_AGNOSTIC_RULES = {"ia_chat"}
@@ -140,6 +143,177 @@ def _clear_followup_timers(numero: str) -> None:
         timers = followup_timers.pop(numero, [])
     for timer in timers:
         timer.cancel()
+    with unattended_alert_lock:
+        alert_timer = unattended_alert_timers.pop(numero, None)
+    if alert_timer:
+        alert_timer.cancel()
+
+
+def _get_unattended_alert_config() -> dict | None:
+    conn = get_connection()
+    c = conn.cursor()
+    try:
+        c.execute(
+            """
+            SELECT unattended_alert_timeout_minutes,
+                   unattended_alert_target_number,
+                   unattended_alert_template_name,
+                   unattended_alert_template_language
+              FROM ia_config
+          ORDER BY id DESC
+             LIMIT 1
+            """
+        )
+        row = c.fetchone()
+    except Exception:
+        row = None
+    finally:
+        conn.close()
+
+    if not row:
+        return None
+
+    return {
+        "timeout_minutes": row[0],
+        "target_number": (row[1] or "").strip(),
+        "template_name": (row[2] or "").strip(),
+        "template_language": (row[3] or "").strip() or "es_CO",
+    }
+
+
+def _send_unattended_alert_if_pending(
+    numero: str,
+    *,
+    timeout_minutes: int,
+    scheduled_at: datetime,
+    tenant_key: str | None,
+    tenant_env: dict | None,
+) -> None:
+    if timeout_minutes <= 0:
+        return
+
+    config = _get_unattended_alert_config() or {}
+    target_number = (config.get("target_number") or "").strip()
+    template_name = (config.get("template_name") or "").strip()
+    template_language = (config.get("template_language") or "es_CO").strip() or "es_CO"
+    if not target_number or not template_name:
+        return
+
+    last_message_info = _get_last_message_info(numero)
+    last_tipo = (last_message_info or {}).get("tipo") or ""
+    if _is_client_message_type(last_tipo):
+        logger.info(
+            "Alerta omitida; último mensaje es del cliente",
+            extra={"numero": numero, "last_tipo": last_tipo},
+        )
+        return
+
+    last_client_info = obtener_ultimo_mensaje_cliente_info(numero)
+    last_client_ts = (last_client_info or {}).get("timestamp")
+    if isinstance(last_client_ts, datetime) and last_client_ts >= scheduled_at:
+        logger.info(
+            "Alerta omitida; cliente respondió después de programar",
+            extra={"numero": numero, "last_client_ts": last_client_ts, "scheduled_at": scheduled_at},
+        )
+        return
+
+    tenants.clear_current_tenant()
+    if tenant_key:
+        tenant = tenants.get_tenant(tenant_key)
+        if tenant:
+            tenants.set_current_tenant(tenant)
+            if tenant_env:
+                tenants.set_current_tenant_env(tenant_env)
+            else:
+                tenants.set_current_tenant_env(tenants.get_tenant_env(tenant))
+    elif tenant_env:
+        tenants.set_current_tenant_env(tenant_env)
+
+    env = tenants.get_current_tenant_env() or {}
+    token = (env.get("META_TOKEN") or "").strip()
+    phone_id = (env.get("PHONE_NUMBER_ID") or "").strip()
+    if not token or not phone_id:
+        logger.warning(
+            "No se puede enviar alerta de chat sin respuesta; faltan credenciales de WhatsApp",
+            extra={"numero": numero, "has_token": bool(token), "has_phone_id": bool(phone_id)},
+        )
+        return
+
+    url = f"https://graph.facebook.com/{API_VERSION}/{phone_id}/messages"
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": target_number,
+        "type": "template",
+        "template": {
+            "name": template_name,
+            "language": {"code": template_language},
+        },
+    }
+
+    try:
+        response = requests.post(
+            url,
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Content-Type": "application/json",
+            },
+            json=payload,
+            timeout=15,
+        )
+    except requests.RequestException as exc:
+        logger.warning(
+            "No se pudo enviar alerta de chat sin respuesta",
+            extra={"numero": numero, "error": str(exc)},
+        )
+        return
+
+    if not response.ok:
+        logger.warning(
+            "Meta rechazó la alerta de chat sin respuesta",
+            extra={"numero": numero, "status_code": response.status_code, "response": response.text},
+        )
+        return
+
+    logger.info(
+        "Alerta de chat sin respuesta enviada",
+        extra={"numero": numero, "target_number": target_number, "template_name": template_name},
+    )
+
+
+def _schedule_unattended_alert(numero: str) -> None:
+    config = _get_unattended_alert_config()
+    if not config:
+        return
+
+    try:
+        timeout_minutes = int(config.get("timeout_minutes"))
+    except (TypeError, ValueError):
+        timeout_minutes = None
+    if not timeout_minutes or timeout_minutes <= 0:
+        return
+
+    if not config.get("target_number") or not config.get("template_name"):
+        return
+
+    current_tenant = tenants.get_current_tenant()
+    tenant_key = current_tenant.tenant_key if current_tenant else None
+    tenant_env = dict(tenants.get_current_tenant_env() or {})
+
+    timer = threading.Timer(
+        timeout_minutes * 60,
+        _send_unattended_alert_if_pending,
+        args=(numero,),
+        kwargs={
+            "timeout_minutes": timeout_minutes,
+            "scheduled_at": datetime.utcnow(),
+            "tenant_key": tenant_key,
+            "tenant_env": tenant_env,
+        },
+    )
+    timer.daemon = True
+    timer.start()
+    with unattended_alert_lock:
+        unattended_alert_timers[numero] = timer
 
 
 def _get_ia_followup_config() -> dict | None:
@@ -504,6 +678,8 @@ def _send_followup_if_pending(
 
 
 def _schedule_followup_messages(numero: str, message_step: str) -> None:
+    _clear_followup_timers(numero)
+    _schedule_unattended_alert(numero)
     message_step_norm = _normalize_step_name(message_step)
     if message_step_norm in {"ia", "ia_chat"}:
         active_hours, active_days = _get_schedule_for_step(message_step, None)
@@ -529,7 +705,6 @@ def _schedule_followup_messages(numero: str, message_step: str) -> None:
     if not messages:
         return
 
-    _clear_followup_timers(numero)
     current_tenant = tenants.get_current_tenant()
     tenant_key = current_tenant.tenant_key if current_tenant else None
     tenant_env = dict(tenants.get_current_tenant_env() or {})
