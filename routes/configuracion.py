@@ -1131,6 +1131,10 @@ def _ensure_ia_config_table(cursor):
             conversion_cta_flow_rule_id INT NULL,
             conversion_cta_flow_options TEXT NULL,
             conversion_cta_keywords TEXT NULL,
+            unattended_alert_timeout_minutes INT NULL,
+            unattended_alert_target_number VARCHAR(30) NULL,
+            unattended_alert_template_name VARCHAR(100) NULL,
+            unattended_alert_template_language VARCHAR(20) NULL,
             created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
         ) ENGINE=InnoDB;
         """
@@ -1304,6 +1308,30 @@ def _ensure_ia_config_table(cursor):
             "ALTER TABLE ia_config ADD COLUMN conversion_cta_keywords TEXT NULL AFTER conversion_cta_flow_options;"
         )
 
+    cursor.execute("SHOW COLUMNS FROM ia_config LIKE 'unattended_alert_timeout_minutes';")
+    if cursor.fetchone() is None:
+        cursor.execute(
+            "ALTER TABLE ia_config ADD COLUMN unattended_alert_timeout_minutes INT NULL AFTER conversion_cta_keywords;"
+        )
+
+    cursor.execute("SHOW COLUMNS FROM ia_config LIKE 'unattended_alert_target_number';")
+    if cursor.fetchone() is None:
+        cursor.execute(
+            "ALTER TABLE ia_config ADD COLUMN unattended_alert_target_number VARCHAR(30) NULL AFTER unattended_alert_timeout_minutes;"
+        )
+
+    cursor.execute("SHOW COLUMNS FROM ia_config LIKE 'unattended_alert_template_name';")
+    if cursor.fetchone() is None:
+        cursor.execute(
+            "ALTER TABLE ia_config ADD COLUMN unattended_alert_template_name VARCHAR(100) NULL AFTER unattended_alert_target_number;"
+        )
+
+    cursor.execute("SHOW COLUMNS FROM ia_config LIKE 'unattended_alert_template_language';")
+    if cursor.fetchone() is None:
+        cursor.execute(
+            "ALTER TABLE ia_config ADD COLUMN unattended_alert_template_language VARCHAR(20) NULL AFTER unattended_alert_template_name;"
+        )
+
 
 def _resolve_waba_id_for_tenant(access_token: str, tenant_env: dict) -> str:
     waba_id = (tenant_env.get("WABA_ID") or "").strip()
@@ -1395,6 +1423,10 @@ def _get_ia_config(cursor):
         "conversion_cta_flow_rule_id",
         "conversion_cta_flow_options",
         "conversion_cta_keywords",
+        "unattended_alert_timeout_minutes",
+        "unattended_alert_target_number",
+        "unattended_alert_template_name",
+        "unattended_alert_template_language",
     ]
 
     queries = [
@@ -1410,7 +1442,11 @@ def _get_ia_config(cursor):
                    conversion_cta_enabled, conversion_cta_message,
                    conversion_cta_media_url, conversion_cta_media_tipo,
                    conversion_cta_flow_rule_id, conversion_cta_flow_options,
-                   conversion_cta_keywords
+                   conversion_cta_keywords,
+                   unattended_alert_timeout_minutes,
+                   unattended_alert_target_number,
+                   unattended_alert_template_name,
+                   unattended_alert_template_language
               FROM ia_config
           ORDER BY id DESC
              LIMIT 1
@@ -2200,6 +2236,15 @@ def configuracion_ia():
             ).strip() or None
             conversion_cta_flow_id = (request.form.get('conversion_cta_flow_id') or '').strip()
             conversion_cta_keywords = (request.form.get('conversion_cta_keywords') or '').strip() or None
+            unattended_alert_target_number = (
+                request.form.get('unattended_alert_target_number') or ''
+            ).strip() or None
+            unattended_alert_template_name = (
+                request.form.get('unattended_alert_template_name') or ''
+            ).strip() or None
+            unattended_alert_template_language = (
+                request.form.get('unattended_alert_template_language') or ''
+            ).strip() or 'es_CO'
             if conversion_cta_keywords:
                 tokens = [
                     token.strip().lower()
@@ -2235,6 +2280,13 @@ def configuracion_ia():
                 followup_interval_minutes = None
             if followup_interval_minutes is not None and followup_interval_minutes < 0:
                 followup_interval_minutes = 0
+            unattended_alert_timeout_minutes = request.form.get('unattended_alert_timeout_minutes')
+            try:
+                unattended_alert_timeout_minutes = int(unattended_alert_timeout_minutes)
+            except (TypeError, ValueError):
+                unattended_alert_timeout_minutes = None
+            if unattended_alert_timeout_minutes is not None and unattended_alert_timeout_minutes < 0:
+                unattended_alert_timeout_minutes = 0
             catalog_url = (request.form.get('catalogo_url') or '').strip()
             pdf_file = request.files.get('catalogo_pdf')
             pdf_dir = _media_root()
@@ -2403,7 +2455,11 @@ def configuracion_ia():
                                conversion_cta_media_tipo = %s,
                                conversion_cta_flow_rule_id = %s,
                                conversion_cta_flow_options = %s,
-                               conversion_cta_keywords = %s
+                               conversion_cta_keywords = %s,
+                               unattended_alert_timeout_minutes = %s,
+                               unattended_alert_target_number = %s,
+                               unattended_alert_template_name = %s,
+                               unattended_alert_template_language = %s
                          WHERE id = %s
                         """,
                         (
@@ -2439,6 +2495,10 @@ def configuracion_ia():
                             conversion_cta_flow_rule_id,
                             conversion_cta_flow_options,
                             conversion_cta_keywords,
+                            unattended_alert_timeout_minutes,
+                            unattended_alert_target_number,
+                            unattended_alert_template_name,
+                            unattended_alert_template_language,
                             ia_config['id'],
                         ),
                     )
@@ -2457,8 +2517,10 @@ def configuracion_ia():
                              conversion_cta_enabled, conversion_cta_message,
                              conversion_cta_media_url, conversion_cta_media_tipo,
                              conversion_cta_flow_rule_id, conversion_cta_flow_options,
-                             conversion_cta_keywords)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                             conversion_cta_keywords,
+                             unattended_alert_timeout_minutes, unattended_alert_target_number,
+                             unattended_alert_template_name, unattended_alert_template_language)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                         """,
                         (
                             ia_model,
@@ -2493,6 +2555,10 @@ def configuracion_ia():
                             conversion_cta_flow_rule_id,
                             conversion_cta_flow_options,
                             conversion_cta_keywords,
+                            unattended_alert_timeout_minutes,
+                            unattended_alert_target_number,
+                            unattended_alert_template_name,
+                            unattended_alert_template_language,
                         ),
                     )
 
