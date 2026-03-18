@@ -5,6 +5,7 @@ import threading
 import json
 import mimetypes
 import re
+import uuid
 from urllib.parse import urlparse
 import unicodedata
 from datetime import datetime, timedelta
@@ -67,6 +68,7 @@ pending_timers     = {}
 cache_lock         = threading.Lock()
 followup_timers    = {}
 followup_lock      = threading.Lock()
+followup_round_tokens = {}
 unattended_alert_timers = {}
 unattended_alert_lock = threading.Lock()
 
@@ -141,6 +143,7 @@ def _is_ai_enabled() -> bool:
 def _clear_followup_timers(numero: str) -> None:
     with followup_lock:
         timers = followup_timers.pop(numero, [])
+        followup_round_tokens.pop(numero, None)
     for timer in timers:
         timer.cancel()
     with unattended_alert_lock:
@@ -510,7 +513,21 @@ def _send_followup_if_pending(
     scheduled_at: datetime,
     tenant_key: str | None,
     tenant_env: dict | None,
+    round_token: str | None = None,
 ) -> None:
+    if round_token:
+        with followup_lock:
+            current_round_token = followup_round_tokens.get(numero)
+        if current_round_token != round_token:
+            logger.info(
+                "Follow-up omitido; la ronda ya no está vigente",
+                extra={
+                    "numero": numero,
+                    "followup_index": followup_index,
+                },
+            )
+            return
+
     message = (followup.get("text") or "").strip()
     media_url = (followup.get("media_url") or "").strip()
     media_tipo = (followup.get("media_tipo") or "").strip()
@@ -678,6 +695,21 @@ def _send_followup_if_pending(
 
 
 def _schedule_followup_messages(numero: str, message_step: str) -> None:
+    with followup_lock:
+        existing = [
+            timer for timer in followup_timers.get(numero, [])
+            if getattr(timer, "is_alive", lambda: False)()
+        ]
+        if existing:
+            followup_timers[numero] = existing
+            logger.info(
+                "Ronda de follow-up ya programada; se omite reprogramación",
+                extra={"numero": numero, "timers": len(existing)},
+            )
+            return
+        followup_timers.pop(numero, None)
+        followup_round_tokens.pop(numero, None)
+
     _clear_followup_timers(numero)
     _schedule_unattended_alert(numero)
     message_step_norm = _normalize_step_name(message_step)
@@ -710,6 +742,7 @@ def _schedule_followup_messages(numero: str, message_step: str) -> None:
     tenant_env = dict(tenants.get_current_tenant_env() or {})
     scheduled = []
     scheduled_at = datetime.utcnow()
+    round_token = uuid.uuid4().hex
     for idx, message in enumerate(messages, start=1):
         delay_seconds = interval_minutes * 60 * idx
         timer = threading.Timer(
@@ -723,6 +756,7 @@ def _schedule_followup_messages(numero: str, message_step: str) -> None:
                 "scheduled_at": scheduled_at,
                 "tenant_key": tenant_key,
                 "tenant_env": tenant_env,
+                "round_token": round_token,
             },
         )
         timer.daemon = True
@@ -730,6 +764,7 @@ def _schedule_followup_messages(numero: str, message_step: str) -> None:
         timer.start()
     with followup_lock:
         followup_timers[numero] = scheduled
+        followup_round_tokens[numero] = round_token
 
 
 def _resolve_rule_platform(numero: str) -> str:
