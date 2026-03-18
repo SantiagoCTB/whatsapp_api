@@ -258,6 +258,106 @@
         </div>
     </section>
 
+    <section class="card config-section followup-card">
+        <div class="config-section-header">
+            <h3>Alerta de No respuesta cliente</h3>
+            <p class="muted">Si el bot ya respondió y el cliente no vuelve a responder en el tiempo configurado, se enviará la plantilla al número de alerta.</p>
+        </div>
+        <div class="form-row">
+            <label for="unattended_alert_timeout_minutes">Tiempo de espera (minutos)</label>
+            <input
+                type="number"
+                id="unattended_alert_timeout_minutes"
+                name="unattended_alert_timeout_minutes"
+                min="0"
+                step="1"
+                value="{{ ia_config.unattended_alert_timeout_minutes if ia_config and ia_config.unattended_alert_timeout_minutes is not none else 10 }}"
+            >
+            <small>Usa 0 para desactivar esta alerta automática.</small>
+        </div>
+        <div class="form-row">
+            <label for="unattended_alert_target_number">Número destino WhatsApp</label>
+            <input
+                type="text"
+                id="unattended_alert_target_number"
+                name="unattended_alert_target_number"
+                placeholder="573001112233"
+                value="{{ ia_config.unattended_alert_target_number or '' if ia_config else '' }}"
+            >
+        </div>
+        <div class="form-row">
+            <label for="unattended_alert_template_name">Template de WhatsApp</label>
+            <input
+                type="text"
+                id="unattended_alert_template_name"
+                name="unattended_alert_template_name"
+                placeholder="alerta_chat_sin_respuesta"
+                value="{{ ia_config.unattended_alert_template_name or '' if ia_config else '' }}"
+            >
+        </div>
+        <div class="form-row">
+            <label for="unattended_alert_template_language">Idioma del template</label>
+            <input
+                type="text"
+                id="unattended_alert_template_language"
+                name="unattended_alert_template_language"
+                placeholder="es_CO"
+                value="{{ ia_config.unattended_alert_template_language or 'es_CO' if ia_config else 'es_CO' }}"
+            >
+        </div>
+    </section>
+
+
+    <section class="card config-section followup-card">
+        <div class="config-section-header">
+            <h3>Alerta por error o espera</h3>
+            <p class="muted">Se activa cuando el chat queda en <strong>Error de flujo</strong> o <strong>Esperando respuesta</strong>.</p>
+        </div>
+        <div class="form-row">
+            <label for="state_alert_timeout_minutes">Tiempo de espera (minutos)</label>
+            <input
+                type="number"
+                id="state_alert_timeout_minutes"
+                name="state_alert_timeout_minutes"
+                min="0"
+                step="1"
+                value="{{ ia_config.state_alert_timeout_minutes if ia_config and ia_config.state_alert_timeout_minutes is not none else 5 }}"
+            >
+            <small>Usa 0 para desactivar esta alerta automática.</small>
+        </div>
+        <div class="form-row">
+            <label for="state_alert_target_number">Número destino WhatsApp</label>
+            <input
+                type="text"
+                id="state_alert_target_number"
+                name="state_alert_target_number"
+                placeholder="573001112233"
+                value="{{ ia_config.state_alert_target_number or '' if ia_config else '' }}"
+            >
+        </div>
+        <div class="form-row">
+            <label for="state_alert_template_name">Template de WhatsApp</label>
+            <input
+                type="text"
+                id="state_alert_template_name"
+                name="state_alert_template_name"
+                placeholder="alerta_error_o_espera"
+                value="{{ ia_config.state_alert_template_name or '' if ia_config else '' }}"
+            >
+        </div>
+        <div class="form-row">
+            <label for="state_alert_template_language">Idioma del template</label>
+            <input
+                type="text"
+                id="state_alert_template_language"
+                name="state_alert_template_language"
+                placeholder="es_CO"
+                value="{{ ia_config.state_alert_template_language or 'es_CO' if ia_config else 'es_CO' }}"
+            >
+        </div>
+    </section>
+
+
     <section class="card config-section">
         <h3>Catálogo</h3>
         <div class="form-row">

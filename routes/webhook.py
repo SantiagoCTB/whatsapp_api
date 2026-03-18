@@ -45,6 +45,7 @@ from services.whatsapp_api import (
     start_typing_feedback,
     stop_typing_feedback,
     INSTAGRAM_GRAPH_BASE_URL,
+    API_VERSION,
 )
 from services.job_queue import enqueue_transcription
 from services.normalize_text import normalize_text
@@ -66,6 +67,29 @@ pending_timers     = {}
 cache_lock         = threading.Lock()
 followup_timers    = {}
 followup_lock      = threading.Lock()
+unattended_alert_timers = {}
+unattended_alert_lock = threading.Lock()
+state_alert_timers = {}
+state_alert_lock = threading.Lock()
+
+ALERT_STATE_LEGACY_MAP = {
+    "sin_respuesta": "esperando_respuesta",
+    "espera_usuario": "esperando_respuesta",
+}
+STATE_ALERT_TRIGGER_STATES = {"esperando_respuesta", "error_flujo"}
+
+AI_NEGATIVE_RESPONSE_MARKERS = {
+    "no tengo informacion",
+    "no cuento con informacion",
+    "no dispongo de informacion",
+    "no tengo datos",
+    "no encontre informacion",
+    "no encuentro informacion",
+    "informacion insuficiente",
+    "no puedo responder",
+    "no puedo ayudarte",
+    "no entendi",
+}
 
 MAX_AUTO_STEPS = 25
 PLATFORM_AGNOSTIC_RULES = {"ia_chat"}
@@ -140,6 +164,327 @@ def _clear_followup_timers(numero: str) -> None:
         timers = followup_timers.pop(numero, [])
     for timer in timers:
         timer.cancel()
+    with unattended_alert_lock:
+        alert_timer = unattended_alert_timers.pop(numero, None)
+    if alert_timer:
+        alert_timer.cancel()
+    with state_alert_lock:
+        state_timer = state_alert_timers.pop(numero, None)
+    if state_timer:
+        state_timer.cancel()
+
+
+def _normalize_alert_state(state: str | None) -> str:
+    normalized = (state or "").strip().lower()
+    return ALERT_STATE_LEGACY_MAP.get(normalized, normalized)
+
+
+def _get_unattended_alert_config() -> dict | None:
+    conn = get_connection()
+    c = conn.cursor()
+    try:
+        c.execute(
+            """
+            SELECT unattended_alert_timeout_minutes,
+                   unattended_alert_target_number,
+                   unattended_alert_template_name,
+                   unattended_alert_template_language
+              FROM ia_config
+          ORDER BY id DESC
+             LIMIT 1
+            """
+        )
+        row = c.fetchone()
+    except Exception:
+        row = None
+    finally:
+        conn.close()
+
+    if not row:
+        return None
+
+    return {
+        "timeout_minutes": row[0],
+        "target_number": (row[1] or "").strip(),
+        "template_name": (row[2] or "").strip(),
+        "template_language": (row[3] or "").strip() or "es_CO",
+    }
+
+
+def _get_state_alert_config() -> dict | None:
+    conn = get_connection()
+    c = conn.cursor()
+    try:
+        c.execute(
+            """
+            SELECT state_alert_timeout_minutes,
+                   state_alert_target_number,
+                   state_alert_template_name,
+                   state_alert_template_language
+              FROM ia_config
+          ORDER BY id DESC
+             LIMIT 1
+            """
+        )
+        row = c.fetchone()
+    except Exception:
+        row = None
+    finally:
+        conn.close()
+
+    if not row:
+        return None
+
+    return {
+        "timeout_minutes": row[0],
+        "target_number": (row[1] or "").strip(),
+        "template_name": (row[2] or "").strip(),
+        "template_language": (row[3] or "").strip() or "es_CO",
+    }
+
+
+def _send_template_alert(
+    *,
+    numero: str,
+    target_number: str,
+    template_name: str,
+    template_language: str,
+    tenant_key: str | None,
+    tenant_env: dict | None,
+    alert_name: str,
+) -> bool:
+    tenants.clear_current_tenant()
+    if tenant_key:
+        tenant = tenants.get_tenant(tenant_key)
+        if tenant:
+            tenants.set_current_tenant(tenant)
+            if tenant_env:
+                tenants.set_current_tenant_env(tenant_env)
+            else:
+                tenants.set_current_tenant_env(tenants.get_tenant_env(tenant))
+    elif tenant_env:
+        tenants.set_current_tenant_env(tenant_env)
+
+    env = tenants.get_current_tenant_env() or {}
+    token = (env.get("META_TOKEN") or "").strip()
+    phone_id = (env.get("PHONE_NUMBER_ID") or "").strip()
+    if not token or not phone_id:
+        logger.warning(
+            "No se puede enviar %s; faltan credenciales de WhatsApp",
+            alert_name,
+            extra={"numero": numero, "has_token": bool(token), "has_phone_id": bool(phone_id)},
+        )
+        return False
+
+    url = f"https://graph.facebook.com/{API_VERSION}/{phone_id}/messages"
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": target_number,
+        "type": "template",
+        "template": {
+            "name": template_name,
+            "language": {"code": template_language},
+        },
+    }
+
+    try:
+        response = requests.post(
+            url,
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Content-Type": "application/json",
+            },
+            json=payload,
+            timeout=15,
+        )
+    except requests.RequestException as exc:
+        logger.warning(
+            "No se pudo enviar %s",
+            alert_name,
+            extra={"numero": numero, "error": str(exc)},
+        )
+        return False
+
+    if not response.ok:
+        logger.warning(
+            "Meta rechazó %s",
+            alert_name,
+            extra={"numero": numero, "status_code": response.status_code, "response": response.text},
+        )
+        return False
+
+    logger.info(
+        "%s enviada",
+        alert_name,
+        extra={"numero": numero, "target_number": target_number, "template_name": template_name},
+    )
+    return True
+
+
+def _send_unattended_alert_if_pending(
+    numero: str,
+    *,
+    timeout_minutes: int,
+    scheduled_at: datetime,
+    tenant_key: str | None,
+    tenant_env: dict | None,
+) -> None:
+    if timeout_minutes <= 0:
+        return
+
+    config = _get_unattended_alert_config() or {}
+    target_number = (config.get("target_number") or "").strip()
+    template_name = (config.get("template_name") or "").strip()
+    template_language = (config.get("template_language") or "es_CO").strip() or "es_CO"
+    if not target_number or not template_name:
+        return
+
+    last_message_info = _get_last_message_info(numero)
+    last_tipo = (last_message_info or {}).get("tipo") or ""
+    if _is_client_message_type(last_tipo):
+        logger.info(
+            "Alerta omitida; último mensaje es del cliente",
+            extra={"numero": numero, "last_tipo": last_tipo},
+        )
+        return
+
+    last_client_info = obtener_ultimo_mensaje_cliente_info(numero)
+    last_client_ts = (last_client_info or {}).get("timestamp")
+    if isinstance(last_client_ts, datetime) and last_client_ts >= scheduled_at:
+        logger.info(
+            "Alerta omitida; cliente respondió después de programar",
+            extra={"numero": numero, "last_client_ts": last_client_ts, "scheduled_at": scheduled_at},
+        )
+        return
+
+    _send_template_alert(
+        numero=numero,
+        target_number=target_number,
+        template_name=template_name,
+        template_language=template_language,
+        tenant_key=tenant_key,
+        tenant_env=tenant_env,
+        alert_name="Alerta de No respuesta cliente",
+    )
+
+
+def _schedule_unattended_alert(numero: str) -> None:
+    config = _get_unattended_alert_config()
+    if not config:
+        return
+
+    try:
+        timeout_minutes = int(config.get("timeout_minutes"))
+    except (TypeError, ValueError):
+        timeout_minutes = None
+    if not timeout_minutes or timeout_minutes <= 0:
+        return
+
+    if not config.get("target_number") or not config.get("template_name"):
+        return
+
+    current_tenant = tenants.get_current_tenant()
+    tenant_key = current_tenant.tenant_key if current_tenant else None
+    tenant_env = dict(tenants.get_current_tenant_env() or {})
+
+    timer = threading.Timer(
+        timeout_minutes * 60,
+        _send_unattended_alert_if_pending,
+        args=(numero,),
+        kwargs={
+            "timeout_minutes": timeout_minutes,
+            "scheduled_at": datetime.utcnow(),
+            "tenant_key": tenant_key,
+            "tenant_env": tenant_env,
+        },
+    )
+    timer.daemon = True
+    timer.start()
+    with unattended_alert_lock:
+        unattended_alert_timers[numero] = timer
+
+
+def _send_state_alert_if_pending(
+    numero: str,
+    *,
+    scheduled_at: datetime,
+    tenant_key: str | None,
+    tenant_env: dict | None,
+) -> None:
+    config = _get_state_alert_config() or {}
+    target_number = (config.get("target_number") or "").strip()
+    template_name = (config.get("template_name") or "").strip()
+    template_language = (config.get("template_language") or "es_CO").strip() or "es_CO"
+    if not target_number or not template_name:
+        return
+
+    row = get_chat_state(numero)
+    current_state = _normalize_alert_state(_extract_chat_status(row))
+    if current_state not in STATE_ALERT_TRIGGER_STATES:
+        logger.info(
+            "Alerta por error o espera omitida; estado cambió",
+            extra={"numero": numero, "current_state": current_state},
+        )
+        return
+
+    last_activity = row[1] if row and len(row) > 1 else None
+    if isinstance(last_activity, datetime) and last_activity > scheduled_at:
+        logger.info(
+            "Alerta por error o espera omitida; hubo actividad reciente",
+            extra={"numero": numero, "last_activity": last_activity, "scheduled_at": scheduled_at},
+        )
+        return
+
+    _send_template_alert(
+        numero=numero,
+        target_number=target_number,
+        template_name=template_name,
+        template_language=template_language,
+        tenant_key=tenant_key,
+        tenant_env=tenant_env,
+        alert_name="Alerta por error o espera",
+    )
+
+
+def _sync_state_alert(numero: str, estado: str | None) -> None:
+    normalized_state = _normalize_alert_state(estado)
+    with state_alert_lock:
+        current_timer = state_alert_timers.pop(numero, None)
+    if current_timer:
+        current_timer.cancel()
+
+    if normalized_state not in STATE_ALERT_TRIGGER_STATES:
+        return
+
+    config = _get_state_alert_config()
+    if not config:
+        return
+    try:
+        timeout_minutes = int(config.get("timeout_minutes"))
+    except (TypeError, ValueError):
+        timeout_minutes = None
+    if not timeout_minutes or timeout_minutes <= 0:
+        return
+    if not config.get("target_number") or not config.get("template_name"):
+        return
+
+    current_tenant = tenants.get_current_tenant()
+    tenant_key = current_tenant.tenant_key if current_tenant else None
+    tenant_env = dict(tenants.get_current_tenant_env() or {})
+    timer = threading.Timer(
+        timeout_minutes * 60,
+        _send_state_alert_if_pending,
+        args=(numero,),
+        kwargs={
+            "scheduled_at": datetime.utcnow(),
+            "tenant_key": tenant_key,
+            "tenant_env": tenant_env,
+        },
+    )
+    timer.daemon = True
+    timer.start()
+    with state_alert_lock:
+        state_alert_timers[numero] = timer
 
 
 def _get_ia_followup_config() -> dict | None:
@@ -504,6 +849,8 @@ def _send_followup_if_pending(
 
 
 def _schedule_followup_messages(numero: str, message_step: str) -> None:
+    _clear_followup_timers(numero)
+    _schedule_unattended_alert(numero)
     message_step_norm = _normalize_step_name(message_step)
     if message_step_norm in {"ia", "ia_chat"}:
         active_hours, active_days = _get_schedule_for_step(message_step, None)
@@ -529,7 +876,6 @@ def _schedule_followup_messages(numero: str, message_step: str) -> None:
     if not messages:
         return
 
-    _clear_followup_timers(numero)
     current_tenant = tenants.get_current_tenant()
     tenant_key = current_tenant.tenant_key if current_tenant else None
     tenant_env = dict(tenants.get_current_tenant_env() or {})
@@ -882,7 +1228,7 @@ def notify_session_closed(numero: str, *, origin: str = "timeout") -> bool:
         "Mensaje de cierre de sesión enviado",
         extra=log_extra,
     )
-    update_chat_state(numero, None, "inactivo")
+    _update_chat_state_and_alert(numero, None, "inactivo")
     return True
 
 RELEVANT_HEADERS = (
@@ -1351,6 +1697,15 @@ def set_user_step(numero, step, estado='espera_usuario'):
     if normalized_step == "ia_chat" and estado == "espera_usuario":
         estado = "ia_chat_pending"
     update_chat_state(numero, step, estado)
+    _sync_state_alert(numero, estado)
+
+
+def _update_chat_state_and_alert(numero: str, step: str | None, estado: str | None = None) -> None:
+    update_chat_state(numero, step, estado)
+    if estado is None:
+        row = get_chat_state(numero)
+        estado = _extract_chat_status(row)
+    _sync_state_alert(numero, estado)
 
 
 def get_current_step(numero):
@@ -1611,19 +1966,43 @@ def _get_ia_system_prompt() -> str | None:
     return _combine_system_prompts(system_prompt, business_description)
 
 
-def _mark_ai_flow_error(numero: str, step: str | None, reason: str) -> None:
+def _should_mark_ai_response_as_error(prompt: str | None, response: str | None) -> bool:
+    response_norm = normalize_text(response or "")
+    if not response_norm:
+        return True
+    if any(marker in response_norm for marker in AI_NEGATIVE_RESPONSE_MARKERS):
+        return True
+
+    prompt_norm = normalize_text(prompt or "")
+    if "?" in str(prompt or "") and any(
+        cue in response_norm
+        for cue in (
+            "puedes dar mas detalles",
+            "necesito mas detalles",
+            "podrias dar mas detalles",
+            "necesito mas informacion",
+        )
+    ):
+        return True
+    if prompt_norm and len(response_norm.split()) <= 3:
+        return True
+    return False
+
+
+def _mark_ai_flow_error(numero: str, step: str | None, reason: str, *, send_notice: bool = True) -> None:
     resolved_step = step or get_current_step(numero)
-    update_chat_state(numero, resolved_step, "error_flujo")
+    _update_chat_state_and_alert(numero, resolved_step, "error_flujo")
     logger.warning(
         "Se marcó el chat con error de flujo por IA",
         extra={"numero": numero, "reason": reason, "step": resolved_step},
     )
-    enviar_mensaje(
-        numero,
-        "Estoy revisando tu solicitud, dame un momento",
-        tipo="bot",
-        step=resolved_step,
-    )
+    if send_notice:
+        enviar_mensaje(
+            numero,
+            "Estoy revisando tu solicitud, dame un momento",
+            tipo="bot",
+            step=resolved_step,
+        )
 
 
 def _reply_with_ai_image(
@@ -1642,7 +2021,7 @@ def _reply_with_ai_image(
 
     if set_step:
         set_user_step(numero, "ia")
-        update_chat_state(numero, "ia", "ia_activa")
+        _update_chat_state_and_alert(numero, "ia", "ia_activa")
 
     if history_step:
         history = obtener_historial_chat(
@@ -1692,6 +2071,8 @@ def _reply_with_ai_image(
         return False
 
     enviar_mensaje(numero, response, tipo="bot", step=message_step)
+    if _should_mark_ai_response_as_error(prompt, response):
+        _mark_ai_flow_error(numero, message_step, "ia_respuesta_negativa_imagen", send_notice=False)
     message_step_norm = _normalize_step_name(message_step)
     _schedule_followup_messages(numero, message_step)
     media_pages = None
@@ -1769,7 +2150,7 @@ def _reply_with_ai(
 
     if set_step:
         set_user_step(numero, "ia")
-        update_chat_state(numero, "ia", "ia_activa")
+        _update_chat_state_and_alert(numero, "ia", "ia_activa")
 
     if history_step:
         history = obtener_historial_chat(
@@ -1844,6 +2225,8 @@ def _reply_with_ai(
         return False
 
     enviar_mensaje(numero, response, tipo="bot", step=message_step)
+    if _should_mark_ai_response_as_error(prompt, response):
+        _mark_ai_flow_error(numero, message_step, "ia_respuesta_negativa", send_notice=False)
     message_step_norm = _normalize_step_name(message_step)
     _schedule_followup_messages(numero, message_step)
     media_pages = pages
@@ -2067,7 +2450,7 @@ def _handle_messenger_payload(data, summary, channel="messenger"):
                 )
                 if channel == "messenger" and not agent_mode:
                     _maybe_send_messenger_disclosure(sender_id, chat_state_row, step)
-                update_chat_state(sender_id, step, estado_update)
+                _update_chat_state_and_alert(sender_id, step, estado_update)
                 if agent_mode:
                     summary["processed"] += 1
                     handled = True
@@ -2123,7 +2506,7 @@ def _handle_messenger_payload(data, summary, channel="messenger"):
                     )
                 if channel == "messenger" and not agent_mode:
                     _maybe_send_messenger_disclosure(sender_id, chat_state_row, step)
-                update_chat_state(sender_id, step, estado_update)
+                _update_chat_state_and_alert(sender_id, step, estado_update)
                 if agent_mode:
                     summary["processed"] += 1
                     handled = True
@@ -2152,7 +2535,7 @@ def _handle_messenger_payload(data, summary, channel="messenger"):
                 )
                 if channel == "messenger" and not agent_mode:
                     _maybe_send_messenger_disclosure(sender_id, chat_state_row, step)
-                update_chat_state(sender_id, step, estado_update)
+                _update_chat_state_and_alert(sender_id, step, estado_update)
                 if agent_mode:
                     summary["processed"] += 1
                     handled = True
@@ -2841,7 +3224,7 @@ def process_step_chain(
         return handled
 
     logging.warning("Fallback en step '%s' para entrada '%s'", step, text_norm)
-    update_chat_state(numero, get_current_step(numero), 'sin_regla')
+    _update_chat_state_and_alert(numero, get_current_step(numero), 'sin_regla')
     return handled
 
 
@@ -2959,7 +3342,7 @@ def handle_text_message(
         chat_status = None
         notify_session_closed(numero, origin="timeout")
     elif row:
-        update_chat_state(numero, step_db, chat_status)
+        _update_chat_state_and_alert(numero, step_db, chat_status)
 
     if texto and save:
         guardar_mensaje(numero, texto, 'cliente', step=step_db)
@@ -2979,7 +3362,7 @@ def handle_text_message(
         return
 
     if _is_ia_chat_pending(row, step_db) and not bootstrapped:
-        update_chat_state(numero, step_db, "espera_usuario")
+        _update_chat_state_and_alert(numero, step_db, "espera_usuario")
 
     if _is_ia_step(get_current_step(numero)) and not bootstrapped:
         platform = platform or _resolve_rule_platform(numero)
@@ -3051,7 +3434,7 @@ def process_buffered_messages(numero):
     state_row = get_chat_state(numero)
     if _is_agent_mode(state_row):
         step = state_row[0] if state_row else None
-        update_chat_state(numero, step)
+        _update_chat_state_and_alert(numero, step)
         logger.info(
             "Se omiten mensajes en buffer por estar en modo asesor",
             extra={"numero": numero, "entradas": len(entries)},
@@ -3224,7 +3607,7 @@ def webhook():
                         link_thumb=ref.get("thumbnail_url"),
                         step=step,
                     )
-                    update_chat_state(from_number, step, estado_update)
+                    _update_chat_state_and_alert(from_number, step, "esperando_respuesta")
                     if not agent_mode:
                         start_typing_feedback(from_number, wa_id)
                         handle_text_message(from_number, "", save=False)
@@ -3264,7 +3647,7 @@ def webhook():
                         step=step,
                     )
 
-                    update_chat_state(from_number, step, estado_update)
+                    _update_chat_state_and_alert(from_number, step, "esperando_respuesta")
                     if not agent_mode:
                         start_typing_feedback(from_number, wa_id)
 
@@ -3338,7 +3721,7 @@ def webhook():
                         step=step,
                     )
 
-                    update_chat_state(from_number, step, estado_update)
+                    _update_chat_state_and_alert(from_number, step, estado_update)
                     if not agent_mode:
                         start_typing_feedback(from_number, wa_id)
 
@@ -3368,7 +3751,7 @@ def webhook():
                         media_url=media_url,
                         step=step,
                     )
-                    update_chat_state(from_number, step, estado_update)
+                    _update_chat_state_and_alert(from_number, step, estado_update)
                     if not agent_mode:
                         start_typing_feedback(from_number, wa_id)
                     logging.info("Imagen recibida: %s", media_id)
@@ -3518,7 +3901,7 @@ def webhook():
                         reply_to_wa_id=reply_to_id,
                         step=step,
                     )
-                    update_chat_state(from_number, step, estado_update)
+                    _update_chat_state_and_alert(from_number, step, estado_update)
                     if agent_mode:
                         summary['processed'] += 1
                         continue
@@ -3588,7 +3971,7 @@ def webhook():
                                 reply_to_wa_id=reply_to_id,
                                 step=step,
                             )
-                            update_chat_state(from_number, step, estado_update)
+                            _update_chat_state_and_alert(from_number, step, "esperando_respuesta")
                             if agent_mode:
                                 summary['processed'] += 1
                                 continue
@@ -3617,7 +4000,7 @@ def webhook():
                             )
                             return jsonify({'status': 'buffered'}), 200
                         else:
-                            update_chat_state(from_number, step, estado_update)
+                            _update_chat_state_and_alert(from_number, step, "esperando_respuesta")
                             if not agent_mode:
                                 start_typing_feedback(from_number, wa_id)
                             summary['processed'] += 1
@@ -3635,7 +4018,7 @@ def webhook():
                         reply_to_wa_id=reply_to_id,
                         step=message_step,
                     )
-                    update_chat_state(from_number, step, estado_update)
+                    _update_chat_state_and_alert(from_number, step, estado_update)
                     if agent_mode:
                         summary['processed'] += 1
                         continue
