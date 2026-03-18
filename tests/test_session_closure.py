@@ -108,8 +108,8 @@ def test_handle_text_message_notifica_timeout(monkeypatch):
     assert notified == [(numero, "timeout")]
     assert saved_messages and saved_messages[0][0] == numero
     assert steps and steps[0][0] == numero
-    assert processed[0][1] == "iniciar"
-    assert processed[-1][1] == "hola"
+    assert processed[0][1] == "hola"
+    assert len(processed) == 1
 
 
 def test_handle_text_message_no_timeout_when_reciente(monkeypatch):

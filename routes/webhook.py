@@ -3143,12 +3143,14 @@ def handle_text_message(
     if not text_norm:
         text_norm = None
 
+    first_message_with_text = False
     if not step_db:
         bootstrapped = True
         set_user_step(numero, Config.INITIAL_STEP)
-        process_step_chain(numero, 'iniciar', platform=platform)
         if not text_norm or text_norm == 'iniciar':
+            process_step_chain(numero, 'iniciar', platform=platform)
             return
+        first_message_with_text = True
 
     if handle_global_command(numero, texto):
         return
@@ -3187,7 +3189,7 @@ def handle_text_message(
     process_step_chain(
         numero,
         text_norm,
-        allow_wildcard_with_text=not bootstrapped,
+        allow_wildcard_with_text=(not bootstrapped) or first_message_with_text,
         platform=platform,
         raw_text=texto,
     )
