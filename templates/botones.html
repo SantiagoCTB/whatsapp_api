@@ -73,11 +73,57 @@
     <label for="tipo">Tipo de medio:</label>
     <select name="tipo" id="tipo">
         <option value="texto">Texto</option>
+        <option value="template">Plantilla</option>
+        <option value="flow">Flow</option>
         <option value="image">Imagen</option>
         <option value="video">Video</option>
         <option value="audio">Audio</option>
         <option value="document">PDF</option>
     </select>
+
+    <div id="template_fields" style="display:none;">
+        <label for="template_name">Plantilla creada</label>
+        <div class="template-button-row">
+            <select id="template_name" name="template_name">
+                <option value="">-- Selecciona una plantilla --</option>
+            </select>
+            <button type="button" id="load_templates" class="btn-secondary">Cargar plantillas</button>
+        </div>
+        <label for="template_language_code">Idioma (language_code)</label>
+        <input type="text" id="template_language_code" name="template_language_code" value="es_CO" placeholder="es_CO">
+        <label for="template_body_parameters">Parámetros del cuerpo (opcional)</label>
+        <textarea id="template_body_parameters" name="template_body_parameters" rows="2" placeholder="valor1, valor2"></textarea>
+    </div>
+
+    <div id="flow_fields" style="display:none;">
+        <label for="flow_rule_id">Flow creado</label>
+        <select id="flow_rule_id">
+            <option value="">-- Selecciona un flow guardado --</option>
+            {% for regla in flow_reglas %}
+            <option value="{{ regla.id }}">{{ regla.step or 'sin step' }} | {{ regla.input_text or 'sin input' }}</option>
+            {% endfor %}
+        </select>
+        <label for="flow_cta">CTA del flow</label>
+        <input type="text" id="flow_cta" name="flow_cta" placeholder="Abrir flow">
+        <label for="flow_id">ID del flow</label>
+        <input type="text" id="flow_id" name="flow_id" placeholder="123456789">
+        <label for="flow_name">Nombre del flow</label>
+        <input type="text" id="flow_name" name="flow_name" placeholder="mi_flow">
+        <label for="flow_message_version">Versión del flow</label>
+        <input type="text" id="flow_message_version" name="flow_message_version" value="3" placeholder="3">
+        <label for="flow_mode">Modo (opcional)</label>
+        <input type="text" id="flow_mode" name="flow_mode" placeholder="draft o published">
+        <label for="flow_token">Token (opcional)</label>
+        <input type="text" id="flow_token" name="flow_token" placeholder="token opcional">
+        <label for="flow_action">Acción (opcional)</label>
+        <input type="text" id="flow_action" name="flow_action" placeholder="navigate / data_exchange">
+        <label for="flow_action_payload">flow_action_payload (JSON opcional)</label>
+        <textarea id="flow_action_payload" name="flow_action_payload" rows="2" placeholder='{"screen":"WELCOME"}'></textarea>
+        <label for="flow_header">Encabezado (opcional)</label>
+        <input type="text" id="flow_header" name="flow_header" placeholder="Completa tus datos">
+        <label for="flow_footer">Pie (opcional)</label>
+        <input type="text" id="flow_footer" name="flow_footer" placeholder="Puedes cancelarlo cuando quieras">
+    </div>
 
     <label for="media" id="label_media_file" style="display:none;">Subir archivo:</label>
     <input type="file" id="media" name="media[]" multiple style="display:none;">
@@ -193,17 +239,24 @@
 </table>
 
 <script id="reglas-data" type="application/json">{{ reglas|tojson }}</script>
+<script id="flow-reglas-data" type="application/json">{{ flow_reglas|tojson }}</script>
 <script>
 function toggleMediaFields() {
     const tipo = document.getElementById('tipo').value;
-    const show = ['image', 'video', 'audio', 'document'].includes(tipo);
+    const showMedia = ['image', 'video', 'audio', 'document'].includes(tipo);
+    const showTemplate = tipo === 'template';
+    const showFlow = tipo === 'flow';
     const mediaInput = document.getElementById('media');
-    const mediaUrl   = document.getElementById('media_url');
-    mediaInput.style.display = show ? 'block' : 'none';
-    document.getElementById('label_media_file').style.display = show ? 'block' : 'none';
-    mediaUrl.style.display = show ? 'block' : 'none';
-    document.getElementById('label_media_url').style.display = show ? 'block' : 'none';
-    if (!show) {
+    const mediaUrl = document.getElementById('media_url');
+
+    mediaInput.style.display = showMedia ? 'block' : 'none';
+    document.getElementById('label_media_file').style.display = showMedia ? 'block' : 'none';
+    mediaUrl.style.display = showMedia ? 'block' : 'none';
+    document.getElementById('label_media_url').style.display = showMedia ? 'block' : 'none';
+    document.getElementById('template_fields').style.display = showTemplate ? 'block' : 'none';
+    document.getElementById('flow_fields').style.display = showFlow ? 'block' : 'none';
+
+    if (!showMedia) {
         mediaInput.value = '';
         mediaUrl.value = '';
     }
@@ -264,6 +317,92 @@ reglaSelect && reglaSelect.addEventListener('change', (event) => {
 if (reglaSelect) {
     mostrarDetalleRegla(reglaSelect.value);
 }
+
+
+const flowReglasRaw = document.getElementById('flow-reglas-data');
+let flowReglas = [];
+if (flowReglasRaw) {
+    try {
+        flowReglas = JSON.parse(flowReglasRaw.textContent);
+    } catch (err) {
+        console.error('No se pudo parsear la información de flows', err);
+    }
+}
+
+function safeParseJson(value) {
+    if (!value) return null;
+    try {
+        return JSON.parse(value);
+    } catch (err) {
+        return null;
+    }
+}
+
+const flowRuleSelect = document.getElementById('flow_rule_id');
+if (flowRuleSelect) {
+    flowRuleSelect.addEventListener('change', (event) => {
+        const selected = flowReglas.find((item) => String(item.id) === String(event.target.value));
+        if (!selected) return;
+        const flowOptions = safeParseJson(selected.opciones) || {};
+        const assign = (id, value) => {
+            const el = document.getElementById(id);
+            if (el) el.value = value || '';
+        };
+        assign('flow_cta', flowOptions.flow_cta || flowOptions.cta);
+        assign('flow_id', flowOptions.flow_id);
+        assign('flow_name', flowOptions.flow_name);
+        assign('flow_message_version', flowOptions.flow_message_version || flowOptions.version || '3');
+        assign('flow_mode', flowOptions.mode);
+        assign('flow_token', flowOptions.flow_token || flowOptions.token);
+        assign('flow_action', flowOptions.flow_action || flowOptions.action);
+        assign('flow_header', flowOptions.flow_header || flowOptions.header);
+        assign('flow_footer', flowOptions.flow_footer || flowOptions.footer);
+        const payload = flowOptions.flow_action_payload || '';
+        assign('flow_action_payload', payload && typeof payload === 'object' ? JSON.stringify(payload) : payload);
+        const msgEl = document.querySelector('textarea[name="mensaje"]');
+        if (msgEl && !msgEl.value.trim()) {
+            msgEl.value = selected.respuesta || '';
+        }
+    });
+}
+
+const templateSelect = document.getElementById('template_name');
+const loadTemplatesButton = document.getElementById('load_templates');
+
+async function loadTemplateOptions() {
+    if (!templateSelect) return;
+    loadTemplatesButton && (loadTemplatesButton.disabled = true);
+    try {
+        const response = await fetch('/api/plantillas?limit=100');
+        const payload = await response.json();
+        if (!response.ok || !payload.ok) {
+            throw new Error(payload.error || 'No se pudieron cargar plantillas');
+        }
+        const templates = Array.isArray(payload.data) ? payload.data : [];
+        templateSelect.innerHTML = '<option value="">-- Selecciona una plantilla --</option>';
+        templates.forEach((item) => {
+            const option = document.createElement('option');
+            option.value = item.name || '';
+            option.textContent = `${item.name || 'sin nombre'} (${item.status || 'N/A'})`;
+            option.dataset.language = item.language || 'es_CO';
+            templateSelect.appendChild(option);
+        });
+    } catch (err) {
+        alert(err.message || 'No se pudieron cargar plantillas');
+    } finally {
+        loadTemplatesButton && (loadTemplatesButton.disabled = false);
+    }
+}
+
+loadTemplatesButton && loadTemplatesButton.addEventListener('click', loadTemplateOptions);
+templateSelect && templateSelect.addEventListener('change', (event) => {
+    const option = event.target.selectedOptions?.[0];
+    const lang = option?.dataset?.language;
+    const languageInput = document.getElementById('template_language_code');
+    if (lang && languageInput && !languageInput.value.trim()) {
+        languageInput.value = lang;
+    }
+});
 
 function initUserSelector(container) {
     const searchInput = container.querySelector('[data-user-search]');
