@@ -46,6 +46,10 @@ from services.db import (
     obtener_ultimo_mensaje_cliente_info,
 )
 from services.normalize_text import normalize_text
+from services.chat_automation import (
+    lock_chat_automation_due_to_advisor,
+    set_chat_automation_settings,
+)
 from routes.configuracion import _ensure_ia_config_table
 
 chat_bp = Blueprint('chat', __name__)
@@ -453,6 +457,45 @@ def _fetch_chat_states(cursor, numeros: list[str]) -> dict[str, tuple[str | None
         for row in cursor.fetchall()
         if row and row[0]
     }
+
+
+def _fetch_chat_automation_settings(cursor, numeros: list[str]) -> dict[str, dict[str, bool]]:
+    placeholders, params = _build_in_clause_params(numeros)
+    if not placeholders:
+        return {}
+    cursor.execute(
+        f"""
+        SELECT numero, ai_enabled, followup_enabled, locked_by_advisor
+          FROM chat_automation_settings
+         WHERE numero IN ({placeholders})
+        """,
+        params,
+    )
+    return {
+        row[0]: {
+            "ai_enabled": bool(row[1]),
+            "followup_enabled": bool(row[2]),
+            "locked_by_advisor": bool(row[3]),
+        }
+        for row in cursor.fetchall()
+        if row and row[0]
+    }
+
+
+def _fetch_advisor_chats(cursor, numeros: list[str]) -> set[str]:
+    placeholders, params = _build_in_clause_params(numeros)
+    if not placeholders:
+        return set()
+    cursor.execute(
+        f"""
+        SELECT DISTINCT numero
+          FROM mensajes
+         WHERE numero IN ({placeholders})
+           AND tipo LIKE 'asesor%%'
+        """,
+        params,
+    )
+    return {row[0] for row in cursor.fetchall() if row and row[0]}
 
 
 def _fetch_user_role_keywords(cursor, user_ids: list[int]) -> dict[int, list[str]]:
@@ -1154,6 +1197,52 @@ def toggle_ai_enabled():
 
     return jsonify({"ok": True, "enabled": bool(enabled)})
 
+
+@chat_bp.route('/chat_toggle_ai', methods=['POST'])
+def chat_toggle_ai():
+    if "user" not in session:
+        return jsonify({"ok": False, "error": "No autorizado"}), 401
+    payload = request.get_json(silent=True) or {}
+    numero = (payload.get("numero") or "").strip()
+    enabled_raw = payload.get("enabled")
+    enabled = str(enabled_raw).lower() in {"1", "true", "t", "yes", "on"}
+    if not numero:
+        return jsonify({"ok": False, "error": "Número requerido"}), 400
+
+    conn = get_connection()
+    c = conn.cursor()
+    try:
+        if not _require_chat_access(c, numero):
+            return jsonify({"ok": False, "error": "No autorizado"}), 403
+    finally:
+        conn.close()
+
+    status = set_chat_automation_settings(numero, ai_enabled=enabled)
+    return jsonify({"ok": True, **status})
+
+
+@chat_bp.route('/chat_toggle_followup', methods=['POST'])
+def chat_toggle_followup():
+    if "user" not in session:
+        return jsonify({"ok": False, "error": "No autorizado"}), 401
+    payload = request.get_json(silent=True) or {}
+    numero = (payload.get("numero") or "").strip()
+    enabled_raw = payload.get("enabled")
+    enabled = str(enabled_raw).lower() in {"1", "true", "t", "yes", "on"}
+    if not numero:
+        return jsonify({"ok": False, "error": "Número requerido"}), 400
+
+    conn = get_connection()
+    c = conn.cursor()
+    try:
+        if not _require_chat_access(c, numero):
+            return jsonify({"ok": False, "error": "No autorizado"}), 403
+    finally:
+        conn.close()
+
+    status = set_chat_automation_settings(numero, followup_enabled=enabled)
+    return jsonify({"ok": True, **status})
+
 @chat_bp.route('/get_chat/<numero>')
 def get_chat(numero):
     if "user" not in session:
@@ -1542,6 +1631,7 @@ def send_message():
     row = get_chat_state(numero)
     step = row[0] if row else ''
     current_state = row[2] if row and len(row) > 2 else None
+    lock_chat_automation_due_to_advisor(numero)
     _schedule_followup_messages(numero, step)
     if tipo_respuesta == 'flow':
         next_state = 'atencion'
@@ -1650,6 +1740,11 @@ def get_chat_list():
     first_client_types = _fetch_first_client_type_by_chat(c, numeros)
     roles_by_chat = _fetch_chat_roles(c, numeros)
     states_by_chat = _fetch_chat_states(c, numeros)
+    try:
+        automation_settings_by_chat = _fetch_chat_automation_settings(c, numeros)
+    except Exception:
+        automation_settings_by_chat = {}
+    advisor_chats = _fetch_advisor_chats(c, numeros)
     rules_cache: dict[str, list] = {}
     assigned_user_ids = [uid for uid, _name in assignments_by_chat.values() if uid]
     user_role_keywords = _fetch_user_role_keywords(c, assigned_user_ids)
@@ -1829,6 +1924,12 @@ def get_chat_list():
                 inicial_rol = role_keywords[0][0].upper()
 
         estado_def = chat_state_def_map.get(estado) if estado else None
+        automation_settings = automation_settings_by_chat.get(numero, {})
+        locked_by_advisor = numero in advisor_chats or bool(
+            automation_settings.get("locked_by_advisor")
+        )
+        ai_enabled = bool(automation_settings.get("ai_enabled", True)) and not locked_by_advisor
+        followup_enabled = bool(automation_settings.get("followup_enabled", True)) and not locked_by_advisor
 
         chats.append({
             "numero": numero,
@@ -1848,6 +1949,9 @@ def get_chat_list():
             "last_timestamp": last_ts,
             "last_message": ultimo,
             "first_link_url": primer_link,
+            "ai_enabled": ai_enabled,
+            "followup_enabled": followup_enabled,
+            "locked_by_advisor": locked_by_advisor,
         })
     if profiles_updated:
         conn.commit()
@@ -2161,6 +2265,8 @@ def send_image():
         return jsonify({'error': error_reason or 'No se pudo enviar la imagen.'}), 502
     row = get_chat_state(numero)
     step = row[0] if row else ''
+    if origen != 'bot':
+        lock_chat_automation_due_to_advisor(numero)
     _schedule_followup_messages(numero, step)
     if origen != 'bot':
         update_chat_state(numero, step, 'asesor')
@@ -2215,6 +2321,7 @@ def send_document():
         return jsonify({'error': error_reason or 'No se pudo enviar el documento.'}), 502
     row = get_chat_state(numero)
     step = row[0] if row else ''
+    lock_chat_automation_due_to_advisor(numero)
     _schedule_followup_messages(numero, step)
     update_chat_state(numero, step, 'asesor')
 
@@ -2454,6 +2561,8 @@ def send_audio():
         )
     row = get_chat_state(numero)
     step = row[0] if row else ''
+    if origen != 'bot':
+        lock_chat_automation_due_to_advisor(numero)
     _schedule_followup_messages(numero, step)
     if origen != 'bot':
         update_chat_state(numero, step, 'asesor')
@@ -2565,6 +2674,8 @@ def send_video():
             return jsonify({'error': error_reason or 'No se pudo enviar el video.'}), 502
     row = get_chat_state(numero)
     step = row[0] if row else ''
+    if origen != 'bot':
+        lock_chat_automation_due_to_advisor(numero)
     _schedule_followup_messages(numero, step)
     if origen != 'bot':
         update_chat_state(numero, step, 'asesor')

@@ -150,6 +150,8 @@
   <div id="contextMenu" class="context-menu"><div id="replyAction">Responder</div></div>
   <div id="chatContextMenu" class="context-menu chat-context-menu">
     <div id="chatAliasAction">Asignar alias</div>
+    <div id="chatToggleAiAction">Desactivar IA</div>
+    <div id="chatToggleFollowupAction">Desactivar seguimiento</div>
     <div id="chatFinishAction" class="danger-action">Finalizar chat</div>
     <div id="chatDeleteAction" class="danger-action">Eliminar chat</div>
     <div class="menu-divider"></div>
@@ -347,6 +349,8 @@
       const replyAction = document.getElementById('replyAction');
       const chatContextMenu = document.getElementById('chatContextMenu');
       const chatAliasAction = document.getElementById('chatAliasAction');
+      const chatToggleAiAction = document.getElementById('chatToggleAiAction');
+      const chatToggleFollowupAction = document.getElementById('chatToggleFollowupAction');
       const chatFinishAction = document.getElementById('chatFinishAction');
       const chatDeleteAction = document.getElementById('chatDeleteAction');
       const chatFinishButton = document.getElementById('chatFinishButton');
@@ -1740,6 +1744,18 @@
         setSectionExpanded(chatUsersSection, false);
         buildChatRoleOptions(chatData);
         buildChatUserOptions(chatData);
+        if (chatToggleAiAction) {
+          const aiEnabled = chatData.ai_enabled !== false;
+          chatToggleAiAction.textContent = aiEnabled ? 'Desactivar IA' : 'IA desactivada';
+          chatToggleAiAction.classList.toggle('disabled', !aiEnabled);
+        }
+        if (chatToggleFollowupAction) {
+          const followupEnabled = chatData.followup_enabled !== false;
+          chatToggleFollowupAction.textContent = followupEnabled
+            ? 'Desactivar seguimiento'
+            : 'Seguimiento desactivado';
+          chatToggleFollowupAction.classList.toggle('disabled', !followupEnabled);
+        }
       }
 
       function buildChatRoleOptions(chatData) {
@@ -1918,6 +1934,56 @@
           body: JSON.stringify({ numero: chatData.numero, nombre: trimmed })
         }).then(() => fetchChatList());
       });
+
+      function toggleChatAutomation(endpoint, numero, enabled, fallbackMessage) {
+        return fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ numero, enabled })
+        }).then(async resp => {
+          const payload = await resp.json().catch(() => ({}));
+          if (!resp.ok || payload.ok === false) {
+            throw new Error(payload.error || fallbackMessage);
+          }
+          return payload;
+        });
+      }
+
+      if (chatToggleAiAction) {
+        chatToggleAiAction.addEventListener('click', () => {
+          if (!chatContextTarget || chatToggleAiAction.classList.contains('disabled')) return;
+          const chatData = chatContextTarget;
+          hideChatContextMenu();
+          toggleChatAutomation('/chat_toggle_ai', chatData.numero, false, 'No se pudo desactivar IA')
+            .then(() => {
+              fetchChatList();
+              if (currentChat === chatData.numero) loadMessages();
+            })
+            .catch(err => {
+              console.error(err);
+              alert(err.message || 'No se pudo desactivar IA');
+            });
+        });
+      }
+
+      if (chatToggleFollowupAction) {
+        chatToggleFollowupAction.addEventListener('click', () => {
+          if (!chatContextTarget || chatToggleFollowupAction.classList.contains('disabled')) return;
+          const chatData = chatContextTarget;
+          hideChatContextMenu();
+          toggleChatAutomation(
+            '/chat_toggle_followup',
+            chatData.numero,
+            false,
+            'No se pudo desactivar seguimiento'
+          )
+            .then(() => fetchChatList())
+            .catch(err => {
+              console.error(err);
+              alert(err.message || 'No se pudo desactivar seguimiento');
+            });
+        });
+      }
 
       function resetActiveChatIfMatches(numero) {
         if (currentChat !== numero) return;
