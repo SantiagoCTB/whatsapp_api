@@ -334,6 +334,7 @@
     .estado-sin_respuesta { background-color: #ff4d4f; color: var(--text-light); }
     .estado-espera_usuario { background-color: #ffc107; color: var(--text-main); }
     .estado-asesor { background-color: #28a745; color: var(--text-light); }
+    .estado-atencion { background-color: #fd7e14; color: var(--text-light); }
     .state-color-dot {
       display: inline-block;
       width: 10px;

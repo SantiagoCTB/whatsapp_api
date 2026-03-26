@@ -1543,7 +1543,10 @@ def send_message():
     step = row[0] if row else ''
     current_state = row[2] if row and len(row) > 2 else None
     _schedule_followup_messages(numero, step)
-    next_state = 'asesor' if current_state else None
+    if tipo_respuesta == 'flow':
+        next_state = 'atencion'
+    else:
+        next_state = 'asesor' if current_state else None
     update_chat_state(numero, step, next_state)
     return jsonify({'status': 'success'}), 200
 

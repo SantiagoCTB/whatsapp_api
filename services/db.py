@@ -69,6 +69,14 @@ TENANTS_TABLE_DDL = """
 
 CHAT_STATE_DEFAULTS = [
     {
+        "key": "atencion",
+        "label": "Atención",
+        "color": "#fd7e14",
+        "text_color": "#ffffff",
+        "priority": 60,
+        "visible": 1,
+    },
+    {
         "key": "esperando_respuesta",
         "label": "Esperando respuesta",
         "color": "#f0ad4e",
