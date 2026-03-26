@@ -55,6 +55,9 @@ from services.ia_client import generate_response
 from services.catalog import extract_text_from_image, find_relevant_pages
 from services.ia_client import generate_response_with_image
 from services.assignments import assign_chat_to_active_user
+from services.chat_automation import (
+    get_chat_automation_status,
+)
 
 webhook_bp = Blueprint('webhook', __name__)
 logger = logging.getLogger(__name__)
@@ -138,6 +141,26 @@ def _is_ai_enabled() -> bool:
         return True
     finally:
         conn.close()
+
+
+def _is_chat_ai_enabled(numero: str | None) -> bool:
+    if not numero:
+        return True
+    try:
+        status = get_chat_automation_status(numero)
+    except Exception:
+        return True
+    return bool(status.get("ai_enabled"))
+
+
+def _is_chat_followup_enabled(numero: str | None) -> bool:
+    if not numero:
+        return True
+    try:
+        status = get_chat_automation_status(numero)
+    except Exception:
+        return True
+    return bool(status.get("followup_enabled"))
 
 
 def _clear_followup_timers(numero: str) -> None:
@@ -695,6 +718,14 @@ def _send_followup_if_pending(
 
 
 def _schedule_followup_messages(numero: str, message_step: str) -> None:
+    if not _is_chat_followup_enabled(numero):
+        logger.info(
+            "Seguimiento desactivado para el chat; se omite programación",
+            extra={"numero": numero},
+        )
+        _clear_followup_timers(numero)
+        return
+
     with followup_lock:
         existing = [
             timer for timer in followup_timers.get(numero, [])
@@ -715,7 +746,7 @@ def _schedule_followup_messages(numero: str, message_step: str) -> None:
     message_step_norm = _normalize_step_name(message_step)
     if message_step_norm in {"ia", "ia_chat"}:
         active_hours, active_days = _get_schedule_for_step(message_step, None)
-        if not _is_ia_rule_active(active_hours, active_days):
+        if not _is_ia_rule_active(active_hours, active_days, numero=numero):
             return
     config = _get_ia_followup_config()
     if not config:
@@ -1314,8 +1345,15 @@ def _is_schedule_active(
     return False
 
 
-def _is_ia_rule_active(active_hours: str | None, active_days: str | None) -> bool:
+def _is_ia_rule_active(
+    active_hours: str | None,
+    active_days: str | None,
+    *,
+    numero: str | None = None,
+) -> bool:
     if not _is_ai_enabled():
+        return False
+    if not _is_chat_ai_enabled(numero):
         return False
     if active_hours or active_days:
         return _is_schedule_active(active_hours, active_days)
@@ -1845,6 +1883,10 @@ def _reply_with_ai_image(
     history_step: str | None = None,
     message_step: str | None = None,
 ) -> bool:
+    if not _is_chat_ai_enabled(numero):
+        logger.info("IA desactivada para el chat; se omite respuesta con imagen", extra={"numero": numero})
+        return False
+
     image_url = _normalize_media_url(media_url)
     if not image_url:
         logger.info("Sin URL de imagen para enviar a la IA", extra={"numero": numero})
@@ -1958,6 +2000,9 @@ def _reply_with_ai(
     allow_empty_catalog: bool = False,
 ) -> bool:
     """Envía el mensaje al modelo de IA y responde al usuario."""
+    if not _is_chat_ai_enabled(numero):
+        logger.info("IA desactivada para el chat; se omite respuesta", extra={"numero": numero})
+        return False
 
     prompt = (user_text or "").strip() or obtener_ultimo_mensaje_cliente(numero)
     if not prompt:
@@ -2530,7 +2575,7 @@ def handle_option_reply(numero, option_id, platform: str | None = None):
                 row[0],
                 matched_text_norm=normalize_text(option_id),
             )
-            if is_ia and not _is_ia_rule_active(row[9], row[10]):
+            if is_ia and not _is_ia_rule_active(row[9], row[10], numero=numero):
                 continue
             if _normalize_option_value((row[0] or '').strip()) == option_norm:
                 return row
@@ -2540,7 +2585,7 @@ def handle_option_reply(numero, option_id, platform: str | None = None):
                 row[0],
                 matched_text_norm=normalize_text(option_id),
             )
-            if is_ia and not _is_ia_rule_active(row[9], row[10]):
+            if is_ia and not _is_ia_rule_active(row[9], row[10], numero=numero):
                 continue
             return row
         return None
@@ -2700,7 +2745,7 @@ def dispatch_rule(
         current_step,
         matched_text_norm=matched_text_norm,
     )
-    if use_ia and not _is_ia_rule_active(active_hours, active_days):
+    if use_ia and not _is_ia_rule_active(active_hours, active_days, numero=numero):
         use_ia = False
     if use_ia and current_step_norm == "ia_chat":
         use_ia = False
@@ -2760,7 +2805,7 @@ def dispatch_rule(
         _rule_has_ia_trigger(input_text)
         and _rule_has_non_ia_inputs(input_text)
         and not _rule_input_matches_ia_trigger(matched_text_norm, input_text)
-        and _is_ia_rule_active(active_hours, active_days)
+        and _is_ia_rule_active(active_hours, active_days, numero=numero)
     )
     if should_defer_ia and not next_step:
         set_user_step(numero, "ia_chat")
@@ -2824,6 +2869,7 @@ def advance_steps(numero: str, steps_str: str, visited=None, platform: str | Non
             if _should_use_ia_for_rule(regla[7], step) and not _is_ia_rule_active(
                 active_hours,
                 active_days,
+                numero=numero,
             ):
                 set_user_step(numero, step)
                 return
@@ -2925,6 +2971,7 @@ def process_step_chain(
         if _should_use_ia_for_rule(patt, step, matched_text_norm=text_norm) and not _is_ia_rule_active(
             active_hours,
             active_days,
+            numero=numero,
         ):
             continue
         dispatch_rule(
@@ -2976,7 +3023,7 @@ def process_step_chain(
                     rule_step,
                     matched_text_norm=text_norm,
                 )
-                if is_ia and not _is_ia_rule_active(active_hours, active_days):
+                if is_ia and not _is_ia_rule_active(active_hours, active_days, numero=numero):
                     continue
                 matches.append(row)
                 continue
@@ -2986,7 +3033,7 @@ def process_step_chain(
                     rule_step,
                     matched_text_norm=text_norm,
                 )
-                if is_ia and not _is_ia_rule_active(active_hours, active_days):
+                if is_ia and not _is_ia_rule_active(active_hours, active_days, numero=numero):
                     continue
                 matches.append(row)
         if not matches:
@@ -3018,6 +3065,7 @@ def process_step_chain(
             if _should_use_ia_for_rule(r[7], step, matched_text_norm=text_norm) and not _is_ia_rule_active(
                 active_hours,
                 active_days,
+                numero=numero,
             ):
                 continue
             selected_rule = r
@@ -3208,7 +3256,7 @@ def handle_text_message(
         current_step = get_current_step(numero)
         current_step_norm = _normalize_step_name(current_step)
         _apply_role_for_step(numero, current_step, platform)
-        if not _is_ia_rule_active(*_get_schedule_for_step(current_step, platform)):
+        if not _is_ia_rule_active(*_get_schedule_for_step(current_step, platform), numero=numero):
             return
         if current_step_norm == "ia_chat":
             _reply_with_ai(

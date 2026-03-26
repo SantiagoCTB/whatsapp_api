@@ -753,6 +753,11 @@
     .context-menu .context-option {
       display:block;
     }
+    .context-menu > div.disabled {
+      opacity: 0.6;
+      cursor: default;
+      pointer-events: none;
+    }
     .chat-context-menu {
       position:fixed;
       min-width:220px;
