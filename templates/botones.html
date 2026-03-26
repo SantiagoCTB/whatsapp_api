@@ -96,19 +96,20 @@
     </div>
 
     <div id="flow_fields" style="display:none;">
-        <label for="flow_rule_id">Flow creado</label>
-        <select id="flow_rule_id">
-            <option value="">-- Selecciona un flow guardado --</option>
-            {% for regla in flow_reglas %}
-            <option value="{{ regla.id }}">{{ regla.step or 'sin step' }} | {{ regla.input_text or 'sin input' }}</option>
+        <label for="flow_existing_id">Flow existente en WhatsApp</label>
+        <select id="flow_existing_id" name="flow_existing_id">
+            <option value="">-- Selecciona un flow de Meta --</option>
+            {% for flow in available_flows or [] %}
+            <option value="{{ flow.id }}">{{ flow.name }} · {{ flow.id }} · {{ flow.status }}</option>
             {% endfor %}
         </select>
+        {% if available_flows_error %}
+        <p class="helper-text">{{ available_flows_error }}</p>
+        {% else %}
+        <p class="helper-text">Se listan flows existentes del WABA actual.</p>
+        {% endif %}
         <label for="flow_cta">CTA del flow</label>
-        <input type="text" id="flow_cta" name="flow_cta" placeholder="Abrir flow">
-        <label for="flow_id">ID del flow</label>
-        <input type="text" id="flow_id" name="flow_id" placeholder="123456789">
-        <label for="flow_name">Nombre del flow</label>
-        <input type="text" id="flow_name" name="flow_name" placeholder="mi_flow">
+        <input type="text" id="flow_cta" name="flow_cta" placeholder="Se completa automáticamente">
         <label for="flow_message_version">Versión del flow</label>
         <input type="text" id="flow_message_version" name="flow_message_version" value="3" placeholder="3">
         <label for="flow_mode">Modo (opcional)</label>
@@ -319,52 +320,31 @@ if (reglaSelect) {
 }
 
 
-const flowReglasRaw = document.getElementById('flow-reglas-data');
-let flowReglas = [];
-if (flowReglasRaw) {
-    try {
-        flowReglas = JSON.parse(flowReglasRaw.textContent);
-    } catch (err) {
-        console.error('No se pudo parsear la información de flows', err);
-    }
-}
 
-function safeParseJson(value) {
-    if (!value) return null;
-    try {
-        return JSON.parse(value);
-    } catch (err) {
-        return null;
+const flowSelect = document.getElementById('flow_existing_id');
+flowSelect && flowSelect.addEventListener('change', (event) => {
+    const option = event.target.selectedOptions?.[0];
+    const flowNameRaw = option ? option.textContent.split('·')[0].trim() : '';
+    const ctaInput = document.getElementById('flow_cta');
+    if (!ctaInput) return;
+    if (!flowNameRaw) {
+        if (!ctaInput.dataset.userEdited) ctaInput.value = '';
+        return;
     }
-}
+    const cta = `Abrir ${flowNameRaw}`.trim().slice(0, 30);
+    if (!ctaInput.dataset.userEdited) {
+        ctaInput.value = cta || 'Abrir flow';
+    }
+});
 
-const flowRuleSelect = document.getElementById('flow_rule_id');
-if (flowRuleSelect) {
-    flowRuleSelect.addEventListener('change', (event) => {
-        const selected = flowReglas.find((item) => String(item.id) === String(event.target.value));
-        if (!selected) return;
-        const flowOptions = safeParseJson(selected.opciones) || {};
-        const assign = (id, value) => {
-            const el = document.getElementById(id);
-            if (el) el.value = value || '';
-        };
-        assign('flow_cta', flowOptions.flow_cta || flowOptions.cta);
-        assign('flow_id', flowOptions.flow_id);
-        assign('flow_name', flowOptions.flow_name);
-        assign('flow_message_version', flowOptions.flow_message_version || flowOptions.version || '3');
-        assign('flow_mode', flowOptions.mode);
-        assign('flow_token', flowOptions.flow_token || flowOptions.token);
-        assign('flow_action', flowOptions.flow_action || flowOptions.action);
-        assign('flow_header', flowOptions.flow_header || flowOptions.header);
-        assign('flow_footer', flowOptions.flow_footer || flowOptions.footer);
-        const payload = flowOptions.flow_action_payload || '';
-        assign('flow_action_payload', payload && typeof payload === 'object' ? JSON.stringify(payload) : payload);
-        const msgEl = document.querySelector('textarea[name="mensaje"]');
-        if (msgEl && !msgEl.value.trim()) {
-            msgEl.value = selected.respuesta || '';
-        }
-    });
-}
+const flowCtaInput = document.getElementById('flow_cta');
+flowCtaInput && flowCtaInput.addEventListener('input', () => {
+    if (flowCtaInput.value.trim()) {
+        flowCtaInput.dataset.userEdited = '1';
+    } else {
+        delete flowCtaInput.dataset.userEdited;
+    }
+});
 
 const templateSelect = document.getElementById('template_name');
 const loadTemplatesButton = document.getElementById('load_templates');

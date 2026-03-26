@@ -3657,6 +3657,9 @@ def botones():
     try:
         opciones_expr = _botones_opciones_column(c, conn)
         categoria_expr = _botones_categoria_column(c, conn)
+        available_flows, available_flows_error = _list_existing_whatsapp_flows(
+            tenants.get_current_tenant()
+        )
         if request.method == 'POST':
             selected_users = _selected_user_ids(request.form, c)
             # Importar botones desde Excel
@@ -3782,9 +3785,20 @@ def botones():
                             medias.append((url, mime))
 
                 elif tipo == 'flow':
+                    selected_flow_id = (request.form.get('flow_existing_id') or '').strip()
+                    selected_flow = next(
+                        (flow for flow in available_flows if flow.get('id') == selected_flow_id),
+                        None,
+                    ) if selected_flow_id else None
+
+                    selected_flow_name = (selected_flow or {}).get('name') or ''
+                    flow_cta_default = f"Abrir {selected_flow_name}".strip() if selected_flow_name else ''
+                    if len(flow_cta_default) > 30:
+                        flow_cta_default = flow_cta_default[:30]
+
                     flow_options = {
-                        'flow_cta': (request.form.get('flow_cta') or '').strip(),
-                        'flow_id': (request.form.get('flow_id') or '').strip(),
+                        'flow_cta': (request.form.get('flow_cta') or '').strip() or flow_cta_default or 'Abrir flow',
+                        'flow_id': selected_flow_id or (request.form.get('flow_id') or '').strip(),
                         'flow_name': (request.form.get('flow_name') or '').strip(),
                         'flow_message_version': (request.form.get('flow_message_version') or '3').strip() or '3',
                         'mode': (request.form.get('flow_mode') or '').strip(),
@@ -3793,6 +3807,8 @@ def botones():
                         'flow_header': (request.form.get('flow_header') or '').strip(),
                         'flow_footer': (request.form.get('flow_footer') or '').strip(),
                     }
+                    if flow_options.get('flow_id'):
+                        flow_options.pop('flow_name', None)
                     flow_action_payload_raw = (request.form.get('flow_action_payload') or '').strip()
                     if flow_action_payload_raw:
                         try:
@@ -3903,7 +3919,7 @@ def botones():
                 flow_reglas.append(regla_data)
         c.execute("SELECT id, username FROM usuarios ORDER BY username")
         usuarios = [{'id': row[0], 'username': row[1]} for row in c.fetchall()]
-        return render_template('botones.html', botones=botones, reglas=reglas, flow_reglas=flow_reglas, usuarios=usuarios)
+        return render_template('botones.html', botones=botones, reglas=reglas, flow_reglas=flow_reglas, available_flows=available_flows, available_flows_error=available_flows_error, usuarios=usuarios)
     finally:
         conn.close()
 
