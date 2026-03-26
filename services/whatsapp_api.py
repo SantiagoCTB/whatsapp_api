@@ -1390,6 +1390,53 @@ def enviar_mensaje(
             }
         }
 
+    elif tipo_respuesta == 'template':
+        if isinstance(opciones, str):
+            opciones_str = opciones.strip()
+            if not opciones_str:
+                opts = {}
+            else:
+                try:
+                    opts = json.loads(opciones_str)
+                except json.JSONDecodeError:
+                    opts = {}
+        elif isinstance(opciones, dict):
+            opts = dict(opciones)
+        else:
+            opts = {}
+
+        template_name = (opts.get('template_name') or opts.get('name') or '').strip()
+        language_code = (opts.get('language_code') or opts.get('language') or 'es_CO').strip() or 'es_CO'
+        body_parameters_raw = opts.get('body_parameters') or []
+        body_parameters = []
+        if isinstance(body_parameters_raw, list):
+            body_parameters = [str(item).strip() for item in body_parameters_raw if str(item).strip()]
+        elif isinstance(body_parameters_raw, str):
+            body_parameters = [item.strip() for item in re.split(r'[\n,]+', body_parameters_raw) if item and item.strip()]
+
+        if not template_name:
+            return _fail('Debes seleccionar una plantilla para el botón de tipo template.')
+
+        components = []
+        if body_parameters:
+            components.append(
+                {
+                    'type': 'body',
+                    'parameters': [{'type': 'text', 'text': value} for value in body_parameters],
+                }
+            )
+
+        data = {
+            'messaging_product': 'whatsapp',
+            'to': numero,
+            'type': 'template',
+            'template': {
+                'name': template_name,
+                'language': {'code': language_code},
+                'components': components,
+            },
+        }
+
     elif tipo_respuesta == 'flow':
         if isinstance(opciones, str):
             opciones_str = opciones.strip()
