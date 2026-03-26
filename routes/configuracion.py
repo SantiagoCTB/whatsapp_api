@@ -3657,6 +3657,9 @@ def botones():
     try:
         opciones_expr = _botones_opciones_column(c, conn)
         categoria_expr = _botones_categoria_column(c, conn)
+        available_flows, available_flows_error = _list_existing_whatsapp_flows(
+            tenants.get_current_tenant()
+        )
         if request.method == 'POST':
             selected_users = _selected_user_ids(request.form, c)
             # Importar botones desde Excel
@@ -3755,32 +3758,85 @@ def botones():
             # Agregar botón manual
             elif 'mensaje' in request.form:
                 nombre = request.form.get('nombre')
-                nuevo_mensaje = request.form['mensaje']
-                tipo = request.form.get('tipo')
-                media_files = request.files.getlist('media')
+                nuevo_mensaje = request.form.get('mensaje', '')
+                tipo = (request.form.get('tipo') or 'texto').strip()
+                opciones_value = None
                 medias = []
-                for media_file in media_files:
-                    if media_file and media_file.filename:
-                        filename = secure_filename(media_file.filename)
-                        unique = f"{uuid.uuid4().hex}_{filename}"
-                        path = os.path.join(_media_root(), unique)
-                        media_file.save(path)
-                        url = url_for(
-                            'static',
-                            filename=tenants.get_uploads_url_path(unique),
-                            _external=True,
-                        )
-                        medias.append((url, media_file.mimetype.split(';', 1)[0]))
-                media_url = request.form.get('media_url', '')
-                urls = [u.strip() for u in re.split(r'[\n,]+', media_url) if u and u.strip()]
-                for url in urls:
-                    ok, mime = _url_ok(url)
-                    if ok:
-                        medias.append((url, mime))
-                if nuevo_mensaje:
+
+                if tipo in {'image', 'video', 'audio', 'document'}:
+                    media_files = request.files.getlist('media')
+                    for media_file in media_files:
+                        if media_file and media_file.filename:
+                            filename = secure_filename(media_file.filename)
+                            unique = f"{uuid.uuid4().hex}_{filename}"
+                            path = os.path.join(_media_root(), unique)
+                            media_file.save(path)
+                            url = url_for(
+                                'static',
+                                filename=tenants.get_uploads_url_path(unique),
+                                _external=True,
+                            )
+                            medias.append((url, media_file.mimetype.split(';', 1)[0]))
+                    media_url = request.form.get('media_url', '')
+                    urls = [u.strip() for u in re.split(r'[\n,]+', media_url) if u and u.strip()]
+                    for url in urls:
+                        ok, mime = _url_ok(url)
+                        if ok:
+                            medias.append((url, mime))
+
+                elif tipo == 'flow':
+                    selected_flow_id = (request.form.get('flow_existing_id') or '').strip()
+                    selected_flow = next(
+                        (flow for flow in available_flows if flow.get('id') == selected_flow_id),
+                        None,
+                    ) if selected_flow_id else None
+
+                    selected_flow_name = (selected_flow or {}).get('name') or ''
+                    flow_cta_default = f"Abrir {selected_flow_name}".strip() if selected_flow_name else ''
+                    if len(flow_cta_default) > 30:
+                        flow_cta_default = flow_cta_default[:30]
+
+                    flow_options = {
+                        'flow_cta': (request.form.get('flow_cta') or '').strip() or flow_cta_default or 'Abrir flow',
+                        'flow_id': selected_flow_id or (request.form.get('flow_id') or '').strip(),
+                        'flow_name': (request.form.get('flow_name') or '').strip(),
+                        'flow_message_version': (request.form.get('flow_message_version') or '3').strip() or '3',
+                        'mode': (request.form.get('flow_mode') or '').strip(),
+                        'flow_token': (request.form.get('flow_token') or '').strip(),
+                        'flow_action': (request.form.get('flow_action') or '').strip(),
+                        'flow_header': (request.form.get('flow_header') or '').strip(),
+                        'flow_footer': (request.form.get('flow_footer') or '').strip(),
+                    }
+                    if flow_options.get('flow_id'):
+                        flow_options.pop('flow_name', None)
+                    flow_action_payload_raw = (request.form.get('flow_action_payload') or '').strip()
+                    if flow_action_payload_raw:
+                        try:
+                            flow_options['flow_action_payload'] = json.loads(flow_action_payload_raw)
+                        except Exception:
+                            flow_options['flow_action_payload'] = flow_action_payload_raw
+                    flow_options = {k: v for k, v in flow_options.items() if v not in (None, '')}
+                    opciones_value = json.dumps(flow_options, ensure_ascii=False) if flow_options else None
+
+                elif tipo == 'template':
+                    body_parameters_raw = (request.form.get('template_body_parameters') or '').strip()
+                    body_parameters = []
+                    if body_parameters_raw:
+                        body_parameters = [
+                            item.strip() for item in re.split(r'[\n,]+', body_parameters_raw) if item and item.strip()
+                        ]
+                    template_options = {
+                        'template_name': (request.form.get('template_name') or '').strip(),
+                        'language_code': (request.form.get('template_language_code') or '').strip(),
+                        'body_parameters': body_parameters,
+                    }
+                    template_options = {k: v for k, v in template_options.items() if v not in (None, '', [])}
+                    opciones_value = json.dumps(template_options, ensure_ascii=False) if template_options else None
+
+                if nuevo_mensaje or tipo in {'flow', 'template'}:
                     c.execute(
                         "INSERT INTO botones (nombre, mensaje, tipo, opciones, categoria) VALUES (%s, %s, %s, %s, %s)",
-                        (nombre, nuevo_mensaje, tipo, None, request.form.get('categoria'))
+                        (nombre, nuevo_mensaje, tipo, opciones_value, request.form.get('categoria'))
                     )
                     boton_id = c.lastrowid
                     for url, mime in medias:
@@ -3836,7 +3892,7 @@ def botones():
             })
         c.execute(
             """
-            SELECT r.id, r.step, r.input_text, r.respuesta, r.tipo,
+            SELECT r.id, r.step, r.input_text, r.respuesta, r.tipo, r.opciones,
                    GROUP_CONCAT(m.media_url SEPARATOR '||') AS media_urls,
                    GROUP_CONCAT(m.media_tipo SEPARATOR '||') AS media_tipos
               FROM reglas r
@@ -3846,19 +3902,24 @@ def botones():
             """
         )
         reglas = []
+        flow_reglas = []
         for row in c.fetchall():
-            reglas.append({
+            regla_data = {
                 'id': row[0],
                 'step': row[1] or '',
                 'input_text': row[2] or '',
                 'respuesta': row[3] or '',
                 'tipo': row[4] or '',
-                'media_urls': row[5] or '',
-                'media_tipos': row[6] or '',
-            })
+                'opciones': row[5] or '',
+                'media_urls': row[6] or '',
+                'media_tipos': row[7] or '',
+            }
+            reglas.append(regla_data)
+            if regla_data['tipo'] == 'flow' and regla_data['opciones']:
+                flow_reglas.append(regla_data)
         c.execute("SELECT id, username FROM usuarios ORDER BY username")
         usuarios = [{'id': row[0], 'username': row[1]} for row in c.fetchall()]
-        return render_template('botones.html', botones=botones, reglas=reglas, usuarios=usuarios)
+        return render_template('botones.html', botones=botones, reglas=reglas, flow_reglas=flow_reglas, available_flows=available_flows, available_flows_error=available_flows_error, usuarios=usuarios)
     finally:
         conn.close()
 
