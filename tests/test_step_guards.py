@@ -288,6 +288,10 @@ def test_handle_text_message_delays_ia_chat(monkeypatch):
     assert update_calls[-1] == ("ia_chat", "espera_usuario")
 
 
+def test_is_agent_mode_accepts_attention_status():
+    assert webhook_module._is_agent_mode(("ia_chat", datetime.now(), "atencion")) is True
+
+
 def test_is_schedule_active_honors_overnight_ranges():
     tzinfo = ZoneInfo("America/Bogota")
     hours = "17:30-07:30"

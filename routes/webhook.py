@@ -1583,7 +1583,7 @@ def _is_ia_chat_pending(row, step: str | None = None) -> bool:
 
 
 def _is_agent_mode(row) -> bool:
-    return _extract_chat_status(row) == 'asesor'
+    return _extract_chat_status(row) in {'asesor', 'atencion'}
 
 
 def _catalog_context_for_prompt(prompt: str):
