@@ -101,6 +101,7 @@ def manage_users():
               FROM usuarios u
          LEFT JOIN user_roles ur ON u.id = ur.user_id
          LEFT JOIN roles r ON ur.role_id = r.id
+             WHERE LOWER(u.username) <> 'superadmin'
           GROUP BY u.id, u.username, u.nombre
           ORDER BY u.username
             '''
