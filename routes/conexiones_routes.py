@@ -184,13 +184,23 @@ def probar_conexion(conexion_id: int):
     if not row:
         return {"ok": False, "error": "Conexión no encontrada."}, 404
 
+    # Optional overrides from request body
+    req_data = request.get_json(silent=True) or {}
+    test_path = (req_data.get("path") or "").strip()
+    test_method = (req_data.get("method") or "").strip().upper()
+    test_body_raw = req_data.get("body")  # None means "use body_template"
+
+    # Construct final URL: base_url + optional path
+    base_url = (row.get("url") or "").rstrip("/")
+    url = f"{base_url}{test_path}" if test_path else base_url
+
     # Build headers dict
-    headers: dict = {}
+    headers: dict = {"Accept": "application/json"}
     if row.get("headers"):
         try:
             parsed = json.loads(row["headers"])
             if isinstance(parsed, dict):
-                headers = parsed
+                headers.update(parsed)
         except (json.JSONDecodeError, TypeError):
             pass
 
@@ -200,7 +210,6 @@ def probar_conexion(conexion_id: int):
     if auth_tipo == "bearer" and auth_valor:
         headers["Authorization"] = f"Bearer {auth_valor}"
     elif auth_tipo == "api_key" and auth_valor:
-        # Expect "Header-Name: value" format
         if ":" in auth_valor:
             key, val = auth_valor.split(":", 1)
             headers[key.strip()] = val.strip()
@@ -211,22 +220,26 @@ def probar_conexion(conexion_id: int):
         encoded = base64.b64encode(auth_valor.encode()).decode()
         headers["Authorization"] = f"Basic {encoded}"
 
-    # Resolve body
-    body_str = (row.get("body_template") or "").strip()
+    # Resolve body: explicit override > body_template from DB
     body_json = None
-    if body_str:
-        try:
-            body_json = json.loads(body_str)
-        except json.JSONDecodeError:
-            body_json = body_str
+    if test_body_raw is not None:
+        body_json = test_body_raw
+    else:
+        body_str = (row.get("body_template") or "").strip()
+        if body_str:
+            try:
+                body_json = json.loads(body_str)
+            except json.JSONDecodeError:
+                body_json = body_str
+
+    method = test_method or (row.get("metodo") or "GET").upper()
 
     try:
-        method = (row.get("metodo") or "GET").upper()
         resp = requests.request(
             method=method,
-            url=row["url"],
+            url=url,
             headers=headers,
-            json=body_json if isinstance(body_json, dict) else None,
+            json=body_json if isinstance(body_json, (dict, list)) else None,
             data=body_json if isinstance(body_json, str) else None,
             timeout=15,
         )
@@ -238,6 +251,7 @@ def probar_conexion(conexion_id: int):
         return {
             "ok": True,
             "status_code": resp.status_code,
+            "url_tested": url,
             "response": resp_body,
         }
     except requests.exceptions.Timeout:

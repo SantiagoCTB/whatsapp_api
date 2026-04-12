@@ -38,8 +38,9 @@
   <label for="cDescripcion">Descripción (opcional)</label>
   <input id="cDescripcion" type="text" placeholder="Consulta el estado de pedidos" />
 
-  <label for="cUrl">URL del endpoint</label>
-  <input id="cUrl" type="url" placeholder="https://api.ejemplo.com/v1/recurso" />
+  <label for="cUrl">URL base de la API</label>
+  <input id="cUrl" type="url" placeholder="https://api.ejemplo.com" />
+  <small class="conexiones-hint">Solo la URL raíz, sin el path (ej: <code>http://kiryapp.agestion.net:63431</code>). El path se define en cada regla del bot.</small>
 
   <label for="cMetodo">Método HTTP</label>
   <select id="cMetodo">
@@ -78,12 +79,37 @@
   </div>
 </section>
 
-<!-- Panel de resultado de prueba -->
+<!-- Panel de prueba -->
 <section class="template-card" id="testSection" hidden>
-  <h3>Resultado de la prueba</h3>
-  <div id="testResult" class="conexiones-result"></div>
-  <div class="action-row">
-    <button id="btnCerrarTest" class="btn-secondary" type="button">Cerrar</button>
+  <h3>Probar conexión</h3>
+  <p id="testBaseUrl" style="font-size:13px;color:#555;margin-bottom:12px;"></p>
+
+  <label for="tPath">Path del endpoint (ruta)</label>
+  <input id="tPath" type="text" placeholder="/api/v1/origins-and-destinies" />
+  <small class="conexiones-hint">Se añade a la URL base. Ejemplo: <code>/api/v1/bearing/by-route/1/2/2026-04-20</code></small>
+
+  <label for="tMethod" style="margin-top:10px;">Método HTTP</label>
+  <select id="tMethod">
+    <option value="GET">GET</option>
+    <option value="POST">POST</option>
+    <option value="PUT">PUT</option>
+    <option value="PATCH">PATCH</option>
+    <option value="DELETE">DELETE</option>
+  </select>
+
+  <div id="tBodyBlock" style="margin-top:10px;">
+    <label for="tBody">Cuerpo JSON (para POST/PUT/PATCH)</label>
+    <textarea id="tBody" rows="6" placeholder='{"customerName": "Juan", "tickets": [...]}'></textarea>
+  </div>
+
+  <div class="action-row" style="margin-top:14px;">
+    <button id="btnEjecutarTest" class="btn-primary" type="button">Ejecutar prueba</button>
+    <button id="btnCerrarTest" class="btn-secondary" type="button">Cancelar</button>
+  </div>
+
+  <div id="testResultBlock" hidden style="margin-top:16px;">
+    <h4 style="margin-bottom:6px;font-size:13px;color:#555;" id="testResultLabel"></h4>
+    <div id="testResult" class="conexiones-result"></div>
   </div>
 </section>
 
@@ -152,6 +178,7 @@
     overflow-y: auto;
   }
   .conexiones-hint { color: #888; font-size: 12px; margin-top: 4px; display: block; }
+  .conexiones-hint code { background: #eee; padding: 1px 4px; border-radius: 3px; font-size: 11px; }
   #authValorBlock { margin-bottom: 0; }
 </style>
 
@@ -300,7 +327,9 @@
   });
 
   document.getElementById('btnCerrarTest').addEventListener('click', () => {
+    testingConexionId = null;
     hide('testSection');
+    hide('testResultBlock');
     show('listaSection');
   });
 
@@ -396,28 +425,85 @@
 
   // ── Test ───────────────────────────────────────────────────────────────────
 
+  let testingConexionId = null;
+
+  function updateTestBodyVisibility() {
+    const m = document.getElementById('tMethod').value;
+    document.getElementById('tBodyBlock').hidden = ['GET', 'DELETE'].includes(m);
+  }
+
+  document.getElementById('tMethod').addEventListener('change', updateTestBodyVisibility);
+
   window.probarConexion = async function (id) {
-    const resultEl = document.getElementById('testResult');
-    resultEl.textContent = 'Ejecutando solicitud...';
+    testingConexionId = id;
+    // Fetch connection to show base URL
+    try {
+      const res = await fetch(`/api/conexiones/${id}`);
+      const json = await res.json();
+      if (json.ok) {
+        document.getElementById('testBaseUrl').textContent =
+          `URL base: ${json.data.url}  •  Auth: ${json.data.auth_tipo}`;
+        document.getElementById('tMethod').value = json.data.metodo || 'GET';
+        updateTestBodyVisibility();
+      }
+    } catch (_) {}
+
+    document.getElementById('tPath').value = '';
+    document.getElementById('tBody').value = '';
+    document.getElementById('testResultBlock').hidden = true;
     hide('formSection');
     hide('listaSection');
     show('testSection');
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  document.getElementById('btnEjecutarTest').addEventListener('click', async () => {
+    const id = testingConexionId;
+    if (!id) return;
+
+    const path   = document.getElementById('tPath').value.trim();
+    const method = document.getElementById('tMethod').value;
+    const bodyRaw = document.getElementById('tBody').value.trim();
+
+    let body = undefined;
+    if (bodyRaw) {
+      try {
+        body = JSON.parse(bodyRaw);
+      } catch {
+        showToast('El cuerpo JSON no es válido.', 'error');
+        return;
+      }
+    }
+
+    const payload = { path, method };
+    if (body !== undefined) payload.body = body;
+
+    const resultEl = document.getElementById('testResult');
+    const labelEl  = document.getElementById('testResultLabel');
+    resultEl.textContent = 'Ejecutando solicitud...';
+    document.getElementById('testResultBlock').hidden = false;
 
     try {
-      const res  = await fetch(`/api/conexiones/${id}/probar`, { method: 'POST' });
+      const res  = await fetch(`/api/conexiones/${id}/probar`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
       const json = await res.json();
       if (json.ok) {
+        labelEl.textContent = `Resultado — ${json.url_tested}`;
         resultEl.textContent =
           `HTTP ${json.status_code}\n\n` +
           JSON.stringify(json.response, null, 2);
       } else {
+        labelEl.textContent = 'Error';
         resultEl.textContent = `Error: ${json.error}`;
       }
     } catch (e) {
+      labelEl.textContent = 'Error de red';
       resultEl.textContent = 'Error de red: ' + e.message;
     }
-  };
+  });
 
   // ── Init ───────────────────────────────────────────────────────────────────
 
