@@ -7,12 +7,23 @@
     <!-- Sidebar -->
     <div class="sidebar">
       {% set session_user = session.get('user') %}
-      {% if session_user %}
-      <div class="sidebar-greeting">Hola {{ session_user }}!</div>
-      {% endif %}
-      <h2>Chats</h2>
-      <div class="sidebar-header">
-        <button id="settingsBtn">⚙️</button>
+      <div class="sidebar-top">
+        {% if session_user %}
+        <div class="user-avatar" aria-hidden="true">{{ session_user[0]|upper }}</div>
+        <div class="sidebar-user-info">
+          <span class="sidebar-username">{{ session_user }}</span>
+          <span class="sidebar-subtitle">Conversaciones</span>
+        </div>
+        {% else %}
+        <div class="sidebar-user-info">
+          <span class="sidebar-username">Chats</span>
+        </div>
+        {% endif %}
+        <button id="settingsBtn" class="icon-btn" aria-label="Configuración" title="Configuración">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+          </svg>
+        </button>
       </div>
       <div id="settingsMenu">
         <a href="{{ url_for('configuracion.reglas') }}">Reglas</a>
@@ -43,9 +54,14 @@
       </div>
       <div class="chat-filters">
         <div class="chat-filters__bar">
-          <input id="buscador" type="text" placeholder="Buscar número…">
+          <div class="search-wrapper">
+            <svg class="search-icon" xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input id="buscador" type="text" placeholder="Buscar conversación…">
+          </div>
           <button type="button" id="filterToggle" class="filter-toggle" aria-expanded="false" aria-label="Mostrar filtros">
-            <span aria-hidden="true">☰</span>
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <line x1="4" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="11" y1="18" x2="13" y2="18"/>
+            </svg>
           </button>
         </div>
         <div id="filterPanel" class="filter-panel" hidden>
@@ -90,26 +106,48 @@
     <!-- Chat Window -->
     <div class="chatWindow" role="region" aria-label="Zona del chat. Arrastra imágenes para prepararlas antes de enviar." tabindex="0">
       <div class="chat-header" aria-live="polite">
-        <button type="button" id="mobileBackBtn" class="chat-header__btn" aria-label="Volver a la lista de chats">←</button>
+        <button type="button" id="mobileBackBtn" class="chat-header__btn" aria-label="Volver a la lista de chats">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
         <img id="mobileChatAvatar" class="chat-header__avatar" alt="Foto de perfil" hidden>
         <div class="chat-header__info">
           <span id="mobileChatTitle" class="chat-header__title">Selecciona un chat</span>
           <span id="mobileChatSubtitle" class="chat-header__subtitle"></span>
         </div>
         <div class="chat-header__actions">
-          <button type="button" id="mobileChatActions" class="chat-header__btn" aria-label="Acciones del chat">⋮</button>
+          <button type="button" id="mobileChatActions" class="chat-header__btn" aria-label="Acciones del chat">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg>
+          </button>
           <button type="button" id="chatFinishButton" class="chat-header__finish" aria-label="Finalizar chat" disabled>Finalizar</button>
         </div>
       </div>
       <div id="botonera"></div>
+      <div id="emptyState" class="empty-state">
+        <div class="empty-state-icon">
+          <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        </div>
+        <h3>Selecciona una conversación</h3>
+        <p>Elige un chat de la lista para empezar a responder</p>
+      </div>
       <div id="chatBox"></div>
       <div id="replyPreview" class="reply-preview"></div>
-      <div class="inputArea">
-        <button id="attachBtn">+</button>
+      <div class="inputArea" id="inputArea">
+        <button id="attachBtn" aria-label="Adjuntar archivo">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        </button>
       <div id="attachMenu" class="attach-menu">
-        <div id="attachImage" class="attach-item" title="Enviar imagen">📷</div>
-        <div id="attachAudio" class="attach-item" title="Grabar audio">🎤</div>
-        <div id="attachVideo" class="attach-item" title="Enviar video">🎥</div>
+        <div id="attachImage" class="attach-item" title="Enviar imagen">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+          <span>Imagen</span>
+        </div>
+        <div id="attachAudio" class="attach-item" title="Grabar audio">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+          <span>Audio</span>
+        </div>
+        <div id="attachVideo" class="attach-item" title="Enviar video">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
+          <span>Video</span>
+        </div>
       </div>
       <div id="imagePreviewChip" class="image-preview-chip" hidden>
         <img id="imagePreviewThumb" alt="Imagen lista para enviar" />
@@ -119,8 +157,12 @@
         <video id="videoPreviewThumb" muted></video>
         <button type="button" id="clearVideoDraft" aria-label="Quitar video">×</button>
       </div>
-      <input id="messageInput" type="text" placeholder="Escribe un mensaje…" spellcheck="true" autocorrect="on" autocapitalize="sentences">
-      <button id="sendBtn">Enviar</button>
+      <div class="input-field-wrapper">
+        <input id="messageInput" type="text" placeholder="Escribe un mensaje…" spellcheck="true" autocorrect="on" autocapitalize="sentences">
+      </div>
+      <button id="sendBtn" aria-label="Enviar mensaje">
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+      </button>
       <input id="imageInput" type="file" accept="image/*" style="display:none;">
       <input id="audioInput" type="file" accept="audio/*" style="display:none;">
       <input id="videoInput" type="file" accept="video/*" style="display:none;">
@@ -131,11 +173,11 @@
         </div>
         <div class="record-controls__actions">
           <button id="startRecord" class="record-controls__btn record-controls__btn--start" title="Grabar">
-            <span class="record-controls__icon" aria-hidden="true">⏺️</span>
+            <svg class="record-controls__icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="12" r="8"/></svg>
             <span>Grabar</span>
           </button>
           <button id="stopRecord" class="record-controls__btn record-controls__btn--stop" title="Detener" disabled>
-            <span class="record-controls__icon" aria-hidden="true">⏹️</span>
+            <svg class="record-controls__icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
             <span>Detener</span>
           </button>
         </div>
@@ -193,6 +235,12 @@
   <script>
     document.addEventListener('DOMContentLoaded', () => {
       let currentChat = null, autoRefresh = null, todosChats = [], lastCount = 0, replyTo = null;
+      const emptyStateEl = document.getElementById('emptyState');
+      function setEmptyState(visible) {
+        if (!emptyStateEl) return;
+        emptyStateEl.style.display = visible ? 'flex' : 'none';
+      }
+      setEmptyState(true);
       let lastIncomingWaId = null;
       let messagesRequestSeq = 0;
       let lastRenderedMessagesSeq = 0;
@@ -1997,6 +2045,7 @@
         botoneraEl.innerHTML = '';
         replyPreviewEl.style.display = 'none';
         replyPreviewEl.innerHTML = '';
+        setEmptyState(true);
         updateMobileChatHeader(null);
         syncMobileLayout();
       }
@@ -2395,6 +2444,7 @@
         if (!socketConnected) {
           schedulePollingFallback();
         }
+        setEmptyState(false);
         updateMobileChatHeader(chatData);
         loadMessages(); loadBotonera();
       }
