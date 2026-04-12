@@ -4,279 +4,490 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Iniciar sesión</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
       theme: {
         extend: {
+          fontFamily: { inter: ['Inter', 'sans-serif'] },
           colors: {
-            primary: '#0ea5e9',
-            secondary: '#14b8a6',
-            'primary-dark': '#0284c7'
+            brand: {
+              50:  '#f0fdf4',
+              100: '#dcfce7',
+              400: '#4ade80',
+              500: '#22c55e',
+              600: '#16a34a',
+              700: '#15803d',
+              800: '#166534',
+              900: '#14532d',
+            }
           }
         }
       }
     }
   </script>
   <style>
-    .animate-blob {
-      animation: blob 8s infinite;
+    body { font-family: 'Inter', sans-serif; }
+
+    /* Fondo con overlay */
+    .bg-overlay::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: rgba(0,0,0,0.45);
+      z-index: 0;
     }
-    .animation-delay-2000 {
-      animation-delay: 2s;
+
+    /* Panel izquierdo: gradiente animado */
+    .brand-panel {
+      background: linear-gradient(145deg, #075e54 0%, #128c7e 40%, #25d366 100%);
+      position: relative;
+      overflow: hidden;
     }
-    .animation-delay-4000 {
-      animation-delay: 4s;
+    .brand-panel::before {
+      content: '';
+      position: absolute;
+      width: 300px; height: 300px;
+      background: rgba(255,255,255,0.07);
+      border-radius: 50%;
+      top: -60px; left: -80px;
     }
-    @keyframes blob {
-      0%,100% { transform: translate(0,0) scale(1); }
-      33% { transform: translate(30px,-50px) scale(1.1); }
-      66% { transform: translate(-20px,20px) scale(0.9); }
+    .brand-panel::after {
+      content: '';
+      position: absolute;
+      width: 200px; height: 200px;
+      background: rgba(255,255,255,0.05);
+      border-radius: 50%;
+      bottom: -40px; right: -50px;
+    }
+
+    /* Inputs */
+    .field-group {
+      position: relative;
+    }
+    .field-group input {
+      width: 100%;
+      padding: 0.75rem 1rem 0.75rem 2.75rem;
+      border: 1.5px solid #e2e8f0;
+      border-radius: 0.625rem;
+      background: #f8fafc;
+      color: #1e293b;
+      font-size: 0.9rem;
+      transition: all 0.2s;
+      outline: none;
+    }
+    .field-group input::placeholder { color: #94a3b8; }
+    .field-group input:focus {
+      border-color: #16a34a;
+      background: #fff;
+      box-shadow: 0 0 0 3px rgba(22,163,74,0.12);
+    }
+    .field-group .field-icon {
+      position: absolute;
+      left: 0.875rem;
+      top: 50%;
+      transform: translateY(-50%);
+      color: #94a3b8;
+      pointer-events: none;
+      transition: color 0.2s;
+    }
+    .field-group:focus-within .field-icon { color: #16a34a; }
+
+    /* Tab bar */
+    .tab-bar {
+      display: flex;
+      background: #f1f5f9;
+      border-radius: 0.625rem;
+      padding: 4px;
+    }
+    .tab-btn {
+      flex: 1;
+      padding: 0.5rem 0.75rem;
+      font-size: 0.85rem;
+      font-weight: 500;
+      border-radius: 0.5rem;
+      transition: all 0.2s;
+      color: #64748b;
+      text-align: center;
+      cursor: pointer;
+      border: none;
+      background: transparent;
+    }
+    .tab-btn.active {
+      background: #fff;
+      color: #15803d;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+    }
+
+    /* Botón principal */
+    .btn-primary {
+      width: 100%;
+      padding: 0.75rem;
+      border-radius: 0.625rem;
+      background: linear-gradient(135deg, #15803d 0%, #16a34a 100%);
+      color: #fff;
+      font-weight: 600;
+      font-size: 0.95rem;
+      letter-spacing: 0.01em;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      cursor: pointer;
+      border: none;
+      box-shadow: 0 4px 14px rgba(21,128,61,0.3);
+    }
+    .btn-primary:hover { filter: brightness(1.07); box-shadow: 0 6px 18px rgba(21,128,61,0.4); }
+    .btn-primary:active { transform: scale(0.98); }
+    .btn-primary:disabled { opacity: 0.7; cursor: not-allowed; }
+
+    .btn-secondary {
+      width: 100%;
+      padding: 0.75rem;
+      border-radius: 0.625rem;
+      background: linear-gradient(135deg, #0f766e 0%, #0d9488 100%);
+      color: #fff;
+      font-weight: 600;
+      font-size: 0.95rem;
+      letter-spacing: 0.01em;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      cursor: pointer;
+      border: none;
+      box-shadow: 0 4px 14px rgba(15,118,110,0.3);
+    }
+    .btn-secondary:hover { filter: brightness(1.07); }
+    .btn-secondary:active { transform: scale(0.98); }
+    .btn-secondary:disabled { opacity: 0.7; cursor: not-allowed; }
+
+    /* Toast */
+    .toast {
+      position: fixed;
+      top: 1.25rem;
+      right: 1.25rem;
+      display: flex;
+      align-items: center;
+      gap: 0.625rem;
+      padding: 0.75rem 1rem;
+      border-radius: 0.625rem;
+      font-size: 0.875rem;
+      font-weight: 500;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.18);
+      z-index: 50;
+      animation: slideIn 0.3s ease;
+      max-width: 360px;
+    }
+    @keyframes slideIn {
+      from { transform: translateX(120%); opacity: 0; }
+      to   { transform: translateX(0);   opacity: 1; }
+    }
+    .toast-error   { background: #ef4444; color: #fff; }
+    .toast-warning { background: #f59e0b; color: #fff; }
+    .toast-success { background: #22c55e; color: #fff; }
+
+    /* Decoración circular del panel */
+    .circle-deco {
+      position: absolute;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.08);
+    }
+
+    @media (max-width: 640px) {
+      .brand-panel { display: none; }
+      .form-panel  { border-radius: 1rem !important; }
     }
   </style>
 </head>
-<body class="min-h-screen flex items-center justify-center relative overflow-hidden" style="background-image: url('{{ url_for('static', filename='fondo_login.png') }}'); background-size: cover; background-position: center;">
 
-  <div class="relative z-10 w-full max-w-md p-8 bg-slate-900/70 backdrop-blur-lg shadow-2xl rounded-xl border border-white/20">
-    <h2 class="text-3xl font-bold text-center text-white drop-shadow mb-2">Acceso a la plataforma</h2>
-    <p class="text-center text-white/80 text-sm mb-6">Gestiona la cuenta iniciando sesión o actualiza tu contraseña de forma segura.</p>
+<body class="min-h-screen flex items-center justify-center bg-overlay relative overflow-hidden"
+  style="background-image: url('{{ url_for('static', filename='fondo_login.png') }}'); background-size: cover; background-position: center;">
 
-    <div class="flex bg-slate-800/60 rounded-lg p-1 mb-6">
-      <button type="button" data-tab-target="login" class="flex-1 px-4 py-2 text-sm font-semibold rounded-lg transition text-white focus:outline-none focus:ring-2 focus:ring-white/40">
-        Iniciar sesión
-      </button>
-      <button type="button" data-tab-target="change" class="flex-1 px-4 py-2 text-sm font-semibold rounded-lg transition text-white focus:outline-none focus:ring-2 focus:ring-white/40">
-        Cambiar contraseña
-      </button>
-    </div>
+  <!-- Card principal -->
+  <div class="relative z-10 flex w-full max-w-3xl mx-4 rounded-2xl overflow-hidden shadow-2xl" style="min-height:520px;">
 
-    <div id="loginSection">
-      <form method="POST" id="loginForm" class="space-y-6">
-        <div class="relative">
-          <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <svg class="w-5 h-5 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
-            </svg>
-          </span>
-          <input id="tenant" name="tenant" required placeholder="Empresa (tenant_key)"
-            value="{{ request.args.get('tenant') or session.get('tenant','') }}"
-            class="w-full pl-10 pr-3 py-2 rounded-lg bg-white/60 focus:bg-white/80 placeholder-gray-600 text-gray-800 focus:outline-none focus:ring-2 focus:ring-primary" />
-        </div>
+    <!-- Panel izquierdo: branding -->
+    <div class="brand-panel hidden sm:flex flex-col items-center justify-center w-2/5 p-10 text-white text-center select-none">
+      <!-- Círculos decorativos -->
+      <div class="circle-deco" style="width:220px;height:220px;top:-70px;left:-70px;"></div>
+      <div class="circle-deco" style="width:150px;height:150px;bottom:-50px;right:-50px;"></div>
+      <div class="circle-deco" style="width:80px;height:80px;top:40%;left:10px;"></div>
 
-        <div class="relative">
-          <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <svg class="w-5 h-5 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.121 17.804A11.955 11.955 0 0112 15c2.5 0 4.847.767 6.879 2.076M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
-            </svg>
-          </span>
-          <input id="username" name="username" required placeholder="Usuario" autocomplete="username"
-            class="w-full pl-10 pr-3 py-2 rounded-lg bg-white/60 focus:bg-white/80 placeholder-gray-600 text-gray-800 focus:outline-none focus:ring-2 focus:ring-primary"/>
-        </div>
-
-        <div class="relative">
-          <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <svg class="w-5 h-5 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 11c1.657 0 3-1.343 3-3V6a3 3 0 10-6 0v2c0 1.657 1.343 3 3 3z"/>
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 11h14v10H5z"/>
-            </svg>
-          </span>
-          <input type="password" id="password" name="password" required placeholder="Contraseña" autocomplete="current-password"
-            class="w-full pl-10 pr-10 py-2 rounded-lg bg-white/60 focus:bg-white/80 placeholder-gray-600 text-gray-800 focus:outline-none focus:ring-2 focus:ring-primary"/>
-          <span class="absolute inset-y-0 right-0 pr-3 flex items-center cursor-pointer text-gray-700" id="togglePassword">
-            <svg id="eyeOpen" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.477 0 8.268 2.943 9.542 7-1.274 4.057-5.065 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
-            </svg>
-            <svg id="eyeClosed" class="w-5 h-5 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.542-7 0.758-2.414 2.485-4.436 4.708-5.727"/>
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.88 9.88a3 3 0 104.24 4.24"/>
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3l18 18"/>
-            </svg>
-          </span>
-        </div>
-
-        <button type="submit" id="submitBtn"
-          class="w-full py-2 flex items-center justify-center rounded-lg bg-primary text-white font-semibold hover:bg-primary-dark transition transform active:scale-95">
-          <span id="btnText">Ingresar</span>
-          <svg id="btnSpinner" class="w-5 h-5 ml-2 hidden animate-spin" viewBox="0 0 24 24" fill="none">
-            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 00-8 8h4z"></path>
+      <!-- Icono / logo -->
+      <div class="relative mb-6">
+        <div class="w-20 h-20 rounded-full bg-white/20 backdrop-blur flex items-center justify-center ring-4 ring-white/30">
+          <svg viewBox="0 0 32 32" class="w-10 h-10" fill="white">
+            <path d="M16 2C8.268 2 2 8.268 2 16c0 2.477.665 4.8 1.822 6.8L2 30l7.4-1.8A13.923 13.923 0 0016 30c7.732 0 14-6.268 14-14S23.732 2 16 2zm0 25.4a12.32 12.32 0 01-6.3-1.73l-.45-.27-4.65 1.13 1.17-4.5-.3-.48A12.382 12.382 0 013.6 16C3.6 9.05 9.05 3.6 16 3.6S28.4 9.05 28.4 16 22.95 27.4 16 27.4zm6.77-9.2c-.37-.185-2.19-1.08-2.53-1.2-.34-.12-.586-.185-.833.185-.247.37-.956 1.2-1.172 1.445-.216.247-.432.278-.802.093-.37-.185-1.563-.576-2.977-1.836-1.1-.98-1.842-2.19-2.058-2.56-.216-.37-.023-.57.162-.754.167-.165.37-.43.556-.647.185-.215.247-.37.37-.617.124-.247.062-.463-.031-.647-.093-.185-.833-2.007-1.141-2.747-.3-.72-.604-.623-.833-.635l-.71-.012c-.247 0-.648.093-.988.463-.34.37-1.296 1.266-1.296 3.087s1.327 3.58 1.512 3.827c.185.247 2.612 3.99 6.33 5.598.885.38 1.576.608 2.113.778.888.282 1.696.242 2.335.147.712-.106 2.19-.896 2.5-1.76.308-.866.308-1.608.215-1.76-.09-.154-.34-.247-.71-.432z"/>
           </svg>
-        </button>
-      </form>
-    </div>
-
-    <div id="changeSection" class="hidden">
-      <form method="POST" action="{{ url_for('auth.password_change') }}" id="changePasswordForm" class="space-y-6">
-        <div class="relative">
-          <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <svg class="w-5 h-5 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
-            </svg>
-          </span>
-          <input id="changeTenant" name="tenant" required placeholder="Empresa (tenant_key)"
-            value="{{ request.args.get('tenant') or session.get('tenant','') }}"
-            class="w-full pl-10 pr-3 py-2 rounded-lg bg-white/60 focus:bg-white/80 placeholder-gray-600 text-gray-800 focus:outline-none focus:ring-2 focus:ring-secondary" />
         </div>
+      </div>
 
-        <div class="relative">
-          <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <svg class="w-5 h-5 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.121 17.804A11.955 11.955 0 0112 15c2.5 0 4.847.767 6.879 2.076M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
-            </svg>
-          </span>
-          <input id="changeUsername" name="username" required placeholder="Usuario" autocomplete="username"
-            class="w-full pl-10 pr-3 py-2 rounded-lg bg-white/60 focus:bg-white/80 placeholder-gray-600 text-gray-800 focus:outline-none focus:ring-2 focus:ring-secondary"/>
-        </div>
+      <h1 class="text-2xl font-bold tracking-tight mb-2">Whapco</h1>
+      <p class="text-white/75 text-sm leading-relaxed">
+        Plataforma de atención al cliente<br/>multicanal con IA
+      </p>
 
-        <div class="relative">
-          <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <svg class="w-5 h-5 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 11c1.657 0 3-1.343 3-3V6a3 3 0 10-6 0v2c0 1.657 1.343 3 3 3z"/>
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 11h14v10H5z"/>
-            </svg>
-          </span>
-          <input type="password" id="currentPassword" name="current_password" required placeholder="Contraseña actual" autocomplete="current-password"
-            class="w-full pl-10 pr-3 py-2 rounded-lg bg-white/60 focus:bg-white/80 placeholder-gray-600 text-gray-800 focus:outline-none focus:ring-2 focus:ring-secondary"/>
-        </div>
-
-        <div class="relative">
-          <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <svg class="w-5 h-5 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 10-8 0v4"/>
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 11h14v10H5z"/>
-            </svg>
-          </span>
-          <input type="password" id="newPassword" name="new_password" required placeholder="Nueva contraseña" minlength="8"
-            pattern="^(?=.*[A-Za-z])(?=.*\d)\S{8,}$" title="Debe tener al menos 8 caracteres, incluyendo letras y números, sin espacios" autocomplete="new-password"
-            class="w-full pl-10 pr-3 py-2 rounded-lg bg-white/60 focus:bg-white/80 placeholder-gray-600 text-gray-800 focus:outline-none focus:ring-2 focus:ring-secondary"/>
-        </div>
-
-        <div class="relative">
-          <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <svg class="w-5 h-5 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 10-8 0v4"/>
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 11h14v10H5z"/>
-            </svg>
-          </span>
-          <input type="password" id="confirmPassword" name="confirm_password" required placeholder="Confirmar nueva contraseña" minlength="8" autocomplete="new-password"
-            class="w-full pl-10 pr-3 py-2 rounded-lg bg-white/60 focus:bg-white/80 placeholder-gray-600 text-gray-800 focus:outline-none focus:ring-2 focus:ring-secondary"/>
-        </div>
-
-        <p class="text-xs text-white/80">La contraseña debe tener al menos 8 caracteres, contener letras y números y no incluir espacios.</p>
-
-        <button type="submit" id="changeSubmitBtn"
-          class="w-full py-2 flex items-center justify-center rounded-lg bg-secondary text-white font-semibold hover:bg-teal-500 transition transform active:scale-95">
-          <span id="changeBtnText">Actualizar contraseña</span>
-          <svg id="changeBtnSpinner" class="w-5 h-5 ml-2 hidden animate-spin" viewBox="0 0 24 24" fill="none">
-            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 00-8 8h4z"></path>
+      <div class="mt-8 grid grid-cols-3 gap-3 w-full">
+        <div class="bg-white/10 rounded-xl p-3 flex flex-col items-center gap-1">
+          <svg class="w-5 h-5 text-white/90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/>
           </svg>
-        </button>
-      </form>
+          <span class="text-white/80 text-xs">WhatsApp</span>
+        </div>
+        <div class="bg-white/10 rounded-xl p-3 flex flex-col items-center gap-1">
+          <svg class="w-5 h-5 text-white/90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+          </svg>
+          <span class="text-white/80 text-xs">IA</span>
+        </div>
+        <div class="bg-white/10 rounded-xl p-3 flex flex-col items-center gap-1">
+          <svg class="w-5 h-5 text-white/90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0"/>
+          </svg>
+          <span class="text-white/80 text-xs">Equipo</span>
+        </div>
+      </div>
     </div>
-  </div>
 
+    <!-- Panel derecho: formulario -->
+    <div class="form-panel bg-white flex flex-col justify-center w-full sm:w-3/5 p-8 sm:p-10">
+
+      <div class="mb-7">
+        <h2 class="text-2xl font-bold text-slate-800 mb-1">Bienvenido</h2>
+        <p class="text-sm text-slate-500">Accede a tu cuenta o actualiza tu contraseña</p>
+      </div>
+
+      <!-- Tabs -->
+      <div class="tab-bar mb-7">
+        <button type="button" data-tab-target="login" class="tab-btn">Iniciar sesión</button>
+        <button type="button" data-tab-target="change" class="tab-btn">Cambiar contraseña</button>
+      </div>
+
+      <!-- === SECCIÓN LOGIN === -->
+      <div id="loginSection">
+        <form method="POST" id="loginForm" class="space-y-4">
+
+          <div class="field-group">
+            <span class="field-icon">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>
+              </svg>
+            </span>
+            <input id="tenant" name="tenant" required placeholder="Empresa (clave de tenant)"
+              value="{{ request.args.get('tenant') or session.get('tenant','') }}" />
+          </div>
+
+          <div class="field-group">
+            <span class="field-icon">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+              </svg>
+            </span>
+            <input id="username" name="username" required placeholder="Usuario" autocomplete="username" />
+          </div>
+
+          <div class="field-group">
+            <span class="field-icon">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+              </svg>
+            </span>
+            <input type="password" id="password" name="password" required placeholder="Contraseña" autocomplete="current-password" style="padding-right:2.75rem;" />
+            <span class="absolute right-3 top-1/2 -translate-y-1/2 cursor-pointer text-slate-400 hover:text-slate-600 transition-colors" id="togglePassword">
+              <svg id="eyeOpen" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.477 0 8.268 2.943 9.542 7-1.274 4.057-5.065 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+              </svg>
+              <svg id="eyeClosed" class="w-4 h-4 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.542-7 .758-2.414 2.485-4.436 4.708-5.727"/>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.88 9.88a3 3 0 104.24 4.24"/>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3l18 18"/>
+              </svg>
+            </span>
+          </div>
+
+          <div class="pt-1">
+            <button type="submit" id="submitBtn" class="btn-primary">
+              <span id="btnText">Ingresar</span>
+              <svg id="btnSpinner" class="w-4 h-4 hidden animate-spin" viewBox="0 0 24 24" fill="none">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 00-8 8h4z"/>
+              </svg>
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <!-- === SECCIÓN CAMBIO DE CONTRASEÑA === -->
+      <div id="changeSection" class="hidden">
+        <form method="POST" action="{{ url_for('auth.password_change') }}" id="changePasswordForm" class="space-y-4">
+
+          <div class="field-group">
+            <span class="field-icon">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>
+              </svg>
+            </span>
+            <input id="changeTenant" name="tenant" required placeholder="Empresa (clave de tenant)"
+              value="{{ request.args.get('tenant') or session.get('tenant','') }}" />
+          </div>
+
+          <div class="field-group">
+            <span class="field-icon">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+              </svg>
+            </span>
+            <input id="changeUsername" name="username" required placeholder="Usuario" autocomplete="username" />
+          </div>
+
+          <div class="field-group">
+            <span class="field-icon">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+              </svg>
+            </span>
+            <input type="password" id="currentPassword" name="current_password" required placeholder="Contraseña actual" autocomplete="current-password" />
+          </div>
+
+          <div class="field-group">
+            <span class="field-icon">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/>
+              </svg>
+            </span>
+            <input type="password" id="newPassword" name="new_password" required placeholder="Nueva contraseña"
+              minlength="8" pattern="^(?=.*[A-Za-z])(?=.*\d)\S{8,}$"
+              title="Mínimo 8 caracteres, con letras y números, sin espacios"
+              autocomplete="new-password" />
+          </div>
+
+          <div class="field-group">
+            <span class="field-icon">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+              </svg>
+            </span>
+            <input type="password" id="confirmPassword" name="confirm_password" required placeholder="Confirmar nueva contraseña" minlength="8" autocomplete="new-password" />
+          </div>
+
+          <p class="text-xs text-slate-400 flex items-center gap-1.5">
+            <svg class="w-3.5 h-3.5 text-slate-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            Mínimo 8 caracteres, con letras y números, sin espacios.
+          </p>
+
+          <div class="pt-1">
+            <button type="submit" id="changeSubmitBtn" class="btn-secondary">
+              <span id="changeBtnText">Actualizar contraseña</span>
+              <svg id="changeBtnSpinner" class="w-4 h-4 hidden animate-spin" viewBox="0 0 24 24" fill="none">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 00-8 8h4z"/>
+              </svg>
+            </button>
+          </div>
+        </form>
+      </div>
+
+    </div><!-- /form-panel -->
+  </div><!-- /card -->
+
+  <!-- Toasts -->
   {% if error %}
-  <div id="toastLoginError" class="fixed top-4 right-4 bg-red-500/95 text-white px-4 py-2 rounded shadow-lg flex items-center space-x-2 z-20">
-    <span>{{ error }}</span>
-    <button type="button" class="focus:outline-none" data-dismiss>&times;</button>
+  <div id="toastLoginError" class="toast toast-error">
+    <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+    </svg>
+    <span class="flex-1">{{ error }}</span>
+    <button type="button" class="focus:outline-none opacity-75 hover:opacity-100" data-dismiss>&times;</button>
   </div>
   {% endif %}
 
   {% if change_error %}
-  <div id="toastChangeError" class="fixed top-4 right-4 bg-amber-500/95 text-white px-4 py-2 rounded shadow-lg flex items-center space-x-2 z-20">
-    <span>{{ change_error }}</span>
-    <button type="button" class="focus:outline-none" data-dismiss>&times;</button>
+  <div id="toastChangeError" class="toast toast-warning">
+    <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+    </svg>
+    <span class="flex-1">{{ change_error }}</span>
+    <button type="button" class="focus:outline-none opacity-75 hover:opacity-100" data-dismiss>&times;</button>
   </div>
   {% endif %}
 
   {% if success %}
-  <div id="toastSuccess" class="fixed top-4 right-4 bg-emerald-500/95 text-white px-4 py-2 rounded shadow-lg flex items-center space-x-2 z-20">
-    <span>{{ success }}</span>
-    <button type="button" class="focus:outline-none" data-dismiss>&times;</button>
+  <div id="toastSuccess" class="toast toast-success">
+    <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+    </svg>
+    <span class="flex-1">{{ success }}</span>
+    <button type="button" class="focus:outline-none opacity-75 hover:opacity-100" data-dismiss>&times;</button>
   </div>
   {% endif %}
 
   <script>
+    // Toggle password
     const togglePassword = document.getElementById('togglePassword');
     const password = document.getElementById('password');
     const eyeOpen = document.getElementById('eyeOpen');
     const eyeClosed = document.getElementById('eyeClosed');
-    if (togglePassword && password && eyeOpen && eyeClosed) {
+    if (togglePassword && password) {
       togglePassword.addEventListener('click', () => {
-        const isPassword = password.type === 'password';
-        password.type = isPassword ? 'text' : 'password';
-        eyeOpen.classList.toggle('hidden', !isPassword);
-        eyeClosed.classList.toggle('hidden', isPassword);
+        const isPass = password.type === 'password';
+        password.type = isPass ? 'text' : 'password';
+        eyeOpen.classList.toggle('hidden', !isPass);
+        eyeClosed.classList.toggle('hidden', isPass);
       });
     }
 
-    const form = document.getElementById('loginForm');
-    if (form) {
+    // Spinner en submit
+    function bindSubmitSpinner(formId, btnId, textId, spinnerId) {
+      const form = document.getElementById(formId);
+      if (!form) return;
       form.addEventListener('submit', () => {
-        const submitBtn = document.getElementById('submitBtn');
-        if (submitBtn) submitBtn.disabled = true;
-        const btnText = document.getElementById('btnText');
-        const btnSpinner = document.getElementById('btnSpinner');
-        if (btnText) btnText.classList.add('hidden');
-        if (btnSpinner) btnSpinner.classList.remove('hidden');
+        const btn = document.getElementById(btnId);
+        const txt = document.getElementById(textId);
+        const spn = document.getElementById(spinnerId);
+        if (btn) btn.disabled = true;
+        if (txt) txt.classList.add('hidden');
+        if (spn) spn.classList.remove('hidden');
       });
     }
+    bindSubmitSpinner('loginForm', 'submitBtn', 'btnText', 'btnSpinner');
+    bindSubmitSpinner('changePasswordForm', 'changeSubmitBtn', 'changeBtnText', 'changeBtnSpinner');
 
-    const changeForm = document.getElementById('changePasswordForm');
-    if (changeForm) {
-      changeForm.addEventListener('submit', () => {
-        const submitBtn = document.getElementById('changeSubmitBtn');
-        if (submitBtn) submitBtn.disabled = true;
-        const btnText = document.getElementById('changeBtnText');
-        const btnSpinner = document.getElementById('changeBtnSpinner');
-        if (btnText) btnText.classList.add('hidden');
-        if (btnSpinner) btnSpinner.classList.remove('hidden');
-      });
-    }
-
-    const tabButtons = document.querySelectorAll('[data-tab-target]');
+    // Tabs
+    const tabBtns = document.querySelectorAll('[data-tab-target]');
     const sections = {
-      login: document.getElementById('loginSection'),
+      login:  document.getElementById('loginSection'),
       change: document.getElementById('changeSection')
     };
 
     function activateTab(target) {
-      tabButtons.forEach((button) => {
-        const isActive = button.dataset.tabTarget === target;
-        button.classList.toggle('bg-white/80', isActive);
-        button.classList.toggle('text-primary', isActive);
-        button.classList.toggle('text-white', !isActive);
-        button.classList.toggle('shadow', isActive);
-        button.setAttribute('aria-selected', String(isActive));
+      tabBtns.forEach(btn => {
+        const active = btn.dataset.tabTarget === target;
+        btn.classList.toggle('active', active);
+        btn.setAttribute('aria-selected', String(active));
       });
-      Object.entries(sections).forEach(([name, section]) => {
-        if (section) {
-          section.classList.toggle('hidden', name !== target);
-        }
+      Object.entries(sections).forEach(([name, el]) => {
+        if (el) el.classList.toggle('hidden', name !== target);
       });
     }
 
     const initialTab = '{{ "change" if show_change else "login" }}';
     activateTab(initialTab);
+    tabBtns.forEach(btn => btn.addEventListener('click', () => activateTab(btn.dataset.tabTarget)));
 
-    tabButtons.forEach((button) => {
-      button.addEventListener('click', () => activateTab(button.dataset.tabTarget));
-    });
-
+    // Toasts
     function setupToast(id) {
       const toast = document.getElementById(id);
       if (!toast) return;
-      const dismissBtn = toast.querySelector('[data-dismiss]');
-      if (dismissBtn) {
-        dismissBtn.addEventListener('click', () => toast.classList.add('hidden'));
-      }
-      setTimeout(() => {
-        toast.classList.add('hidden');
-      }, 5000);
+      toast.querySelector('[data-dismiss]')?.addEventListener('click', () => toast.remove());
+      setTimeout(() => toast.remove(), 5000);
     }
-
     ['toastLoginError', 'toastChangeError', 'toastSuccess'].forEach(setupToast);
   </script>
 </body>
