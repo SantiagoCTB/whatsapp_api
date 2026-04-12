@@ -1,0 +1,427 @@
+{% extends 'base.html' %}
+{% block title %}Conexiones API{% endblock %}
+{% block body_class %}page{% endblock %}
+{% block content %}
+<div class="page-header">
+  <a href="{{ url_for('chat.index') }}" class="page-header-back">
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>
+    Volver
+  </a>
+  <div class="page-header-icon">
+    <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+  </div>
+  <div class="page-header-text">
+    <h2>Conexiones API</h2>
+    <p>Configura y prueba conexiones a servicios externos mediante consultas HTTP</p>
+  </div>
+  <button id="btnNuevaConexion" class="btn-primary" type="button">+ Nueva conexión</button>
+</div>
+
+<!-- Toast de notificaciones -->
+<div id="toast" class="conexiones-toast" role="alert" aria-live="polite" hidden></div>
+
+<!-- Lista de conexiones -->
+<section class="template-card" id="listaSection">
+  <h3>Conexiones configuradas</h3>
+  <div id="listaConexiones">
+    <p class="conexiones-empty">Cargando...</p>
+  </div>
+</section>
+
+<!-- Formulario crear / editar -->
+<section class="template-card" id="formSection" hidden>
+  <h3 id="formTitle">Nueva conexión</h3>
+
+  <label for="cNombre">Nombre de la conexión</label>
+  <input id="cNombre" type="text" placeholder="Mi API de clientes" />
+
+  <label for="cDescripcion">Descripción (opcional)</label>
+  <input id="cDescripcion" type="text" placeholder="Consulta el estado de pedidos" />
+
+  <label for="cUrl">URL del endpoint</label>
+  <input id="cUrl" type="url" placeholder="https://api.ejemplo.com/v1/recurso" />
+
+  <label for="cMetodo">Método HTTP</label>
+  <select id="cMetodo">
+    <option value="GET">GET</option>
+    <option value="POST">POST</option>
+    <option value="PUT">PUT</option>
+    <option value="PATCH">PATCH</option>
+    <option value="DELETE">DELETE</option>
+  </select>
+
+  <label for="cAuthTipo">Autenticación</label>
+  <select id="cAuthTipo">
+    <option value="none">Sin autenticación</option>
+    <option value="bearer">Bearer Token</option>
+    <option value="basic">Basic Auth (usuario:contraseña)</option>
+    <option value="api_key">API Key (Encabezado:Valor)</option>
+  </select>
+
+  <div id="authValorBlock">
+    <label for="cAuthValor" id="cAuthValorLabel">Token / credencial</label>
+    <input id="cAuthValor" type="password" placeholder="" autocomplete="new-password" />
+    <small id="authValorHint" class="conexiones-hint"></small>
+  </div>
+
+  <label for="cHeaders">Headers personalizados (JSON)</label>
+  <textarea id="cHeaders" rows="4" placeholder='{"Content-Type": "application/json", "X-Custom": "valor"}'></textarea>
+
+  <div id="bodyBlock">
+    <label for="cBody">Cuerpo de la solicitud (JSON para POST/PUT/PATCH)</label>
+    <textarea id="cBody" rows="5" placeholder='{"clave": "valor"}'></textarea>
+  </div>
+
+  <div class="action-row">
+    <button id="btnGuardar" class="btn-primary" type="button">Guardar conexión</button>
+    <button id="btnCancelar" class="btn-secondary" type="button">Cancelar</button>
+  </div>
+</section>
+
+<!-- Panel de resultado de prueba -->
+<section class="template-card" id="testSection" hidden>
+  <h3>Resultado de la prueba</h3>
+  <div id="testResult" class="conexiones-result"></div>
+  <div class="action-row">
+    <button id="btnCerrarTest" class="btn-secondary" type="button">Cerrar</button>
+  </div>
+</section>
+
+<style>
+  .conexiones-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+  }
+  .conexiones-table th,
+  .conexiones-table td {
+    text-align: left;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border-color, #e0e0e0);
+  }
+  .conexiones-table th {
+    background: #f5f9f8;
+    font-weight: 600;
+    color: #333;
+  }
+  .conexiones-table tr:hover td {
+    background: #f0faf8;
+  }
+  .badge-metodo {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    color: #fff;
+  }
+  .badge-GET    { background: #00A884; }
+  .badge-POST   { background: #2563eb; }
+  .badge-PUT    { background: #d97706; }
+  .badge-PATCH  { background: #7c3aed; }
+  .badge-DELETE { background: #dc2626; }
+  .conexiones-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+  .conexiones-empty { color: #888; font-style: italic; padding: 12px 0; }
+  .conexiones-toast {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    background: #212121;
+    color: #fff;
+    padding: 12px 20px;
+    border-radius: 8px;
+    font-size: 14px;
+    z-index: 9999;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.25);
+    max-width: 360px;
+  }
+  .conexiones-toast.ok   { background: #00A884; }
+  .conexiones-toast.error { background: #dc2626; }
+  .conexiones-result {
+    background: #1e1e1e;
+    color: #d4d4d4;
+    border-radius: 8px;
+    padding: 16px;
+    font-family: monospace;
+    font-size: 13px;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 400px;
+    overflow-y: auto;
+  }
+  .conexiones-hint { color: #888; font-size: 12px; margin-top: 4px; display: block; }
+  #authValorBlock { margin-bottom: 0; }
+</style>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  'use strict';
+
+  let editingId = null;
+
+  // ── Helpers ────────────────────────────────────────────────────────────────
+
+  function showToast(msg, type = 'ok') {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = 'conexiones-toast ' + type;
+    t.hidden = false;
+    clearTimeout(t._timer);
+    t._timer = setTimeout(() => { t.hidden = true; }, 3500);
+  }
+
+  function show(id)  { document.getElementById(id).hidden = false; }
+  function hide(id)  { document.getElementById(id).hidden = true; }
+
+  function methodBadge(m) {
+    return `<span class="badge-metodo badge-${m}">${m}</span>`;
+  }
+
+  function authLabel(tipo) {
+    const labels = { none: 'Ninguna', bearer: 'Bearer', basic: 'Basic', api_key: 'API Key' };
+    return labels[tipo] || tipo;
+  }
+
+  // ── Load list ──────────────────────────────────────────────────────────────
+
+  async function loadConexiones() {
+    const container = document.getElementById('listaConexiones');
+    try {
+      const res = await fetch('/api/conexiones');
+      const json = await res.json();
+      if (!json.ok) { container.innerHTML = `<p class="conexiones-empty">Error: ${json.error}</p>`; return; }
+      if (!json.data.length) {
+        container.innerHTML = '<p class="conexiones-empty">No hay conexiones configuradas todavía.</p>';
+        return;
+      }
+      container.innerHTML = `
+        <table class="conexiones-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Nombre</th>
+              <th>Método</th>
+              <th>URL</th>
+              <th>Auth</th>
+              <th>Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${json.data.map(c => `
+              <tr>
+                <td>${c.id}</td>
+                <td>
+                  <strong>${escapeHtml(c.nombre)}</strong>
+                  ${c.descripcion ? `<br><small style="color:#888">${escapeHtml(c.descripcion)}</small>` : ''}
+                </td>
+                <td>${methodBadge(c.metodo)}</td>
+                <td style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escapeHtml(c.url)}">${escapeHtml(c.url)}</td>
+                <td>${authLabel(c.auth_tipo)}</td>
+                <td>
+                  <div class="conexiones-actions">
+                    <button class="btn-secondary" type="button" onclick="editarConexion(${c.id})">Editar</button>
+                    <button class="btn-primary"   type="button" onclick="probarConexion(${c.id})">Probar</button>
+                    <button class="btn-secondary" type="button" style="color:#dc2626;border-color:#dc2626" onclick="eliminarConexion(${c.id}, '${escapeHtml(c.nombre)}')">Eliminar</button>
+                  </div>
+                </td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>`;
+    } catch (e) {
+      container.innerHTML = `<p class="conexiones-empty">Error de red: ${e.message}</p>`;
+    }
+  }
+
+  function escapeHtml(str) {
+    return String(str || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  // ── Form helpers ───────────────────────────────────────────────────────────
+
+  function resetForm() {
+    editingId = null;
+    document.getElementById('formTitle').textContent = 'Nueva conexión';
+    ['cNombre','cDescripcion','cUrl','cAuthValor','cHeaders','cBody'].forEach(id => {
+      document.getElementById(id).value = '';
+    });
+    document.getElementById('cMetodo').value = 'GET';
+    document.getElementById('cAuthTipo').value = 'none';
+    updateAuthHint();
+    updateBodyVisibility();
+  }
+
+  function updateAuthHint() {
+    const tipo = document.getElementById('cAuthTipo').value;
+    const block = document.getElementById('authValorBlock');
+    const label = document.getElementById('cAuthValorLabel');
+    const hint  = document.getElementById('authValorHint');
+    const input = document.getElementById('cAuthValor');
+    const hints = {
+      none:    '',
+      bearer:  'Ingresa el token Bearer (sin el prefijo "Bearer ").',
+      basic:   'Ingresa usuario:contraseña en texto plano.',
+      api_key: 'Ingresa en formato   NombreHeader: valor   (ej: X-Api-Key: abc123).',
+    };
+    const labels = { none: 'Token / credencial', bearer: 'Token Bearer', basic: 'Usuario:Contraseña', api_key: 'Clave API (Header:Valor)' };
+    block.hidden = tipo === 'none';
+    label.textContent = labels[tipo] || 'Token / credencial';
+    hint.textContent = hints[tipo] || '';
+    input.placeholder = hints[tipo] ? (tipo === 'basic' ? 'usuario:contraseña' : tipo === 'api_key' ? 'X-Api-Key: tu_clave' : 'tu_token') : '';
+  }
+
+  function updateBodyVisibility() {
+    const m = document.getElementById('cMetodo').value;
+    document.getElementById('bodyBlock').hidden = ['GET','DELETE'].includes(m);
+  }
+
+  // ── Open form ──────────────────────────────────────────────────────────────
+
+  document.getElementById('btnNuevaConexion').addEventListener('click', () => {
+    resetForm();
+    hide('listaSection');
+    hide('testSection');
+    show('formSection');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  });
+
+  document.getElementById('btnCancelar').addEventListener('click', () => {
+    hide('formSection');
+    show('listaSection');
+  });
+
+  document.getElementById('btnCerrarTest').addEventListener('click', () => {
+    hide('testSection');
+    show('listaSection');
+  });
+
+  document.getElementById('cAuthTipo').addEventListener('change', updateAuthHint);
+  document.getElementById('cMetodo').addEventListener('change', updateBodyVisibility);
+
+  // ── Save ───────────────────────────────────────────────────────────────────
+
+  document.getElementById('btnGuardar').addEventListener('click', async () => {
+    const nombre     = document.getElementById('cNombre').value.trim();
+    const url        = document.getElementById('cUrl').value.trim();
+    const metodo     = document.getElementById('cMetodo').value;
+    const auth_tipo  = document.getElementById('cAuthTipo').value;
+    const auth_valor = document.getElementById('cAuthValor').value.trim();
+    const headersRaw = document.getElementById('cHeaders').value.trim();
+    const body       = document.getElementById('cBody').value.trim();
+    const descripcion= document.getElementById('cDescripcion').value.trim();
+
+    if (!nombre || !url) { showToast('Nombre y URL son obligatorios.', 'error'); return; }
+
+    if (headersRaw) {
+      try { JSON.parse(headersRaw); } catch {
+        showToast('El campo Headers no es un JSON válido.', 'error');
+        return;
+      }
+    }
+
+    const payload = { nombre, descripcion, url, metodo, auth_tipo, auth_valor, headers: headersRaw || '{}', body_template: body };
+
+    const endpoint = editingId ? `/api/conexiones/${editingId}` : '/api/conexiones';
+    const method   = editingId ? 'PUT' : 'POST';
+
+    try {
+      const res  = await fetch(endpoint, { method, headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+      const json = await res.json();
+      if (!json.ok) { showToast(json.error || 'Error al guardar.', 'error'); return; }
+      showToast(json.message, 'ok');
+      hide('formSection');
+      show('listaSection');
+      loadConexiones();
+    } catch (e) {
+      showToast('Error de red: ' + e.message, 'error');
+    }
+  });
+
+  // ── Edit ───────────────────────────────────────────────────────────────────
+
+  window.editarConexion = async function (id) {
+    try {
+      const res  = await fetch(`/api/conexiones/${id}`);
+      const json = await res.json();
+      if (!json.ok) { showToast(json.error, 'error'); return; }
+      const c = json.data;
+      editingId = id;
+      document.getElementById('formTitle').textContent = 'Editar conexión';
+      document.getElementById('cNombre').value      = c.nombre || '';
+      document.getElementById('cDescripcion').value = c.descripcion || '';
+      document.getElementById('cUrl').value         = c.url || '';
+      document.getElementById('cMetodo').value      = c.metodo || 'GET';
+      document.getElementById('cAuthTipo').value    = c.auth_tipo || 'none';
+      document.getElementById('cAuthValor').value   = '';  // masked
+      const hdr = c.headers;
+      document.getElementById('cHeaders').value = typeof hdr === 'object' ? JSON.stringify(hdr, null, 2) : (hdr || '');
+      document.getElementById('cBody').value = c.body_template || '';
+      updateAuthHint();
+      updateBodyVisibility();
+      if (c.auth_valor_masked) {
+        document.getElementById('cAuthValor').placeholder = '(sin cambios — dejar en blanco para conservar)';
+      }
+      hide('listaSection');
+      hide('testSection');
+      show('formSection');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch (e) {
+      showToast('Error de red: ' + e.message, 'error');
+    }
+  };
+
+  // ── Delete ─────────────────────────────────────────────────────────────────
+
+  window.eliminarConexion = async function (id, nombre) {
+    if (!confirm(`¿Eliminar la conexión "${nombre}"? Esta acción no se puede deshacer.`)) return;
+    try {
+      const res  = await fetch(`/api/conexiones/${id}`, { method: 'DELETE' });
+      const json = await res.json();
+      if (!json.ok) { showToast(json.error, 'error'); return; }
+      showToast(json.message, 'ok');
+      loadConexiones();
+    } catch (e) {
+      showToast('Error de red: ' + e.message, 'error');
+    }
+  };
+
+  // ── Test ───────────────────────────────────────────────────────────────────
+
+  window.probarConexion = async function (id) {
+    const resultEl = document.getElementById('testResult');
+    resultEl.textContent = 'Ejecutando solicitud...';
+    hide('formSection');
+    hide('listaSection');
+    show('testSection');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+
+    try {
+      const res  = await fetch(`/api/conexiones/${id}/probar`, { method: 'POST' });
+      const json = await res.json();
+      if (json.ok) {
+        resultEl.textContent =
+          `HTTP ${json.status_code}\n\n` +
+          JSON.stringify(json.response, null, 2);
+      } else {
+        resultEl.textContent = `Error: ${json.error}`;
+      }
+    } catch (e) {
+      resultEl.textContent = 'Error de red: ' + e.message;
+    }
+  };
+
+  // ── Init ───────────────────────────────────────────────────────────────────
+
+  loadConexiones();
+})();
+</script>
+{% endblock %}

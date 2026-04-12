@@ -978,9 +978,170 @@ def init_db(db_settings: DatabaseSettings | None = None):
     if not c.fetchone():
         c.execute("ALTER TABLE ia_catalog_pages ADD COLUMN keywords TEXT NULL AFTER text_content;")
 
+    # api_conexiones: conexiones a APIs externas configurables por tenant
+    c.execute(
+        """
+        CREATE TABLE IF NOT EXISTS api_conexiones (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          nombre VARCHAR(100) NOT NULL,
+          descripcion TEXT,
+          url TEXT NOT NULL,
+          metodo VARCHAR(10) NOT NULL DEFAULT 'GET',
+          headers TEXT,
+          body_template TEXT,
+          auth_tipo VARCHAR(20) NOT NULL DEFAULT 'none',
+          auth_valor TEXT,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB;
+        """
+    )
+
+    # chat_variables: variables de contexto por chat para flujos API
+    c.execute(
+        """
+        CREATE TABLE IF NOT EXISTS chat_variables (
+          numero VARCHAR(100) NOT NULL,
+          var_key VARCHAR(100) NOT NULL,
+          var_value TEXT,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          PRIMARY KEY (numero, var_key)
+        ) ENGINE=InnoDB;
+        """
+    )
+
     conn.commit()
     conn.close()
 
+
+# ---------------------------------------------------------------------------
+# CRUD: api_conexiones
+# ---------------------------------------------------------------------------
+
+def get_all_conexiones(db_settings: "DatabaseSettings | None" = None) -> list[dict]:
+    conn = get_connection(ensure_database=True, db_settings=db_settings)
+    c = conn.cursor(dictionary=True)
+    c.execute(
+        "SELECT id, nombre, descripcion, url, metodo, headers, body_template, "
+        "auth_tipo, auth_valor, created_at, updated_at FROM api_conexiones ORDER BY id"
+    )
+    rows = c.fetchall()
+    conn.close()
+    return rows
+
+
+def get_conexion(conexion_id: int, db_settings: "DatabaseSettings | None" = None) -> dict | None:
+    conn = get_connection(ensure_database=True, db_settings=db_settings)
+    c = conn.cursor(dictionary=True)
+    c.execute(
+        "SELECT id, nombre, descripcion, url, metodo, headers, body_template, "
+        "auth_tipo, auth_valor, created_at, updated_at FROM api_conexiones WHERE id = %s",
+        (conexion_id,),
+    )
+    row = c.fetchone()
+    conn.close()
+    return row
+
+
+def create_conexion(
+    nombre: str,
+    url: str,
+    metodo: str = "GET",
+    descripcion: str = "",
+    headers: str = "",
+    body_template: str = "",
+    auth_tipo: str = "none",
+    auth_valor: str = "",
+    db_settings: "DatabaseSettings | None" = None,
+) -> int:
+    conn = get_connection(ensure_database=True, db_settings=db_settings)
+    c = conn.cursor()
+    c.execute(
+        "INSERT INTO api_conexiones (nombre, descripcion, url, metodo, headers, body_template, auth_tipo, auth_valor) "
+        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+        (nombre, descripcion, url, metodo, headers, body_template, auth_tipo, auth_valor),
+    )
+    new_id = c.lastrowid
+    conn.commit()
+    conn.close()
+    return new_id
+
+
+def update_conexion(
+    conexion_id: int,
+    nombre: str,
+    url: str,
+    metodo: str,
+    descripcion: str = "",
+    headers: str = "",
+    body_template: str = "",
+    auth_tipo: str = "none",
+    auth_valor: str = "",
+    db_settings: "DatabaseSettings | None" = None,
+) -> bool:
+    conn = get_connection(ensure_database=True, db_settings=db_settings)
+    c = conn.cursor()
+    c.execute(
+        "UPDATE api_conexiones SET nombre=%s, descripcion=%s, url=%s, metodo=%s, "
+        "headers=%s, body_template=%s, auth_tipo=%s, auth_valor=%s WHERE id=%s",
+        (nombre, descripcion, url, metodo, headers, body_template, auth_tipo, auth_valor, conexion_id),
+    )
+    affected = c.rowcount
+    conn.commit()
+    conn.close()
+    return affected > 0
+
+
+def delete_conexion(conexion_id: int, db_settings: "DatabaseSettings | None" = None) -> bool:
+    conn = get_connection(ensure_database=True, db_settings=db_settings)
+    c = conn.cursor()
+    c.execute("DELETE FROM api_conexiones WHERE id = %s", (conexion_id,))
+    affected = c.rowcount
+    conn.commit()
+    conn.close()
+    return affected > 0
+
+
+# ---------------------------------------------------------------------------
+# CRUD: chat_variables
+# ---------------------------------------------------------------------------
+
+def set_chat_var(numero: str, key: str, value: str, db_settings: "DatabaseSettings | None" = None) -> None:
+    conn = get_connection(ensure_database=True, db_settings=db_settings)
+    c = conn.cursor()
+    c.execute(
+        "INSERT INTO chat_variables (numero, var_key, var_value) VALUES (%s, %s, %s) "
+        "ON DUPLICATE KEY UPDATE var_value = VALUES(var_value), updated_at = CURRENT_TIMESTAMP",
+        (numero, key, value),
+    )
+    conn.commit()
+    conn.close()
+
+
+def get_chat_var(numero: str, key: str, db_settings: "DatabaseSettings | None" = None) -> str | None:
+    conn = get_connection(ensure_database=True, db_settings=db_settings)
+    c = conn.cursor()
+    c.execute("SELECT var_value FROM chat_variables WHERE numero = %s AND var_key = %s", (numero, key))
+    row = c.fetchone()
+    conn.close()
+    return row[0] if row else None
+
+
+def get_all_chat_vars(numero: str, db_settings: "DatabaseSettings | None" = None) -> dict:
+    conn = get_connection(ensure_database=True, db_settings=db_settings)
+    c = conn.cursor()
+    c.execute("SELECT var_key, var_value FROM chat_variables WHERE numero = %s", (numero,))
+    rows = c.fetchall()
+    conn.close()
+    return {r[0]: r[1] for r in rows}
+
+
+def clear_chat_vars(numero: str, db_settings: "DatabaseSettings | None" = None) -> None:
+    conn = get_connection(ensure_database=True, db_settings=db_settings)
+    c = conn.cursor()
+    c.execute("DELETE FROM chat_variables WHERE numero = %s", (numero,))
+    conn.commit()
+    conn.close()
 
 
 def guardar_mensaje(

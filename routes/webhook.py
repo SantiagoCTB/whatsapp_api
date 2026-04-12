@@ -2765,6 +2765,39 @@ def dispatch_rule(
             advance_steps(numero, next_step, visited=visited, platform=platform)
         return
 
+    # ── Tipos de acción API ──────────────────────────────────────────────────
+    if tipo_resp == 'api_call':
+        from services.api_actions import handle_api_call_rule
+        _apply_role_keyword(numero, rol_kw)
+        handle_api_call_rule(
+            numero=numero,
+            respuesta_json=resp,
+            next_step_raw=next_step_raw,
+            current_step=current_step,
+            platform=platform,
+            visited=visited,
+            selected_option_id=selected_option_id,
+            opts=opts,
+            last_user_text=obtener_ultimo_mensaje_cliente(numero) or "",
+        )
+        return
+
+    if tipo_resp == 'guardar_input':
+        from services.api_actions import handle_guardar_input_rule
+        _apply_role_keyword(numero, rol_kw)
+        handle_guardar_input_rule(
+            numero=numero,
+            respuesta_json=resp,
+            next_step_raw=next_step_raw,
+            current_step=current_step,
+            platform=platform,
+            visited=visited,
+            selected_option_id=selected_option_id,
+            opts=opts,
+            last_user_text=obtener_ultimo_mensaje_cliente(numero) or "",
+        )
+        return
+
     media_list = media_urls.split('||') if media_urls else []
     if tipo_resp in {'texto', 'lista', 'boton'} and not (resp or '').strip() and not media_list:
         _apply_role_keyword(numero, rol_kw)

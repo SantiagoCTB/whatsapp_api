@@ -22,6 +22,7 @@ from routes.tablero_routes import tablero_bp
 from routes.export_routes import export_bp
 from routes.landing_routes import landing_bp
 from routes.plantillas_routes import plantillas_bp
+from routes.conexiones_routes import conexiones_bp
 from services.realtime import init_app as init_socketio, socketio
 
 
@@ -134,6 +135,7 @@ def create_app():
     app.register_blueprint(export_bp)
     app.register_blueprint(landing_bp)
     app.register_blueprint(plantillas_bp)
+    app.register_blueprint(conexiones_bp)
     init_socketio(app)
     import routes.socket_routes  # noqa: F401
 
