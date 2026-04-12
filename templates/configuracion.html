@@ -2,13 +2,19 @@
 {% block title %}Configuración de Reglas{% endblock %}
 {% block body_class %}page{% endblock %}
 {% block content %}
-<div class="top-right">
-    <a href="{{ url_for('chat.index') }}">
-        <button class="back-btn btn-primary">Volver al inicio</button>
-    </a>
+<div class="page-header">
+  <a href="{{ url_for('chat.index') }}" class="page-header-back">
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>
+    Volver
+  </a>
+  <div class="page-header-icon">
+    <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+  </div>
+  <div class="page-header-text">
+    <h2>Configuración de Reglas</h2>
+    <p>Crea y gestiona las reglas de respuesta del bot</p>
+  </div>
 </div>
-
-<h2>Configuración de Reglas</h2>
 <div class="page-tabs">
     <a class="tab-link active" href="{{ url_for('configuracion.reglas') }}">Reglas</a>
     <a class="tab-link" href="{{ url_for('configuracion.configuracion_ia') }}">Configuración IA</a>

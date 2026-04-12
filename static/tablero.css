@@ -71,7 +71,15 @@
 }
 
 .icon {
-  font-size: 1.5em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: rgba(0,168,132,0.1);
+  color: #007C67;
+  flex-shrink: 0;
 }
 
 

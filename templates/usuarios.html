@@ -2,14 +2,20 @@
 {% block title %}Usuarios{% endblock %}
 {% block body_class %}page{% endblock %}
 {% block content %}
-<div class="top-right">
-    <a href="{{ url_for('chat.index') }}">
-        <button class="back-btn btn-primary">Volver al inicio</button>
-    </a>
-</div>
 
-<h2>Usuarios</h2>
-<p>Crear nuevos usuarios y asignarles un rol inicial.</p>
+<div class="page-header">
+  <a href="{{ url_for('chat.index') }}" class="page-header-back">
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>
+    Volver
+  </a>
+  <div class="page-header-icon">
+    <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
+  </div>
+  <div class="page-header-text">
+    <h2>Usuarios</h2>
+    <p>Crea nuevos usuarios y asígnales un rol inicial</p>
+  </div>
+</div>
 
 {% if error %}
 <div class="alert error">{{ error }}</div>
@@ -18,57 +24,106 @@
 <div class="alert success">{{ success }}</div>
 {% endif %}
 
-<form action="{{ url_for('usuarios.manage_users') }}" method="post">
-    <h3>Crear usuario</h3>
+<section class="page-section">
+  <h3>
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
+    Crear usuario
+  </h3>
+  <form action="{{ url_for('usuarios.manage_users') }}" method="post" style="background:none;box-shadow:none;padding:0;margin:0;">
     <label for="username">Nombre de usuario</label>
     <input type="text" id="username" name="username" value="{{ form_data.get('username', '') }}" required>
 
-    <label for="nombre">Nombre</label>
+    <label for="nombre">Nombre completo</label>
     <input type="text" id="nombre" name="nombre" value="{{ form_data.get('nombre', '') }}">
 
     <label for="password">Contraseña</label>
-    <input type="password" id="password" name="password" required>
+    <div class="password-wrapper">
+      <input type="password" id="password" name="password" required>
+      <button type="button" class="password-toggle" data-target="password" aria-label="Mostrar u ocultar contraseña">
+        <svg id="eye-password-open" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+        <svg id="eye-password-closed" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="display:none"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+      </button>
+    </div>
 
     <label for="confirm_password">Confirmar contraseña</label>
-    <input type="password" id="confirm_password" name="confirm_password" required>
+    <div class="password-wrapper">
+      <input type="password" id="confirm_password" name="confirm_password" required>
+      <button type="button" class="password-toggle" data-target="confirm_password" aria-label="Mostrar u ocultar contraseña">
+        <svg class="eye-open" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+        <svg class="eye-closed" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="display:none"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+      </button>
+    </div>
 
     <label for="role_id">Rol inicial</label>
     <select id="role_id" name="role_id" required>
-        <option value="" disabled {% if not form_data.get('role_id') %}selected{% endif %}>Selecciona un rol</option>
-        {% for rol in roles %}
-        <option value="{{ rol[0] }}" {% if form_data.get('role_id') == rol[0]|string %}selected{% endif %}>{{ rol[1] }}</option>
-        {% endfor %}
+      <option value="" disabled {% if not form_data.get('role_id') %}selected{% endif %}>Selecciona un rol</option>
+      {% for rol in roles %}
+      <option value="{{ rol[0] }}" {% if form_data.get('role_id') == rol[0]|string %}selected{% endif %}>{{ rol[1] }}</option>
+      {% endfor %}
     </select>
 
-    <button type="submit" class="btn-primary">Crear usuario</button>
-</form>
+    <button type="submit" class="btn-primary" style="margin-top:8px;display:inline-flex;align-items:center;gap:6px;">
+      <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
+      Crear usuario
+    </button>
+  </form>
+</section>
 
-<h3>Usuarios actuales</h3>
-<table class="fixed-table">
-    <tr>
-        <th>Usuario</th>
-        <th>Nombre</th>
-        <th>Roles asignados</th>
-        <th>Acciones</th>
-    </tr>
-    {% for usuario in usuarios %}
-    <tr>
-        <td>{{ usuario[1] }}</td>
-        <td>{{ usuario[2] or '—' }}</td>
-        <td>{{ usuario[3] if usuario[3] else 'Sin roles asignados' }}</td>
-        <td>
-            <form action="{{ url_for('usuarios.delete_user', user_id=usuario[0]) }}" method="post">
-                <button
-                    type="submit"
-                    class="btn-danger"
-                    {% if usuario[1] == session.get('user') %}disabled{% endif %}
-                    onclick="return confirm('¿Seguro que deseas eliminar este usuario?');"
-                >
-                    Eliminar
-                </button>
+<section class="page-section">
+  <h3>
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+    Usuarios actuales
+  </h3>
+  <div class="fixed-table">
+    <table>
+      <thead>
+        <tr>
+          <th>Usuario</th>
+          <th>Nombre</th>
+          <th>Roles asignados</th>
+          <th>Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for usuario in usuarios %}
+        <tr>
+          <td><strong>{{ usuario[1] }}</strong></td>
+          <td>{{ usuario[2] or '—' }}</td>
+          <td>{{ usuario[3] if usuario[3] else '<span style="color:var(--timestamp-color)">Sin roles</span>' }}</td>
+          <td>
+            <form action="{{ url_for('usuarios.delete_user', user_id=usuario[0]) }}" method="post" style="background:none;box-shadow:none;padding:0;margin:0;">
+              <button
+                type="submit"
+                class="btn-danger"
+                style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;font-size:0.82rem;"
+                {% if usuario[1] == session.get('user') %}disabled{% endif %}
+                onclick="return confirm('¿Seguro que deseas eliminar este usuario?');"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+                Eliminar
+              </button>
             </form>
-        </td>
-    </tr>
-    {% endfor %}
-</table>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<script>
+  document.querySelectorAll('.password-toggle').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const targetId = btn.dataset.target;
+      const input = document.getElementById(targetId);
+      if (!input) return;
+      const isPassword = input.type === 'password';
+      input.type = isPassword ? 'text' : 'password';
+      const openIcon = btn.querySelector('.eye-open, [id$="-open"]');
+      const closedIcon = btn.querySelector('.eye-closed, [id$="-closed"]');
+      if (openIcon) openIcon.style.display = isPassword ? 'none' : '';
+      if (closedIcon) closedIcon.style.display = isPassword ? '' : 'none';
+    });
+  });
+</script>
 {% endblock %}

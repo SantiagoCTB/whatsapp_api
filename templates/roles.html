@@ -2,124 +2,197 @@
 {% block title %}Roles{% endblock %}
 {% block body_class %}page{% endblock %}
 {% block content %}
-<div class="top-right">
-    <a href="{{ url_for('chat.index') }}">
-        <button class="back-btn btn-primary">Volver al inicio</button>
-    </a>
+
+<div class="page-header">
+  <a href="{{ url_for('chat.index') }}" class="page-header-back">
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>
+    Volver
+  </a>
+  <div class="page-header-icon">
+    <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+  </div>
+  <div class="page-header-text">
+    <h2>Roles</h2>
+    <p>Gestiona los roles y asignaciones del equipo</p>
+  </div>
 </div>
 
-<h2>Roles</h2>
 {% if bulk_summary %}
-    {% if bulk_summary.error %}
-        <p class="muted">No se pudo asignar roles de manera masiva: {{ bulk_summary.error }}</p>
-    {% else %}
-        <p class="muted">
-            Asignación masiva completada: {{ bulk_summary.assigned }} chats asociados al rol
-            "{{ bulk_summary.role }}". Palabras clave usadas: {{ bulk_summary.keywords }}.
-        </p>
-        {% if bulk_summary.user %}
-            <p class="muted">
-                Asignación masiva de usuario: {{ bulk_summary.user_assigned }} chats asignados a
-                "{{ bulk_summary.user }}".
-            </p>
-        {% endif %}
-    {% endif %}
+  {% if bulk_summary.error %}
+    <div class="alert error">No se pudo asignar roles de manera masiva: {{ bulk_summary.error }}</div>
+  {% else %}
+    <div class="alert success">
+      Asignación masiva completada: {{ bulk_summary.assigned }} chats asociados al rol "{{ bulk_summary.role }}". Palabras clave usadas: {{ bulk_summary.keywords }}.
+      {% if bulk_summary.user %}
+        Asignación de usuario: {{ bulk_summary.user_assigned }} chats asignados a "{{ bulk_summary.user }}".
+      {% endif %}
+    </div>
+  {% endif %}
 {% endif %}
 {% if roles_reset %}
-    <p class="muted">Se eliminaron todos los roles asignados a los chats.</p>
+  <div class="alert success">Se eliminaron todos los roles asignados a los chats.</div>
 {% endif %}
-<form action="{{ url_for('roles.crear_rol') }}" method="post">
-    <h3>Crear rol</h3>
-    <input type="text" name="name" placeholder="Nombre" required>
-    <input type="text" name="keyword" placeholder="Palabra clave">
-    <button type="submit" class="btn-primary">Crear</button>
-</form>
 
-<table class="fixed-table">
-    <tr>
-        <th>Nombre</th>
-        <th>Palabra clave</th>
-        <th>Usuarios</th>
-        <th>Acciones</th>
-    </tr>
-    {% for rol in roles %}
-    <tr>
-        <td>{{ rol[1] }}</td>
-        <td>{{ rol[2] }}</td>
-        <td>{{ ', '.join(asignaciones.get(rol[0], [])) }}</td>
-        <td>
-            <form action="{{ url_for('roles.eliminar_rol', rol_id=rol[0]) }}" method="post" style="display:inline; background:none; box-shadow:none; padding:0; margin:0;">
-                <button type="submit" class="delete-btn btn-primary">Eliminar</button>
-            </form>
-            <form action="{{ url_for('roles.editar_rol', rol_id=rol[0]) }}" method="post" style="display:inline; background:none; box-shadow:none; padding:0; margin:0;">
-                <input type="text" name="name" value="{{ rol[1] }}" required style="width:auto; padding:4px; margin:0 4px 0 0;">
-                <input type="text" name="keyword" value="{{ rol[2] }}" style="width:auto; padding:4px; margin:0 4px 0 0;">
-                <button type="submit" class="btn-primary">Actualizar</button>
-            </form>
-        </td>
-    </tr>
-    {% endfor %}
-</table>
+<section class="page-section">
+  <h3>
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+    Crear rol
+  </h3>
+  <form action="{{ url_for('roles.crear_rol') }}" method="post" style="background:none;box-shadow:none;padding:0;margin:0;display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;">
+    <div style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:160px;">
+      <label for="new-role-name" style="font-size:0.85rem;font-weight:600;color:var(--text-main);">Nombre</label>
+      <input type="text" id="new-role-name" name="name" placeholder="Ej: Ventas" required>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:160px;">
+      <label for="new-role-keyword" style="font-size:0.85rem;font-weight:600;color:var(--text-main);">Palabra clave</label>
+      <input type="text" id="new-role-keyword" name="keyword" placeholder="Ej: ventas">
+    </div>
+    <button type="submit" class="btn-primary" style="display:inline-flex;align-items:center;gap:6px;">
+      <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      Crear
+    </button>
+  </form>
+</section>
 
-<form action="{{ url_for('roles.asignar_rol') }}" method="post">
-    <h3>Asignar rol a usuario</h3>
-    <select name="user_id">
-    {% for u in usuarios %}
-        <option value="{{ u[0] }}">{{ u[1] }}</option>
-    {% endfor %}
-    </select>
-    <select name="role_id">
-    {% for rol in roles %}
-        <option value="{{ rol[0] }}">{{ rol[1] }}</option>
-    {% endfor %}
-    </select>
-    <button type="submit" class="btn-primary">Asignar</button>
-</form>
-
-<form action="{{ url_for('roles.quitar_rol') }}" method="post">
-    <h3>Quitar rol de usuario</h3>
-    <select name="user_id">
-    {% for u in usuarios %}
-        <option value="{{ u[0] }}">{{ u[1] }}</option>
-    {% endfor %}
-    </select>
-    <select name="role_id">
-    {% for rol in roles %}
-        <option value="{{ rol[0] }}">{{ rol[1] }}</option>
-    {% endfor %}
-    </select>
-    <button type="submit" class="btn-primary">Quitar</button>
-</form>
-
-<form action="{{ url_for('roles.asignar_roles_masivo') }}" method="post">
-    <h3>Asignación masiva por palabras clave</h3>
-    <p class="muted">
-        Busca en los mensajes y asigna el rol seleccionado a todos los chats que contengan
-        alguna de las palabras clave (separadas por coma). Si no ingresas palabras, se usa
-        la palabra clave del rol.
-    </p>
-    <label for="bulk-user">Usuario (opcional)</label>
-    <select id="bulk-user" name="user_id">
-        <option value="">Sin asignación</option>
-        {% for u in usuarios %}
-            <option value="{{ u[0] }}">{{ u[1] }}</option>
+<section class="page-section">
+  <h3>
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+    Roles existentes
+  </h3>
+  <div class="fixed-table">
+    <table>
+      <thead>
+        <tr>
+          <th>Nombre</th>
+          <th>Palabra clave</th>
+          <th>Usuarios</th>
+          <th>Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for rol in roles %}
+        <tr>
+          <td><strong>{{ rol[1] }}</strong></td>
+          <td><code style="background:rgba(0,168,132,0.07);padding:2px 7px;border-radius:5px;font-size:0.85rem;">{{ rol[2] }}</code></td>
+          <td style="color:var(--timestamp-color);font-size:0.875rem;">{{ ', '.join(asignaciones.get(rol[0], [])) or '—' }}</td>
+          <td>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+              <form action="{{ url_for('roles.eliminar_rol', rol_id=rol[0]) }}" method="post" style="background:none;box-shadow:none;padding:0;margin:0;">
+                <button type="submit" class="btn-danger" style="display:inline-flex;align-items:center;gap:5px;padding:6px 11px;font-size:0.82rem;">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+                  Eliminar
+                </button>
+              </form>
+              <form action="{{ url_for('roles.editar_rol', rol_id=rol[0]) }}" method="post" style="background:none;box-shadow:none;padding:0;margin:0;display:inline-flex;gap:6px;align-items:center;">
+                <input type="text" name="name" value="{{ rol[1] }}" required style="width:120px;padding:6px 9px;margin:0;">
+                <input type="text" name="keyword" value="{{ rol[2] }}" style="width:110px;padding:6px 9px;margin:0;">
+                <button type="submit" class="btn-secondary" style="display:inline-flex;align-items:center;gap:5px;padding:6px 11px;font-size:0.82rem;">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+                  Guardar
+                </button>
+              </form>
+            </div>
+          </td>
+        </tr>
         {% endfor %}
-    </select>
-    <select name="role_id" required>
-    {% for rol in roles %}
-        <option value="{{ rol[0] }}">{{ rol[1] }}</option>
-    {% endfor %}
-    </select>
-    <input type="text" name="keywords" placeholder="ej: ventas, soporte, cotización">
-    <button type="submit" class="btn-primary">Asignar masivamente</button>
-</form>
+      </tbody>
+    </table>
+  </div>
+</section>
 
-<form action="{{ url_for('roles.reset_chat_roles') }}" method="post"
-      onsubmit="return confirm('¿Seguro que deseas eliminar todos los roles asignados a los chats? Esta acción no se puede deshacer.');">
-    <h3>Reiniciar roles de chats</h3>
-    <p class="muted">
-        Elimina todas las asignaciones de roles en chats y reinicia la distribución actual.
-    </p>
-    <button type="submit" class="delete-btn btn-primary">Reiniciar roles de chats</button>
-</form>
+<section class="page-section">
+  <h3>
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><polyline points="16 11 18 13 22 9"/></svg>
+    Asignar rol a usuario
+  </h3>
+  <form action="{{ url_for('roles.asignar_rol') }}" method="post" style="background:none;box-shadow:none;padding:0;margin:0;display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;">
+    <div style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:160px;">
+      <label style="font-size:0.85rem;font-weight:600;color:var(--text-main);">Usuario</label>
+      <select name="user_id">
+        {% for u in usuarios %}<option value="{{ u[0] }}">{{ u[1] }}</option>{% endfor %}
+      </select>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:160px;">
+      <label style="font-size:0.85rem;font-weight:600;color:var(--text-main);">Rol</label>
+      <select name="role_id">
+        {% for rol in roles %}<option value="{{ rol[0] }}">{{ rol[1] }}</option>{% endfor %}
+      </select>
+    </div>
+    <button type="submit" class="btn-primary" style="display:inline-flex;align-items:center;gap:6px;">
+      <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+      Asignar
+    </button>
+  </form>
+</section>
+
+<section class="page-section">
+  <h3>
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="18" y1="8" x2="23" y2="13"/><line x1="23" y1="8" x2="18" y2="13"/></svg>
+    Quitar rol de usuario
+  </h3>
+  <form action="{{ url_for('roles.quitar_rol') }}" method="post" style="background:none;box-shadow:none;padding:0;margin:0;display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;">
+    <div style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:160px;">
+      <label style="font-size:0.85rem;font-weight:600;color:var(--text-main);">Usuario</label>
+      <select name="user_id">
+        {% for u in usuarios %}<option value="{{ u[0] }}">{{ u[1] }}</option>{% endfor %}
+      </select>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:160px;">
+      <label style="font-size:0.85rem;font-weight:600;color:var(--text-main);">Rol</label>
+      <select name="role_id">
+        {% for rol in roles %}<option value="{{ rol[0] }}">{{ rol[1] }}</option>{% endfor %}
+      </select>
+    </div>
+    <button type="submit" class="btn-secondary" style="display:inline-flex;align-items:center;gap:6px;">
+      <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      Quitar
+    </button>
+  </form>
+</section>
+
+<section class="page-section">
+  <h3>
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+    Asignación masiva por palabras clave
+  </h3>
+  <p class="muted">Busca en los mensajes y asigna el rol seleccionado a todos los chats que contengan alguna de las palabras clave (separadas por coma). Si no ingresas palabras, se usa la palabra clave del rol.</p>
+  <form action="{{ url_for('roles.asignar_roles_masivo') }}" method="post" style="background:none;box-shadow:none;padding:0;margin:12px 0 0;display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;">
+    <div style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:160px;">
+      <label for="bulk-user" style="font-size:0.85rem;font-weight:600;color:var(--text-main);">Usuario (opcional)</label>
+      <select id="bulk-user" name="user_id">
+        <option value="">Sin asignación</option>
+        {% for u in usuarios %}<option value="{{ u[0] }}">{{ u[1] }}</option>{% endfor %}
+      </select>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:160px;">
+      <label style="font-size:0.85rem;font-weight:600;color:var(--text-main);">Rol</label>
+      <select name="role_id" required>
+        {% for rol in roles %}<option value="{{ rol[0] }}">{{ rol[1] }}</option>{% endfor %}
+      </select>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:4px;flex:2;min-width:200px;">
+      <label style="font-size:0.85rem;font-weight:600;color:var(--text-main);">Palabras clave</label>
+      <input type="text" name="keywords" placeholder="ej: ventas, soporte, cotización">
+    </div>
+    <button type="submit" class="btn-primary" style="display:inline-flex;align-items:center;gap:6px;">
+      <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+      Asignar masivamente
+    </button>
+  </form>
+</section>
+
+<section class="page-section" style="border-color:#fecaca;">
+  <h3 style="color:#b91c1c;">
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+    Reiniciar roles de chats
+  </h3>
+  <p class="muted">Elimina todas las asignaciones de roles en chats y reinicia la distribución actual.</p>
+  <form action="{{ url_for('roles.reset_chat_roles') }}" method="post" style="background:none;box-shadow:none;padding:0;margin:12px 0 0;"
+        onsubmit="return confirm('¿Seguro que deseas eliminar todos los roles asignados a los chats? Esta acción no se puede deshacer.');">
+    <button type="submit" class="btn-danger" style="display:inline-flex;align-items:center;gap:6px;">
+      <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+      Reiniciar roles de chats
+    </button>
+  </form>
+</section>
 {% endblock %}

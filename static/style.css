@@ -2729,3 +2729,207 @@ body.chat #chatBox::-webkit-scrollbar-thumb {
   box-shadow: 0 4px 12px rgba(0,168,132,0.4);
 }
 
+/* ============================================================
+   PAGE UI IMPROVEMENTS — shared across body.page templates
+   ============================================================ */
+
+/* Better base for all admin/worker pages */
+body.page {
+  font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  padding: 28px clamp(16px, 4vw, 48px);
+  max-width: 1200px;
+  margin: 0 auto;
+  background: #fff;
+  background-image: none;
+}
+
+/* ── Page header ─────────────────────────────────────────────── */
+.page-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 28px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.page-header-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: rgba(0,168,132,0.1);
+  border: 1px solid rgba(0,168,132,0.18);
+  display: grid;
+  place-items: center;
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.page-header-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.page-header-text h2 {
+  margin: 0;
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--text-main);
+  letter-spacing: -0.01em;
+}
+
+.page-header-text p {
+  margin: 3px 0 0;
+  color: var(--timestamp-color);
+  font-size: 0.875rem;
+}
+
+.page-header-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--border-color);
+  background: transparent;
+  color: var(--text-main);
+  padding: 8px 14px;
+  border-radius: 10px;
+  font-weight: 600;
+  font-size: 0.875rem;
+  text-decoration: none;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.2s, border-color 0.2s, color 0.2s;
+}
+
+.page-header-back:hover {
+  background: rgba(0,168,132,0.07);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* ── Form inputs (page context) ─────────────────────────────── */
+body.page input:not([type=checkbox]):not([type=range]):not([type=file]):not([type=submit]):not([type=button]),
+body.page select,
+body.page textarea {
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 9px 12px;
+  font-size: 0.9rem;
+  color: var(--text-main);
+  background: #fff;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+body.page input:not([type=checkbox]):not([type=range]):not([type=file]):not([type=submit]):not([type=button]):focus,
+body.page select:focus,
+body.page textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(0,168,132,0.1);
+}
+
+/* ── Table improvements (page context) ─────────────────────── */
+body.page table {
+  border-collapse: collapse;
+  border-spacing: 0;
+}
+
+body.page th {
+  background: rgba(0,168,132,0.06);
+  font-weight: 700;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--accent-hover);
+  padding: 10px 12px;
+  border-bottom: 2px solid var(--border-color);
+}
+
+body.page td {
+  padding: 10px 12px;
+  border-bottom: 1px solid #f0f0f0;
+  font-size: 0.9rem;
+  vertical-align: middle;
+}
+
+body.page table tr:hover td {
+  background: rgba(0,168,132,0.035);
+}
+
+/* ── Status icon helpers ─────────────────────────────────────── */
+.status-icon {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.status-icon--success { color: #2e7d32; }
+.status-icon--error   { color: #b00020; }
+.status-icon--warning { color: #d97706; }
+
+/* ── Section card for page forms ─────────────────────────────── */
+body.page .page-section {
+  background: #fff;
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  padding: 24px;
+  margin-bottom: 20px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+}
+
+body.page .page-section h3 {
+  margin: 0 0 16px;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-main);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ── Password field wrapper ──────────────────────────────────── */
+.password-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.password-wrapper input {
+  flex: 1;
+  padding-right: 42px !important;
+}
+
+.password-toggle {
+  position: absolute;
+  right: 10px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--timestamp-color);
+  display: grid;
+  place-items: center;
+  padding: 4px;
+  border-radius: 6px;
+  transition: color 0.2s;
+}
+
+.password-toggle:hover { color: var(--accent); }
+.password-toggle:after { display: none; }
+
+/* ── Inline icon buttons inside tables ──────────────────────── */
+body.page .icon-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: background 0.2s, color 0.2s, border-color 0.2s;
+}
+
+

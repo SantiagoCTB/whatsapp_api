@@ -4,14 +4,24 @@
 {% block content %}
 <link rel="stylesheet" href="{{ url_for('static', filename='tablero.css') }}">
 
-<div class="top-right">
-    <a href="{{ url_for('chat.index') }}">
-        <button class="back-btn btn-primary">Volver al inicio</button>
-    </a>
+<div class="page-header">
+  <a href="{{ url_for('chat.index') }}" class="page-header-back">
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>
+    Volver
+  </a>
+  <div class="page-header-icon">
+    <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+  </div>
+  <div class="page-header-text">
+    <h2>Tablero</h2>
+    <p>Métricas y estadísticas de conversaciones</p>
+  </div>
+  <button id="filters-toggle" class="page-header-back" type="button" aria-expanded="false" aria-controls="filters-panel" style="gap:6px;">
+    <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="4" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="11" y1="18" x2="13" y2="18"/></svg>
+    Filtros
+  </button>
 </div>
 
-
-<button id="filters-toggle" class="filters-toggle btn-primary" type="button" aria-expanded="false" aria-controls="filters-panel">Filtros</button>
 <div id="filters-panel" class="filters-panel" hidden>
     <label for="fechaInicio">Desde:</label>
     <input type="date" id="fechaInicio">
@@ -39,13 +49,14 @@
     <button id="clear-filters" class="btn-primary" type="button">Limpiar filtros</button>
 </div>
 
-
 <main>
     <div class="dashboard-grid">
         <section class="cards resumen">
             <div class="card">
                 <div class="card-content">
-                    <span class="icon">💬</span>
+                    <span class="icon">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                    </span>
                     <div class="text">
                         <h3>Total de mensajes</h3>
                         <p id="totalMensajes">0</p>
@@ -54,7 +65,9 @@
             </div>
             <div class="card">
                 <div class="card-content">
-                    <span class="icon">🗂️</span>
+                    <span class="icon">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                    </span>
                     <div class="text">
                         <h3>Total de chats</h3>
                         <p id="totalChats">0</p>
@@ -63,7 +76,9 @@
             </div>
             <div class="card">
                 <div class="card-content">
-                    <span class="icon">👥</span>
+                    <span class="icon">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                    </span>
                     <div class="text">
                         <h3>Cantidad de roles</h3>
                         <p id="cantidadRoles">0</p>
@@ -72,7 +87,9 @@
             </div>
             <div class="card">
                 <div class="card-content">
-                    <span class="icon">📤</span>
+                    <span class="icon">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                    </span>
                     <div class="text">
                         <h3>Enviados</h3>
                         <p id="totalEnviados">0</p>
@@ -81,7 +98,9 @@
             </div>
             <div class="card">
                 <div class="card-content">
-                    <span class="icon">📥</span>
+                    <span class="icon">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="8 17 12 21 16 17"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.88 18.09A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.29"/></svg>
+                    </span>
                     <div class="text">
                         <h3>Recibidos</h3>
                         <p id="totalRecibidos">0</p>
@@ -90,18 +109,21 @@
             </div>
         </section>
         <section class="reports" id="reportes">
-            <!-- Gráficos iniciales a ancho completo -->
             <div class="wide-row">
                 <div class="card chart-card">
                     <div class="card-header">
-                        <span class="icon">📅</span>
+                        <span class="icon">
+                          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                        </span>
                         <h4>Mensajes por Día</h4>
                     </div>
                     <canvas id="graficoDiario"></canvas>
                 </div>
                 <div class="card chart-card">
                     <div class="card-header">
-                        <span class="icon">⏰</span>
+                        <span class="icon">
+                          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                        </span>
                         <h4>Mensajes por Hora</h4>
                     </div>
                     <canvas id="graficoHora"></canvas>
@@ -109,7 +131,9 @@
             </div>
             <div class="card chart-card">
                 <div class="card-header">
-                    <span class="icon">📆</span>
+                    <span class="icon">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="3" y1="14" x2="21" y2="14"/></svg>
+                    </span>
                     <h4>Mensajes por Semana</h4>
                 </div>
                 <div class="chart-table">
@@ -127,21 +151,27 @@
             </div>
             <div class="card chart-card">
                 <div class="card-header">
-                    <span class="icon">📊</span>
+                    <span class="icon">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+                    </span>
                     <h3>Totales de mensajes</h3>
                 </div>
                 <canvas id="graficoTotales"></canvas>
             </div>
             <div class="card chart-card">
                 <div class="card-header">
-                    <span class="icon">👤</span>
+                    <span class="icon">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                    </span>
                     <h4>Chats por Usuario</h4>
                 </div>
                 <canvas id="grafico"></canvas>
             </div>
             <div class="card chart-card">
                 <div class="card-header">
-                    <span class="icon">🏆</span>
+                    <span class="icon">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="6"/><path d="M15.477 12.89L17 22l-5-3-5 3 1.523-9.11"/></svg>
+                    </span>
                     <h4>Top Números</h4>
                 </div>
                 <div class="chart-table">
@@ -159,7 +189,9 @@
             </div>
             <div class="card chart-card">
                 <div class="card-header">
-                    <span class="icon">🙅📞</span>
+                    <span class="icon">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="1" y1="1" x2="23" y2="23"/><path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55"/><path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39"/><path d="M10.71 5.05A16 16 0 0 1 22.56 9"/><path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg>
+                    </span>
                     <h4>Números sin Asesor</h4>
                 </div>
                 <div class="chart-table">
@@ -174,7 +206,9 @@
             </div>
             <div class="card chart-card">
                 <div class="card-header">
-                    <span class="icon">🔤</span>
+                    <span class="icon">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg>
+                    </span>
                     <h4>Palabras Más Usadas</h4>
                 </div>
                 <div class="chart-table">
@@ -192,7 +226,9 @@
             </div>
             <div class="card chart-card">
                 <div class="card-header">
-                    <span class="icon">👥</span>
+                    <span class="icon">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                    </span>
                     <h4>Roles</h4>
                 </div>
                 <div class="chart-table">
@@ -210,28 +246,36 @@
             </div>
             <div class="card chart-card">
                 <div class="card-header">
-                    <span class="icon">💬</span>
+                    <span class="icon">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                    </span>
                     <h4>Tipos de Mensaje</h4>
                 </div>
                 <canvas id="graficoTipos"></canvas>
             </div>
             <div class="card chart-card">
                 <div class="card-header">
-                    <span class="icon">🧩</span>
+                    <span class="icon">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="6" height="4" rx="1"/><rect x="9" y="3" width="6" height="4" rx="1"/><rect x="16" y="3" width="6" height="4" rx="1"/><rect x="2" y="10" width="6" height="4" rx="1"/><rect x="9" y="10" width="6" height="4" rx="1"/><rect x="16" y="10" width="6" height="4" rx="1"/><rect x="2" y="17" width="6" height="4" rx="1"/><rect x="9" y="17" width="6" height="4" rx="1"/></svg>
+                    </span>
                     <h4>Chats por Integración</h4>
                 </div>
                 <canvas id="graficoIntegraciones"></canvas>
             </div>
             <div class="card chart-card">
                 <div class="card-header">
-                    <span class="icon">🗓️</span>
+                    <span class="icon">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                    </span>
                     <h4>Tipos por Día</h4>
                 </div>
                 <canvas id="graficoTiposDiarios"></canvas>
             </div>
             <div class="card chart-card">
                 <div class="card-header">
-                    <span class="icon">🙅</span>
+                    <span class="icon">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="18" y1="8" x2="23" y2="13"/><line x1="23" y1="8" x2="18" y2="13"/></svg>
+                    </span>
                     <h4>Mensajes sin Asesor</h4>
                 </div>
                 <canvas id="graficoSinAsesor"></canvas>

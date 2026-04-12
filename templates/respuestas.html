@@ -2,13 +2,19 @@
 {% block title %}Respuestas{% endblock %}
 {% block body_class %}page{% endblock %}
 {% block content %}
-<div class="top-right">
-    <a href="{{ url_for('chat.index') }}">
-        <button class="back-btn btn-primary">Volver al inicio</button>
-    </a>
+<div class="page-header">
+  <a href="{{ url_for('chat.index') }}" class="page-header-back">
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>
+    Volver
+  </a>
+  <div class="page-header-icon">
+    <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>
+  </div>
+  <div class="page-header-text">
+    <h2>Respuestas</h2>
+    <p>Historial de respuestas de flows recibidas</p>
+  </div>
 </div>
-
-<h2>Respuestas</h2>
 {% set max_summary_items = 10 %}
 {% if flow_responses %}
 <div class="flow-responses-table">
