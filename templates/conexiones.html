@@ -12,176 +12,175 @@
   </div>
   <div class="page-header-text">
     <h2>Conexiones API</h2>
-    <p>Configura y prueba conexiones a servicios externos mediante consultas HTTP</p>
+    <p>Configura servicios externos y prueba llamadas HTTP directamente</p>
   </div>
   <button id="btnNuevaConexion" class="btn-primary" type="button">+ Nueva conexión</button>
 </div>
 
-<!-- Toast de notificaciones -->
-<div id="toast" class="conexiones-toast" role="alert" aria-live="polite" hidden></div>
+<!-- Toast -->
+<div id="toast" class="cx-toast" role="alert" aria-live="polite" hidden></div>
 
-<!-- Lista de conexiones -->
+<!-- ── Lista ────────────────────────────────────────────────────────────── -->
 <section class="template-card" id="listaSection">
   <h3>Conexiones configuradas</h3>
-  <div id="listaConexiones">
-    <p class="conexiones-empty">Cargando...</p>
-  </div>
+  <div id="listaConexiones"><p class="cx-empty">Cargando...</p></div>
 </section>
 
-<!-- Formulario crear / editar -->
+<!-- ── Formulario crear / editar ─────────────────────────────────────── -->
 <section class="template-card" id="formSection" hidden>
   <h3 id="formTitle">Nueva conexión</h3>
 
-  <label for="cNombre">Nombre de la conexión</label>
-  <input id="cNombre" type="text" placeholder="Mi API de clientes" />
+  <label for="cNombre">Nombre</label>
+  <input id="cNombre" type="text" placeholder="KIRYAPP, Mi CRM, etc." />
 
-  <label for="cDescripcion">Descripción (opcional)</label>
-  <input id="cDescripcion" type="text" placeholder="Consulta el estado de pedidos" />
+  <label for="cDescripcion">Descripción <span style="color:#aaa;font-weight:400">(opcional)</span></label>
+  <input id="cDescripcion" type="text" placeholder="Servicio de venta de tiquetes de bus" />
 
   <label for="cUrl">URL base de la API</label>
-  <input id="cUrl" type="url" placeholder="https://api.ejemplo.com" />
-  <small class="conexiones-hint">Solo la URL raíz, sin el path (ej: <code>http://kiryapp.agestion.net:63431</code>). El path se define en cada regla del bot.</small>
+  <input id="cUrl" type="url" placeholder="http://kiryapp.agestion.net:63431" />
+  <small class="cx-hint">Solo el servidor raíz, sin rutas. Ejemplo: <code>http://kiryapp.agestion.net:63431</code></small>
 
-  <label for="cMetodo">Método HTTP</label>
-  <select id="cMetodo">
-    <option value="GET">GET</option>
-    <option value="POST">POST</option>
-    <option value="PUT">PUT</option>
-    <option value="PATCH">PATCH</option>
-    <option value="DELETE">DELETE</option>
-  </select>
-
-  <label for="cAuthTipo">Autenticación</label>
+  <label for="cAuthTipo" style="margin-top:14px;">Autenticación</label>
   <select id="cAuthTipo">
     <option value="none">Sin autenticación</option>
     <option value="bearer">Bearer Token</option>
     <option value="basic">Basic Auth (usuario:contraseña)</option>
-    <option value="api_key">API Key (Encabezado:Valor)</option>
+    <option value="api_key">API Key (Encabezado: Valor)</option>
   </select>
 
   <div id="authValorBlock">
     <label for="cAuthValor" id="cAuthValorLabel">Token / credencial</label>
-    <input id="cAuthValor" type="password" placeholder="" autocomplete="new-password" />
-    <small id="authValorHint" class="conexiones-hint"></small>
+    <input id="cAuthValor" type="password" autocomplete="new-password" />
+    <small id="authValorHint" class="cx-hint"></small>
   </div>
 
-  <label for="cHeaders">Headers personalizados (JSON)</label>
-  <textarea id="cHeaders" rows="4" placeholder='{"Content-Type": "application/json", "X-Custom": "valor"}'></textarea>
+  <label for="cHeaders" style="margin-top:14px;">Headers globales <span style="color:#aaa;font-weight:400">(JSON, opcional)</span></label>
+  <textarea id="cHeaders" rows="3" placeholder='{"X-Custom-Header": "valor"}'></textarea>
+  <small class="cx-hint">Se añaden a todas las llamadas de esta conexión.</small>
 
-  <div id="bodyBlock">
-    <label for="cBody">Cuerpo de la solicitud (JSON para POST/PUT/PATCH)</label>
-    <textarea id="cBody" rows="5" placeholder='{"clave": "valor"}'></textarea>
-  </div>
-
-  <div class="action-row">
-    <button id="btnGuardar" class="btn-primary" type="button">Guardar conexión</button>
+  <div class="action-row" style="margin-top:18px;">
+    <button id="btnGuardar" class="btn-primary" type="button">Guardar</button>
     <button id="btnCancelar" class="btn-secondary" type="button">Cancelar</button>
   </div>
 </section>
 
-<!-- Panel de prueba -->
+<!-- ── Panel de llamada HTTP ─────────────────────────────────────────── -->
 <section class="template-card" id="testSection" hidden>
-  <h3>Probar conexión</h3>
-  <p id="testBaseUrl" style="font-size:13px;color:#555;margin-bottom:12px;"></p>
 
-  <label for="tPath">Path del endpoint (ruta)</label>
-  <input id="tPath" type="text" placeholder="/api/v1/origins-and-destinies" />
-  <small class="conexiones-hint">Se añade a la URL base. Ejemplo: <code>/api/v1/bearing/by-route/1/2/2026-04-20</code></small>
+  <!-- Encabezado de la conexión activa -->
+  <div class="cx-conn-header">
+    <div>
+      <span class="cx-conn-name" id="tConNombre"></span>
+      <span class="cx-conn-base" id="tConBase"></span>
+    </div>
+    <span class="cx-badge-auth" id="tConAuth"></span>
+  </div>
 
-  <label for="tMethod" style="margin-top:10px;">Método HTTP</label>
-  <select id="tMethod">
-    <option value="GET">GET</option>
-    <option value="POST">POST</option>
-    <option value="PUT">PUT</option>
-    <option value="PATCH">PATCH</option>
-    <option value="DELETE">DELETE</option>
-  </select>
+  <!-- Constructor de URL -->
+  <div class="cx-url-row">
+    <select id="tMethod" class="cx-method-select">
+      <option value="GET">GET</option>
+      <option value="POST">POST</option>
+      <option value="PUT">PUT</option>
+      <option value="PATCH">PATCH</option>
+      <option value="DELETE">DELETE</option>
+    </select>
+    <span class="cx-base-preview" id="tBasePreview"></span>
+    <input id="tPath" type="text" class="cx-path-input" placeholder="/api/v1/origins-and-destinies" />
+    <button id="btnSend" class="btn-primary cx-send-btn" type="button">Enviar</button>
+  </div>
+  <small class="cx-hint" id="tUrlPreview" style="margin-bottom:12px;"></small>
 
+  <!-- Headers adicionales (colapsable) -->
+  <details class="cx-details">
+    <summary>Headers adicionales <span style="color:#aaa;font-weight:400">(JSON, opcional)</span></summary>
+    <textarea id="tExtraHeaders" rows="3" style="margin-top:8px;" placeholder='{"X-Trace-Id": "abc123"}'></textarea>
+    <small class="cx-hint">Se fusionan con los headers globales de la conexión.</small>
+  </details>
+
+  <!-- Body -->
   <div id="tBodyBlock" style="margin-top:10px;">
-    <label for="tBody">Cuerpo JSON (para POST/PUT/PATCH)</label>
-    <textarea id="tBody" rows="6" placeholder='{"customerName": "Juan", "tickets": [...]}'></textarea>
+    <label for="tBody">Cuerpo de la solicitud <span style="color:#aaa;font-weight:400">(JSON)</span></label>
+    <textarea id="tBody" rows="8" placeholder='&#123;
+  "customerName": "Juan",
+  "customerDocument": "123456789",
+  "tickets": [&#123; "bearingId": 1, "seatId": "A1" &#125;]
+&#125;'></textarea>
   </div>
 
-  <div class="action-row" style="margin-top:14px;">
-    <button id="btnEjecutarTest" class="btn-primary" type="button">Ejecutar prueba</button>
-    <button id="btnCerrarTest" class="btn-secondary" type="button">Cancelar</button>
+  <!-- Resultado -->
+  <div id="tResultBlock" style="margin-top:16px;" hidden>
+    <div class="cx-result-bar">
+      <span id="tStatusBadge" class="cx-status-badge"></span>
+      <span id="tTimeBadge" class="cx-time-badge"></span>
+      <code id="tUrlCalled" class="cx-url-called"></code>
+    </div>
+    <div id="tResult" class="cx-result"></div>
   </div>
 
-  <div id="testResultBlock" hidden style="margin-top:16px;">
-    <h4 style="margin-bottom:6px;font-size:13px;color:#555;" id="testResultLabel"></h4>
-    <div id="testResult" class="conexiones-result"></div>
+  <div style="margin-top:14px;">
+    <button id="btnCerrarTest" class="btn-secondary" type="button">← Volver a conexiones</button>
   </div>
 </section>
 
+<!-- ── Estilos ─────────────────────────────────────────────────────────── -->
 <style>
-  .conexiones-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 14px;
-  }
-  .conexiones-table th,
-  .conexiones-table td {
-    text-align: left;
-    padding: 10px 12px;
-    border-bottom: 1px solid var(--border-color, #e0e0e0);
-  }
-  .conexiones-table th {
-    background: #f5f9f8;
-    font-weight: 600;
-    color: #333;
-  }
-  .conexiones-table tr:hover td {
-    background: #f0faf8;
-  }
-  .badge-metodo {
-    display: inline-block;
-    padding: 2px 8px;
-    border-radius: 4px;
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 0.5px;
-    color: #fff;
-  }
-  .badge-GET    { background: #00A884; }
-  .badge-POST   { background: #2563eb; }
-  .badge-PUT    { background: #d97706; }
-  .badge-PATCH  { background: #7c3aed; }
-  .badge-DELETE { background: #dc2626; }
-  .conexiones-actions { display: flex; gap: 6px; flex-wrap: wrap; }
-  .conexiones-empty { color: #888; font-style: italic; padding: 12px 0; }
-  .conexiones-toast {
-    position: fixed;
-    bottom: 24px;
-    right: 24px;
-    background: #212121;
-    color: #fff;
-    padding: 12px 20px;
-    border-radius: 8px;
-    font-size: 14px;
-    z-index: 9999;
-    box-shadow: 0 4px 16px rgba(0,0,0,0.25);
-    max-width: 360px;
-  }
-  .conexiones-toast.ok   { background: #00A884; }
-  .conexiones-toast.error { background: #dc2626; }
-  .conexiones-result {
-    background: #1e1e1e;
-    color: #d4d4d4;
-    border-radius: 8px;
-    padding: 16px;
-    font-family: monospace;
-    font-size: 13px;
-    overflow-x: auto;
-    white-space: pre-wrap;
-    word-break: break-word;
-    max-height: 400px;
-    overflow-y: auto;
-  }
-  .conexiones-hint { color: #888; font-size: 12px; margin-top: 4px; display: block; }
-  .conexiones-hint code { background: #eee; padding: 1px 4px; border-radius: 3px; font-size: 11px; }
-  #authValorBlock { margin-bottom: 0; }
-</style>
+  /* Tabla */
+  .cx-table { width:100%; border-collapse:collapse; font-size:14px; }
+  .cx-table th, .cx-table td { text-align:left; padding:10px 12px; border-bottom:1px solid var(--border-color,#e0e0e0); }
+  .cx-table th { background:#f5f9f8; font-weight:600; color:#333; }
+  .cx-table tr:hover td { background:#f0faf8; }
+  .cx-actions { display:flex; gap:6px; flex-wrap:wrap; }
+  .cx-empty { color:#888; font-style:italic; padding:12px 0; }
 
+  /* Badge método */
+  .badge-m { display:inline-block; padding:2px 7px; border-radius:4px; font-size:11px; font-weight:700; color:#fff; }
+  .badge-GET    { background:#00A884; }
+  .badge-POST   { background:#2563eb; }
+  .badge-PUT    { background:#d97706; }
+  .badge-PATCH  { background:#7c3aed; }
+  .badge-DELETE { background:#dc2626; }
+
+  /* Toast */
+  .cx-toast { position:fixed; bottom:24px; right:24px; background:#212121; color:#fff; padding:12px 20px; border-radius:8px; font-size:14px; z-index:9999; box-shadow:0 4px 16px rgba(0,0,0,.25); max-width:360px; }
+  .cx-toast.ok    { background:#00A884; }
+  .cx-toast.error { background:#dc2626; }
+
+  /* Hint */
+  .cx-hint { color:#888; font-size:12px; margin-top:4px; display:block; }
+  .cx-hint code { background:#eee; padding:1px 5px; border-radius:3px; font-size:11px; }
+  #authValorBlock { margin-bottom:0; }
+
+  /* Conexión activa header */
+  .cx-conn-header { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; padding-bottom:14px; border-bottom:1px solid var(--border-color,#e0e0e0); margin-bottom:16px; }
+  .cx-conn-name { font-weight:700; font-size:16px; margin-right:8px; }
+  .cx-conn-base { color:#666; font-size:13px; font-family:monospace; }
+  .cx-badge-auth { font-size:11px; font-weight:600; background:#f0f7ff; color:#2563eb; border:1px solid #bfdbfe; padding:2px 8px; border-radius:12px; }
+
+  /* URL builder */
+  .cx-url-row { display:flex; align-items:center; gap:6px; flex-wrap:nowrap; margin-bottom:4px; }
+  .cx-method-select { flex:0 0 auto; width:100px; font-weight:700; }
+  .cx-base-preview { flex:0 0 auto; color:#888; font-family:monospace; font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:220px; }
+  .cx-path-input { flex:1 1 0; min-width:0; font-family:monospace; }
+  .cx-send-btn { flex:0 0 auto; white-space:nowrap; }
+
+  /* Details colapsable */
+  .cx-details { border:1px solid var(--border-color,#e0e0e0); border-radius:8px; padding:10px 14px; margin-top:10px; }
+  .cx-details summary { cursor:pointer; font-size:13px; color:#555; user-select:none; }
+  .cx-details summary:hover { color:#000; }
+
+  /* Resultado */
+  .cx-result-bar { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:8px; }
+  .cx-status-badge { padding:3px 10px; border-radius:12px; font-weight:700; font-size:13px; color:#fff; }
+  .cx-status-2xx { background:#00A884; }
+  .cx-status-3xx { background:#2563eb; }
+  .cx-status-4xx { background:#d97706; }
+  .cx-status-5xx { background:#dc2626; }
+  .cx-status-err { background:#6b7280; }
+  .cx-time-badge { font-size:12px; color:#888; }
+  .cx-url-called { font-size:12px; color:#555; word-break:break-all; }
+  .cx-result { background:#1e1e1e; color:#d4d4d4; border-radius:8px; padding:16px; font-family:monospace; font-size:13px; overflow-x:auto; white-space:pre-wrap; word-break:break-word; max-height:500px; overflow-y:auto; }
+</style>
 {% endblock %}
 
 {% block scripts %}
@@ -190,102 +189,72 @@
   'use strict';
 
   let editingId = null;
+  let testConexionId = null;
 
-  // ── Helpers ────────────────────────────────────────────────────────────────
+  // ── Helpers ──────────────────────────────────────────────────────────────
 
   function showToast(msg, type = 'ok') {
     const t = document.getElementById('toast');
     t.textContent = msg;
-    t.className = 'conexiones-toast ' + type;
+    t.className = 'cx-toast ' + type;
     t.hidden = false;
     clearTimeout(t._timer);
     t._timer = setTimeout(() => { t.hidden = true; }, 3500);
   }
 
-  function show(id)  { document.getElementById(id).hidden = false; }
-  function hide(id)  { document.getElementById(id).hidden = true; }
+  const show = id => document.getElementById(id).hidden = false;
+  const hide = id => document.getElementById(id).hidden = true;
 
   function methodBadge(m) {
-    return `<span class="badge-metodo badge-${m}">${m}</span>`;
+    return `<span class="badge-m badge-${m}">${m}</span>`;
   }
 
-  function authLabel(tipo) {
-    const labels = { none: 'Ninguna', bearer: 'Bearer', basic: 'Basic', api_key: 'API Key' };
-    return labels[tipo] || tipo;
+  function authLabel(t) {
+    return { none:'Ninguna', bearer:'Bearer', basic:'Basic', api_key:'API Key' }[t] || t;
   }
 
-  // ── Load list ──────────────────────────────────────────────────────────────
+  function escapeHtml(str) {
+    return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  // ── Lista ────────────────────────────────────────────────────────────────
 
   async function loadConexiones() {
-    const container = document.getElementById('listaConexiones');
+    const el = document.getElementById('listaConexiones');
     try {
-      const res = await fetch('/api/conexiones');
-      const json = await res.json();
-      if (!json.ok) { container.innerHTML = `<p class="conexiones-empty">Error: ${json.error}</p>`; return; }
-      if (!json.data.length) {
-        container.innerHTML = '<p class="conexiones-empty">No hay conexiones configuradas todavía.</p>';
-        return;
-      }
-      container.innerHTML = `
-        <table class="conexiones-table">
-          <thead>
-            <tr>
-              <th>#</th>
-              <th>Nombre</th>
-              <th>Método</th>
-              <th>URL</th>
-              <th>Auth</th>
-              <th>Acciones</th>
-            </tr>
-          </thead>
+      const r = await fetch('/api/conexiones');
+      const j = await r.json();
+      if (!j.ok) { el.innerHTML = `<p class="cx-empty">Error: ${j.error}</p>`; return; }
+      if (!j.data.length) { el.innerHTML = '<p class="cx-empty">No hay conexiones configuradas todavía.</p>'; return; }
+      el.innerHTML = `
+        <table class="cx-table">
+          <thead><tr><th>#</th><th>Nombre</th><th>URL base</th><th>Auth</th><th>Acciones</th></tr></thead>
           <tbody>
-            ${json.data.map(c => `
+            ${j.data.map(c => `
               <tr>
                 <td>${c.id}</td>
                 <td>
                   <strong>${escapeHtml(c.nombre)}</strong>
                   ${c.descripcion ? `<br><small style="color:#888">${escapeHtml(c.descripcion)}</small>` : ''}
                 </td>
-                <td>${methodBadge(c.metodo)}</td>
-                <td style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escapeHtml(c.url)}">${escapeHtml(c.url)}</td>
+                <td style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:monospace;font-size:12px;" title="${escapeHtml(c.url)}">${escapeHtml(c.url)}</td>
                 <td>${authLabel(c.auth_tipo)}</td>
                 <td>
-                  <div class="conexiones-actions">
+                  <div class="cx-actions">
+                    <button class="btn-primary"   type="button" onclick="abrirCliente(${c.id})">Abrir cliente</button>
                     <button class="btn-secondary" type="button" onclick="editarConexion(${c.id})">Editar</button>
-                    <button class="btn-primary"   type="button" onclick="probarConexion(${c.id})">Probar</button>
-                    <button class="btn-secondary" type="button" style="color:#dc2626;border-color:#dc2626" onclick="eliminarConexion(${c.id}, '${escapeHtml(c.nombre)}')">Eliminar</button>
+                    <button class="btn-secondary" type="button" style="color:#dc2626;border-color:#dc2626" onclick="eliminarConexion(${c.id},'${escapeHtml(c.nombre)}')">Eliminar</button>
                   </div>
                 </td>
-              </tr>
-            `).join('')}
+              </tr>`).join('')}
           </tbody>
         </table>`;
     } catch (e) {
-      container.innerHTML = `<p class="conexiones-empty">Error de red: ${e.message}</p>`;
+      el.innerHTML = `<p class="cx-empty">Error de red: ${e.message}</p>`;
     }
   }
 
-  function escapeHtml(str) {
-    return String(str || '')
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;');
-  }
-
-  // ── Form helpers ───────────────────────────────────────────────────────────
-
-  function resetForm() {
-    editingId = null;
-    document.getElementById('formTitle').textContent = 'Nueva conexión';
-    ['cNombre','cDescripcion','cUrl','cAuthValor','cHeaders','cBody'].forEach(id => {
-      document.getElementById(id).value = '';
-    });
-    document.getElementById('cMetodo').value = 'GET';
-    document.getElementById('cAuthTipo').value = 'none';
-    updateAuthHint();
-    updateBodyVisibility();
-  }
+  // ── Formulario ───────────────────────────────────────────────────────────
 
   function updateAuthHint() {
     const tipo = document.getElementById('cAuthTipo').value;
@@ -294,88 +263,64 @@
     const hint  = document.getElementById('authValorHint');
     const input = document.getElementById('cAuthValor');
     const hints = {
-      none:    '',
-      bearer:  'Ingresa el token Bearer (sin el prefijo "Bearer ").',
-      basic:   'Ingresa usuario:contraseña en texto plano.',
-      api_key: 'Ingresa en formato   NombreHeader: valor   (ej: X-Api-Key: abc123).',
+      none:'', bearer:'Solo el token, sin el prefijo "Bearer".',
+      basic:'Formato: usuario:contraseña', api_key:'Formato: NombreHeader: valor  (ej: X-Api-Key: abc123)',
     };
-    const labels = { none: 'Token / credencial', bearer: 'Token Bearer', basic: 'Usuario:Contraseña', api_key: 'Clave API (Header:Valor)' };
+    const labels = { none:'Credencial', bearer:'Token Bearer', basic:'Usuario:Contraseña', api_key:'Header: Valor' };
     block.hidden = tipo === 'none';
-    label.textContent = labels[tipo] || 'Token / credencial';
-    hint.textContent = hints[tipo] || '';
-    input.placeholder = hints[tipo] ? (tipo === 'basic' ? 'usuario:contraseña' : tipo === 'api_key' ? 'X-Api-Key: tu_clave' : 'tu_token') : '';
+    label.textContent = labels[tipo] || 'Credencial';
+    hint.textContent  = hints[tipo] || '';
+    input.placeholder = tipo === 'basic' ? 'usuario:contraseña' : tipo === 'api_key' ? 'X-Api-Key: tu_clave' : 'tu_token_aquí';
   }
 
-  function updateBodyVisibility() {
-    const m = document.getElementById('cMetodo').value;
-    document.getElementById('bodyBlock').hidden = ['GET','DELETE'].includes(m);
+  function resetForm() {
+    editingId = null;
+    document.getElementById('formTitle').textContent = 'Nueva conexión';
+    ['cNombre','cDescripcion','cUrl','cAuthValor','cHeaders'].forEach(id => {
+      document.getElementById(id).value = '';
+    });
+    document.getElementById('cAuthTipo').value = 'none';
+    updateAuthHint();
   }
-
-  // ── Open form ──────────────────────────────────────────────────────────────
 
   document.getElementById('btnNuevaConexion').addEventListener('click', () => {
     resetForm();
-    hide('listaSection');
-    hide('testSection');
-    show('formSection');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    hide('listaSection'); hide('testSection'); show('formSection');
+    window.scrollTo({ top:0, behavior:'smooth' });
   });
 
   document.getElementById('btnCancelar').addEventListener('click', () => {
-    hide('formSection');
-    show('listaSection');
-  });
-
-  document.getElementById('btnCerrarTest').addEventListener('click', () => {
-    testingConexionId = null;
-    hide('testSection');
-    hide('testResultBlock');
-    show('listaSection');
+    hide('formSection'); show('listaSection');
   });
 
   document.getElementById('cAuthTipo').addEventListener('change', updateAuthHint);
-  document.getElementById('cMetodo').addEventListener('change', updateBodyVisibility);
-
-  // ── Save ───────────────────────────────────────────────────────────────────
 
   document.getElementById('btnGuardar').addEventListener('click', async () => {
     const nombre     = document.getElementById('cNombre').value.trim();
     const url        = document.getElementById('cUrl').value.trim();
-    const metodo     = document.getElementById('cMetodo').value;
     const auth_tipo  = document.getElementById('cAuthTipo').value;
     const auth_valor = document.getElementById('cAuthValor').value.trim();
     const headersRaw = document.getElementById('cHeaders').value.trim();
-    const body       = document.getElementById('cBody').value.trim();
     const descripcion= document.getElementById('cDescripcion').value.trim();
 
     if (!nombre || !url) { showToast('Nombre y URL son obligatorios.', 'error'); return; }
-
     if (headersRaw) {
-      try { JSON.parse(headersRaw); } catch {
-        showToast('El campo Headers no es un JSON válido.', 'error');
-        return;
-      }
+      try { JSON.parse(headersRaw); } catch { showToast('Headers: JSON inválido.', 'error'); return; }
     }
 
-    const payload = { nombre, descripcion, url, metodo, auth_tipo, auth_valor, headers: headersRaw || '{}', body_template: body };
-
+    const payload = { nombre, descripcion, url, metodo:'GET', auth_tipo, auth_valor, headers: headersRaw || '{}', body_template:'' };
     const endpoint = editingId ? `/api/conexiones/${editingId}` : '/api/conexiones';
     const method   = editingId ? 'PUT' : 'POST';
 
     try {
-      const res  = await fetch(endpoint, { method, headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+      const res  = await fetch(endpoint, { method, headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) });
       const json = await res.json();
       if (!json.ok) { showToast(json.error || 'Error al guardar.', 'error'); return; }
       showToast(json.message, 'ok');
-      hide('formSection');
-      show('listaSection');
+      hide('formSection'); show('listaSection');
       loadConexiones();
-    } catch (e) {
-      showToast('Error de red: ' + e.message, 'error');
-    }
+    } catch (e) { showToast('Error de red: ' + e.message, 'error'); }
   });
-
-  // ── Edit ───────────────────────────────────────────────────────────────────
 
   window.editarConexion = async function (id) {
     try {
@@ -388,125 +333,158 @@
       document.getElementById('cNombre').value      = c.nombre || '';
       document.getElementById('cDescripcion').value = c.descripcion || '';
       document.getElementById('cUrl').value         = c.url || '';
-      document.getElementById('cMetodo').value      = c.metodo || 'GET';
       document.getElementById('cAuthTipo').value    = c.auth_tipo || 'none';
-      document.getElementById('cAuthValor').value   = '';  // masked
+      document.getElementById('cAuthValor').value   = '';
       const hdr = c.headers;
       document.getElementById('cHeaders').value = typeof hdr === 'object' ? JSON.stringify(hdr, null, 2) : (hdr || '');
-      document.getElementById('cBody').value = c.body_template || '';
       updateAuthHint();
-      updateBodyVisibility();
       if (c.auth_valor_masked) {
-        document.getElementById('cAuthValor').placeholder = '(sin cambios — dejar en blanco para conservar)';
+        document.getElementById('cAuthValor').placeholder = '(dejar vacío para conservar el token actual)';
       }
-      hide('listaSection');
-      hide('testSection');
-      show('formSection');
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    } catch (e) {
-      showToast('Error de red: ' + e.message, 'error');
-    }
+      hide('listaSection'); hide('testSection'); show('formSection');
+      window.scrollTo({ top:0, behavior:'smooth' });
+    } catch (e) { showToast('Error de red: ' + e.message, 'error'); }
   };
 
-  // ── Delete ─────────────────────────────────────────────────────────────────
-
   window.eliminarConexion = async function (id, nombre) {
-    if (!confirm(`¿Eliminar la conexión "${nombre}"? Esta acción no se puede deshacer.`)) return;
+    if (!confirm(`¿Eliminar "${nombre}"? Esta acción no se puede deshacer.`)) return;
     try {
-      const res  = await fetch(`/api/conexiones/${id}`, { method: 'DELETE' });
+      const res  = await fetch(`/api/conexiones/${id}`, { method:'DELETE' });
       const json = await res.json();
       if (!json.ok) { showToast(json.error, 'error'); return; }
       showToast(json.message, 'ok');
       loadConexiones();
-    } catch (e) {
-      showToast('Error de red: ' + e.message, 'error');
-    }
+    } catch (e) { showToast('Error de red: ' + e.message, 'error'); }
   };
 
-  // ── Test ───────────────────────────────────────────────────────────────────
+  // ── Cliente HTTP ─────────────────────────────────────────────────────────
 
-  let testingConexionId = null;
-
-  function updateTestBodyVisibility() {
+  function updateBodyVisibility() {
     const m = document.getElementById('tMethod').value;
-    document.getElementById('tBodyBlock').hidden = ['GET', 'DELETE'].includes(m);
+    document.getElementById('tBodyBlock').hidden = ['GET','DELETE'].includes(m);
   }
 
-  document.getElementById('tMethod').addEventListener('change', updateTestBodyVisibility);
+  function updateUrlPreview() {
+    const base = document.getElementById('tBasePreview').textContent;
+    const path = document.getElementById('tPath').value.trim();
+    document.getElementById('tUrlPreview').textContent = base + (path || '');
+  }
 
-  window.probarConexion = async function (id) {
-    testingConexionId = id;
-    // Fetch connection to show base URL
+  document.getElementById('tMethod').addEventListener('change', updateBodyVisibility);
+  document.getElementById('tPath').addEventListener('input', updateUrlPreview);
+
+  window.abrirCliente = async function (id) {
+    testConexionId = id;
     try {
-      const res = await fetch(`/api/conexiones/${id}`);
+      const res  = await fetch(`/api/conexiones/${id}`);
       const json = await res.json();
-      if (json.ok) {
-        document.getElementById('testBaseUrl').textContent =
-          `URL base: ${json.data.url}  •  Auth: ${json.data.auth_tipo}`;
-        document.getElementById('tMethod').value = json.data.metodo || 'GET';
-        updateTestBodyVisibility();
-      }
+      if (!json.ok) { showToast(json.error, 'error'); return; }
+      const c = json.data;
+      document.getElementById('tConNombre').textContent = c.nombre;
+      document.getElementById('tConBase').textContent   = c.url;
+      document.getElementById('tBasePreview').textContent = c.url;
+      document.getElementById('tConAuth').textContent   = authLabel(c.auth_tipo);
     } catch (_) {}
 
     document.getElementById('tPath').value = '';
     document.getElementById('tBody').value = '';
-    document.getElementById('testResultBlock').hidden = true;
-    hide('formSection');
-    hide('listaSection');
-    show('testSection');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    document.getElementById('tExtraHeaders').value = '';
+    document.getElementById('tMethod').value = 'GET';
+    updateBodyVisibility();
+    updateUrlPreview();
+    hide('tResultBlock');
+    hide('listaSection'); hide('formSection'); show('testSection');
+    window.scrollTo({ top:0, behavior:'smooth' });
+    document.getElementById('tPath').focus();
   };
 
-  document.getElementById('btnEjecutarTest').addEventListener('click', async () => {
-    const id = testingConexionId;
+  document.getElementById('btnCerrarTest').addEventListener('click', () => {
+    testConexionId = null;
+    hide('testSection'); show('listaSection');
+  });
+
+  document.getElementById('btnSend').addEventListener('click', async () => {
+    const id = testConexionId;
     if (!id) return;
 
-    const path   = document.getElementById('tPath').value.trim();
-    const method = document.getElementById('tMethod').value;
-    const bodyRaw = document.getElementById('tBody').value.trim();
+    const path         = document.getElementById('tPath').value.trim();
+    const method       = document.getElementById('tMethod').value;
+    const bodyRaw      = document.getElementById('tBody').value.trim();
+    const extraHdrRaw  = document.getElementById('tExtraHeaders').value.trim();
 
     let body = undefined;
-    if (bodyRaw) {
-      try {
-        body = JSON.parse(bodyRaw);
-      } catch {
-        showToast('El cuerpo JSON no es válido.', 'error');
-        return;
-      }
+    if (bodyRaw && !['GET','DELETE'].includes(method)) {
+      try { body = JSON.parse(bodyRaw); }
+      catch { showToast('Cuerpo JSON inválido.', 'error'); return; }
+    }
+
+    let extra_headers = undefined;
+    if (extraHdrRaw) {
+      try { extra_headers = JSON.parse(extraHdrRaw); }
+      catch { showToast('Headers adicionales: JSON inválido.', 'error'); return; }
     }
 
     const payload = { path, method };
     if (body !== undefined) payload.body = body;
+    if (extra_headers !== undefined) payload.extra_headers = extra_headers;
 
-    const resultEl = document.getElementById('testResult');
-    const labelEl  = document.getElementById('testResultLabel');
-    resultEl.textContent = 'Ejecutando solicitud...';
-    document.getElementById('testResultBlock').hidden = false;
+    const btn = document.getElementById('btnSend');
+    btn.textContent = 'Enviando…';
+    btn.disabled = true;
+    hide('tResultBlock');
 
+    const t0 = Date.now();
     try {
       const res  = await fetch(`/api/conexiones/${id}/probar`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify(payload),
       });
+      const elapsed = Date.now() - t0;
       const json = await res.json();
+
+      const statusBadge = document.getElementById('tStatusBadge');
+      const timeBadge   = document.getElementById('tTimeBadge');
+      const urlCalled   = document.getElementById('tUrlCalled');
+      const resultEl    = document.getElementById('tResult');
+
       if (json.ok) {
-        labelEl.textContent = `Resultado — ${json.url_tested}`;
-        resultEl.textContent =
-          `HTTP ${json.status_code}\n\n` +
-          JSON.stringify(json.response, null, 2);
+        const code = json.status_code;
+        let cls = 'cx-status-err';
+        if (code >= 200 && code < 300) cls = 'cx-status-2xx';
+        else if (code >= 300 && code < 400) cls = 'cx-status-3xx';
+        else if (code >= 400 && code < 500) cls = 'cx-status-4xx';
+        else if (code >= 500) cls = 'cx-status-5xx';
+
+        statusBadge.textContent = `HTTP ${code}`;
+        statusBadge.className   = `cx-status-badge ${cls}`;
+        timeBadge.textContent   = `${json.time_ms ?? elapsed} ms`;
+        urlCalled.textContent   = json.url_tested || '';
+        resultEl.textContent    = typeof json.response === 'string'
+          ? json.response
+          : JSON.stringify(json.response, null, 2);
       } else {
-        labelEl.textContent = 'Error';
-        resultEl.textContent = `Error: ${json.error}`;
+        statusBadge.textContent = 'Error';
+        statusBadge.className   = 'cx-status-badge cx-status-err';
+        timeBadge.textContent   = `${elapsed} ms`;
+        urlCalled.textContent   = '';
+        resultEl.textContent    = json.error || 'Error desconocido';
       }
+      show('tResultBlock');
     } catch (e) {
-      labelEl.textContent = 'Error de red';
-      resultEl.textContent = 'Error de red: ' + e.message;
+      showToast('Error de red: ' + e.message, 'error');
+    } finally {
+      btn.textContent = 'Enviar';
+      btn.disabled = false;
     }
   });
 
-  // ── Init ───────────────────────────────────────────────────────────────────
+  // Enviar con Ctrl+Enter en el body
+  document.getElementById('tBody').addEventListener('keydown', e => {
+    if (e.ctrlKey && e.key === 'Enter') document.getElementById('btnSend').click();
+  });
 
+  // ── Init ─────────────────────────────────────────────────────────────────
   loadConexiones();
 })();
 </script>
