@@ -317,6 +317,146 @@ def send_flow():
 
     return {"ok": True, "message": "Flow enviado correctamente.", "data": payload}
 
+# ── Flows ─────────────────────────────────────────────────────────────────────
+
+_FLOW_CATEGORIES = {"SIGN_UP", "SIGN_IN", "APPOINTMENT_BOOKING", "LEAD_GEN",
+                    "CONTACT_US", "CUSTOMER_SUPPORT", "SURVEY", "OTHER"}
+
+
+@plantillas_bp.route("/api/flows", methods=["GET"])
+def list_flows():
+    if not _require_login():
+        return {"ok": False, "error": "No autorizado"}, 403
+
+    try:
+        token, waba_id, phone_id = _tenant_whatsapp_env()
+        waba_id = _resolve_waba_id(token, waba_id, phone_id)
+    except RuntimeError as exc:
+        return {"ok": False, "error": str(exc)}, 400
+
+    response = requests.get(
+        f"{GRAPH_BASE_URL}/{waba_id}/flows",
+        params={"fields": "id,name,status,categories,validation_errors,preview", "access_token": token},
+        timeout=20,
+    )
+    payload = response.json() if response.content else {}
+
+    if response.status_code >= 400:
+        details = _extract_graph_error_message(payload)
+        message = "No se pudieron listar los flows."
+        if details:
+            message = f"{message} {details}"
+        return {"ok": False, "error": message, "details": payload}, 400
+
+    return {"ok": True, "data": payload.get("data", []), "paging": payload.get("paging")}
+
+
+@plantillas_bp.route("/api/flows", methods=["POST"])
+def create_flow():
+    if not _require_login():
+        return {"ok": False, "error": "No autorizado"}, 403
+
+    data = request.get_json(silent=True) or {}
+
+    name = (data.get("name") or "").strip()
+    if not name:
+        return {"ok": False, "error": "El campo 'name' es obligatorio."}, 400
+
+    categories = data.get("categories") or []
+    if isinstance(categories, str):
+        categories = [c.strip().upper() for c in categories.split(",") if c.strip()]
+    if not categories:
+        return {"ok": False, "error": "Debes indicar al menos una categoría."}, 400
+    invalid_cats = [c for c in categories if c not in _FLOW_CATEGORIES]
+    if invalid_cats:
+        return {"ok": False, "error": f"Categorías inválidas: {', '.join(invalid_cats)}. Válidas: {', '.join(sorted(_FLOW_CATEGORIES))}."}, 400
+
+    try:
+        token, waba_id, phone_id = _tenant_whatsapp_env()
+        waba_id = _resolve_waba_id(token, waba_id, phone_id)
+    except RuntimeError as exc:
+        return {"ok": False, "error": str(exc)}, 400
+
+    create_body = {"name": name, "categories": categories}
+    endpoint_url = data.get("endpoint_uri", "").strip()
+    if endpoint_url:
+        create_body["endpoint_uri"] = endpoint_url
+
+    response = requests.post(
+        f"{GRAPH_BASE_URL}/{waba_id}/flows",
+        params={"access_token": token},
+        json=create_body,
+        timeout=20,
+    )
+    payload = response.json() if response.content else {}
+
+    if response.status_code >= 400:
+        details = _extract_graph_error_message(payload)
+        message = "No se pudo crear el flow."
+        if details:
+            message = f"{message} {details}"
+        return {"ok": False, "error": message, "details": payload}, 400
+
+    return {"ok": True, "message": "Flow creado correctamente.", "data": payload}, 201
+
+
+@plantillas_bp.route("/api/flows/<string:flow_id>", methods=["DELETE"])
+def delete_flow(flow_id: str):
+    if not _require_login():
+        return {"ok": False, "error": "No autorizado"}, 403
+
+    try:
+        token, _, __ = _tenant_whatsapp_env()
+    except RuntimeError as exc:
+        return {"ok": False, "error": str(exc)}, 400
+
+    response = requests.delete(
+        f"{GRAPH_BASE_URL}/{flow_id}",
+        params={"access_token": token},
+        timeout=20,
+    )
+    payload = response.json() if response.content else {}
+
+    if response.status_code >= 400:
+        details = _extract_graph_error_message(payload)
+        message = "No se pudo eliminar el flow."
+        if details:
+            message = f"{message} {details}"
+        return {"ok": False, "error": message, "details": payload}, 400
+
+    return {"ok": True, "message": "Flow eliminado.", "data": payload}
+
+
+@plantillas_bp.route("/api/flows/<string:flow_id>/publish", methods=["POST"])
+def publish_flow(flow_id: str):
+    if not _require_login():
+        return {"ok": False, "error": "No autorizado"}, 403
+
+    try:
+        token, _, __ = _tenant_whatsapp_env()
+    except RuntimeError as exc:
+        return {"ok": False, "error": str(exc)}, 400
+
+    response = requests.post(
+        f"{GRAPH_BASE_URL}/{flow_id}",
+        params={"access_token": token},
+        json={"action": "PUBLISH"},
+        timeout=20,
+    )
+    payload = response.json() if response.content else {}
+
+    if response.status_code >= 400:
+        details = _extract_graph_error_message(payload)
+        message = "No se pudo publicar el flow."
+        if details:
+            message = f"{message} {details}"
+        return {"ok": False, "error": message, "details": payload}, 400
+
+    return {"ok": True, "message": "Flow publicado correctamente.", "data": payload}
+
+
+# ── Templates ─────────────────────────────────────────────────────────────────
+
 @plantillas_bp.route("/api/plantillas/<string:template_name>", methods=["DELETE"])
 def delete_template(template_name: str):
     if not _require_login():

@@ -165,6 +165,43 @@
   <div id="templatesList"></div>
 </section>
 
+<div class="template-grid">
+  <section class="template-card">
+    <h3>5) Crear Flow</h3>
+    <label>Nombre del flow</label>
+    <input id="flowCreateName" placeholder="mi_flow_registro" />
+
+    <label>Categorías (selecciona una o más)</label>
+    <select id="flowCreateCategories" multiple size="5">
+      <option value="SIGN_UP">SIGN_UP</option>
+      <option value="SIGN_IN">SIGN_IN</option>
+      <option value="APPOINTMENT_BOOKING">APPOINTMENT_BOOKING</option>
+      <option value="LEAD_GEN">LEAD_GEN</option>
+      <option value="CONTACT_US">CONTACT_US</option>
+      <option value="CUSTOMER_SUPPORT">CUSTOMER_SUPPORT</option>
+      <option value="SURVEY">SURVEY</option>
+      <option value="OTHER" selected>OTHER</option>
+    </select>
+    <small style="color:#6b7280">Mantén Ctrl/Cmd para seleccionar varias.</small>
+
+    <label>Endpoint URI (opcional — para flows con backend propio)</label>
+    <input id="flowCreateEndpoint" placeholder="https://mi-servidor.com/flow-endpoint" />
+
+    <div class="action-row">
+      <button id="createFlow" type="button" class="btn-primary">Crear flow</button>
+    </div>
+    <pre id="createFlowResult" class="json-preview"></pre>
+  </section>
+
+  <section class="template-card">
+    <h3>6) Flows existentes</h3>
+    <div class="action-row">
+      <button id="loadFlows" type="button" class="btn-primary">Cargar flows</button>
+    </div>
+    <div id="flowsList"></div>
+  </section>
+</div>
+
 <script>
   const createPreview = document.getElementById('createPreview');
   const sendPreview = document.getElementById('sendPreview');
@@ -444,6 +481,111 @@
 
   document.getElementById('loadTemplates').addEventListener('click', loadTemplates);
   document.getElementById('refreshCredentials').addEventListener('click', loadCredentialsStatus);
+
+  // ── Flows ──────────────────────────────────────────────────────────────────
+
+  const createFlowResult = document.getElementById('createFlowResult');
+
+  document.getElementById('createFlow').addEventListener('click', async () => {
+    const name = document.getElementById('flowCreateName').value.trim();
+    if (!name) { notify('El nombre del flow es obligatorio.', true); return; }
+
+    const selected = Array.from(document.getElementById('flowCreateCategories').selectedOptions)
+      .map(o => o.value);
+    if (!selected.length) { notify('Selecciona al menos una categoría.', true); return; }
+
+    const endpoint = document.getElementById('flowCreateEndpoint').value.trim();
+    const body = { name, categories: selected };
+    if (endpoint) body.endpoint_uri = endpoint;
+
+    try {
+      const result = await postJson('/api/flows', body);
+      createFlowResult.textContent = JSON.stringify(result.data, null, 2);
+      notify(result.message || 'Flow creado');
+      loadFlows();
+    } catch (err) {
+      notify(err.message, true);
+    }
+  });
+
+  async function loadFlows() {
+    try {
+      const response = await fetch('/api/flows');
+      const result = await response.json();
+      if (!response.ok || !result.ok) {
+        throw new Error(result.error || 'No se pudieron cargar los flows');
+      }
+      const root = document.getElementById('flowsList');
+      root.innerHTML = '';
+      if (!result.data || result.data.length === 0) {
+        root.textContent = 'No hay flows para mostrar.';
+        return;
+      }
+
+      result.data.forEach(flow => {
+        const row = document.createElement('div');
+        row.className = 'template-list-row';
+        const categories = (flow.categories || []).join(', ') || '-';
+        const validationErrors = (flow.validation_errors || []).length;
+        const previewUrl = flow.preview?.preview_url || '';
+
+        row.innerHTML = `
+          <div>
+            <strong>${flow.name || '-'}</strong>
+            <div>ID: <code>${flow.id}</code></div>
+            <div>Estado: <strong>${flow.status || '-'}</strong></div>
+            <div>Categorías: ${categories}</div>
+            ${validationErrors ? `<div style="color:#b91c1c">Errores de validación: ${validationErrors}</div>` : ''}
+            ${previewUrl ? `<div><a href="${previewUrl}" target="_blank" rel="noopener">Ver preview</a></div>` : ''}
+          </div>
+          <div class="action-row">
+            <button type="button" class="btn-secondary btn-use-flow">Usar para enviar</button>
+            ${flow.status === 'DRAFT' ? `<button type="button" class="btn-secondary btn-publish-flow">Publicar</button>` : ''}
+            <button type="button" class="btn-secondary btn-delete-flow">Eliminar</button>
+          </div>
+        `;
+
+        row.querySelector('.btn-use-flow').addEventListener('click', () => {
+          document.getElementById('flowId').value = flow.id || '';
+          document.getElementById('flowName').value = '';
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        });
+
+        const publishBtn = row.querySelector('.btn-publish-flow');
+        if (publishBtn) {
+          publishBtn.addEventListener('click', async () => {
+            if (!confirm(`¿Publicar el flow "${flow.name}"? Esta acción es irreversible.`)) return;
+            try {
+              const res = await postJson(`/api/flows/${encodeURIComponent(flow.id)}/publish`, {});
+              notify(res.message || 'Flow publicado');
+              loadFlows();
+            } catch (err) {
+              notify(err.message, true);
+            }
+          });
+        }
+
+        row.querySelector('.btn-delete-flow').addEventListener('click', async () => {
+          if (!confirm(`¿Eliminar el flow "${flow.name}" (ID: ${flow.id})?`)) return;
+          try {
+            const delRes = await fetch(`/api/flows/${encodeURIComponent(flow.id)}`, { method: 'DELETE' });
+            const delData = await delRes.json();
+            if (!delRes.ok || !delData.ok) throw new Error(delData.error || 'No se pudo eliminar');
+            notify(delData.message || 'Flow eliminado');
+            loadFlows();
+          } catch (err) {
+            notify(err.message, true);
+          }
+        });
+
+        root.appendChild(row);
+      });
+    } catch (err) {
+      notify(err.message, true);
+    }
+  }
+
+  document.getElementById('loadFlows').addEventListener('click', loadFlows);
 
   loadCredentialsStatus();
 </script>
