@@ -1354,6 +1354,55 @@ def guardar_estado_mensaje(
     return mensaje_status_id
 
 
+def get_last_flow_response(numero: str, flow_name: str | None = None) -> dict | None:
+    """Recupera la última respuesta de un Flow para el número dado.
+
+    Si se indica ``flow_name``, filtra por ese nombre; de lo contrario devuelve
+    la respuesta más reciente independientemente del flow.
+    """
+    conn = get_connection()
+    try:
+        c = conn.cursor()
+        try:
+            if flow_name:
+                c.execute(
+                    """
+                    SELECT flow_name, response_json, wa_id, timestamp
+                      FROM flow_responses
+                     WHERE numero = %s AND flow_name = %s
+                  ORDER BY timestamp DESC
+                     LIMIT 1
+                    """,
+                    (numero, flow_name),
+                )
+            else:
+                c.execute(
+                    """
+                    SELECT flow_name, response_json, wa_id, timestamp
+                      FROM flow_responses
+                     WHERE numero = %s
+                  ORDER BY timestamp DESC
+                     LIMIT 1
+                    """,
+                    (numero,),
+                )
+            row = c.fetchone()
+        except ProgrammingError as exc:
+            if exc.errno != errorcode.ER_NO_SUCH_TABLE:
+                raise
+            return None
+        if not row:
+            return None
+        return {
+            "flow_name": row[0],
+            "response_json": row[1],
+            "wa_id": row[2],
+            "timestamp": row[3],
+        }
+    finally:
+        conn.close()
+
+
 def guardar_flow_response(numero, flow_name, response_json, wa_id=None):
     """Guarda la respuesta de un Flow (nfm_reply) en la tabla ``flow_responses``."""
     conn = get_connection()

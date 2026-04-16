@@ -175,7 +175,8 @@ def execute_api_call(numero: str, config: dict, last_user_text: str = "") -> tup
 
     # 1. Variables del chat
     chat_vars = db_service.get_all_chat_vars(numero)
-    # Agregar texto del usuario como variable especial
+    # Variables especiales siempre disponibles
+    chat_vars.setdefault("_numero", numero)
     if last_user_text:
         chat_vars.setdefault("_input", last_user_text)
 
@@ -394,6 +395,407 @@ def handle_guardar_input_rule(
         chat_vars = db_service.get_all_chat_vars(numero)
         msg = interpolate(confirmation, chat_vars)
         enviar_mensaje(numero, msg, tipo="bot", step=current_step)
+
+    next_step = _resolve_next_step(next_step_raw, selected_option_id, opts)
+    advance_steps(numero, next_step, visited=visited, platform=platform)
+
+
+# ---------------------------------------------------------------------------
+# guardar_flow_inputs – extrae campos del último nfm_reply y los guarda
+# ---------------------------------------------------------------------------
+# Formato JSON del campo `respuesta`:
+# {
+#   "flow_name": "kiryapp_pasajero",   // opcional: filtra por nombre de flow
+#   "field_map": {                      // clave_en_flow → nombre_chat_var
+#     "document_type": "doc_tipo",
+#     "document":      "doc_numero",
+#     "name":          "nombre_pasajero",
+#     "last_name":     "apellido_pasajero",
+#     "email":         "email_pasajero",
+#     "seat_id":       "silla_id"
+#   },
+#   "message": "✅ Datos recibidos, procesando tu reserva..."
+# }
+
+def handle_flow_inputs_rule(
+    numero: str,
+    respuesta_json: str,
+    next_step_raw: str | None,
+    current_step: str,
+    platform: str | None,
+    visited: set,
+    selected_option_id: str | None,
+    opts: str | None,
+    last_user_text: str = "",
+) -> None:
+    """Extrae campos de la última respuesta de un WhatsApp Flow y los persiste
+    como chat_variables individuales."""
+    from services import db as db_service
+    from services.whatsapp_api import enviar_mensaje
+    from routes.webhook import advance_steps, _resolve_next_step  # type: ignore
+
+    try:
+        config = json.loads(respuesta_json or "{}")
+    except json.JSONDecodeError as exc:
+        logger.error("guardar_flow_inputs: JSON inválido: %s", exc)
+        advance_steps(numero, _resolve_next_step(next_step_raw, selected_option_id, opts),
+                      visited=visited, platform=platform)
+        return
+
+    flow_name = (config.get("flow_name") or "").strip() or None
+    field_map: dict = config.get("field_map") or {}
+    confirmation = (config.get("message") or "").strip()
+
+    row = db_service.get_last_flow_response(numero, flow_name)
+    if not row:
+        logger.warning("guardar_flow_inputs: no hay flow_response para %s flow=%s", numero, flow_name)
+        enviar_mensaje(numero, "No se recibieron datos del formulario. Intenta de nuevo.", tipo="bot")
+        return
+
+    try:
+        payload = json.loads(row["response_json"] or "{}")
+    except (json.JSONDecodeError, TypeError):
+        payload = {}
+
+    if not isinstance(payload, dict):
+        payload = {}
+
+    saved: list[str] = []
+    for flow_field, var_name in field_map.items():
+        if not var_name:
+            continue
+        value = payload.get(flow_field)
+        if value is None:
+            continue
+        db_service.set_chat_var(numero, var_name, str(value))
+        saved.append(var_name)
+
+    logger.info("guardar_flow_inputs: %s → guardadas %s", numero, saved)
+
+    if confirmation:
+        chat_vars = db_service.get_all_chat_vars(numero)
+        chat_vars.setdefault("_numero", numero)
+        msg = interpolate(confirmation, chat_vars)
+        enviar_mensaje(numero, msg, tipo="bot", step=current_step)
+
+    next_step = _resolve_next_step(next_step_raw, selected_option_id, opts)
+    advance_steps(numero, next_step, visited=visited, platform=platform)
+
+
+# ---------------------------------------------------------------------------
+# kiryapp_reserve – reserva tiquetes usando chat_variables y la API KiryApp
+# ---------------------------------------------------------------------------
+# Formato JSON del campo `respuesta`:
+# {
+#   "conexion_id": 1,
+#   "tickets": [
+#     {
+#       "bearingId": "{{bearing_id}}",
+#       "seatId":    "{{silla_id}}",
+#       "date":      "{{fecha_viaje}}",
+#       "origin":    "{{origen_id}}",
+#       "destiny":   "{{destino_id}}",
+#       "details":   "WHATSAPP",
+#       "document":  "{{doc_numero}}",
+#       "name":      "{{nombre_pasajero}}",
+#       "telephone": "{{_numero}}"
+#     }
+#   ],
+#   "store_as": "kiryapp_reserva",
+#   "store_ticket_ids_as": "ticket_ids",
+#   "store_client_id_as": "client_id",
+#   "message": "✅ Reserva creada. Elige cómo pagar:",
+#   "timeout_minutes": 5
+# }
+
+_reservation_timers: dict = {}  # numero → threading.Timer
+
+
+def handle_kiryapp_reserve_rule(
+    numero: str,
+    respuesta_json: str,
+    next_step_raw: str | None,
+    current_step: str,
+    platform: str | None,
+    visited: set,
+    selected_option_id: str | None,
+    opts: str | None,
+    last_user_text: str = "",
+) -> None:
+    """Reserva tiquetes en KiryApp y programa la liberación automática si no
+    se completa el pago en el tiempo indicado."""
+    import threading
+    from services import db as db_service
+    from services.whatsapp_api import enviar_mensaje
+    from services.kiryapp import get_client_from_conexion, KiryappError
+    from routes.webhook import advance_steps, _resolve_next_step  # type: ignore
+
+    try:
+        config = json.loads(respuesta_json or "{}")
+    except json.JSONDecodeError as exc:
+        logger.error("kiryapp_reserve: JSON inválido: %s", exc)
+        enviar_mensaje(numero, "Error de configuración interna. Contáctanos.", tipo="bot")
+        return
+
+    chat_vars = db_service.get_all_chat_vars(numero)
+    chat_vars["_numero"] = numero
+
+    conexion_id = config.get("conexion_id")
+    if not conexion_id:
+        logger.error("kiryapp_reserve: falta conexion_id en configuración.")
+        enviar_mensaje(numero, "Error de configuración interna.", tipo="bot")
+        return
+
+    raw_tickets = config.get("tickets") or []
+    tickets: list[dict] = []
+    for t in interpolate_obj(raw_tickets, chat_vars):
+        if not isinstance(t, dict):
+            continue
+        for int_field in ("bearingId", "origin", "destiny"):
+            if t.get(int_field) is not None:
+                try:
+                    t[int_field] = int(t[int_field])
+                except (ValueError, TypeError):
+                    pass
+        tickets.append(t)
+
+    customer_payload = {
+        "customerName":         interpolate(config.get("customerName", "{{nombre_pasajero}}"), chat_vars),
+        "customerLastName":     interpolate(config.get("customerLastName", "{{apellido_pasajero}}"), chat_vars),
+        "customerDocument":     interpolate(config.get("customerDocument", "{{doc_numero}}"), chat_vars),
+        "customerDocumentType": int(interpolate(config.get("customerDocumentType", "{{doc_tipo}}"), chat_vars) or 9),
+        "customerEmail":        interpolate(config.get("customerEmail", "{{email_pasajero}}"), chat_vars),
+        "customerPhone":        interpolate(config.get("customerPhone", "{{_numero}}"), chat_vars),
+        "customerAddress":      interpolate(config.get("customerAddress", ""), chat_vars),
+        "SellerName":           "WHATSAPP",
+        "tickets":              tickets,
+    }
+
+    try:
+        client = get_client_from_conexion(int(conexion_id))
+        result = client.reserve_ticket(customer_payload)
+    except KiryappError as exc:
+        logger.error("kiryapp_reserve: KiryappError para %s: %s", numero, exc)
+        msg = str(exc)
+        if any(w in msg.lower() for w in ("silla", "seat", "ocupad", "taken")):
+            enviar_mensaje(
+                numero,
+                "⚠️ La silla seleccionada ya fue ocupada. Por favor elige otra.",
+                tipo="bot",
+                step=current_step,
+            )
+        else:
+            enviar_mensaje(numero, f"Error al reservar: {msg}", tipo="bot")
+        return
+    except Exception as exc:
+        logger.error("kiryapp_reserve: error inesperado para %s: %s", numero, exc)
+        enviar_mensaje(numero, "Hubo un problema creando la reserva. Intenta de nuevo.", tipo="bot")
+        return
+
+    store_as = (config.get("store_as") or "kiryapp_reserva").strip()
+    db_service.set_chat_var(numero, store_as, json.dumps(result, ensure_ascii=False))
+
+    if isinstance(result, dict):
+        if config.get("store_client_id_as"):
+            client_id = result.get("thirdClientId") or result.get("clientId") or result.get("id")
+            if client_id is not None:
+                db_service.set_chat_var(numero, config["store_client_id_as"], str(client_id))
+
+        if config.get("store_ticket_ids_as"):
+            tickets_resp = result.get("tickets") or result.get("data") or result.get("items") or []
+            if isinstance(tickets_resp, list):
+                ids = [str(t.get("id") or t.get("ticketId") or "") for t in tickets_resp if isinstance(t, dict)]
+                db_service.set_chat_var(numero, config["store_ticket_ids_as"], json.dumps(ids))
+
+    # Timer de liberación automática
+    timeout_min = int(config.get("timeout_minutes") or 5)
+    if timeout_min > 0:
+        prev = _reservation_timers.pop(numero, None)
+        if prev:
+            prev.cancel()
+
+        _snap_chat_vars = dict(chat_vars)  # snapshot para el closure
+
+        def _liberar_reserva(
+            _numero=numero, _conexion_id=conexion_id,
+            _ticket_ids_var=config.get("store_ticket_ids_as", "ticket_ids"),
+            _bearing_id=_snap_chat_vars.get("bearing_id", "0"),
+            _seat_id=_snap_chat_vars.get("silla_id", ""),
+        ):
+            _reservation_timers.pop(_numero, None)
+            paid_flag = db_service.get_chat_var(_numero, "_kiryapp_paid")
+            if paid_flag == "1":
+                return
+            logger.info("kiryapp_reserve: timeout %s min, cancelando reserva para %s", timeout_min, _numero)
+            try:
+                cancel_client = get_client_from_conexion(int(_conexion_id))
+                ticket_ids_json = db_service.get_chat_var(_numero, _ticket_ids_var)
+                if ticket_ids_json:
+                    tid_list = json.loads(ticket_ids_json)
+                    payload = [{"id": int(tid), "bearingId": int(_bearing_id or 0), "seatId": _seat_id}
+                               for tid in tid_list if tid]
+                    if payload:
+                        cancel_client.cancel_ticket(payload)
+            except Exception as e:
+                logger.warning("kiryapp_reserve: error al cancelar reserva automática: %s", e)
+            enviar_mensaje(
+                _numero,
+                "⏰ Tu reserva expiró por falta de pago. Puedes buscar de nuevo cuando quieras.",
+                tipo="bot",
+            )
+
+        timer = threading.Timer(timeout_min * 60, _liberar_reserva)
+        timer.daemon = True
+        timer.start()
+        _reservation_timers[numero] = timer
+
+    msg_template = (config.get("message") or "✅ Reserva creada. Elige el método de pago:").strip()
+    chat_vars_fresh = db_service.get_all_chat_vars(numero)
+    chat_vars_fresh["_numero"] = numero
+    msg = interpolate(msg_template, chat_vars_fresh)
+
+    payment_methods_config = config.get("payment_methods") or [
+        {"id": "14", "title": "Tarjeta débito"},
+        {"id": "9",  "title": "Tarjeta crédito"},
+        {"id": "2",  "title": "Efectivo"},
+        {"id": "8",  "title": "Transferencia bancaria"},
+    ]
+    sections = [{
+        "title": "Métodos de pago",
+        "rows": [{"id": str(pm["id"]), "title": pm["title"]} for pm in payment_methods_config],
+    }]
+    opciones_obj = {
+        "sections": sections,
+        "header": "Método de pago",
+        "footer": "Selecciona cómo pagar",
+        "button": "Ver métodos",
+    }
+    enviar_mensaje(
+        numero, msg, tipo="bot",
+        tipo_respuesta="lista",
+        opciones=json.dumps(opciones_obj, ensure_ascii=False),
+        step=current_step,
+    )
+
+    next_step = _resolve_next_step(next_step_raw, selected_option_id, opts)
+    advance_steps(numero, next_step, visited=visited, platform=platform)
+
+
+# ---------------------------------------------------------------------------
+# kiryapp_pay – ejecuta el pago de una reserva ya creada
+# ---------------------------------------------------------------------------
+# Formato JSON del campo `respuesta`:
+# {
+#   "conexion_id": 1,
+#   "client_id_var":      "client_id",
+#   "ticket_ids_var":     "ticket_ids",
+#   "bearing_id_var":     "bearing_id",
+#   "seat_id_var":        "silla_id",
+#   "payment_method_var": "metodo_pago_id",
+#   "amount_var":         "precio_total",
+#   "reference":          "WHATSAPP-{{_numero}}",
+#   "message_ok":         "🎉 ¡Pago confirmado! Tu tiquete está listo.",
+#   "message_error":      "❌ Error al procesar el pago. Intenta de nuevo."
+# }
+
+def handle_kiryapp_pay_rule(
+    numero: str,
+    respuesta_json: str,
+    next_step_raw: str | None,
+    current_step: str,
+    platform: str | None,
+    visited: set,
+    selected_option_id: str | None,
+    opts: str | None,
+    last_user_text: str = "",
+) -> None:
+    """Ejecuta el pago de una reserva KiryApp y marca la conversación como pagada."""
+    from services import db as db_service
+    from services.whatsapp_api import enviar_mensaje
+    from services.kiryapp import get_client_from_conexion, KiryappError
+    from routes.webhook import advance_steps, _resolve_next_step  # type: ignore
+
+    try:
+        config = json.loads(respuesta_json or "{}")
+    except json.JSONDecodeError as exc:
+        logger.error("kiryapp_pay: JSON inválido: %s", exc)
+        enviar_mensaje(numero, "Error de configuración interna.", tipo="bot")
+        return
+
+    chat_vars = db_service.get_all_chat_vars(numero)
+    chat_vars["_numero"] = numero
+
+    conexion_id = config.get("conexion_id")
+    if not conexion_id:
+        logger.error("kiryapp_pay: falta conexion_id")
+        enviar_mensaje(numero, "Error de configuración interna.", tipo="bot")
+        return
+
+    client_id_var    = config.get("client_id_var",      "client_id")
+    ticket_ids_var   = config.get("ticket_ids_var",     "ticket_ids")
+    bearing_id_var   = config.get("bearing_id_var",     "bearing_id")
+    seat_id_var      = config.get("seat_id_var",        "silla_id")
+    payment_meth_var = config.get("payment_method_var", "metodo_pago_id")
+    amount_var       = config.get("amount_var",         "precio_total")
+
+    third_client_id = int(chat_vars.get(client_id_var) or 0)
+    ticket_ids_json = chat_vars.get(ticket_ids_var) or "[]"
+    bearing_id      = int(chat_vars.get(bearing_id_var) or 0)
+    seat_id         = chat_vars.get(seat_id_var) or ""
+    payment_method  = int(chat_vars.get(payment_meth_var) or selected_option_id or 2)
+    amount          = chat_vars.get(amount_var) or "0"
+    reference       = interpolate(config.get("reference") or "WHATSAPP-{{_numero}}", chat_vars)
+
+    try:
+        ticket_ids = json.loads(ticket_ids_json)
+    except (json.JSONDecodeError, TypeError):
+        ticket_ids = []
+
+    if not ticket_ids or not third_client_id:
+        logger.error("kiryapp_pay: faltan ticket_ids o client_id para %s", numero)
+        enviar_mensaje(numero, "No encontré la reserva activa. Inicia de nuevo.", tipo="bot")
+        return
+
+    tickets_to_pay = [
+        {"id": int(tid), "bearingId": bearing_id, "seatId": seat_id}
+        for tid in ticket_ids if tid
+    ]
+
+    try:
+        client = get_client_from_conexion(int(conexion_id))
+        result = client.pay_ticket({
+            "thirdClientId": third_client_id,
+            "ticketsToPay": tickets_to_pay,
+            "payments": [{"paymentMethod": payment_method, "value": str(amount), "reference": reference}],
+        })
+    except KiryappError as exc:
+        logger.error("kiryapp_pay: KiryappError para %s: %s", numero, exc)
+        msg_error = interpolate(
+            config.get("message_error") or "❌ Error al procesar el pago. Intenta de nuevo.",
+            {**chat_vars, "_error": str(exc)},
+        )
+        enviar_mensaje(numero, msg_error, tipo="bot")
+        return
+    except Exception as exc:
+        logger.error("kiryapp_pay: error inesperado para %s: %s", numero, exc)
+        enviar_mensaje(numero, "Hubo un problema procesando el pago. Intenta de nuevo.", tipo="bot")
+        return
+
+    # Marcar como pagado y cancelar timer
+    db_service.set_chat_var(numero, "_kiryapp_paid", "1")
+    timer = _reservation_timers.pop(numero, None)
+    if timer:
+        timer.cancel()
+
+    db_service.set_chat_var(numero, "kiryapp_pago", json.dumps(result, ensure_ascii=False))
+
+    chat_vars_fresh = db_service.get_all_chat_vars(numero)
+    chat_vars_fresh["_numero"] = numero
+    msg_ok = interpolate(
+        config.get("message_ok") or "🎉 ¡Pago confirmado! Tu reserva está lista.",
+        chat_vars_fresh,
+    )
+    enviar_mensaje(numero, msg_ok, tipo="bot", step=current_step)
 
     next_step = _resolve_next_step(next_step_raw, selected_option_id, opts)
     advance_steps(numero, next_step, visited=visited, platform=platform)

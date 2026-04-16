@@ -2782,6 +2782,54 @@ def dispatch_rule(
         )
         return
 
+    if tipo_resp == 'guardar_flow_inputs':
+        from services.api_actions import handle_flow_inputs_rule
+        _apply_role_keyword(numero, rol_kw)
+        handle_flow_inputs_rule(
+            numero=numero,
+            respuesta_json=resp,
+            next_step_raw=next_step_raw,
+            current_step=current_step,
+            platform=platform,
+            visited=visited,
+            selected_option_id=selected_option_id,
+            opts=opts,
+            last_user_text=obtener_ultimo_mensaje_cliente(numero) or "",
+        )
+        return
+
+    if tipo_resp == 'kiryapp_reserve':
+        from services.api_actions import handle_kiryapp_reserve_rule
+        _apply_role_keyword(numero, rol_kw)
+        handle_kiryapp_reserve_rule(
+            numero=numero,
+            respuesta_json=resp,
+            next_step_raw=next_step_raw,
+            current_step=current_step,
+            platform=platform,
+            visited=visited,
+            selected_option_id=selected_option_id,
+            opts=opts,
+            last_user_text=obtener_ultimo_mensaje_cliente(numero) or "",
+        )
+        return
+
+    if tipo_resp == 'kiryapp_pay':
+        from services.api_actions import handle_kiryapp_pay_rule
+        _apply_role_keyword(numero, rol_kw)
+        handle_kiryapp_pay_rule(
+            numero=numero,
+            respuesta_json=resp,
+            next_step_raw=next_step_raw,
+            current_step=current_step,
+            platform=platform,
+            visited=visited,
+            selected_option_id=selected_option_id,
+            opts=opts,
+            last_user_text=obtener_ultimo_mensaje_cliente(numero) or "",
+        )
+        return
+
     if tipo_resp == 'guardar_input':
         from services.api_actions import handle_guardar_input_rule
         _apply_role_keyword(numero, rol_kw)
