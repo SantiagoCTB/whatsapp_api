@@ -389,16 +389,18 @@ def handle_guardar_input_rule(
     confirmation = (config.get("message") or "").strip()
 
     value = ""
-    if source == "option_id" and selected_option_id:
-        value = str(selected_option_id)
+    if source == "option_id":
+        # Solo usar el ID seleccionado; NO caer en last_user_text
+        # (evita guardar el texto anterior del usuario cuando el motor
+        # de pasos dispara el comodín antes de que el usuario responda).
+        if selected_option_id:
+            value = str(selected_option_id)
     elif last_user_text:
         value = last_user_text.strip()
     elif selected_option_id:
         value = str(selected_option_id)
 
-    # Si se esperaba capturar algo pero no hay dato aún (el motor de pasos
-    # disparó este comodín antes de que el usuario respondiera), quedarse
-    # en el paso actual y esperar la entrada real del usuario.
+    # Si se esperaba capturar algo pero no hay dato aún, esperar al usuario.
     if store_as and not value:
         from routes.webhook import set_user_step  # type: ignore
         set_user_step(numero, current_step)
