@@ -45,6 +45,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+from datetime import datetime, timedelta
 from typing import Any
 
 import requests
@@ -176,9 +177,17 @@ def execute_api_call(numero: str, config: dict, last_user_text: str = "") -> tup
     # 1. Variables del chat
     chat_vars = db_service.get_all_chat_vars(numero)
     # Variables especiales siempre disponibles
+    today = datetime.now()
     chat_vars.setdefault("_numero", numero)
+    chat_vars.setdefault("_hoy",    today.strftime("%Y-%m-%d"))
+    chat_vars.setdefault("_manana", (today + timedelta(days=1)).strftime("%Y-%m-%d"))
     if last_user_text:
         chat_vars.setdefault("_input", last_user_text)
+    # Resolver alias de fechas relativas almacenados como chat_var
+    _fecha_aliases = {"hoy": chat_vars["_hoy"], "manana": chat_vars["_manana"], "mañana": chat_vars["_manana"]}
+    for k, v in list(chat_vars.items()):
+        if isinstance(v, str) and v.lower() in _fecha_aliases:
+            chat_vars[k] = _fecha_aliases[v.lower()]
 
     # 2. Conexión base
     conexion_id = config.get("conexion_id")
@@ -386,6 +395,14 @@ def handle_guardar_input_rule(
         value = last_user_text.strip()
     elif selected_option_id:
         value = str(selected_option_id)
+
+    # Si se esperaba capturar algo pero no hay dato aún (el motor de pasos
+    # disparó este comodín antes de que el usuario respondiera), quedarse
+    # en el paso actual y esperar la entrada real del usuario.
+    if store_as and not value:
+        from routes.webhook import set_user_step  # type: ignore
+        set_user_step(numero, current_step)
+        return
 
     if store_as and value:
         db_service.set_chat_var(numero, store_as, value)
