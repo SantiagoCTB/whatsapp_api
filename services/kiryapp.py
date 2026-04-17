@@ -88,16 +88,18 @@ class TicketPayRequest:
 class KiryappClient:
     """Wrapper tipado para la API de KiryApp."""
 
-    def __init__(self, base_url: str, token: str, timeout: int = _DEFAULT_TIMEOUT):
+    def __init__(self, base_url: str, token: str = "", timeout: int = _DEFAULT_TIMEOUT, auth_header: str = ""):
         self.base_url = base_url.rstrip("/")
         self.token = token
         self.timeout = timeout
         self._session = requests.Session()
+        auth_hdr = auth_header or (f"Bearer {token}" if token else "")
         self._session.headers.update({
-            "Authorization": f"Bearer {token}",
             "Content-Type": "application/json",
             "Accept": "application/json",
         })
+        if auth_hdr:
+            self._session.headers["Authorization"] = auth_hdr
 
     # ── helpers ─────────────────────────────────────────────────────────────
 
@@ -199,9 +201,20 @@ def get_client_from_conexion(conexion_id: int) -> KiryappClient:
     auth_tipo = (row.get("auth_tipo") or "none").lower()
     auth_valor = (row.get("auth_valor") or "").strip()
 
-    if auth_tipo != "bearer" or not auth_valor:
-        raise KiryappError(
-            "La conexión de KiryApp debe usar autenticación Bearer con un token configurado."
-        )
+    if auth_tipo == "bearer" and auth_valor:
+        return KiryappClient(base_url=base_url, token=auth_valor)
 
-    return KiryappClient(base_url=base_url, token=auth_valor)
+    # Fallback: leer Authorization desde el campo headers JSON de la conexión
+    import json as _json
+    headers_raw = (row.get("headers") or "").strip()
+    if headers_raw:
+        try:
+            h = _json.loads(headers_raw)
+            if isinstance(h, dict) and h.get("Authorization"):
+                return KiryappClient(base_url=base_url, auth_header=h["Authorization"])
+        except Exception:
+            pass
+
+    raise KiryappError(
+        "La conexión de KiryApp debe usar autenticación Bearer con un token configurado."
+    )

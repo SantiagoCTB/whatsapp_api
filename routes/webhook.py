@@ -2595,6 +2595,14 @@ def handle_option_reply(numero, option_id, platform: str | None = None):
     if not rule_row:
         rule_row = _select_rule(_fetch_rules())
 
+    # Si ninguna regla específica matcheó, buscar comodín en el step actual.
+    # Esto permite que reglas guardar_input con input_text='*' y from='option_id'
+    # capturen el ID de la opción seleccionada de una lista/botón.
+    if not rule_row:
+        wildcard_rows = [r for r in current_step_rules if (r[8] or '').strip() == '*']
+        if wildcard_rows:
+            rule_row = wildcard_rows[0]
+
     if rule_row:
         rule_step = (rule_row[0] or '').strip().lower()
         rule = rule_row[1:]
