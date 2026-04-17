@@ -54,6 +54,18 @@ logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def _to_int(value: Any, default: int) -> int:
+    """Convierte `value` a int; retorna `default` si falla."""
+    try:
+        return int(value)
+    except (ValueError, TypeError):
+        return default
+
+
+# ---------------------------------------------------------------------------
 # Interpolación de variables {{var}}
 # ---------------------------------------------------------------------------
 
@@ -582,7 +594,7 @@ def handle_kiryapp_reserve_rule(
         "customerName":         interpolate(config.get("customerName", "{{nombre_pasajero}}"), chat_vars),
         "customerLastName":     interpolate(config.get("customerLastName", "{{apellido_pasajero}}"), chat_vars),
         "customerDocument":     interpolate(config.get("customerDocument", "{{doc_numero}}"), chat_vars),
-        "customerDocumentType": int(interpolate(config.get("customerDocumentType", "{{doc_tipo}}"), chat_vars) or 9),
+        "customerDocumentType": _to_int(interpolate(config.get("customerDocumentType", "{{doc_tipo}}"), chat_vars), 9),
         "customerEmail":        interpolate(config.get("customerEmail", "{{email_pasajero}}"), chat_vars),
         "customerPhone":        interpolate(config.get("customerPhone", "{{_numero}}"), chat_vars),
         "customerAddress":      interpolate(config.get("customerAddress", ""), chat_vars),
@@ -651,7 +663,7 @@ def handle_kiryapp_reserve_rule(
                 ticket_ids_json = db_service.get_chat_var(_numero, _ticket_ids_var)
                 if ticket_ids_json:
                     tid_list = json.loads(ticket_ids_json)
-                    payload = [{"id": int(tid), "bearingId": int(_bearing_id or 0), "seatId": _seat_id}
+                    payload = [{"id": _to_int(tid, 0), "bearingId": _to_int(_bearing_id, 0), "seatId": _seat_id}
                                for tid in tid_list if tid]
                     if payload:
                         cancel_client.cancel_ticket(payload)
@@ -757,11 +769,11 @@ def handle_kiryapp_pay_rule(
     payment_meth_var = config.get("payment_method_var", "metodo_pago_id")
     amount_var       = config.get("amount_var",         "precio_total")
 
-    third_client_id = int(chat_vars.get(client_id_var) or 0)
+    third_client_id = _to_int(chat_vars.get(client_id_var), 0)
     ticket_ids_json = chat_vars.get(ticket_ids_var) or "[]"
-    bearing_id      = int(chat_vars.get(bearing_id_var) or 0)
+    bearing_id      = _to_int(chat_vars.get(bearing_id_var), 0)
     seat_id         = chat_vars.get(seat_id_var) or ""
-    payment_method  = int(chat_vars.get(payment_meth_var) or selected_option_id or 2)
+    payment_method  = _to_int(chat_vars.get(payment_meth_var) or selected_option_id, 2)
     amount          = chat_vars.get(amount_var) or "0"
     reference       = interpolate(config.get("reference") or "WHATSAPP-{{_numero}}", chat_vars)
 
@@ -776,7 +788,7 @@ def handle_kiryapp_pay_rule(
         return
 
     tickets_to_pay = [
-        {"id": int(tid), "bearingId": bearing_id, "seatId": seat_id}
+        {"id": _to_int(tid, 0), "bearingId": bearing_id, "seatId": seat_id}
         for tid in ticket_ids if tid
     ]
 
