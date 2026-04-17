@@ -2841,6 +2841,10 @@ def dispatch_rule(
     if tipo_resp == 'guardar_input':
         from services.api_actions import handle_guardar_input_rule
         _apply_role_keyword(numero, rol_kw)
+        # Si matched_text_norm es None el disparo es automático (advance_steps /
+        # process_step_chain sin input del usuario). En ese caso se pasa cadena
+        # vacía para que guardar_input detecte que no hay valor y espere.
+        _last_txt = "" if matched_text_norm is None else (obtener_ultimo_mensaje_cliente(numero) or "")
         handle_guardar_input_rule(
             numero=numero,
             respuesta_json=resp,
@@ -2850,7 +2854,7 @@ def dispatch_rule(
             visited=visited,
             selected_option_id=selected_option_id,
             opts=opts,
-            last_user_text=obtener_ultimo_mensaje_cliente(numero) or "",
+            last_user_text=_last_txt,
         )
         return
 
