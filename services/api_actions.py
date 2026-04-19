@@ -65,6 +65,43 @@ def _to_int(value: Any, default: int) -> int:
         return default
 
 
+def _parse_date_input(value: str) -> str | None:
+    """Normaliza input del usuario a formato YYYY-MM-DD.
+
+    Acepta: hoy, mañana/manana, dd/mm, dd/mm/yyyy, dd-mm-yyyy, yyyy-mm-dd.
+    Retorna None si no puede parsear o la fecha ya pasó (solo aplica a dd/mm).
+    """
+    v = value.strip().lower()
+    today = datetime.now()
+
+    if v == "hoy":
+        return today.strftime("%Y-%m-%d")
+    if v in ("mañana", "manana"):
+        return (today + timedelta(days=1)).strftime("%Y-%m-%d")
+
+    for fmt in ("%d/%m/%Y", "%d-%m-%Y", "%Y-%m-%d", "%d/%m/%y", "%d-%m-%y"):
+        try:
+            dt = datetime.strptime(v, fmt)
+            return dt.strftime("%Y-%m-%d")
+        except ValueError:
+            continue
+
+    # dd/mm o dd-mm sin año → asumir año actual; si ya pasó, año siguiente
+    for sep in ("/", "-"):
+        parts = v.split(sep)
+        if len(parts) == 2 and all(p.isdigit() for p in parts):
+            try:
+                day, month = int(parts[0]), int(parts[1])
+                dt = datetime(today.year, month, day)
+                if dt.date() < today.date():
+                    dt = datetime(today.year + 1, month, day)
+                return dt.strftime("%Y-%m-%d")
+            except ValueError:
+                pass
+
+    return None
+
+
 # ---------------------------------------------------------------------------
 # Interpolación de variables {{var}}
 # ---------------------------------------------------------------------------
@@ -417,6 +454,19 @@ def handle_guardar_input_rule(
         from routes.webhook import set_user_step  # type: ignore
         set_user_step(numero, current_step)
         return
+
+    # Normalización de formato (actualmente solo "date")
+    fmt_field = (config.get("format") or "").lower()
+    if fmt_field == "date" and value:
+        normalized = _parse_date_input(value)
+        if normalized is None:
+            error_msg = (config.get("error_message") or
+                         "❌ No entendí esa fecha. Escríbela así: *dd/mm/yyyy* (ej: 25/04/2026)")
+            enviar_mensaje(numero, error_msg, tipo="bot")
+            from routes.webhook import set_user_step  # type: ignore
+            set_user_step(numero, current_step)
+            return
+        value = normalized
 
     if store_as and value:
         db_service.set_chat_var(numero, store_as, value)
