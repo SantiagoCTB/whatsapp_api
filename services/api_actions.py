@@ -45,6 +45,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import unicodedata
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -71,7 +72,7 @@ def _parse_date_input(value: str) -> str | None:
     Acepta: hoy, mañana/manana, dd/mm, dd/mm/yyyy, dd-mm-yyyy, yyyy-mm-dd.
     Retorna None si no puede parsear o la fecha ya pasó (solo aplica a dd/mm).
     """
-    v = value.strip().lower()
+    v = unicodedata.normalize("NFC", value.strip().lower())
     today = datetime.now()
 
     if v == "hoy":
@@ -235,8 +236,10 @@ def execute_api_call(numero: str, config: dict, last_user_text: str = "") -> tup
     # Resolver alias de fechas relativas almacenados como chat_var
     _fecha_aliases = {"hoy": chat_vars["_hoy"], "manana": chat_vars["_manana"], "mañana": chat_vars["_manana"]}
     for k, v in list(chat_vars.items()):
-        if isinstance(v, str) and v.lower() in _fecha_aliases:
-            chat_vars[k] = _fecha_aliases[v.lower()]
+        if isinstance(v, str):
+            _v_norm = unicodedata.normalize("NFC", v.lower())
+            if _v_norm in _fecha_aliases:
+                chat_vars[k] = _fecha_aliases[_v_norm]
 
     # 2. Conexión base
     conexion_id = config.get("conexion_id")
