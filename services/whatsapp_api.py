@@ -789,7 +789,7 @@ def enviar_mensaje(
             for boton in botones:
                 if not isinstance(boton, dict):
                     continue
-                btn_clean = {k: v for k, v in boton.items() if k not in {"step", "next_step"}}
+                btn_clean = {k: v for k, v in boton.items() if k not in {"step", "next_step", "_store_as"}}
                 boton_type = (btn_clean.get("type") or "").strip().lower()
                 reply_obj = btn_clean.get("reply") if isinstance(btn_clean.get("reply"), dict) else {}
                 title = (
@@ -1261,7 +1261,7 @@ def enviar_mensaje(
         for sec in sections:
             rows_clean = []
             for row in sec.get("rows", []):
-                row_clean = {k: v for k, v in row.items() if k not in {"step", "next_step"}}
+                row_clean = {k: v for k, v in row.items() if k not in {"step", "next_step", "_store_as"}}
                 rows_clean.append(row_clean)
             sec_clean = {k: v for k, v in sec.items() if k != "rows"}
             sec_clean["rows"] = rows_clean
@@ -1290,7 +1290,7 @@ def enviar_mensaje(
             botones = []
         botones_clean = []
         for b in botones:
-            btn_clean = {k: v for k, v in b.items() if k not in {"step", "next_step"}}
+            btn_clean = {k: v for k, v in b.items() if k not in {"step", "next_step", "_store_as"}}
             botones_clean.append(btn_clean)
         data = {
             "messaging_product": "whatsapp",

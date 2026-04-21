@@ -291,6 +291,7 @@ def execute_api_call(numero: str, config: dict, last_user_text: str = "") -> tup
     body = interpolate_obj(raw_body, chat_vars) if raw_body is not None else None
 
     # 6. Llamada HTTP
+    logger.info("api_call: %s %s | vars=%s", method, url, {k: v for k, v in chat_vars.items() if not k.startswith("_")})
     try:
         resp = requests.request(
             method=method,
