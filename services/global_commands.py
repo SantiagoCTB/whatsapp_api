@@ -1,8 +1,6 @@
 import re
 
 from config import Config
-from services.db import get_connection
-from services.assignments import assign_chat_to_active_user
 from services.whatsapp_api import enviar_mensaje
 from services.normalize_text import normalize_text
 
@@ -11,56 +9,13 @@ GLOBAL_COMMANDS = {}
 
 
 def reiniciar_handler(numero, text):
-    """Reinicia el flujo para el usuario y envía el mensaje inicial."""
-    # Importar aquí para evitar dependencias circulares
-    from routes.webhook import set_user_step, advance_steps, _resolve_rule_platform
+    """Reinicia el flujo para el usuario y ejecuta el paso inicial."""
+    from routes.webhook import set_user_step, process_step_chain, _resolve_rule_platform
 
-    # Aseguramos establecer el paso inicial antes de iniciar el flujo
     set_user_step(numero, Config.INITIAL_STEP)
     enviar_mensaje(numero, "Perfecto, volvamos a empezar.")
     platform = _resolve_rule_platform(numero)
-
-    conn = get_connection(); c = conn.cursor()
-    c.execute(
-        """
-        SELECT r.respuesta, r.siguiente_step, r.tipo,
-               GROUP_CONCAT(m.media_url SEPARATOR '||') AS media_urls,
-               r.opciones, r.rol_keyword
-          FROM reglas r
-          LEFT JOIN regla_medias m ON r.id = m.regla_id
-         WHERE r.step=%s
-           AND r.input_text=%s
-           AND (r.platform IS NULL OR r.platform = '' OR r.platform = %s)
-         GROUP BY r.id
-         ORDER BY (r.platform = %s) DESC, r.id
-         LIMIT 1
-        """,
-        (Config.INITIAL_STEP, 'iniciar', platform, platform)
-    )
-    row = c.fetchone(); conn.close()
-
-    if row:
-        resp, next_step, tipo_resp, media_urls, opts, rol_kw = row
-        media_list = media_urls.split('||') if media_urls else []
-        if tipo_resp in ['image', 'video', 'audio', 'document'] and media_list:
-            enviar_mensaje(numero, resp, tipo_respuesta=tipo_resp, opciones=media_list[0])
-            for extra in media_list[1:]:
-                enviar_mensaje(numero, '', tipo_respuesta=tipo_resp, opciones=extra)
-        else:
-            enviar_mensaje(numero, resp, tipo_respuesta=tipo_resp, opciones=opts)
-        if rol_kw:
-            conn2 = get_connection(); c2 = conn2.cursor()
-            c2.execute("SELECT id FROM roles WHERE keyword=%s", (rol_kw,))
-            role = c2.fetchone()
-            if role:
-                c2.execute(
-                    "INSERT IGNORE INTO chat_roles (numero, role_id) VALUES (%s, %s)",
-                    (numero, role[0])
-                )
-                conn2.commit()
-            conn2.close()
-            assign_chat_to_active_user(numero, rol_kw)
-        advance_steps(numero, next_step, platform=platform)
+    process_step_chain(numero, 'iniciar', platform=platform)
 
 
 # Registrar comandos por defecto
