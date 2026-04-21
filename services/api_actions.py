@@ -306,7 +306,13 @@ def execute_api_call(numero: str, config: dict, last_user_text: str = "") -> tup
         except Exception:
             response_data = resp.text
     except requests.exceptions.HTTPError as exc:
-        raise RuntimeError(f"Error HTTP {exc.response.status_code} desde la API: {exc}") from exc
+        try:
+            body = exc.response.json()
+            api_msg = body.get("message") or body.get("error") or body.get("detail") or ""
+        except Exception:
+            api_msg = exc.response.text or ""
+        detail = f": {api_msg}" if api_msg else ""
+        raise RuntimeError(f"Error HTTP {exc.response.status_code}{detail}") from exc
     except requests.exceptions.RequestException as exc:
         raise RuntimeError(f"Error de red al llamar la API: {exc}") from exc
 
@@ -390,7 +396,8 @@ def handle_api_call_rule(
         message, tipo_resp, opciones = execute_api_call(numero, config, last_user_text=last_user_text)
     except Exception as exc:
         logger.error("api_call: error ejecutando llamada API para %s: %s", numero, exc)
-        enviar_mensaje(numero, "Hubo un problema consultando la información. Intenta de nuevo.", tipo="bot")
+        error_msg = config.get("error_message") or "⚠️ No encontramos viajes disponibles para esa ruta y fecha. Escribe *reiniciar* para intentar con otra opción."
+        enviar_mensaje(numero, error_msg, tipo="bot")
         return
 
     enviar_mensaje(
