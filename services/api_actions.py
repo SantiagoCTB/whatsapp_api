@@ -623,6 +623,15 @@ def handle_kiryapp_reserve_rule(
 
     chat_vars = db_service.get_all_chat_vars(numero)
     chat_vars["_numero"] = numero
+    # Resolver aliases de fecha relativa ("hoy", "mañana") al igual que execute_api_call
+    _today = datetime.now()
+    chat_vars.setdefault("_hoy",    _today.strftime("%Y-%m-%d"))
+    chat_vars.setdefault("_manana", (_today + timedelta(days=1)).strftime("%Y-%m-%d"))
+    _fecha_aliases = {"hoy": chat_vars["_hoy"], "manana": chat_vars["_manana"], "mañana": chat_vars["_manana"]}
+    for _k, _v in list(chat_vars.items()):
+        if isinstance(_v, str):
+            if unicodedata.normalize("NFC", _v.lower()) in _fecha_aliases:
+                chat_vars[_k] = _fecha_aliases[unicodedata.normalize("NFC", _v.lower())]
 
     conexion_id = config.get("conexion_id")
     if not conexion_id:
