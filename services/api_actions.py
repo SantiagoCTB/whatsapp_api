@@ -289,6 +289,8 @@ def execute_api_call(numero: str, config: dict, last_user_text: str = "") -> tup
     method = (config.get("method") or conexion.get("metodo") or "GET").upper()
     raw_body = config.get("body")
     body = interpolate_obj(raw_body, chat_vars) if raw_body is not None else None
+    if isinstance(body, dict):
+        body = {k: (int(v) if isinstance(v, str) and v.lstrip("-").isdigit() else v) for k, v in body.items()}
 
     # 6. Llamada HTTP
     logger.info("api_call: %s %s | vars=%s", method, url, {k: v for k, v in chat_vars.items() if not k.startswith("_")})
