@@ -1,409 +1,907 @@
 {% extends 'base.html' %}
-{% block title %}Panel Super Admin{% endblock %}
-{% block body_class %}admin-tenants{% endblock %}
+{% block title %}Super Admin · Empresas{% endblock %}
+{% block body_class %}page{% endblock %}
+
 {% block content %}
-<div class="admin-page">
-  <h1>Gestión de empresas (solo super admin)</h1>
+<style>
+/* ── Admin tenants page ─────────────────────────────────────── */
+.ta-badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 3px 9px; border-radius: 20px; font-size: 0.75rem; font-weight: 600;
+}
+.ta-badge--active   { background: #d1fae5; color: #065f46; }
+.ta-badge--expired  { background: #fee2e2; color: #991b1b; }
+.ta-badge--none     { background: #f3f4f6; color: #6b7280; }
 
-  {% if error %}
-  <div class="alert alert-error">{{ error }}</div>
-  {% endif %}
-  {% if message %}
-  <div class="alert alert-success">{{ message }}</div>
-  {% endif %}
+.ta-tabs {
+  display: flex; gap: 4px; border-bottom: 1px solid var(--border-color);
+  margin: 20px 0 24px; padding-bottom: 0;
+}
+.ta-tab {
+  background: none; border: none; padding: 8px 16px; cursor: pointer;
+  font-size: 0.875rem; font-weight: 600; color: var(--timestamp-color);
+  border-bottom: 2px solid transparent; margin-bottom: -1px;
+  border-radius: 6px 6px 0 0; transition: color 0.2s, border-color 0.2s, background 0.2s;
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.ta-tab:hover   { color: var(--text-main); background: rgba(0,168,132,0.05); }
+.ta-tab.active  { color: var(--accent); border-bottom-color: var(--accent); background: none; }
 
-  <div class="admin-grid">
-    <section class="card">
-      <h2>Empresas registradas</h2>
-      <table class="table">
+.ta-tab-content { display: none; }
+.ta-tab-content.active { display: block; }
+
+.ta-env-tabs {
+  display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 20px;
+}
+.ta-env-tab {
+  background: #f4f6f9; border: 1px solid var(--border-color); border-radius: 8px;
+  padding: 5px 13px; font-size: 0.82rem; font-weight: 600; cursor: pointer;
+  color: var(--text-main); transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.ta-env-tab:hover  { background: #e8edff; border-color: #c8d4ff; }
+.ta-env-tab.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+.ta-env-group { display: none; }
+.ta-env-group.active { display: block; }
+
+.ta-field {
+  display: flex; flex-direction: column; gap: 5px; margin-bottom: 16px;
+}
+.ta-field label {
+  font-size: 0.82rem; font-weight: 600; color: var(--text-main); user-select: none;
+}
+.ta-field .field-hint {
+  font-size: 0.75rem; color: var(--timestamp-color); margin-top: 2px;
+}
+.ta-field input,
+.ta-field select,
+.ta-field textarea {
+  width: 100%; padding: 9px 12px; border: 1px solid var(--border-color);
+  border-radius: 8px; font-size: 0.9rem; color: var(--text-main);
+  background: #fff; transition: border-color 0.2s, box-shadow 0.2s;
+  box-sizing: border-box; margin: 0;
+}
+.ta-field input:focus,
+.ta-field select:focus,
+.ta-field textarea:focus {
+  outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(0,168,132,0.1);
+}
+.ta-field .copy-wrap { position: relative; }
+.ta-field .copy-wrap input { padding-right: 40px; }
+.ta-copy-btn {
+  position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
+  background: none; border: none; cursor: pointer; color: var(--timestamp-color);
+  padding: 4px; border-radius: 5px; transition: color 0.15s;
+}
+.ta-copy-btn:hover { color: var(--accent); }
+
+.ta-form-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 0 20px;
+}
+@media (max-width: 640px) { .ta-form-grid { grid-template-columns: 1fr; } }
+
+.ta-stats-row {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 14px; margin-bottom: 20px;
+}
+.ta-stat {
+  background: #f8fafc; border: 1px solid var(--border-color); border-radius: 10px;
+  padding: 14px 16px;
+}
+.ta-stat-label { font-size: 0.75rem; color: var(--timestamp-color); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+.ta-stat-value { font-size: 1.1rem; font-weight: 700; color: var(--text-main); margin-top: 4px; }
+
+.ta-integration-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px;
+}
+.ta-int-item {
+  background: #f8fafc; border: 1px solid var(--border-color); border-radius: 10px;
+  padding: 12px 14px;
+}
+.ta-int-item-label { font-size: 0.75rem; font-weight: 700; color: var(--timestamp-color); margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.04em; }
+.ta-int-item-value { font-size: 0.875rem; font-weight: 600; color: var(--text-main); word-break: break-all; }
+.ta-int-item-value.empty { color: var(--timestamp-color); font-weight: 400; font-style: italic; }
+
+/* ── Delete modal ───────────────────────────────────────────── */
+.ta-modal-backdrop {
+  display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45);
+  z-index: 200; align-items: center; justify-content: center;
+}
+.ta-modal-backdrop.open { display: flex; }
+.ta-modal {
+  background: #fff; border-radius: 16px; padding: 28px 32px; max-width: 380px; width: 90%;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.2); text-align: center;
+}
+.ta-modal-icon {
+  width: 52px; height: 52px; border-radius: 50%; background: #fee2e2;
+  display: flex; align-items: center; justify-content: center; margin: 0 auto 16px; color: #dc2626;
+}
+.ta-modal h3 { font-size: 1.1rem; font-weight: 700; margin-bottom: 8px; }
+.ta-modal p  { font-size: 0.875rem; color: var(--timestamp-color); margin-bottom: 22px; }
+.ta-modal-actions { display: flex; gap: 10px; justify-content: center; }
+
+/* ── Toast ──────────────────────────────────────────────────── */
+.ta-toast {
+  background: #fff; border: 1px solid var(--border-color); border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12); padding: 12px 16px;
+  display: flex; align-items: center; gap: 10px; font-size: 0.875rem;
+  animation: ta-slide-in 0.3s ease; max-width: 360px;
+}
+.ta-toast--success { border-left: 4px solid #10b981; }
+.ta-toast--error   { border-left: 4px solid #ef4444; }
+@keyframes ta-slide-in {
+  from { opacity: 0; transform: translateX(30px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+/* Tenant list table row clickable area */
+.ta-tenant-name { font-weight: 700; color: var(--text-main); }
+.ta-tenant-key {
+  font-size: 0.78rem; background: rgba(0,168,132,0.08); color: var(--accent-hover);
+  padding: 2px 7px; border-radius: 5px; font-family: monospace; display: inline-block; margin-top: 3px;
+}
+.ta-selected-indicator {
+  display: none; position: absolute; left: 0; top: 0; bottom: 0;
+  width: 3px; background: var(--accent); border-radius: 2px;
+}
+tr.ta-row-selected td:first-child { position: relative; }
+tr.ta-row-selected .ta-selected-indicator { display: block; }
+tr.ta-row-selected td { background: rgba(0,168,132,0.04); }
+
+.ta-roles-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+.ta-role-check { display: flex; align-items: center; gap: 6px; }
+.ta-role-check input[type=checkbox] { accent-color: var(--accent); width: 16px; height: 16px; }
+
+.ta-users-table-wrap { overflow-x: auto; }
+</style>
+
+<!-- Toast container -->
+<div id="toast-container" style="position:fixed;top:20px;right:20px;z-index:300;display:flex;flex-direction:column;gap:10px;pointer-events:none;"></div>
+
+<!-- Delete confirmation modal -->
+<div class="ta-modal-backdrop" id="delete-modal">
+  <div class="ta-modal">
+    <div class="ta-modal-icon">
+      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+    </div>
+    <h3>¿Eliminar empresa?</h3>
+    <p id="delete-modal-msg">Esta acción eliminará el tenant del registro. Las bases de datos no se tocan.</p>
+    <div class="ta-modal-actions">
+      <button type="button" class="btn-secondary" style="padding:9px 20px;" onclick="document.getElementById('delete-modal').classList.remove('open')">Cancelar</button>
+      <form id="delete-form" method="post">
+        <button type="submit" class="btn-danger" style="padding:9px 20px;">Eliminar</button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- ── Page header ──────────────────────────────────────────── -->
+<div class="page-header">
+  <div class="page-header-icon">
+    <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/><line x1="12" y1="12" x2="12" y2="16"/><line x1="10" y1="14" x2="14" y2="14"/></svg>
+  </div>
+  <div class="page-header-text">
+    <h2>Super Admin · Empresas</h2>
+    <p>Gestiona tenants, suscripciones, usuarios y credenciales de cada empresa</p>
+  </div>
+</div>
+
+<!-- ── Top grid: list + create ──────────────────────────────── -->
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px;align-items:start;">
+
+  <!-- Tenant list -->
+  <section class="page-section" style="padding:20px;">
+    <h3 style="margin:0 0 14px;font-size:1rem;font-weight:700;color:var(--text-main);display:flex;align-items:center;gap:8px;">
+      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+      Empresas registradas
+      <span style="margin-left:auto;background:rgba(0,168,132,0.1);color:var(--accent-hover);border-radius:20px;padding:2px 10px;font-size:0.75rem;font-weight:700;">{{ tenants|length }}</span>
+    </h3>
+
+    <div style="position:relative;margin-bottom:12px;">
+      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--timestamp-color);" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input id="tenant-search" type="search" placeholder="Buscar empresa o clave…" style="width:100%;padding:8px 10px 8px 32px;border:1px solid var(--border-color);border-radius:8px;font-size:0.875rem;" oninput="filterTenants(this.value)">
+    </div>
+
+    <div style="overflow-x:auto;">
+      <table style="background:none;box-shadow:none;padding:0;margin:0;width:100%;border-collapse:collapse;">
         <thead>
           <tr>
-            <th>Tenant</th>
-            <th>Nombre</th>
-            <th>Base de datos</th>
-            <th>Host</th>
-            <th></th>
+            <th style="background:rgba(0,168,132,0.06);font-weight:700;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.05em;color:var(--accent-hover);padding:8px 10px;border-bottom:2px solid var(--border-color);">Empresa</th>
+            <th style="background:rgba(0,168,132,0.06);font-weight:700;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.05em;color:var(--accent-hover);padding:8px 10px;border-bottom:2px solid var(--border-color);">Estado</th>
+            <th style="background:rgba(0,168,132,0.06);padding:8px 10px;border-bottom:2px solid var(--border-color);"></th>
           </tr>
         </thead>
-        <tbody>
-          {% for tenant in tenants %}
-          <tr>
-            <td>{{ tenant.tenant_key }}</td>
-            <td>{{ tenant.name }}</td>
-            <td>{{ tenant.db_name }}</td>
-            <td>{{ tenant.db_host }}:{{ tenant.db_port }}</td>
-            <td class="actions">
-              <a class="btn" href="{{ url_for('tenant_admin.dashboard', tenant=tenant.tenant_key) }}">Gestionar</a>
-              <form method="post" action="{{ url_for('tenant_admin.delete_tenant', tenant_key=tenant.tenant_key) }}" onsubmit="return confirm('¿Eliminar el tenant {{ tenant.tenant_key }}?');">
-                <button type="submit" class="btn danger">Eliminar</button>
-              </form>
+        <tbody id="tenants-tbody">
+          {% for t in tenants %}
+          <tr class="ta-tenant-row{% if selected_tenant and selected_tenant.tenant_key == t.tenant_key %} ta-row-selected{% endif %}"
+              data-search="{{ t.tenant_key }} {{ t.name }}">
+            <td style="padding:10px;border-bottom:1px solid #f0f0f0;vertical-align:middle;">
+              <div class="ta-selected-indicator"></div>
+              <div class="ta-tenant-name">{{ t.name }}</div>
+              <div class="ta-tenant-key">{{ t.tenant_key }}</div>
+              <div style="font-size:0.75rem;color:var(--timestamp-color);margin-top:3px;">{{ t.db_host }}:{{ t.db_port }} / {{ t.db_name }}</div>
+            </td>
+            <td style="padding:10px;border-bottom:1px solid #f0f0f0;vertical-align:middle;white-space:nowrap;">
+              <span class="ta-badge ta-badge--none">—</span>
+            </td>
+            <td style="padding:8px 10px;border-bottom:1px solid #f0f0f0;vertical-align:middle;white-space:nowrap;">
+              <div style="display:flex;gap:6px;align-items:center;">
+                <a href="{{ url_for('tenant_admin.dashboard', tenant=t.tenant_key) }}"
+                   class="btn-secondary" style="padding:5px 12px;font-size:0.8rem;display:inline-flex;align-items:center;gap:5px;border-radius:7px;text-decoration:none;">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>
+                  Gestionar
+                </a>
+                <button type="button"
+                  class="btn-danger" style="padding:5px 10px;font-size:0.8rem;border-radius:7px;display:inline-flex;align-items:center;"
+                  onclick="openDeleteModal('{{ t.tenant_key }}', '{{ t.name }}', '{{ url_for('tenant_admin.delete_tenant', tenant_key=t.tenant_key) }}')">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+                </button>
+              </div>
             </td>
           </tr>
           {% else %}
-          <tr><td colspan="5">No hay empresas registradas todavía.</td></tr>
+          <tr id="no-tenants-row"><td colspan="3" style="padding:20px;text-align:center;color:var(--timestamp-color);font-style:italic;">No hay empresas registradas todavía.</td></tr>
           {% endfor %}
+          <tr id="no-results-row" style="display:none;"><td colspan="3" style="padding:20px;text-align:center;color:var(--timestamp-color);font-style:italic;">Ninguna empresa coincide con la búsqueda.</td></tr>
         </tbody>
       </table>
-    </section>
+    </div>
+  </section>
 
-    <section class="card">
-      <h2>Registrar/actualizar empresa</h2>
-      <form method="post" action="{{ url_for('tenant_admin.create_or_update_tenant') }}" class="form-grid">
-        <label>Clave (tenant_key)
-          <input name="tenant_key" required placeholder="mi_empresa" />
-        </label>
-        <label>Nombre público
-          <input name="name" placeholder="Nombre de la empresa" />
-        </label>
-        <label>DB Host
-          <input name="db_host" required placeholder="localhost" />
-        </label>
-        <label>DB Puerto
-          <input name="db_port" type="number" min="1" max="65535" value="3306" />
-        </label>
-        <label>DB Nombre
-          <input name="db_name" required placeholder="whatsapp_tenant" />
-        </label>
-        <label>DB Usuario
-          <input name="db_user" required placeholder="root" />
-        </label>
-        <label>DB Password
-          <input name="db_password" required type="password" />
-        </label>
-        <label>Metadata (JSON opcional)
-          <textarea name="metadata" rows="3" placeholder='{"branding": "Acme"}'></textarea>
-        </label>
-        <label class="checkbox-inline">
-          <input type="checkbox" name="ensure_schema" value="1" checked /> Crear/actualizar esquema aislado
-        </label>
-        <button type="submit" class="btn primary">Guardar empresa</button>
-      </form>
-    </section>
+  <!-- Create / update form -->
+  <section class="page-section" style="padding:20px;">
+    <h3 style="margin:0 0 18px;font-size:1rem;font-weight:700;color:var(--text-main);display:flex;align-items:center;gap:8px;">
+      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      Registrar / actualizar empresa
+    </h3>
+    <form method="post" action="{{ url_for('tenant_admin.create_or_update_tenant') }}" style="background:none;box-shadow:none;padding:0;margin:0;">
+      <div class="ta-form-grid">
+        <div class="ta-field">
+          <label for="f-key">Clave (tenant_key) *</label>
+          <input id="f-key" name="tenant_key" required placeholder="mi_empresa" pattern="[a-z0-9_-]+" title="Solo letras minúsculas, números, guiones y guiones bajos">
+          <span class="field-hint">Sin espacios. Ej: acme_corp</span>
+        </div>
+        <div class="ta-field">
+          <label for="f-name">Nombre público</label>
+          <input id="f-name" name="name" placeholder="Acme Corporation">
+        </div>
+        <div class="ta-field">
+          <label for="f-host">DB Host *</label>
+          <input id="f-host" name="db_host" required placeholder="localhost o 127.0.0.1">
+        </div>
+        <div class="ta-field">
+          <label for="f-port">DB Puerto</label>
+          <input id="f-port" name="db_port" type="number" min="1" max="65535" value="3306">
+        </div>
+        <div class="ta-field">
+          <label for="f-dbname">DB Nombre *</label>
+          <input id="f-dbname" name="db_name" required placeholder="whapco_acme">
+        </div>
+        <div class="ta-field">
+          <label for="f-user">DB Usuario *</label>
+          <input id="f-user" name="db_user" required placeholder="root">
+        </div>
+      </div>
+      <div class="ta-field">
+        <label for="f-pass">DB Password *</label>
+        <div class="password-wrapper">
+          <input id="f-pass" name="db_password" required type="password" placeholder="••••••••">
+          <button type="button" class="password-toggle" onclick="togglePassword('f-pass', this)" aria-label="Mostrar/ocultar contraseña">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="ta-field">
+        <label for="f-meta">Metadata (JSON opcional)</label>
+        <textarea id="f-meta" name="metadata" rows="2" placeholder='{"branding": "Acme"}'></textarea>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:18px;">
+        <input type="checkbox" name="ensure_schema" value="1" checked id="f-schema" style="accent-color:var(--accent);width:16px;height:16px;">
+        <label for="f-schema" style="font-size:0.875rem;cursor:pointer;user-select:none;">Crear / actualizar esquema aislado</label>
+      </div>
+      <button type="submit" class="btn-primary" style="display:inline-flex;align-items:center;gap:7px;padding:10px 22px;">
+        <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+        Guardar empresa
+      </button>
+    </form>
+  </section>
+</div>
+
+<!-- ── Selected tenant management ───────────────────────────── -->
+{% if selected_tenant %}
+{% set sub = tenant_subscription %}
+{% set is_active = sub.get('paid_until') %}
+
+<section class="page-section" style="padding:24px;">
+
+  <!-- Tenant heading -->
+  <div style="display:flex;align-items:center;gap:14px;margin-bottom:4px;flex-wrap:wrap;">
+    <div style="width:44px;height:44px;border-radius:12px;background:rgba(0,168,132,0.1);border:1px solid rgba(0,168,132,0.2);display:grid;place-items:center;color:var(--accent);flex-shrink:0;">
+      <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>
+    </div>
+    <div style="flex:1;min-width:0;">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+        <span style="font-size:1.15rem;font-weight:800;color:var(--text-main);">{{ selected_tenant.name }}</span>
+        <code style="background:rgba(0,168,132,0.08);color:var(--accent-hover);padding:3px 9px;border-radius:6px;font-size:0.82rem;">{{ selected_tenant.tenant_key }}</code>
+        {% if is_active %}
+        <span class="ta-badge ta-badge--active">
+          <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+          Activa hasta {{ sub.get('paid_until') }}
+        </span>
+        {% else %}
+        <span class="ta-badge ta-badge--none">Sin suscripción</span>
+        {% endif %}
+      </div>
+      <div style="font-size:0.8rem;color:var(--timestamp-color);margin-top:3px;">{{ selected_tenant.db_name }} · {{ selected_tenant.db_host }}:{{ selected_tenant.db_port }}</div>
+    </div>
   </div>
 
-  {% if selected_tenant %}
-  <section class="card">
-    <h2>Administrar {{ selected_tenant.name }} ({{ selected_tenant.tenant_key }})</h2>
-    <div class="meta-grid">
-      <div><strong>DB:</strong> {{ selected_tenant.db_name }} en {{ selected_tenant.db_host }}:{{ selected_tenant.db_port }}</div>
-      <div><strong>Usuario BD:</strong> {{ selected_tenant.db_user }}</div>
-      <div><strong>Metadata:</strong> {{ selected_tenant.metadata or '{}' }}</div>
-      <div><strong>Estado membresía:</strong> {% if tenant_subscription.get('paid_until') %}Activa hasta {{ tenant_subscription.get('paid_until') }}{% else %}Sin pago registrado{% endif %}</div>
-      <div><strong>Ciclo actual:</strong> {{ tenant_subscription.get('billing_cycle') }}</div>
-      <div><strong>Contador mensual:</strong> {{ tenant_subscription.get('monthly_counter', 0) }}</div>
+  <!-- Stat row -->
+  <div class="ta-stats-row" style="margin:18px 0;">
+    <div class="ta-stat">
+      <div class="ta-stat-label">Mensajes este ciclo</div>
+      <div class="ta-stat-value">{{ sub.get('monthly_counter', 0)|int }}</div>
     </div>
+    <div class="ta-stat">
+      <div class="ta-stat-label">Límite mensual</div>
+      <div class="ta-stat-value">{{ sub.get('monthly_limit') or '∞' }}</div>
+    </div>
+    <div class="ta-stat">
+      <div class="ta-stat-label">Ciclo de facturación</div>
+      <div class="ta-stat-value" style="font-size:0.9rem;">{{ sub.get('billing_cycle') or '—' }}</div>
+    </div>
+    <div class="ta-stat">
+      <div class="ta-stat-label">Usuarios</div>
+      <div class="ta-stat-value">{{ tenant_users|length }}</div>
+    </div>
+  </div>
 
-    <div class="admin-grid">
+  <!-- Tab bar -->
+  <div class="ta-tabs">
+    <button class="ta-tab active" data-tab="tab-sub" onclick="switchTab(event, 'tab-sub')">
+      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
+      Suscripción
+    </button>
+    <button class="ta-tab" data-tab="tab-users" onclick="switchTab(event, 'tab-users')">
+      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+      Usuarios
+    </button>
+    <button class="ta-tab" data-tab="tab-env" onclick="switchTab(event, 'tab-env')">
+      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+      Variables de entorno
+    </button>
+    <button class="ta-tab" data-tab="tab-int" onclick="switchTab(event, 'tab-int')">
+      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+      Integraciones
+    </button>
+  </div>
+
+  <!-- ══ Tab: Suscripción ══════════════════════════════════════ -->
+  <div class="ta-tab-content active" id="tab-sub">
+    <form method="post" action="{{ url_for('tenant_admin.update_tenant_subscription', tenant_key=selected_tenant.tenant_key) }}" style="background:none;box-shadow:none;padding:0;margin:0;max-width:480px;">
+      <div class="ta-form-grid">
+        <div class="ta-field">
+          <label for="s-until">Pagado hasta</label>
+          <input type="date" id="s-until" name="paid_until" value="{{ sub.get('paid_until') or '' }}">
+          <span class="field-hint">Deja vacío para sin fecha límite</span>
+        </div>
+        <div class="ta-field">
+          <label for="s-limit">Límite mensual de mensajes</label>
+          <input type="number" id="s-limit" min="0" name="monthly_limit" value="{{ sub.get('monthly_limit') if sub.get('monthly_limit') is not none else '' }}" placeholder="Sin límite">
+        </div>
+      </div>
+      <p style="font-size:0.82rem;color:var(--timestamp-color);margin-bottom:16px;">
+        Si no hay fecha de pago o ya venció, los usuarios de la empresa no podrán iniciar sesión.
+      </p>
+      <button type="submit" class="btn-primary" style="display:inline-flex;align-items:center;gap:7px;padding:10px 22px;">
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+        Guardar suscripción
+      </button>
+    </form>
+  </div>
+
+  <!-- ══ Tab: Usuarios ════════════════════════════════════════ -->
+  <div class="ta-tab-content" id="tab-users">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:start;">
+
+      <!-- User list -->
       <div>
-        <h3>Suscripción</h3>
-        <form method="post" action="{{ url_for('tenant_admin.update_tenant_subscription', tenant_key=selected_tenant.tenant_key) }}" class="form-grid">
-          <label>Pagado hasta
-            <input type="date" name="paid_until" value="{{ tenant_subscription.get('paid_until') or '' }}" />
-          </label>
-          <label>Límite mensual (opcional)
-            <input type="number" min="0" name="monthly_limit" value="{{ tenant_subscription.get('monthly_limit') if tenant_subscription.get('monthly_limit') is not none else '' }}" placeholder="Sin límite" />
-          </label>
-          <p class="help">Si no hay fecha de pago o ya venció, los usuarios de la empresa no podrán entrar.</p>
-          <button type="submit" class="btn primary">Guardar suscripción</button>
+        <h4 style="font-size:0.875rem;font-weight:700;margin-bottom:12px;color:var(--text-main);">Usuarios existentes</h4>
+        <div class="ta-users-table-wrap">
+          <table style="background:none;box-shadow:none;padding:0;margin:0;width:100%;border-collapse:collapse;">
+            <thead>
+              <tr>
+                <th style="background:rgba(0,168,132,0.06);font-size:0.75rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--accent-hover);padding:8px 10px;border-bottom:2px solid var(--border-color);text-align:left;">Usuario</th>
+                <th style="background:rgba(0,168,132,0.06);font-size:0.75rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--accent-hover);padding:8px 10px;border-bottom:2px solid var(--border-color);text-align:left;">Roles</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for u in tenant_users %}
+              <tr>
+                <td style="padding:9px 10px;border-bottom:1px solid #f0f0f0;font-weight:600;font-size:0.875rem;">{{ u.username }}</td>
+                <td style="padding:9px 10px;border-bottom:1px solid #f0f0f0;font-size:0.82rem;color:var(--timestamp-color);">
+                  {% if u.roles %}
+                    {% for r in u.roles.split(',') %}
+                    <code style="background:rgba(0,168,132,0.07);padding:1px 6px;border-radius:4px;margin-right:3px;">{{ r.strip() }}</code>
+                    {% endfor %}
+                  {% else %}—{% endif %}
+                </td>
+              </tr>
+              {% else %}
+              <tr><td colspan="2" style="padding:16px;text-align:center;color:var(--timestamp-color);font-style:italic;">Aún no hay usuarios.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Create user form -->
+      <div>
+        <h4 style="font-size:0.875rem;font-weight:700;margin-bottom:12px;color:var(--text-main);">Crear / actualizar usuario</h4>
+        <form method="post" action="{{ url_for('tenant_admin.create_tenant_user', tenant_key=selected_tenant.tenant_key) }}" style="background:none;box-shadow:none;padding:0;margin:0;">
+          <div class="ta-field">
+            <label for="u-name">Usuario</label>
+            <input id="u-name" name="username" required placeholder="admin">
+          </div>
+          <div class="ta-field">
+            <label for="u-pass">Contraseña</label>
+            <div class="password-wrapper">
+              <input id="u-pass" name="password" type="password" required placeholder="••••••••">
+              <button type="button" class="password-toggle" onclick="togglePassword('u-pass', this)" aria-label="Mostrar/ocultar">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+              </button>
+            </div>
+          </div>
+          {% if tenant_roles %}
+          <div class="ta-field">
+            <label>Roles</label>
+            <div class="ta-roles-grid" style="background:#f8fafc;border:1px solid var(--border-color);border-radius:8px;padding:12px;">
+              {% for role in tenant_roles %}
+              <label class="ta-role-check" style="cursor:pointer;font-size:0.875rem;">
+                <input type="checkbox" name="roles" value="{{ role.keyword }}"> {{ role.name }}
+                <code style="background:rgba(0,168,132,0.07);padding:1px 5px;border-radius:4px;font-size:0.75rem;">{{ role.keyword }}</code>
+              </label>
+              {% endfor %}
+            </div>
+          </div>
+          {% else %}
+          <p style="font-size:0.82rem;color:var(--timestamp-color);margin-bottom:16px;">No hay roles definidos en este tenant.</p>
+          {% endif %}
+          <button type="submit" class="btn-primary" style="display:inline-flex;align-items:center;gap:7px;padding:10px 22px;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+            Guardar usuario
+          </button>
         </form>
       </div>
-      <div>
-        <h3>Usuarios y roles</h3>
-        <table class="table">
-          <thead><tr><th>Usuario</th><th>Roles</th></tr></thead>
-          <tbody>
-            {% for u in tenant_users %}
-            <tr>
-              <td>{{ u.username }}</td>
-              <td>{{ u.roles or '—' }}</td>
-            </tr>
-            {% else %}
-            <tr><td colspan="2">Aún no hay usuarios en este tenant.</td></tr>
-            {% endfor %}
-          </tbody>
-        </table>
+    </div>
+  </div>
+
+  <!-- ══ Tab: Variables de entorno ════════════════════════════ -->
+  <div class="ta-tab-content" id="tab-env">
+    <form method="post" action="{{ url_for('tenant_admin.update_tenant_env', tenant_key=selected_tenant.tenant_key) }}" style="background:none;box-shadow:none;padding:0;margin:0;">
+
+      <!-- Env sub-tabs -->
+      <div class="ta-env-tabs">
+        <button type="button" class="ta-env-tab active" onclick="switchEnvTab(this,'env-whatsapp')">
+          <img src="{{ url_for('static', filename='logo-whatsapp.png') }}" width="14" height="14" style="vertical-align:middle;margin-right:4px;" alt=""> WhatsApp
+        </button>
+        <button type="button" class="ta-env-tab" onclick="switchEnvTab(this,'env-messenger')">
+          <img src="{{ url_for('static', filename='logo-facebook.png') }}" width="14" height="14" style="vertical-align:middle;margin-right:4px;" alt=""> Messenger
+        </button>
+        <button type="button" class="ta-env-tab" onclick="switchEnvTab(this,'env-instagram')">
+          <img src="{{ url_for('static', filename='logo-instagram.png') }}" width="14" height="14" style="vertical-align:middle;margin-right:4px;" alt=""> Instagram
+        </button>
+        <button type="button" class="ta-env-tab" onclick="switchEnvTab(this,'env-ia')">
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:4px;" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          IA
+        </button>
+        <button type="button" class="ta-env-tab" onclick="switchEnvTab(this,'env-general')">
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:4px;" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>
+          General
+        </button>
       </div>
-      <div>
-        <h3>Crear/actualizar usuario</h3>
-        <form method="post" action="{{ url_for('tenant_admin.create_tenant_user', tenant_key=selected_tenant.tenant_key) }}" class="form-grid">
-          <label>Usuario
-            <input name="username" required placeholder="admin" />
-          </label>
-          <label>Contraseña
-            <input name="password" type="password" required />
-          </label>
-          <fieldset class="roles">
-            <legend>Roles</legend>
-            {% for role in tenant_roles %}
-            <label class="checkbox-inline">
-              <input type="checkbox" name="roles" value="{{ role.keyword }}" /> {{ role.name }} ({{ role.keyword }})
-            </label>
-            {% else %}
-            <p>No hay roles definidos aún en este tenant.</p>
-            {% endfor %}
-          </fieldset>
-          <button type="submit" class="btn primary">Guardar usuario</button>
-        </form>
+
+      <!-- WhatsApp -->
+      <div class="ta-env-group active" id="env-whatsapp">
+        <div class="ta-form-grid">
+          <div class="ta-field">
+            <label>META_TOKEN</label>
+            <div class="copy-wrap">
+              <input name="META_TOKEN" value="{{ tenant_env.get('META_TOKEN','') }}" placeholder="Token de acceso de Meta">
+              <button type="button" class="ta-copy-btn" onclick="copyField(this)" title="Copiar">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              </button>
+            </div>
+          </div>
+          <div class="ta-field">
+            <label>LONG_LIVED_TOKEN</label>
+            <div class="copy-wrap">
+              <input name="LONG_LIVED_TOKEN" value="{{ tenant_env.get('LONG_LIVED_TOKEN','') }}" placeholder="Token largo generado por Meta">
+              <button type="button" class="ta-copy-btn" onclick="copyField(this)" title="Copiar">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              </button>
+            </div>
+          </div>
+          <div class="ta-field">
+            <label>PHONE_NUMBER_ID</label>
+            <input name="PHONE_NUMBER_ID" value="{{ tenant_env.get('PHONE_NUMBER_ID','') }}" placeholder="Ej: 630532376819353">
+          </div>
+          <div class="ta-field">
+            <label>WABA_ID</label>
+            <input name="WABA_ID" value="{{ tenant_env.get('WABA_ID','') }}" placeholder="ID de WhatsApp Business Account">
+          </div>
+          <div class="ta-field">
+            <label>BUSINESS_ID</label>
+            <input name="BUSINESS_ID" value="{{ tenant_env.get('BUSINESS_ID','') }}" placeholder="ID del Business Manager">
+          </div>
+          <div class="ta-field">
+            <label>VERIFY_TOKEN</label>
+            <input name="VERIFY_TOKEN" value="{{ tenant_env.get('VERIFY_TOKEN','') }}" placeholder="Token de verificación del webhook">
+          </div>
+        </div>
+        <p style="font-size:0.8rem;color:var(--timestamp-color);margin-top:4px;">
+          PHONE_NUMBER_ID y META_TOKEN son obligatorios para recibir y enviar mensajes de WhatsApp.
+        </p>
       </div>
-      <div>
-        <h3>Variables de entorno por empresa</h3>
-        <form method="post" action="{{ url_for('tenant_admin.update_tenant_env', tenant_key=selected_tenant.tenant_key) }}" class="form-grid">
-          <label>META_TOKEN
-            <input name="META_TOKEN" value="{{ tenant_env.get('META_TOKEN','') }}" placeholder="token de Meta" />
-          </label>
-          <label>MESSENGER_TOKEN
-            <input name="MESSENGER_TOKEN" value="{{ tenant_env.get('MESSENGER_TOKEN','') }}" placeholder="token de Messenger" />
-          </label>
-          <label>INSTAGRAM_TOKEN
-            <input name="INSTAGRAM_TOKEN" value="{{ tenant_env.get('INSTAGRAM_TOKEN','') }}" placeholder="token de Instagram" />
-          </label>
-          <label>INSTAGRAM_ACCOUNT_ID
-            <input name="INSTAGRAM_ACCOUNT_ID" value="{{ tenant_env.get('INSTAGRAM_ACCOUNT_ID','') }}" placeholder="ID de cuenta de Instagram" />
-          </label>
-          <label>INSTAGRAM_PAGE_ID
-            <input name="INSTAGRAM_PAGE_ID" value="{{ tenant_env.get('INSTAGRAM_PAGE_ID','') }}" placeholder="ID de página de Instagram" />
-          </label>
-          <label>MESSENGER_PAGE_ID
-            <input name="MESSENGER_PAGE_ID" value="{{ tenant_env.get('MESSENGER_PAGE_ID','') }}" placeholder="ID de la Page de Messenger" />
-          </label>
-          <label>MESSENGER_PAGE_ACCESS_TOKEN
-            <input name="MESSENGER_PAGE_ACCESS_TOKEN" value="{{ tenant_env.get('MESSENGER_PAGE_ACCESS_TOKEN','') }}" placeholder="token de acceso de la Page" />
-          </label>
-          <label>PAGE_ID
-            <input name="PAGE_ID" value="{{ tenant_env.get('PAGE_ID','') }}" placeholder="ID de la Page" />
-          </label>
-          <label>PAGE_ACCESS_TOKEN
-            <input name="PAGE_ACCESS_TOKEN" value="{{ tenant_env.get('PAGE_ACCESS_TOKEN','') }}" placeholder="token de acceso de la Page" />
-          </label>
-          <label>PLATFORM (messenger | instagram)
+
+      <!-- Messenger -->
+      <div class="ta-env-group" id="env-messenger">
+        <div class="ta-form-grid">
+          <div class="ta-field">
+            <label>MESSENGER_TOKEN</label>
+            <div class="copy-wrap">
+              <input name="MESSENGER_TOKEN" value="{{ tenant_env.get('MESSENGER_TOKEN','') }}" placeholder="Token de Messenger">
+              <button type="button" class="ta-copy-btn" onclick="copyField(this)" title="Copiar">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              </button>
+            </div>
+          </div>
+          <div class="ta-field">
+            <label>MESSENGER_PAGE_ID</label>
+            <input name="MESSENGER_PAGE_ID" value="{{ tenant_env.get('MESSENGER_PAGE_ID','') }}" placeholder="ID de la Page de Messenger">
+          </div>
+          <div class="ta-field">
+            <label>MESSENGER_PAGE_ACCESS_TOKEN</label>
+            <div class="copy-wrap">
+              <input name="MESSENGER_PAGE_ACCESS_TOKEN" value="{{ tenant_env.get('MESSENGER_PAGE_ACCESS_TOKEN','') }}" placeholder="Token de acceso de la Page">
+              <button type="button" class="ta-copy-btn" onclick="copyField(this)" title="Copiar">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              </button>
+            </div>
+          </div>
+          <div class="ta-field">
+            <label>PAGE_ID</label>
+            <input name="PAGE_ID" value="{{ tenant_env.get('PAGE_ID','') }}" placeholder="ID de la Page (legacy)">
+          </div>
+          <div class="ta-field">
+            <label>PAGE_ACCESS_TOKEN</label>
+            <div class="copy-wrap">
+              <input name="PAGE_ACCESS_TOKEN" value="{{ tenant_env.get('PAGE_ACCESS_TOKEN','') }}" placeholder="Token de acceso (legacy)">
+              <button type="button" class="ta-copy-btn" onclick="copyField(this)" title="Copiar">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Instagram -->
+      <div class="ta-env-group" id="env-instagram">
+        <div class="ta-form-grid">
+          <div class="ta-field">
+            <label>INSTAGRAM_TOKEN</label>
+            <div class="copy-wrap">
+              <input name="INSTAGRAM_TOKEN" value="{{ tenant_env.get('INSTAGRAM_TOKEN','') }}" placeholder="Token de Instagram">
+              <button type="button" class="ta-copy-btn" onclick="copyField(this)" title="Copiar">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              </button>
+            </div>
+          </div>
+          <div class="ta-field">
+            <label>INSTAGRAM_ACCOUNT_ID</label>
+            <input name="INSTAGRAM_ACCOUNT_ID" value="{{ tenant_env.get('INSTAGRAM_ACCOUNT_ID','') }}" placeholder="ID de cuenta de Instagram">
+          </div>
+          <div class="ta-field">
+            <label>INSTAGRAM_PAGE_ID</label>
+            <input name="INSTAGRAM_PAGE_ID" value="{{ tenant_env.get('INSTAGRAM_PAGE_ID','') }}" placeholder="ID de página de Instagram">
+          </div>
+          <div class="ta-field">
+            <label>PLATFORM</label>
             <select name="PLATFORM">
-              <option value="" {% if not tenant_env.get('PLATFORM') %}selected{% endif %}>Seleccionar</option>
+              <option value="" {% if not tenant_env.get('PLATFORM') %}selected{% endif %}>Sin seleccionar (WhatsApp)</option>
               <option value="messenger" {% if tenant_env.get('PLATFORM') == 'messenger' %}selected{% endif %}>messenger</option>
               <option value="instagram" {% if tenant_env.get('PLATFORM') == 'instagram' %}selected{% endif %}>instagram</option>
             </select>
-          </label>
-          <label>LONG_LIVED_TOKEN
-            <input name="LONG_LIVED_TOKEN" value="{{ tenant_env.get('LONG_LIVED_TOKEN','') }}" placeholder="token largo generado por Meta" />
-          </label>
-          <label>PHONE_NUMBER_ID
-            <input name="PHONE_NUMBER_ID" value="{{ tenant_env.get('PHONE_NUMBER_ID','') }}" placeholder="630532376819353" />
-          </label>
-          <label>WABA_ID
-            <input name="WABA_ID" value="{{ tenant_env.get('WABA_ID','') }}" placeholder="1234567890" />
-          </label>
-          <label>BUSINESS_ID
-            <input name="BUSINESS_ID" value="{{ tenant_env.get('BUSINESS_ID','') }}" placeholder="ID del Business Manager" />
-          </label>
-          <label>SECRET_KEY
-            <input name="SECRET_KEY" value="{{ tenant_env.get('SECRET_KEY','') }}" placeholder="my_secret_token" />
-          </label>
-          <label>VERIFY_TOKEN
-            <input name="VERIFY_TOKEN" value="{{ tenant_env.get('VERIFY_TOKEN','') }}" placeholder="token de verificación" />
-          </label>
-          <label>MEDIA_ROOT
-            <input name="MEDIA_ROOT" value="{{ tenant_env.get('MEDIA_ROOT','') }}" placeholder="/app/static/uploads" />
-          </label>
-          <label>SESSION_TIMEOUT_MESSAGE
-            <textarea name="SESSION_TIMEOUT_MESSAGE" rows="2" placeholder="Mensaje al cerrar sesión por inactividad">{{ tenant_env.get('SESSION_TIMEOUT_MESSAGE','') }}</textarea>
-          </label>
-          <label>SESSION_TIMEOUT (segundos)
-            <input type="number" min="60" name="SESSION_TIMEOUT" value="{{ tenant_env.get('SESSION_TIMEOUT','') }}" />
-          </label>
-          <label>IA_API_TOKEN
-            <input name="IA_API_TOKEN" value="{{ tenant_env.get('IA_API_TOKEN','') }}" placeholder="Token del proveedor de IA" />
-          </label>
-          <label>IA_MODEL
-            <input name="IA_MODEL" value="{{ tenant_env.get('IA_MODEL','') }}" placeholder="o4-mini" />
-          </label>
-          <label>IA_HISTORY_LIMIT
-            <input type="number" min="1" name="IA_HISTORY_LIMIT" value="{{ tenant_env.get('IA_HISTORY_LIMIT','') }}" />
-          </label>
-          <label>IA_SYSTEM_MESSAGE
-            <textarea name="IA_SYSTEM_MESSAGE" rows="3" placeholder="Mensaje de sistema para el modelo de IA">{{ tenant_env.get('IA_SYSTEM_MESSAGE','') }}</textarea>
-          </label>
-          <p class="help">
-            Las credenciales de WhatsApp (PHONE_NUMBER_ID y META_TOKEN) se guardan por
-            empresa; deja los campos vacíos solo si todavía no tienes los datos para
-            este tenant. Ya no se comparten valores del <code>.env</code> entre
-            empresas.
-          </p>
-          <button type="submit" class="btn primary">Guardar variables</button>
-        </form>
-      </div>
-      <div>
-        <h3>Integraciones</h3>
-        {% set tenant_metadata = selected_tenant.metadata if selected_tenant.metadata is mapping else {} %}
-        {% set instagram_account = tenant_metadata.get('instagram_account') if tenant_metadata.get('instagram_account') is mapping else {} %}
-        {% set page_selection = tenant_metadata.get('page_selection') if tenant_metadata.get('page_selection') is mapping else {} %}
-        {% set messenger_selection = page_selection.get('messenger') if page_selection.get('messenger') is mapping else {} %}
-        <div class="meta-grid">
-          <div><strong>WABA_ID:</strong> {{ tenant_env.get('WABA_ID') or '—' }}</div>
-          <div><strong>BUSINESS_ID:</strong> {{ tenant_env.get('BUSINESS_ID') or '—' }}</div>
-          <div><strong>Phone number:</strong> {{ tenant_env.get('PHONE_NUMBER_ID') or '—' }}</div>
-          <div><strong>Token largo:</strong> {{ tenant_env.get('LONG_LIVED_TOKEN') or tenant_env.get('META_TOKEN') or '—' }}</div>
-          <div><strong>Page ID (Messenger):</strong> {{ tenant_env.get('MESSENGER_PAGE_ID') or tenant_env.get('PAGE_ID') or '—' }}</div>
-          <div><strong>Instagram account ID:</strong> {{ tenant_env.get('INSTAGRAM_ACCOUNT_ID') or tenant_env.get('INSTAGRAM_PAGE_ID') or '—' }}</div>
-          <div><strong>Cuenta Instagram:</strong> {{ instagram_account.get('username') or instagram_account.get('id') or '—' }}</div>
-          <div><strong>Plataforma legacy:</strong> {{ tenant_env.get('PLATFORM') or '—' }}</div>
-          <div><strong>Page name (Messenger):</strong> {{ messenger_selection.get('page_name') or '—' }}</div>
-          <div><strong>Business info:</strong> {{ tenant_metadata.get('whatsapp_business') or '—' }}</div>
+            <span class="field-hint">Solo necesario si usas Messenger o Instagram como canal principal.</span>
+          </div>
         </div>
-        <p class="help">Usa el Embedded Signup para generar las credenciales directamente desde Meta y guardarlas en este tenant.</p>
-        <button
-          id="wa-signup-trigger"
-          class="btn primary"
-          data-config-code="{{ signup_config_code or '' }}"
-          data-tenant="{{ selected_tenant.tenant_key }}"
-          {% if not signup_config_code or not facebook_app_id %}disabled{% endif %}
-        >
-          Abrir Embedded Signup
-        </button>
-        {% if not signup_config_code %}
-        <p class="alert alert-error" style="margin-top: 0.5rem">Falta configurar SIGNUP_FACEBOOK en el entorno.</p>
-        {% endif %}
-        {% if not facebook_app_id %}
-        <p class="alert alert-error" style="margin-top: 0.5rem">Falta configurar FACEBOOK_APP_ID en el entorno.</p>
-        {% endif %}
-        <div id="wa-signup-status" class="help" style="margin-top: 0.5rem"></div>
       </div>
+
+      <!-- IA -->
+      <div class="ta-env-group" id="env-ia">
+        <div class="ta-form-grid">
+          <div class="ta-field">
+            <label>IA_API_TOKEN</label>
+            <div class="copy-wrap">
+              <input name="IA_API_TOKEN" value="{{ tenant_env.get('IA_API_TOKEN','') }}" placeholder="Token del proveedor de IA (OpenAI, etc.)">
+              <button type="button" class="ta-copy-btn" onclick="copyField(this)" title="Copiar">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              </button>
+            </div>
+          </div>
+          <div class="ta-field">
+            <label>IA_MODEL</label>
+            <input name="IA_MODEL" value="{{ tenant_env.get('IA_MODEL','') }}" placeholder="o4-mini">
+            <span class="field-hint">Modelo a usar. Ej: gpt-4o, o4-mini, gpt-4-turbo</span>
+          </div>
+          <div class="ta-field">
+            <label>IA_HISTORY_LIMIT</label>
+            <input type="number" min="1" name="IA_HISTORY_LIMIT" value="{{ tenant_env.get('IA_HISTORY_LIMIT','') }}" placeholder="20">
+            <span class="field-hint">Cantidad de mensajes de historial que se envían al modelo.</span>
+          </div>
+        </div>
+        <div class="ta-field">
+          <label>IA_SYSTEM_MESSAGE</label>
+          <textarea name="IA_SYSTEM_MESSAGE" rows="4" placeholder="Eres un asistente de atención al cliente de…">{{ tenant_env.get('IA_SYSTEM_MESSAGE','') }}</textarea>
+        </div>
+      </div>
+
+      <!-- General -->
+      <div class="ta-env-group" id="env-general">
+        <div class="ta-form-grid">
+          <div class="ta-field">
+            <label>SECRET_KEY</label>
+            <div class="password-wrapper">
+              <input id="env-secret" name="SECRET_KEY" type="password" value="{{ tenant_env.get('SECRET_KEY','') }}" placeholder="my_secret_token">
+              <button type="button" class="password-toggle" onclick="togglePassword('env-secret', this)" aria-label="Mostrar/ocultar">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+              </button>
+            </div>
+          </div>
+          <div class="ta-field">
+            <label>MEDIA_ROOT</label>
+            <input name="MEDIA_ROOT" value="{{ tenant_env.get('MEDIA_ROOT','') }}" placeholder="/app/static/uploads">
+          </div>
+          <div class="ta-field">
+            <label>SESSION_TIMEOUT (segundos)</label>
+            <input type="number" min="60" name="SESSION_TIMEOUT" value="{{ tenant_env.get('SESSION_TIMEOUT','') }}" placeholder="1800">
+          </div>
+        </div>
+        <div class="ta-field">
+          <label>SESSION_TIMEOUT_MESSAGE</label>
+          <textarea name="SESSION_TIMEOUT_MESSAGE" rows="2" placeholder="Tu sesión ha caducado por inactividad.">{{ tenant_env.get('SESSION_TIMEOUT_MESSAGE','') }}</textarea>
+        </div>
+      </div>
+
+      <!-- Save button (outside sub-tabs, always visible) -->
+      <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border-color);display:flex;align-items:center;gap:12px;">
+        <button type="submit" class="btn-primary" style="display:inline-flex;align-items:center;gap:7px;padding:10px 22px;">
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+          Guardar variables
+        </button>
+        <span style="font-size:0.8rem;color:var(--timestamp-color);">Se guardan todas las categorías al mismo tiempo.</span>
+      </div>
+    </form>
+  </div>
+
+  <!-- ══ Tab: Integraciones ════════════════════════════════════ -->
+  <div class="ta-tab-content" id="tab-int">
+    {% set tenant_metadata = selected_tenant.metadata if selected_tenant.metadata is mapping else {} %}
+    {% set instagram_account = tenant_metadata.get('instagram_account') if tenant_metadata.get('instagram_account') is mapping else {} %}
+    {% set page_selection = tenant_metadata.get('page_selection') if tenant_metadata.get('page_selection') is mapping else {} %}
+    {% set messenger_sel = page_selection.get('messenger') if page_selection.get('messenger') is mapping else {} %}
+
+    <p style="font-size:0.875rem;color:var(--timestamp-color);margin-bottom:20px;">
+      Resumen de las credenciales de integración guardadas para este tenant.
+      Usa el <strong>Embedded Signup</strong> para obtener y guardar las credenciales directamente desde Meta.
+    </p>
+
+    <div class="ta-integration-grid" style="margin-bottom:24px;">
+      {% set int_items = [
+        ('WABA_ID',          tenant_env.get('WABA_ID')),
+        ('BUSINESS_ID',      tenant_env.get('BUSINESS_ID')),
+        ('Phone Number ID',  tenant_env.get('PHONE_NUMBER_ID')),
+        ('Token largo',      (tenant_env.get('LONG_LIVED_TOKEN') or tenant_env.get('META_TOKEN'))),
+        ('Page ID Messenger',tenant_env.get('MESSENGER_PAGE_ID') or tenant_env.get('PAGE_ID')),
+        ('Instagram Acc. ID',tenant_env.get('INSTAGRAM_ACCOUNT_ID') or tenant_env.get('INSTAGRAM_PAGE_ID')),
+        ('Cuenta Instagram', instagram_account.get('username') or instagram_account.get('id')),
+        ('Page Messenger',   messenger_sel.get('page_name')),
+        ('Plataforma',       tenant_env.get('PLATFORM')),
+        ('Business info',    tenant_metadata.get('whatsapp_business')|string if tenant_metadata.get('whatsapp_business') else None),
+      ] %}
+      {% for label, val in int_items %}
+      <div class="ta-int-item">
+        <div class="ta-int-item-label">{{ label }}:</div>
+        <div class="ta-int-item-value {% if not val %}empty{% endif %}">
+          {% if val %}{{ val }}{% else %}No configurado{% endif %}
+        </div>
+      </div>
+      {% endfor %}
     </div>
-  </section>
-  {% endif %}
-</div>
+
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+      <button
+        id="wa-signup-trigger"
+        class="btn-primary" style="display:inline-flex;align-items:center;gap:8px;padding:10px 22px;"
+        data-config-code="{{ signup_config_code or '' }}"
+        data-tenant="{{ selected_tenant.tenant_key }}"
+        {% if not signup_config_code or not facebook_app_id %}disabled title="Faltan SIGNUP_FACEBOOK o FACEBOOK_APP_ID en el entorno"{% endif %}
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M24 12.073C24 5.405 18.627 0 12 0S0 5.405 0 12.073C0 18.1 4.388 23.094 10.125 24v-8.437H7.078v-3.49h3.047V9.41c0-3.025 1.792-4.697 4.533-4.697 1.312 0 2.686.236 2.686.236v2.97h-1.513c-1.491 0-1.956.93-1.956 1.886v2.267h3.328l-.532 3.49h-2.796V24C19.612 23.094 24 18.1 24 12.073z"/></svg>
+        Embedded Signup de WhatsApp
+      </button>
+      {% if not signup_config_code %}
+      <span style="font-size:0.8rem;color:#dc2626;">Falta <code>SIGNUP_FACEBOOK</code> en el entorno.</span>
+      {% endif %}
+      {% if not facebook_app_id %}
+      <span style="font-size:0.8rem;color:#dc2626;">Falta <code>FACEBOOK_APP_ID</code> en el entorno.</span>
+      {% endif %}
+    </div>
+    <div id="wa-signup-status" style="margin-top:10px;font-size:0.85rem;color:var(--timestamp-color);"></div>
+  </div>
+
+</section>
+{% endif %}
 {% endblock %}
 
 {% block scripts %}
 {{ super() }}
+
+<!-- Facebook SDK (lazy, only if signup button exists) -->
 <script>
-  const facebookSdkReady = new Promise((resolve, reject) => {
-    const initSdk = () => {
-      if (!window.FB) {
-        reject(new Error('Facebook SDK no disponible'));
-        return;
-      }
-      try {
-        FB.init({
-          appId: '{{ facebook_app_id or '' }}',
-          cookie: true,
-          xfbml: true,
-          version: 'v20.0'
-        });
-        FB.AppEvents && FB.AppEvents.logPageView();
-        resolve(FB);
-      } catch (err) {
-        console.warn('No se pudo inicializar el SDK de Facebook', err);
-        reject(err);
-      }
-    };
-
-    window.fbAsyncInit = initSdk;
-
-    if (window.FB) {
-      initSdk();
-      return;
-    }
-
-    if (!document.getElementById('facebook-jssdk')) {
-      (function(d, s, id) {
-        var js, fjs = d.getElementsByTagName(s)[0];
-        js = d.createElement(s); js.id = id;
-        js.src = "https://connect.facebook.net/en_US/sdk.js";
-        fjs.parentNode.insertBefore(js, fjs);
-      }(document, 'script', 'facebook-jssdk'));
-    }
-  });
+const facebookSdkReady = new Promise((resolve, reject) => {
+  const initSdk = () => {
+    if (!window.FB) { reject(new Error('Facebook SDK no disponible')); return; }
+    try {
+      FB.init({ appId: '{{ facebook_app_id or "" }}', cookie: true, xfbml: true, version: 'v20.0' });
+      FB.AppEvents && FB.AppEvents.logPageView();
+      resolve(FB);
+    } catch (err) { reject(err); }
+  };
+  window.fbAsyncInit = initSdk;
+  if (window.FB) { initSdk(); return; }
+  if (!document.getElementById('facebook-jssdk')) {
+    var js = document.createElement('script');
+    js.id = 'facebook-jssdk';
+    js.src = 'https://connect.facebook.net/en_US/sdk.js';
+    document.head.appendChild(js);
+  }
+});
 </script>
-<script>
-  (function() {
-    const trigger = document.getElementById('wa-signup-trigger');
-    if (!trigger) return;
 
-    const facebookAppId = '{{ facebook_app_id or '' }}';
+<script>
+(function () {
+  /* ── Toast ──────────────────────────────────────────────── */
+  function showToast(msg, type) {
+    const c = document.getElementById('toast-container');
+    if (!c) return;
+    const t = document.createElement('div');
+    t.className = 'ta-toast ta-toast--' + (type || 'success');
+    const icon = type === 'error'
+      ? '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" stroke="#ef4444" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>'
+      : '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" stroke="#10b981" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+    t.innerHTML = icon + '<span>' + msg + '</span>';
+    t.style.pointerEvents = 'auto';
+    c.appendChild(t);
+    setTimeout(() => { t.style.opacity = '0'; t.style.transition = 'opacity 0.4s'; setTimeout(() => t.remove(), 400); }, 4000);
+  }
+
+  /* Show URL-based alerts as toasts */
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('msg'))   showToast(params.get('msg'), 'success');
+  if (params.get('error')) showToast(params.get('error'), 'error');
+
+  /* ── Tab switching ──────────────────────────────────────── */
+  window.switchTab = function(e, id) {
+    document.querySelectorAll('.ta-tab').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.ta-tab-content').forEach(d => d.classList.remove('active'));
+    e.currentTarget.classList.add('active');
+    const el = document.getElementById(id);
+    if (el) el.classList.add('active');
+  };
+
+  window.switchEnvTab = function(btn, id) {
+    btn.closest('.ta-tab-content').querySelectorAll('.ta-env-tab').forEach(b => b.classList.remove('active'));
+    btn.closest('.ta-tab-content').querySelectorAll('.ta-env-group').forEach(d => d.classList.remove('active'));
+    btn.classList.add('active');
+    const el = document.getElementById(id);
+    if (el) el.classList.add('active');
+  };
+
+  /* ── Tenant search filter ───────────────────────────────── */
+  window.filterTenants = function(q) {
+    q = q.toLowerCase().trim();
+    let visible = 0;
+    document.querySelectorAll('.ta-tenant-row').forEach(row => {
+      const match = !q || row.dataset.search.toLowerCase().includes(q);
+      row.style.display = match ? '' : 'none';
+      if (match) visible++;
+    });
+    const nr = document.getElementById('no-results-row');
+    if (nr) nr.style.display = (visible === 0 && q) ? '' : 'none';
+  };
+
+  /* ── Password toggle ────────────────────────────────────── */
+  window.togglePassword = function(id, btn) {
+    const inp = document.getElementById(id);
+    if (!inp) return;
+    inp.type = inp.type === 'password' ? 'text' : 'password';
+    btn.style.color = inp.type === 'text' ? 'var(--accent)' : '';
+  };
+
+  /* ── Copy to clipboard ──────────────────────────────────── */
+  window.copyField = function(btn) {
+    const inp = btn.previousElementSibling || btn.parentElement.querySelector('input');
+    if (!inp) return;
+    navigator.clipboard.writeText(inp.value).then(() => showToast('Copiado al portapapeles', 'success'));
+  };
+
+  /* ── Delete modal ───────────────────────────────────────── */
+  window.openDeleteModal = function(key, name, action) {
+    document.getElementById('delete-modal-msg').textContent =
+      '¿Seguro que deseas eliminar "' + name + '" (' + key + ')? El registro se eliminará del directorio de tenants. Las bases de datos no se modifican.';
+    document.getElementById('delete-form').action = action;
+    document.getElementById('delete-modal').classList.add('open');
+  };
+  document.getElementById('delete-modal').addEventListener('click', function(e) {
+    if (e.target === this) this.classList.remove('open');
+  });
+
+  /* ── Embedded Signup ────────────────────────────────────── */
+  const trigger = document.getElementById('wa-signup-trigger');
+  if (trigger) {
+    const facebookAppId = '{{ facebook_app_id or "" }}';
     const configCode = trigger.dataset.configCode;
     const tenantKey = trigger.dataset.tenant;
-    const signupRedirectUri = '{{ signup_redirect_uri or '' }}';
+    const signupRedirectUri = '{{ signup_redirect_uri or "" }}';
     const statusBox = document.getElementById('wa-signup-status');
 
-    const updateStatus = (message, isError) => {
+    function setStatus(msg, isError) {
       if (!statusBox) return;
-      statusBox.textContent = message || '';
-      statusBox.style.color = isError ? '#c0392b' : '#2c3e50';
-    };
+      statusBox.textContent = msg || '';
+      statusBox.style.color = isError ? '#dc2626' : 'var(--timestamp-color)';
+    }
 
-    function handleSignupMessage(event) {
+    window.addEventListener('message', function(event) {
       if (event.origin !== 'https://www.facebook.com') return;
       let data = event.data;
-      if (typeof data === 'string') {
-        try { data = JSON.parse(data); } catch (err) { return; }
-      }
-
-      if (!data || data.type !== 'WA_EMBEDDED_SIGNUP' || data.event !== 'FINISH') {
-        return;
-      }
-
+      if (typeof data === 'string') { try { data = JSON.parse(data); } catch { return; } }
+      if (!data || data.type !== 'WA_EMBEDDED_SIGNUP' || data.event !== 'FINISH') return;
       const payload = data.data || {};
-      if (signupRedirectUri && !payload.redirect_uri) {
-        payload.redirect_uri = signupRedirectUri;
-      }
-      fetch(`/admin/tenants/${tenantKey}/signup`, {
+      if (signupRedirectUri && !payload.redirect_uri) payload.redirect_uri = signupRedirectUri;
+      fetch('/admin/tenants/' + tenantKey + '/signup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
-      })
-        .then((resp) => resp.json())
-        .then((resp) => {
-          if (resp.ok) {
-            updateStatus(resp.message || 'Credenciales guardadas. Recarga la página para ver los cambios.');
-            setTimeout(() => window.location.reload(), 1200);
-          } else {
-            updateStatus(resp.error || 'No se pudieron guardar las credenciales.', true);
-          }
-        })
-        .catch(() => updateStatus('Error al enviar los datos del signup.', true));
-    }
-
-    window.addEventListener('message', handleSignupMessage);
+      }).then(r => r.json()).then(r => {
+        if (r.ok) { showToast(r.message || 'Credenciales guardadas.', 'success'); setTimeout(() => location.reload(), 1200); }
+        else       { showToast(r.error || 'No se pudieron guardar las credenciales.', 'error'); }
+      }).catch(() => showToast('Error al enviar los datos del signup.', 'error'));
+    });
 
     trigger.addEventListener('click', function() {
-      if (!facebookAppId) {
-        updateStatus('Falta configurar FACEBOOK_APP_ID.', true);
-        return;
-      }
-      if (!configCode) {
-        updateStatus('Falta configurar SIGNUP_FACEBOOK.', true);
-        return;
-      }
-
-      facebookSdkReady.then((FB) => {
-        if (!FB || !FB.login) {
-          updateStatus('El SDK de Facebook no está listo. Revisa tu conexión y APP_ID.', true);
-          return;
-        }
-
-        updateStatus('Abriendo el diálogo de Embedded Signup...');
-        FB.login(
-          function(response) {
-            if (response && response.status === 'connected') {
-              updateStatus('Sesión de Facebook detectada. Completa el cuadro de diálogo para continuar.');
-            } else {
-              updateStatus('No se pudo abrir el diálogo de Facebook. Verifica los permisos del navegador.', true);
-            }
-          },
-          {
-            config_id: configCode,
-            response_type: 'code',
-            override_default_response_type: true,
-            redirect_uri: signupRedirectUri || window.location.href,
-          },
-        );
+      if (!facebookAppId) { showToast('Falta configurar FACEBOOK_APP_ID.', 'error'); return; }
+      if (!configCode)    { showToast('Falta configurar SIGNUP_FACEBOOK.', 'error'); return; }
+      facebookSdkReady.then(FB => {
+        if (!FB || !FB.login) { showToast('SDK de Facebook no listo.', 'error'); return; }
+        setStatus('Abriendo el diálogo de Embedded Signup…');
+        FB.login(function(response) {
+          if (response && response.status === 'connected') {
+            setStatus('Sesión detectada. Completa el cuadro de diálogo.');
+          } else {
+            showToast('No se pudo abrir el diálogo de Facebook.', 'error');
+          }
+        }, { config_id: configCode, response_type: 'code', override_default_response_type: true, redirect_uri: signupRedirectUri || window.location.href });
       }).catch(() => {
-        const fallbackRedirectUri = signupRedirectUri || window.location.href;
-        const popupUrl = `https://www.facebook.com/v20.0/dialog/oauth?app_id=${encodeURIComponent(facebookAppId)}&config_id=${encodeURIComponent(configCode)}&state=${encodeURIComponent(tenantKey)}&redirect_uri=${encodeURIComponent(fallbackRedirectUri)}`;
-        const features = 'width=700,height=800,menubar=no,toolbar=no';
-        window.open(popupUrl, 'wa_signup', features);
-        updateStatus('Se abrió el flujo de Embedded Signup en una nueva ventana (modo respaldo).');
+        const url = 'https://www.facebook.com/v20.0/dialog/oauth?app_id=' + encodeURIComponent(facebookAppId) +
+          '&config_id=' + encodeURIComponent(configCode) +
+          '&state=' + encodeURIComponent(tenantKey) +
+          '&redirect_uri=' + encodeURIComponent(signupRedirectUri || window.location.href);
+        window.open(url, 'wa_signup', 'width=700,height=800,menubar=no,toolbar=no');
+        setStatus('Se abrió el flujo en una nueva ventana (modo respaldo).');
       });
     });
-  })();
+  }
+})();
 </script>
 {% endblock %}
