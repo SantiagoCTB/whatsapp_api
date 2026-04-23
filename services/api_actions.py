@@ -902,3 +902,163 @@ def handle_kiryapp_pay_rule(
 
     next_step = _resolve_next_step(next_step_raw, selected_option_id, opts)
     advance_steps(numero, next_step, visited=visited, platform=platform)
+
+
+# ---------------------------------------------------------------------------
+# kiryapp_seat_map – genera y envía imagen del mapa de asientos
+# ---------------------------------------------------------------------------
+# Formato JSON del campo `respuesta`:
+# {
+#   "conexion_id":      1,
+#   "bearing_id_var":   "bearing_id",       // chat_var con el ID del viaje
+#   "origin_id_var":    "origen_id",         // chat_var con el ID de origen
+#   "destiny_id_var":   "destino_id",        // chat_var con el ID de destino
+#   "bearing_data_var": "resultado_bearing", // opcional: si ya tienes el JSON del bearing
+#   "route_name_var":   "nombre_ruta",       // opcional: para el header de la imagen
+#   "departure_var":    "hora_salida",       // opcional: para el header de la imagen
+#   "message": "🚌 Elige tu silla. Escribe el número:"
+# }
+
+def handle_kiryapp_seat_map_rule(
+    numero: str,
+    respuesta_json: str,
+    next_step_raw: str | None,
+    current_step: str,
+    platform: str | None,
+    visited: set,
+    selected_option_id: str | None,
+    opts: str | None,
+    last_user_text: str = "",
+) -> None:
+    """Genera una imagen PNG del mapa de asientos del viaje y la envía al usuario."""
+    from services import db as db_service
+    from services.whatsapp_api import enviar_mensaje, _resolve_public_media_url
+    from services.kiryapp import get_client_from_conexion, KiryappError
+    from services.seat_map import generate_seat_map_image, save_seat_map, build_available_seats_opciones
+    from routes.webhook import advance_steps, _resolve_next_step  # type: ignore
+
+    try:
+        config = json.loads(respuesta_json or "{}")
+    except json.JSONDecodeError as exc:
+        logger.error("kiryapp_seat_map: JSON inválido: %s", exc)
+        enviar_mensaje(numero, "Error de configuración interna.", tipo="bot")
+        return
+
+    chat_vars = db_service.get_all_chat_vars(numero)
+
+    bearing_id_var   = config.get("bearing_id_var",   "bearing_id")
+    origin_id_var    = config.get("origin_id_var",    "origen_id")
+    destiny_id_var   = config.get("destiny_id_var",   "destino_id")
+    bearing_data_var = config.get("bearing_data_var", "")
+    route_name_var   = config.get("route_name_var",   "")
+    departure_var    = config.get("departure_var",    "")
+
+    bearing_id = _to_int(chat_vars.get(bearing_id_var),  0)
+    origin_id  = _to_int(chat_vars.get(origin_id_var),   0)
+    destiny_id = _to_int(chat_vars.get(destiny_id_var),  0)
+    route_name = chat_vars.get(route_name_var, "") if route_name_var else ""
+    departure  = chat_vars.get(departure_var,  "") if departure_var  else ""
+
+    # Obtener datos del bearing (de chat_var ya guardada o llamando a la API)
+    seats_raw: list[list[dict]] | None = None
+
+    if bearing_data_var and chat_vars.get(bearing_data_var):
+        try:
+            stored = json.loads(chat_vars[bearing_data_var])
+            if isinstance(stored, dict):
+                data_list = stored.get("data", [stored])
+                bearing_obj = data_list[0] if isinstance(data_list, list) and data_list else stored
+            elif isinstance(stored, list):
+                bearing_obj = stored[0] if stored else {}
+            else:
+                bearing_obj = {}
+            seats_json = bearing_obj.get("seats", "")
+            if seats_json:
+                seats_raw = json.loads(seats_json) if isinstance(seats_json, str) else seats_json
+        except Exception as exc:
+            logger.warning("kiryapp_seat_map: no se pudo parsear bearing_data_var: %s", exc)
+
+    if seats_raw is None:
+        conexion_id = config.get("conexion_id")
+        if not conexion_id:
+            logger.error("kiryapp_seat_map: falta conexion_id y no hay bearing_data_var.")
+            enviar_mensaje(numero, "Error de configuración interna.", tipo="bot")
+            return
+        if not bearing_id:
+            enviar_mensaje(numero, "No se encontró el viaje seleccionado. Intenta de nuevo.", tipo="bot")
+            return
+        try:
+            client = get_client_from_conexion(int(conexion_id))
+            result = client.get_bearing_by_id(bearing_id, origin_id, destiny_id)
+            data_list = result.get("data", [result]) if isinstance(result, dict) else result
+            bearing_obj = data_list[0] if isinstance(data_list, list) and data_list else {}
+            seats_json = bearing_obj.get("seats", "")
+            seats_raw = json.loads(seats_json) if isinstance(seats_json, str) else seats_json
+        except KiryappError as exc:
+            logger.error("kiryapp_seat_map: KiryappError para %s: %s", numero, exc)
+            enviar_mensaje(numero, f"No se pudo obtener el mapa de asientos: {exc}", tipo="bot")
+            return
+        except Exception as exc:
+            logger.error("kiryapp_seat_map: error inesperado para %s: %s", numero, exc)
+            enviar_mensaje(numero, "Hubo un problema obteniendo los asientos. Intenta de nuevo.", tipo="bot")
+            return
+
+    if not seats_raw or not isinstance(seats_raw, list):
+        enviar_mensaje(numero, "No hay información de asientos disponible para este viaje.", tipo="bot")
+        return
+
+
+    try:
+        png_bytes = generate_seat_map_image(
+            seats_raw,
+            bearing_id=bearing_id,
+            route_name=route_name,
+            departure=departure,
+        )
+        filename, s3_url = save_seat_map(png_bytes, bearing_id)
+        image_url = s3_url or _resolve_public_media_url(filename)
+    except Exception as exc:
+        logger.error("kiryapp_seat_map: error generando imagen para %s: %s", numero, exc)
+        enviar_mensaje(numero, "No se pudo generar el mapa de asientos. Intenta de nuevo.", tipo="bot")
+        return
+
+    if not image_url:
+        logger.error("kiryapp_seat_map: no se pudo construir URL publica para %s", filename)
+        enviar_mensaje(numero, "No se pudo generar el mapa de asientos.", tipo="bot")
+        return
+
+    # 1. Imagen del bus
+    img_caption = interpolate(
+        config.get("image_caption") or "Mapa de sillas del bus",
+        {**chat_vars, "_numero": numero},
+    )
+    enviar_mensaje(
+        numero,
+        img_caption,
+        tipo="bot",
+        tipo_respuesta="image",
+        opciones=image_url,
+        step=current_step,
+    )
+
+    # 2. Lista interactiva con solo los asientos disponibles
+    lista_opciones = build_available_seats_opciones(seats_raw)
+    if lista_opciones:
+        lista_msg = interpolate(
+            config.get("message") or "Selecciona el numero de tu silla:",
+            {**chat_vars, "_numero": numero},
+        )
+        enviar_mensaje(
+            numero,
+            lista_msg,
+            tipo="bot",
+            tipo_respuesta="lista",
+            opciones=lista_opciones,
+            step=current_step,
+        )
+    else:
+        enviar_mensaje(numero, "Lo sentimos, no hay sillas disponibles para este viaje.", tipo="bot")
+        return
+
+    next_step = _resolve_next_step(next_step_raw, selected_option_id, opts)
+    advance_steps(numero, next_step, visited=visited, platform=platform)
