@@ -293,6 +293,8 @@ def execute_api_call(numero: str, config: dict, last_user_text: str = "") -> tup
         body = {k: (int(v) if isinstance(v, str) and v.lstrip("-").isdigit() else v) for k, v in body.items()}
 
     # 6. Llamada HTTP
+    _ssl_raw = conexion.get("ssl_verify", 1)
+    ssl_verify = bool(int(_ssl_raw)) if _ssl_raw is not None else True
     logger.info("api_call: %s %s | vars=%s", method, url, {k: v for k, v in chat_vars.items() if not k.startswith("_")})
     try:
         resp = requests.request(
@@ -302,6 +304,7 @@ def execute_api_call(numero: str, config: dict, last_user_text: str = "") -> tup
             json=body if isinstance(body, dict) else None,
             data=json.dumps(body) if isinstance(body, str) and body else None,
             timeout=20,
+            verify=ssl_verify,
         )
         resp.raise_for_status()
         try:

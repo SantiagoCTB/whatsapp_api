@@ -991,6 +991,7 @@ def init_db(db_settings: DatabaseSettings | None = None):
           body_template TEXT,
           auth_tipo VARCHAR(20) NOT NULL DEFAULT 'none',
           auth_valor TEXT,
+          ssl_verify TINYINT(1) NOT NULL DEFAULT 1,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
         ) ENGINE=InnoDB;
@@ -1023,7 +1024,7 @@ def get_all_conexiones(db_settings: "DatabaseSettings | None" = None) -> list[di
     c = conn.cursor(dictionary=True)
     c.execute(
         "SELECT id, nombre, descripcion, url, metodo, headers, body_template, "
-        "auth_tipo, auth_valor, created_at, updated_at FROM api_conexiones ORDER BY id"
+        "auth_tipo, auth_valor, ssl_verify, created_at, updated_at FROM api_conexiones ORDER BY id"
     )
     rows = c.fetchall()
     conn.close()
@@ -1035,7 +1036,7 @@ def get_conexion(conexion_id: int, db_settings: "DatabaseSettings | None" = None
     c = conn.cursor(dictionary=True)
     c.execute(
         "SELECT id, nombre, descripcion, url, metodo, headers, body_template, "
-        "auth_tipo, auth_valor, created_at, updated_at FROM api_conexiones WHERE id = %s",
+        "auth_tipo, auth_valor, ssl_verify, created_at, updated_at FROM api_conexiones WHERE id = %s",
         (conexion_id,),
     )
     row = c.fetchone()
