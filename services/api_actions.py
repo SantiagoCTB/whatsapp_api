@@ -241,7 +241,45 @@ def execute_api_call(numero: str, config: dict, last_user_text: str = "") -> tup
             if _v_norm in _fecha_aliases:
                 chat_vars[k] = _fecha_aliases[_v_norm]
 
-    # 2. Conexión base
+    # 2a. Cortocircuito: leer de caché si está configurado y disponible
+    from_cache = (config.get("from_cache") or "").strip()
+    if from_cache and chat_vars.get(from_cache):
+        try:
+            cached_raw = chat_vars[from_cache]
+            response_data = json.loads(cached_raw) if isinstance(cached_raw, str) else cached_raw
+            logger.info("api_call: usando caché '%s' para %s", from_cache, config.get("path", ""))
+            # La caché ya contiene el dato extraído → saltar data_path y llamada HTTP
+            fmt = config.get("format") or {}
+            format_tipo = (fmt.get("tipo") or "texto").lower()
+            message_template = config.get("message") or ""
+            message = interpolate(message_template, chat_vars)
+            items: list = []
+            if isinstance(response_data, list):
+                items = response_data
+            elif isinstance(response_data, dict):
+                for key in ("data", "items", "results", "rows", "list"):
+                    if isinstance(response_data.get(key), list):
+                        items = response_data[key]
+                        break
+                if not items:
+                    items = [response_data]
+            if format_tipo == "lista" and items:
+                sections = _build_lista_sections(items, fmt)
+                opciones_obj = {
+                    "sections": sections,
+                    "header": fmt.get("header", "Opciones"),
+                    "footer": fmt.get("footer", "Selecciona una opción"),
+                    "button": fmt.get("button", "Ver opciones"),
+                }
+                return message, "lista", json.dumps(opciones_obj, ensure_ascii=False)
+            if format_tipo == "boton" and items:
+                buttons = _build_boton_buttons(items, fmt)
+                return message, "boton", json.dumps(buttons, ensure_ascii=False)
+            return message or "✅ Operación completada.", "texto", None
+        except Exception as exc:
+            logger.warning("api_call: error leyendo caché '%s': %s — continuando con llamada HTTP", from_cache, exc)
+
+    # 2b. Conexión base
     conexion_id = config.get("conexion_id")
     if not conexion_id:
         raise ValueError("api_call: falta 'conexion_id' en la configuración.")
@@ -409,11 +447,6 @@ def handle_api_call_rule(
         error_step = config.get("error_step")
         if error_step:
             advance_steps(numero, error_step, visited=visited, platform=platform)
-        else:
-            # Sin error_step configurado: resetear step a None para que el usuario
-            # no quede atascado repitiendo la misma llamada fallida indefinidamente.
-            from services.db import update_chat_state
-            update_chat_state(numero, None, "espera_usuario")
         return
 
     enviar_mensaje(
