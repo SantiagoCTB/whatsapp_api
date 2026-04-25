@@ -145,20 +145,57 @@ def _seat_color(seat: dict):
 
 
 def _split_groups(seats: list):
-    """Devuelve (left_cols, right_cols) excluyendo columnas Pasillo/Conductor."""
+    """Devuelve (left_cols, right_cols) excluyendo columnas Pasillo/Conductor.
+
+    Soporta layouts 1+1, 2+2 y minibuses con columna del medio mixta
+    (e.g. Silla en algunas filas y Pasillo en otras).
+    """
     if not seats:
         return [], []
     n_cols = max(len(r) for r in seats)
+    if n_cols == 0:
+        return [], []
+
+    # Caso 1: existe alguna columna que es SIEMPRE pasillo/conductor → aisle clásico
     aisle = {
         c for c in range(n_cols)
-        if all(seats[r][c].get("type", "").lower() in ("pasillo", "conductor")
-               for r in range(len(seats)) if c < len(seats[r]))
+        if all(
+            (c >= len(row)) or row[c].get("type", "").lower() in ("pasillo", "conductor")
+            for row in seats
+        )
     }
-    first_a = min(aisle) if aisle else n_cols // 2
-    last_a  = max(aisle) if aisle else n_cols // 2
-    left  = [c for c in range(first_a) if c not in aisle]
-    right = [c for c in range(last_a + 1, n_cols) if c not in aisle]
-    return left, right
+    if aisle:
+        first_a = min(aisle)
+        last_a  = max(aisle)
+        left  = [c for c in range(first_a)           if c not in aisle]
+        right = [c for c in range(last_a + 1, n_cols) if c not in aisle]
+        return left, right
+
+    # Caso 2: no hay columna 100% pasillo (ej. minibús donde la columna del lado
+    # tiene asiento en la fila delantera/trasera pero pasillo en el resto).
+    # Votamos: la columna con más apariciones de pasillo es el límite del pasillo.
+    pasillo_count = [0] * n_cols
+    for row in seats:
+        for c, seat in enumerate(row):
+            if seat.get("type", "").lower() in ("pasillo", "conductor"):
+                pasillo_count[c] += 1
+
+    best_col = max(range(n_cols), key=lambda c: pasillo_count[c])
+    if pasillo_count[best_col] > 0:
+        # ¿Esa columna tiene también asientos reales? → incluirla en el grupo derecho
+        has_real_seat = any(
+            best_col < len(row)
+            and row[best_col].get("type", "").lower() not in ("pasillo", "conductor")
+            and str(row[best_col].get("number", 0)) not in ("0", "", "None")
+            for row in seats
+        )
+        left  = list(range(best_col))
+        right = ([best_col] if has_real_seat else []) + list(range(best_col + 1, n_cols))
+        return left, right
+
+    # Caso 3: sin información de pasillo → split en el medio
+    mid = n_cols // 2
+    return list(range(mid)), list(range(mid, n_cols))
 
 
 def _compute_img_width(left_cols: list, right_cols: list) -> tuple[int, int, int]:
@@ -227,7 +264,7 @@ def generate_seat_map_image(
 
         for i, col in enumerate(left_cols):
             seat = row[col] if col < len(row) else {}
-            if not seat or seat.get("type", "").lower() == "pasillo":
+            if not seat or seat.get("type", "").lower() in ("pasillo", "conductor"):
                 continue
             x0 = left_x0 + i * (SEAT_W + PAIR_GAP)
             x1 = x0 + SEAT_W
@@ -243,7 +280,7 @@ def generate_seat_map_image(
 
         for i, col in enumerate(right_cols):
             seat = row[col] if col < len(row) else {}
-            if not seat or seat.get("type", "").lower() == "pasillo":
+            if not seat or seat.get("type", "").lower() in ("pasillo", "conductor"):
                 continue
             x0 = right_x0 + i * (SEAT_W + PAIR_GAP)
             x1 = x0 + SEAT_W

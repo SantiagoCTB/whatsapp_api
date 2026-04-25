@@ -303,7 +303,7 @@ def execute_api_call(numero: str, config: dict, last_user_text: str = "") -> tup
             headers=headers,
             json=body if isinstance(body, dict) else None,
             data=json.dumps(body) if isinstance(body, str) and body else None,
-            timeout=20,
+            timeout=10,
             verify=ssl_verify,
         )
         resp.raise_for_status()
@@ -404,6 +404,16 @@ def handle_api_call_rule(
         logger.error("api_call: error ejecutando llamada API para %s: %s", numero, exc)
         error_msg = config.get("error_message") or "⚠️ No encontramos viajes disponibles para esa ruta y fecha. Escribe *reiniciar* para intentar con otra opción."
         enviar_mensaje(numero, error_msg, tipo="bot")
+        # Avanzar al error_step si está configurado; si no, limpiar el step para
+        # evitar que el usuario quede atascado reintentando la misma llamada fallida.
+        error_step = config.get("error_step")
+        if error_step:
+            advance_steps(numero, error_step, visited=visited, platform=platform)
+        else:
+            # Sin error_step configurado: resetear step a None para que el usuario
+            # no quede atascado repitiendo la misma llamada fallida indefinidamente.
+            from services.db import update_chat_state
+            update_chat_state(numero, None, "espera_usuario")
         return
 
     enviar_mensaje(
