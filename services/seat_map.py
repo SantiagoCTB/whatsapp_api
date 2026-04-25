@@ -57,12 +57,7 @@ DRIVER_H  = 28
 HOOD_H    = 58
 CORNER_R  =  8
 
-# Posiciones X calculadas
-_LEFT_X   = BUS_WALL + SEAT_PAD                         # borde izq del primer asiento
-_R2_X     = _LEFT_X + SEAT_W + PAIR_GAP                 # borde izq del segundo asiento izq
-_L3_X     = _R2_X + SEAT_W + AISLE_W                   # borde izq del primer asiento der
-_L4_X     = _L3_X + SEAT_W + PAIR_GAP                  # borde izq del segundo asiento der
-IMG_W     = _L4_X + SEAT_W + SEAT_PAD + BUS_WALL        # ancho total de imagen
+IMG_W     = 286  # fallback; el generador calcula el ancho real dinámicamente
 
 
 # ── Helpers de dibujo ─────────────────────────────────────────────────────────
@@ -97,48 +92,40 @@ def _ctext(draw, cx, cy, text, font, fill):
 
 # ── Dibujo del chasis ─────────────────────────────────────────────────────────
 
-def _draw_bus_shell(draw, img_h: int):
+def _draw_bus_shell(draw, img_w: int, img_h: int):
     """Carrocería exterior, interior, capó y parabrisas."""
-    # Cuerpo exterior principal
-    _rrect(draw, 0, 20, IMG_W, img_h, r=20, fill=BUS_EXT)
+    _rrect(draw, 0, 20, img_w, img_h, r=20, fill=BUS_EXT)
+    _rrect(draw, 10, 0, img_w - 10, HOOD_H, r=30, fill=BUS_EXT)
+    draw.rectangle([BUS_WALL, HOOD_H, img_w - BUS_WALL, img_h - 8], fill=BUS_INT)
 
-    # Capó redondeado (frente del bus)
-    _rrect(draw, 10, 0, IMG_W - 10, HOOD_H, r=30, fill=BUS_EXT)
-
-    # Interior del bus
-    draw.rectangle([BUS_WALL, HOOD_H, IMG_W - BUS_WALL, img_h - 8], fill=BUS_INT)
-
-    # Parabrisas (trapecio: más ancho abajo que arriba, da perspectiva)
     ws_margin_top = 18
     ws_margin_bot = 8
     ws_top = 5
     ws_bot = HOOD_H - 3
     draw.polygon([
         (ws_margin_top, ws_top),
-        (IMG_W - ws_margin_top, ws_top),
-        (IMG_W - ws_margin_bot, ws_bot),
+        (img_w - ws_margin_top, ws_top),
+        (img_w - ws_margin_bot, ws_bot),
         (ws_margin_bot, ws_bot),
     ], fill=WINDSHIELD)
 
-    # Reflejo / división central del parabrisas
-    cx = IMG_W // 2
+    cx = img_w // 2
     draw.line([(cx, ws_top + 4), (cx, ws_bot - 4)], fill=WINDSHIELD2, width=2)
 
-    # Marco del parabrisas (borde oscuro)
     draw.polygon([
         (ws_margin_top, ws_top),
-        (IMG_W - ws_margin_top, ws_top),
-        (IMG_W - ws_margin_bot, ws_bot),
+        (img_w - ws_margin_top, ws_top),
+        (img_w - ws_margin_bot, ws_bot),
         (ws_margin_bot, ws_bot),
     ], outline=BUS_EXT)
 
 
-def _draw_side_windows(draw, first_y: int, n_rows: int):
+def _draw_side_windows(draw, img_w: int, first_y: int, n_rows: int):
     """Ventanillas laterales a lo largo de las filas de asientos."""
     win_x0_L = 3
     win_x1_L = BUS_WALL - 2
-    win_x0_R = IMG_W - BUS_WALL + 2
-    win_x1_R = IMG_W - 3
+    win_x0_R = img_w - BUS_WALL + 2
+    win_x1_R = img_w - 3
     for i in range(n_rows):
         wy0 = first_y + i * (SEAT_H + ROW_GAP) + 3
         wy1 = wy0 + SEAT_H - 6
@@ -174,11 +161,19 @@ def _split_groups(seats: list):
     return left, right
 
 
-def _x_for(col_index: int, group: str) -> int:
-    """X del borde izquierdo de un asiento dado su índice dentro del grupo."""
-    if group == "left":
-        return _LEFT_X + col_index * (SEAT_W + PAIR_GAP)
-    return _L3_X + col_index * (SEAT_W + PAIR_GAP)
+def _compute_img_width(left_cols: list, right_cols: list) -> tuple[int, int, int]:
+    """Calcula ancho de imagen y posiciones X iniciales según el layout real.
+
+    Retorna (img_w, left_x0, right_x0).
+    """
+    n_left  = max(len(left_cols),  1)
+    n_right = max(len(right_cols), 1)
+    left_w  = n_left  * SEAT_W + max(0, n_left  - 1) * PAIR_GAP
+    right_w = n_right * SEAT_W + max(0, n_right - 1) * PAIR_GAP
+    left_x0  = BUS_WALL + SEAT_PAD
+    right_x0 = left_x0 + left_w + AISLE_W
+    img_w    = right_x0 + right_w + SEAT_PAD + BUS_WALL
+    return img_w, left_x0, right_x0
 
 
 # ── Generador principal ───────────────────────────────────────────────────────
@@ -194,6 +189,7 @@ def generate_seat_map_image(
 
     f_title, f_sub, f_num, f_x, f_tiny = _fonts()
     left_cols, right_cols = _split_groups(seats)
+    img_w, left_x0, right_x0 = _compute_img_width(left_cols, right_cols)
 
     # Calcular altura
     n_driver = sum(
@@ -201,22 +197,22 @@ def generate_seat_map_image(
         if all(s.get("type", "").lower() in ("conductor", "pasillo") for s in row)
     )
     n_seat_rows = len(seats) - n_driver
-    cond_y      = HOOD_H + 5
+    cond_y       = HOOD_H + 5
     first_seat_y = cond_y + (DRIVER_H + 6 if n_driver else 0)
-    grid_h      = n_seat_rows * (SEAT_H + ROW_GAP) - ROW_GAP
-    img_h       = first_seat_y + grid_h + 14
+    grid_h       = n_seat_rows * (SEAT_H + ROW_GAP) - ROW_GAP
+    img_h        = first_seat_y + grid_h + 14
 
-    img  = Image.new("RGB", (IMG_W, img_h), BUS_EXT)
+    img  = Image.new("RGB", (img_w, img_h), BUS_EXT)
     draw = ImageDraw.Draw(img)
 
-    _draw_bus_shell(draw, img_h)
-    _draw_side_windows(draw, first_seat_y, n_seat_rows)
+    _draw_bus_shell(draw, img_w, img_h)
+    _draw_side_windows(draw, img_w, first_seat_y, n_seat_rows)
 
     # ── Conductor ──────────────────────────────────────────────────────────────
     if n_driver:
-        _rrect(draw, BUS_WALL + 2, cond_y, IMG_W - BUS_WALL - 2,
+        _rrect(draw, BUS_WALL + 2, cond_y, img_w - BUS_WALL - 2,
                cond_y + DRIVER_H, r=5, fill=COND_BG)
-        _ctext(draw, IMG_W // 2, cond_y + DRIVER_H // 2,
+        _ctext(draw, img_w // 2, cond_y + DRIVER_H // 2,
                "Conductor", f_sub, TEXT_DIM)
 
     # ── Asientos ──────────────────────────────────────────────────────────────
@@ -233,7 +229,7 @@ def generate_seat_map_image(
             seat = row[col] if col < len(row) else {}
             if not seat or seat.get("type", "").lower() == "pasillo":
                 continue
-            x0 = _x_for(i, "left")
+            x0 = left_x0 + i * (SEAT_W + PAIR_GAP)
             x1 = x0 + SEAT_W
             color = _seat_color(seat)
             _rrect(draw, x0, y0, x1, y1, CORNER_R, color)
@@ -249,7 +245,7 @@ def generate_seat_map_image(
             seat = row[col] if col < len(row) else {}
             if not seat or seat.get("type", "").lower() == "pasillo":
                 continue
-            x0 = _x_for(i, "right")
+            x0 = right_x0 + i * (SEAT_W + PAIR_GAP)
             x1 = x0 + SEAT_W
             color = _seat_color(seat)
             _rrect(draw, x0, y0, x1, y1, CORNER_R, color)
@@ -278,7 +274,7 @@ def generate_seat_map_image(
         draw.text((lx + box + 3, ly + 1), label, font=f_tiny, fill=TEXT_LABEL)
         bb = draw.textbbox((0, 0), label, font=f_tiny)
         lx += box + 3 + (bb[2] - bb[0]) + 10
-        if lx > IMG_W - 60:
+        if lx > img_w - 60:
             lx, ly = BUS_WALL + 4, ly + 16
 
     buf = io.BytesIO()
