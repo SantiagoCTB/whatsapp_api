@@ -1,7 +1,7 @@
 """Genera imagen PNG top-down de un bus y la lista interactiva de asientos disponibles.
 
 La imagen muestra: capó redondeado, parabrisas, ventanas laterales, conductor y
-asientos en layout 2+2 con pasillo central.
+asientos en layout 2+2 con pasillo central. Optimizada para visualización en celular.
 
 El PNG se sube a S3 si AWS_S3_BUCKET está configurado; de lo contrario se guarda
 en static/uploads/<tenant>/ y se sirve vía la URL pública de la app.
@@ -23,41 +23,41 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 # ── Paleta ────────────────────────────────────────────────────────────────────
-BUS_EXT     = (15,  23,  42)   # carrocería exterior
-BUS_INT     = (10,  16,  30)   # interior oscuro
-WINDSHIELD  = (147, 197, 253)  # parabrisas azul claro
-WINDSHIELD2 = (186, 222, 251)  # reflejo parabrisas
-WINDOW_C    = ( 59, 130, 246)  # ventanas laterales
-COND_BG     = ( 30,  41,  59)  # zona conductor
-AISLE_C     = (  8,  12,  24)  # pasillo central
+BUS_EXT     = (20,  30,  48)   # carrocería exterior
+BUS_INT     = (15,  22,  36)   # interior oscuro
+WINDSHIELD  = (147, 210, 253)  # parabrisas azul claro
+WINDSHIELD2 = (186, 230, 251)  # reflejo parabrisas
+WINDOW_C    = ( 56, 130, 246)  # ventanas laterales
+COND_BG     = ( 30,  45,  65)  # zona conductor
 
-C_LIBRE     = ( 29,  78, 216)  # #1d4ed8  disponible
-C_PREF      = (109,  40, 217)  # #6d28d9  preferencial
-C_VIP       = (180,  83,   9)  # #b45309  VIP
-C_OCUPADO   = (155,  28,  28)  # #9b1c1c  ocupado
+C_LIBRE     = ( 22, 163,  74)  # verde vibrante disponible
+C_PREF      = (126,  34, 206)  # violeta preferencial
+C_VIP       = (180,  83,   9)  # ámbar VIP
+C_OCUPADO   = (185,  28,  28)  # rojo ocupado
 
 TEXT_W      = (255, 255, 255)
-TEXT_DIM    = (120, 150, 200)
-TEXT_LABEL  = (190, 210, 245)
+TEXT_DIM    = (130, 165, 210)
+TEXT_LABEL  = (200, 220, 250)
+BG_IMG      = (240, 243, 248)  # fondo imagen
 
 FONT_BOLD = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
 FONT_REG  = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
 
 SEAT_MAP_MAX_AGE = 7_200  # 2 horas
 
-# ── Dimensiones ───────────────────────────────────────────────────────────────
-BUS_WALL  = 14
-SEAT_PAD  =  8
-SEAT_W    = 52
-SEAT_H    = 44
-PAIR_GAP  =  4
-AISLE_W   = 26
-ROW_GAP   =  6
-DRIVER_H  = 28
-HOOD_H    = 58
-CORNER_R  =  8
+# ── Dimensiones (optimizadas para celular) ────────────────────────────────────
+BUS_WALL  = 28
+SEAT_PAD  = 18
+SEAT_W    = 96
+SEAT_H    = 80
+PAIR_GAP  = 10
+AISLE_W   = 52
+ROW_GAP   = 12
+DRIVER_H  = 55
+HOOD_H    = 105
+CORNER_R  = 14
 
-IMG_W     = 286  # fallback; el generador calcula el ancho real dinámicamente
+IMG_W     = 548  # fallback; el generador calcula el ancho real dinámicamente
 
 
 # ── Helpers de dibujo ─────────────────────────────────────────────────────────
@@ -66,11 +66,11 @@ def _fonts():
     from PIL import ImageFont
     try:
         return (
-            ImageFont.truetype(FONT_BOLD, 13),  # título
-            ImageFont.truetype(FONT_REG,  10),  # subtítulo
-            ImageFont.truetype(FONT_BOLD, 14),  # número de silla
-            ImageFont.truetype(FONT_BOLD, 15),  # ✕ ocupado
-            ImageFont.truetype(FONT_REG,   9),  # leyenda
+            ImageFont.truetype(FONT_BOLD, 20),  # f_title: ruta/info
+            ImageFont.truetype(FONT_REG,  15),  # f_sub: subtítulo / etiquetas
+            ImageFont.truetype(FONT_BOLD, 28),  # f_num: número de silla
+            ImageFont.truetype(FONT_BOLD, 30),  # f_x: ✕ ocupado
+            ImageFont.truetype(FONT_REG,  14),  # f_tiny: leyenda
         )
     except Exception:
         d = ImageFont.load_default()
@@ -94,14 +94,14 @@ def _ctext(draw, cx, cy, text, font, fill):
 
 def _draw_bus_shell(draw, img_w: int, img_h: int):
     """Carrocería exterior, interior, capó y parabrisas."""
-    _rrect(draw, 0, 20, img_w, img_h, r=20, fill=BUS_EXT)
-    _rrect(draw, 10, 0, img_w - 10, HOOD_H, r=30, fill=BUS_EXT)
-    draw.rectangle([BUS_WALL, HOOD_H, img_w - BUS_WALL, img_h - 8], fill=BUS_INT)
+    _rrect(draw, 0, 24, img_w, img_h, r=28, fill=BUS_EXT)
+    _rrect(draw, 16, 0, img_w - 16, HOOD_H, r=50, fill=BUS_EXT)
+    draw.rectangle([BUS_WALL, HOOD_H, img_w - BUS_WALL, img_h - 12], fill=BUS_INT)
 
-    ws_margin_top = 18
-    ws_margin_bot = 8
-    ws_top = 5
-    ws_bot = HOOD_H - 3
+    ws_margin_top = 32
+    ws_margin_bot = 14
+    ws_top = 8
+    ws_bot = HOOD_H - 6
     draw.polygon([
         (ws_margin_top, ws_top),
         (img_w - ws_margin_top, ws_top),
@@ -110,7 +110,7 @@ def _draw_bus_shell(draw, img_w: int, img_h: int):
     ], fill=WINDSHIELD)
 
     cx = img_w // 2
-    draw.line([(cx, ws_top + 4), (cx, ws_bot - 4)], fill=WINDSHIELD2, width=2)
+    draw.line([(cx, ws_top + 6), (cx, ws_bot - 6)], fill=WINDSHIELD2, width=3)
 
     draw.polygon([
         (ws_margin_top, ws_top),
@@ -122,15 +122,15 @@ def _draw_bus_shell(draw, img_w: int, img_h: int):
 
 def _draw_side_windows(draw, img_w: int, first_y: int, n_rows: int):
     """Ventanillas laterales a lo largo de las filas de asientos."""
-    win_x0_L = 3
-    win_x1_L = BUS_WALL - 2
-    win_x0_R = img_w - BUS_WALL + 2
-    win_x1_R = img_w - 3
+    win_x0_L = 4
+    win_x1_L = BUS_WALL - 3
+    win_x0_R = img_w - BUS_WALL + 3
+    win_x1_R = img_w - 4
     for i in range(n_rows):
-        wy0 = first_y + i * (SEAT_H + ROW_GAP) + 3
-        wy1 = wy0 + SEAT_H - 6
-        _rrect(draw, win_x0_L, wy0, win_x1_L, wy1, r=2, fill=WINDOW_C)
-        _rrect(draw, win_x0_R, wy0, win_x1_R, wy1, r=2, fill=WINDOW_C)
+        wy0 = first_y + i * (SEAT_H + ROW_GAP) + 5
+        wy1 = wy0 + SEAT_H - 10
+        _rrect(draw, win_x0_L, wy0, win_x1_L, wy1, r=3, fill=WINDOW_C)
+        _rrect(draw, win_x0_R, wy0, win_x1_R, wy1, r=3, fill=WINDOW_C)
 
 
 # ── Datos de asiento ─────────────────────────────────────────────────────────
@@ -221,14 +221,20 @@ def generate_seat_map_image(
     route_name: str = "",
     departure: str = "",
 ) -> bytes:
-    """Genera PNG top-down del bus y lo retorna como bytes."""
+    """Genera PNG top-down del bus y lo retorna como bytes.
+
+    La imagen tiene tres zonas verticales:
+      1. Header oscuro con nombre de ruta y hora de salida (si se proveen)
+      2. Cuerpo del bus: capó, asientos, etiquetas FRENTE/TRASERA
+      3. Leyenda de colores sobre fondo claro
+    """
     from PIL import Image, ImageDraw
 
     f_title, f_sub, f_num, f_x, f_tiny = _fonts()
     left_cols, right_cols = _split_groups(seats)
     img_w, left_x0, right_x0 = _compute_img_width(left_cols, right_cols)
 
-    # Calcular altura
+    # ── Dimensiones del cuerpo del bus ────────────────────────────────────────
     n_driver = sum(
         1 for row in seats
         if all(s.get("type", "").lower() in ("conductor", "pasillo") for s in row)
@@ -236,23 +242,48 @@ def generate_seat_map_image(
     n_seat_rows = len(seats) - n_driver
     cond_y       = HOOD_H + 5
     first_seat_y = cond_y + (DRIVER_H + 6 if n_driver else 0)
-    grid_h       = n_seat_rows * (SEAT_H + ROW_GAP) - ROW_GAP
-    img_h        = first_seat_y + grid_h + 14
+    grid_h       = max(0, n_seat_rows * (SEAT_H + ROW_GAP) - ROW_GAP)
+    bus_h        = first_seat_y + grid_h + 22
 
-    img  = Image.new("RGB", (img_w, img_h), BUS_EXT)
+    # ── Altura de las zonas extra ─────────────────────────────────────────────
+    has_header = bool(route_name or departure)
+    header_h   = 72 if has_header else 0
+    legend_h   = 58   # leyenda siempre visible abajo
+
+    total_h = header_h + bus_h + 14 + legend_h
+
+    # ── Canvas principal (fondo claro) ────────────────────────────────────────
+    img  = Image.new("RGB", (img_w, total_h), BG_IMG)
     draw = ImageDraw.Draw(img)
 
-    _draw_bus_shell(draw, img_w, img_h)
-    _draw_side_windows(draw, img_w, first_seat_y, n_seat_rows)
+    # ── 1. Header ─────────────────────────────────────────────────────────────
+    if has_header:
+        draw.rectangle([0, 0, img_w, header_h], fill=(25, 38, 60))
+        hy = 14
+        if route_name:
+            _ctext(draw, img_w // 2, hy + 12, route_name, f_title, TEXT_W)
+            hy += 34
+        if departure:
+            _ctext(draw, img_w // 2, hy + 10, f"Salida: {departure}", f_sub, TEXT_DIM)
 
-    # ── Conductor ──────────────────────────────────────────────────────────────
+    # ── 2. Sub-imagen del bus ──────────────────────────────────────────────────
+    bus_img  = Image.new("RGB", (img_w, bus_h), BUS_EXT)
+    bus_draw = ImageDraw.Draw(bus_img)
+
+    _draw_bus_shell(bus_draw, img_w, bus_h)
+    _draw_side_windows(bus_draw, img_w, first_seat_y, n_seat_rows)
+
+    # Etiqueta FRENTE en la zona del capó
+    _ctext(bus_draw, img_w // 2, HOOD_H // 2 - 8, "FRENTE", f_sub, TEXT_DIM)
+
+    # Zona conductor (solo si hay fila 100% conductor/pasillo)
     if n_driver:
-        _rrect(draw, BUS_WALL + 2, cond_y, img_w - BUS_WALL - 2,
-               cond_y + DRIVER_H, r=5, fill=COND_BG)
-        _ctext(draw, img_w // 2, cond_y + DRIVER_H // 2,
+        _rrect(bus_draw, BUS_WALL + 2, cond_y, img_w - BUS_WALL - 2,
+               cond_y + DRIVER_H, r=7, fill=COND_BG)
+        _ctext(bus_draw, img_w // 2, cond_y + DRIVER_H // 2,
                "Conductor", f_sub, TEXT_DIM)
 
-    # ── Asientos ──────────────────────────────────────────────────────────────
+    # Asientos
     seat_row_idx = 0
     for row in seats:
         if all(s.get("type", "").lower() in ("conductor", "pasillo") for s in row):
@@ -269,14 +300,12 @@ def generate_seat_map_image(
             x0 = left_x0 + i * (SEAT_W + PAIR_GAP)
             x1 = x0 + SEAT_W
             color = _seat_color(seat)
-            _rrect(draw, x0, y0, x1, y1, CORNER_R, color)
+            _rrect(bus_draw, x0, y0, x1, y1, CORNER_R, color)
             num = str(seat.get("number", "") or "")
             if num and num != "0":
                 is_occ = "disponible" not in (seat.get("state", "") or "").lower()
-                if is_occ:
-                    _ctext(draw, (x0 + x1) // 2, yc, "X", f_x, TEXT_W)
-                else:
-                    _ctext(draw, (x0 + x1) // 2, yc, num, f_num, TEXT_W)
+                _ctext(bus_draw, (x0 + x1) // 2, yc, "X" if is_occ else num,
+                       f_x if is_occ else f_num, TEXT_W)
 
         for i, col in enumerate(right_cols):
             seat = row[col] if col < len(row) else {}
@@ -285,34 +314,37 @@ def generate_seat_map_image(
             x0 = right_x0 + i * (SEAT_W + PAIR_GAP)
             x1 = x0 + SEAT_W
             color = _seat_color(seat)
-            _rrect(draw, x0, y0, x1, y1, CORNER_R, color)
+            _rrect(bus_draw, x0, y0, x1, y1, CORNER_R, color)
             num = str(seat.get("number", "") or "")
             if num and num != "0":
                 is_occ = "disponible" not in (seat.get("state", "") or "").lower()
-                if is_occ:
-                    _ctext(draw, (x0 + x1) // 2, yc, "X", f_x, TEXT_W)
-                else:
-                    _ctext(draw, (x0 + x1) // 2, yc, num, f_num, TEXT_W)
+                _ctext(bus_draw, (x0 + x1) // 2, yc, "X" if is_occ else num,
+                       f_x if is_occ else f_num, TEXT_W)
 
         seat_row_idx += 1
 
-    # ── Leyenda ────────────────────────────────────────────────────────────────
+    # Etiqueta TRASERA al final del bus
+    _ctext(bus_draw, img_w // 2, bus_h - 14, "TRASERA", f_sub, TEXT_DIM)
+
+    img.paste(bus_img, (0, header_h))
+
+    # ── 3. Leyenda (debajo del bus, sobre BG_IMG) ─────────────────────────────
     leg_items = [
         (C_LIBRE,   "Libre"),
         (C_OCUPADO, "Ocupado"),
         (C_PREF,    "Preferencial"),
         (C_VIP,     "VIP"),
     ]
-    box = 10
-    lx = BUS_WALL + 4
-    ly = img_h - 26
+    box = 20
+    lx  = BUS_WALL
+    ly  = header_h + bus_h + 18
     for color, label in leg_items:
-        _rrect(draw, lx, ly + 2, lx + box, ly + 2 + box, 2, color)
-        draw.text((lx + box + 3, ly + 1), label, font=f_tiny, fill=TEXT_LABEL)
-        bb = draw.textbbox((0, 0), label, font=f_tiny)
-        lx += box + 3 + (bb[2] - bb[0]) + 10
-        if lx > img_w - 60:
-            lx, ly = BUS_WALL + 4, ly + 16
+        _rrect(draw, lx, ly, lx + box, ly + box, 4, color)
+        draw.text((lx + box + 7, ly + 3), label, font=f_tiny, fill=(50, 70, 110))
+        bb  = draw.textbbox((0, 0), label, font=f_tiny)
+        lx += box + 7 + (bb[2] - bb[0]) + 18
+        if lx > img_w - 90:
+            lx, ly = BUS_WALL, ly + 26
 
     buf = io.BytesIO()
     img.save(buf, format="PNG", optimize=True)
