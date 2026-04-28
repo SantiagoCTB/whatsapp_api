@@ -22,23 +22,26 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
-# ── Paleta ────────────────────────────────────────────────────────────────────
-BUS_EXT     = (20,  30,  48)   # carrocería exterior
-BUS_INT     = (15,  22,  36)   # interior oscuro
-WINDSHIELD  = (147, 210, 253)  # parabrisas azul claro
-WINDSHIELD2 = (186, 230, 251)  # reflejo parabrisas
-WINDOW_C    = ( 56, 130, 246)  # ventanas laterales
-COND_BG     = ( 30,  45,  65)  # zona conductor
+# ── Paleta (tema claro, alto contraste para móvil) ───────────────────────────
+BG_IMG      = (248, 250, 253)  # fondo principal
+CARD_BG     = (255, 255, 255)  # fondo del bus
+CARD_BORDER = (203, 213, 225)  # borde del bus
+HEADER_BG   = ( 30,  64, 175)  # azul fuerte header
+AISLE_BG    = (241, 245, 249)  # franja del pasillo
+DRIVER_BG   = ( 51,  65,  85)  # zona conductor
+ROW_LABEL   = (148, 163, 184)  # número de fila
+TEXT_DARK   = ( 17,  24,  39)  # texto oscuro
+TEXT_LIGHT  = (255, 255, 255)
+TEXT_MUTED  = (100, 116, 139)
 
-C_LIBRE     = ( 22, 163,  74)  # verde vibrante disponible
+C_LIBRE     = ( 22, 163,  74)  # verde libre
+C_LIBRE_B   = ( 15, 118,  53)
 C_PREF      = (126,  34, 206)  # violeta preferencial
-C_VIP       = (180,  83,   9)  # ámbar VIP
-C_OCUPADO   = (185,  28,  28)  # rojo ocupado
-
-TEXT_W      = (255, 255, 255)
-TEXT_DIM    = (130, 165, 210)
-TEXT_LABEL  = (200, 220, 250)
-BG_IMG      = (240, 243, 248)  # fondo imagen
+C_PREF_B    = ( 88,  28, 135)
+C_VIP       = (217, 119,   6)  # ámbar VIP
+C_VIP_B     = (146,  64,  14)
+C_OCUPADO   = (220,  38,  38)  # rojo ocupado
+C_OCUPADO_B = (153,  27,  27)
 
 FONT_BOLD = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
 FONT_REG  = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
@@ -46,18 +49,21 @@ FONT_REG  = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
 SEAT_MAP_MAX_AGE = 7_200  # 2 horas
 
 # ── Dimensiones (optimizadas para celular) ────────────────────────────────────
-BUS_WALL  = 28
-SEAT_PAD  = 18
-SEAT_W    = 96
-SEAT_H    = 80
-PAIR_GAP  = 10
-AISLE_W   = 52
-ROW_GAP   = 12
-DRIVER_H  = 55
-HOOD_H    = 105
-CORNER_R  = 14
+SEAT_W      = 78        # silla
+SEAT_H      = 78
+SEAT_GAP    = 10        # entre sillas del mismo lado
+AISLE_W     = 56        # ancho del pasillo
+ROW_GAP     = 14        # entre filas
+ROW_LABEL_W = 38        # columna de número de fila
+PAD_X       = 22        # padding horizontal del card
+PAD_TOP     = 22        # padding superior interno
+PAD_BOT     = 28        # padding inferior interno
+DRIVER_H    = 56
+CORNER_R    = 14
+CARD_R      = 18
+SEAT_R      = 12
 
-IMG_W     = 548  # fallback; el generador calcula el ancho real dinámicamente
+IMG_W       = 560  # fallback
 
 
 # ── Helpers de dibujo ─────────────────────────────────────────────────────────
@@ -65,83 +71,64 @@ IMG_W     = 548  # fallback; el generador calcula el ancho real dinámicamente
 def _fonts():
     from PIL import ImageFont
     try:
-        return (
-            ImageFont.truetype(FONT_BOLD, 20),  # f_title: ruta/info
-            ImageFont.truetype(FONT_REG,  15),  # f_sub: subtítulo / etiquetas
-            ImageFont.truetype(FONT_BOLD, 28),  # f_num: número de silla
-            ImageFont.truetype(FONT_BOLD, 30),  # f_x: ✕ ocupado
-            ImageFont.truetype(FONT_REG,  14),  # f_tiny: leyenda
-        )
+        return {
+            "title":    ImageFont.truetype(FONT_BOLD, 24),
+            "sub":      ImageFont.truetype(FONT_REG,  16),
+            "tag":      ImageFont.truetype(FONT_BOLD, 13),
+            "seat":     ImageFont.truetype(FONT_BOLD, 30),
+            "occupied": ImageFont.truetype(FONT_BOLD, 32),
+            "row":      ImageFont.truetype(FONT_BOLD, 16),
+            "legend":   ImageFont.truetype(FONT_BOLD, 14),
+            "label":    ImageFont.truetype(FONT_BOLD, 13),
+        }
     except Exception:
         d = ImageFont.load_default()
-        return d, d, d, d, d
+        return {k: d for k in ("title","sub","tag","seat","occupied","row","legend","label")}
 
 
-def _rrect(draw, x0, y0, x1, y1, r, fill):
-    r = min(r, (x1 - x0) // 2, (y1 - y0) // 2)
-    draw.rectangle([x0 + r, y0, x1 - r, y1], fill=fill)
-    draw.rectangle([x0, y0 + r, x1, y1 - r], fill=fill)
-    for cx, cy in [(x0, y0), (x1 - 2*r, y0), (x0, y1 - 2*r), (x1 - 2*r, y1 - 2*r)]:
-        draw.ellipse([cx, cy, cx + 2*r, cy + 2*r], fill=fill)
+def _rrect(draw, x0, y0, x1, y1, r, fill=None, outline=None, width=1):
+    """Rectángulo redondeado usando draw.rounded_rectangle (Pillow >= 8)."""
+    draw.rounded_rectangle([x0, y0, x1, y1], radius=r, fill=fill,
+                           outline=outline, width=width)
 
 
 def _ctext(draw, cx, cy, text, font, fill):
     bb = draw.textbbox((0, 0), text, font=font)
-    draw.text((cx - (bb[2] - bb[0]) // 2, cy - (bb[3] - bb[1]) // 2), text, font=font, fill=fill)
+    draw.text((cx - (bb[2] - bb[0]) // 2, cy - (bb[3] - bb[1]) // 2 - bb[1]),
+              text, font=font, fill=fill)
 
 
-# ── Dibujo del chasis ─────────────────────────────────────────────────────────
-
-def _draw_bus_shell(draw, img_w: int, img_h: int):
-    """Carrocería exterior, interior, capó y parabrisas."""
-    _rrect(draw, 0, 24, img_w, img_h, r=28, fill=BUS_EXT)
-    _rrect(draw, 16, 0, img_w - 16, HOOD_H, r=50, fill=BUS_EXT)
-    draw.rectangle([BUS_WALL, HOOD_H, img_w - BUS_WALL, img_h - 12], fill=BUS_INT)
-
-    ws_margin_top = 32
-    ws_margin_bot = 14
-    ws_top = 8
-    ws_bot = HOOD_H - 6
-    draw.polygon([
-        (ws_margin_top, ws_top),
-        (img_w - ws_margin_top, ws_top),
-        (img_w - ws_margin_bot, ws_bot),
-        (ws_margin_bot, ws_bot),
-    ], fill=WINDSHIELD)
-
-    cx = img_w // 2
-    draw.line([(cx, ws_top + 6), (cx, ws_bot - 6)], fill=WINDSHIELD2, width=3)
-
-    draw.polygon([
-        (ws_margin_top, ws_top),
-        (img_w - ws_margin_top, ws_top),
-        (img_w - ws_margin_bot, ws_bot),
-        (ws_margin_bot, ws_bot),
-    ], outline=BUS_EXT)
-
-
-def _draw_side_windows(draw, img_w: int, first_y: int, n_rows: int):
-    """Ventanillas laterales a lo largo de las filas de asientos."""
-    win_x0_L = 4
-    win_x1_L = BUS_WALL - 3
-    win_x0_R = img_w - BUS_WALL + 3
-    win_x1_R = img_w - 4
-    for i in range(n_rows):
-        wy0 = first_y + i * (SEAT_H + ROW_GAP) + 5
-        wy1 = wy0 + SEAT_H - 10
-        _rrect(draw, win_x0_L, wy0, win_x1_L, wy1, r=3, fill=WINDOW_C)
-        _rrect(draw, win_x0_R, wy0, win_x1_R, wy1, r=3, fill=WINDOW_C)
+def _draw_seat(draw, x0, y0, x1, y1, color, border, num: str, occupied: bool, fonts):
+    """Dibuja una silla con sombra sutil, número grande y X si está ocupada."""
+    # Sombra
+    _rrect(draw, x0 + 2, y0 + 3, x1 + 2, y1 + 3, SEAT_R, fill=(0, 0, 0, 30) if False else (220, 220, 230))
+    # Cuerpo
+    _rrect(draw, x0, y0, x1, y1, SEAT_R, fill=color, outline=border, width=2)
+    # Respaldo (banda superior más oscura)
+    _rrect(draw, x0 + 6, y0 + 5, x1 - 6, y0 + 14, 4, fill=border)
+    # Texto
+    cx = (x0 + x1) // 2
+    cy = (y0 + y1) // 2 + 4
+    if occupied:
+        _ctext(draw, cx, cy, "✕", fonts["occupied"], TEXT_LIGHT)
+    else:
+        _ctext(draw, cx, cy, num, fonts["seat"], TEXT_LIGHT)
 
 
 # ── Datos de asiento ─────────────────────────────────────────────────────────
 
-def _seat_color(seat: dict):
+def _seat_color(seat: dict) -> tuple:
+    """Retorna (color_relleno, color_borde) para una silla."""
     tipo  = (seat.get("type",  "") or "").lower()
     state = (seat.get("state", "") or "").lower()
     libre = "disponible" in state
-    if tipo == "preferencial": return C_PREF  if libre else C_OCUPADO
-    if tipo == "vip":          return C_VIP   if libre else C_OCUPADO
-    return C_LIBRE if libre else C_OCUPADO
+    if not libre:
+        return C_OCUPADO, C_OCUPADO_B
+    if tipo == "preferencial":
+        return C_PREF, C_PREF_B
+    if tipo == "vip":
+        return C_VIP, C_VIP_B
+    return C_LIBRE, C_LIBRE_B
 
 
 def _split_groups(seats: list):
@@ -201,15 +188,21 @@ def _split_groups(seats: list):
 def _compute_img_width(left_cols: list, right_cols: list) -> tuple[int, int, int]:
     """Calcula ancho de imagen y posiciones X iniciales según el layout real.
 
+    Layout horizontal (de izq a der):
+      PAD_X | ROW_LABEL_W | left_seats | AISLE_W | right_seats | PAD_X
+
     Retorna (img_w, left_x0, right_x0).
     """
     n_left  = max(len(left_cols),  1)
     n_right = max(len(right_cols), 1)
-    left_w  = n_left  * SEAT_W + max(0, n_left  - 1) * PAIR_GAP
-    right_w = n_right * SEAT_W + max(0, n_right - 1) * PAIR_GAP
-    left_x0  = BUS_WALL + SEAT_PAD
+    left_w  = n_left  * SEAT_W + max(0, n_left  - 1) * SEAT_GAP
+    right_w = n_right * SEAT_W + max(0, n_right - 1) * SEAT_GAP
+    left_x0  = PAD_X + ROW_LABEL_W
     right_x0 = left_x0 + left_w + AISLE_W
-    img_w    = right_x0 + right_w + SEAT_PAD + BUS_WALL
+    img_w    = right_x0 + right_w + PAD_X
+    # Mínimo razonable para móvil
+    if img_w < 480:
+        img_w = 480
     return img_w, left_x0, right_x0
 
 
@@ -221,130 +214,209 @@ def generate_seat_map_image(
     route_name: str = "",
     departure: str = "",
 ) -> bytes:
-    """Genera PNG top-down del bus y lo retorna como bytes.
+    """Genera PNG limpio del mapa de sillas, optimizado para WhatsApp/celular.
 
-    La imagen tiene tres zonas verticales:
-      1. Header oscuro con nombre de ruta y hora de salida (si se proveen)
-      2. Cuerpo del bus: capó, asientos, etiquetas FRENTE/TRASERA
-      3. Leyenda de colores sobre fondo claro
+    Diseño:
+      1. Header azul con ruta y hora de salida
+      2. Tarjeta blanca con FRENTE arriba, sillas con número de fila al lado,
+         pasillo central marcado, y TRASERA abajo
+      3. Leyenda de colores fuera de la tarjeta
     """
     from PIL import Image, ImageDraw
 
-    f_title, f_sub, f_num, f_x, f_tiny = _fonts()
+    fonts = _fonts()
     left_cols, right_cols = _split_groups(seats)
     img_w, left_x0, right_x0 = _compute_img_width(left_cols, right_cols)
 
-    # ── Dimensiones del cuerpo del bus ────────────────────────────────────────
-    n_driver = sum(
-        1 for row in seats
-        if all(s.get("type", "").lower() in ("conductor", "pasillo") for s in row)
+    # ── Filas de tipo conductor (solo pasillo/conductor) y filas de sillas ─────
+    def _is_driver_row(row: list[dict]) -> bool:
+        return all(s.get("type", "").lower() in ("conductor", "pasillo") for s in row)
+
+    seat_rows = [row for row in seats if not _is_driver_row(row)]
+    has_driver_row = any(_is_driver_row(row) for row in seats)
+    n_seat_rows = len(seat_rows)
+
+    # Disponibles (para chip en header)
+    n_disponibles = sum(
+        1 for row in seat_rows for s in row
+        if (s.get("type", "").lower() == "silla"
+            or s.get("type", "").lower() in ("preferencial", "vip"))
+        and "disponible" in (s.get("state", "") or "").lower()
+        and str(s.get("number", "0")) not in ("0", "", "None")
     )
-    n_seat_rows = len(seats) - n_driver
-    cond_y       = HOOD_H + 5
-    first_seat_y = cond_y + (DRIVER_H + 6 if n_driver else 0)
-    grid_h       = max(0, n_seat_rows * (SEAT_H + ROW_GAP) - ROW_GAP)
-    bus_h        = first_seat_y + grid_h + 22
+    n_total = sum(
+        1 for row in seat_rows for s in row
+        if (s.get("type", "").lower() in ("silla", "preferencial", "vip"))
+        and str(s.get("number", "0")) not in ("0", "", "None")
+    )
 
-    # ── Altura de las zonas extra ─────────────────────────────────────────────
+    # ── Cálculo de alturas ────────────────────────────────────────────────────
     has_header = bool(route_name or departure)
-    header_h   = 72 if has_header else 0
-    legend_h   = 58   # leyenda siempre visible abajo
+    header_h   = 96 if has_header else 0
 
-    total_h = header_h + bus_h + 14 + legend_h
+    front_h    = 38
+    driver_h   = (DRIVER_H + 14) if has_driver_row else 0
+    grid_h     = max(0, n_seat_rows * (SEAT_H + ROW_GAP) - ROW_GAP)
+    rear_h     = 32
+    card_h     = front_h + PAD_TOP + driver_h + grid_h + PAD_BOT + rear_h
 
-    # ── Canvas principal (fondo claro) ────────────────────────────────────────
+    legend_h   = 64
+    margin_top_card = 10
+    margin_bot_card = 14
+    total_h = header_h + margin_top_card + card_h + margin_bot_card + legend_h
+
+    # ── Canvas ────────────────────────────────────────────────────────────────
     img  = Image.new("RGB", (img_w, total_h), BG_IMG)
     draw = ImageDraw.Draw(img)
 
     # ── 1. Header ─────────────────────────────────────────────────────────────
     if has_header:
-        draw.rectangle([0, 0, img_w, header_h], fill=(25, 38, 60))
-        hy = 14
+        draw.rectangle([0, 0, img_w, header_h], fill=HEADER_BG)
+        hy = 18
         if route_name:
-            _ctext(draw, img_w // 2, hy + 12, route_name, f_title, TEXT_W)
-            hy += 34
+            _ctext(draw, img_w // 2, hy + 12, route_name, fonts["title"], TEXT_LIGHT)
+            hy += 38
         if departure:
-            _ctext(draw, img_w // 2, hy + 10, f"Salida: {departure}", f_sub, TEXT_DIM)
+            _ctext(draw, img_w // 2, hy + 10, f"Salida {departure}",
+                   fonts["sub"], (200, 215, 240))
+            hy += 26
 
-    # ── 2. Sub-imagen del bus ──────────────────────────────────────────────────
-    bus_img  = Image.new("RGB", (img_w, bus_h), BUS_EXT)
-    bus_draw = ImageDraw.Draw(bus_img)
+        # Chip de disponibilidad
+        if n_total > 0:
+            chip_txt = f"  {n_disponibles} de {n_total} sillas disponibles  "
+            bb = draw.textbbox((0, 0), chip_txt, font=fonts["tag"])
+            cw = bb[2] - bb[0]
+            cx = img_w // 2
+            chip_y = header_h - 22
+            _rrect(draw, cx - cw//2 - 2, chip_y - 2,
+                   cx + cw//2 + 2, chip_y + 18, 10, fill=(255, 255, 255))
+            _ctext(draw, cx, chip_y + 8, chip_txt.strip(), fonts["tag"], HEADER_BG)
 
-    _draw_bus_shell(bus_draw, img_w, bus_h)
-    _draw_side_windows(bus_draw, img_w, first_seat_y, n_seat_rows)
+    # ── 2. Tarjeta del bus ────────────────────────────────────────────────────
+    card_x0 = 14
+    card_x1 = img_w - 14
+    card_y0 = header_h + margin_top_card
+    card_y1 = card_y0 + card_h
+    _rrect(draw, card_x0, card_y0, card_x1, card_y1, CARD_R,
+           fill=CARD_BG, outline=CARD_BORDER, width=2)
 
-    # Etiqueta FRENTE en la zona del capó
-    _ctext(bus_draw, img_w // 2, HOOD_H // 2 - 8, "FRENTE", f_sub, TEXT_DIM)
+    # Etiqueta FRENTE (con flecha)
+    _ctext(draw, img_w // 2, card_y0 + 18, "▲  FRENTE  ▲",
+           fonts["label"], TEXT_MUTED)
 
-    # Zona conductor (solo si hay fila 100% conductor/pasillo)
-    if n_driver:
-        _rrect(bus_draw, BUS_WALL + 2, cond_y, img_w - BUS_WALL - 2,
-               cond_y + DRIVER_H, r=7, fill=COND_BG)
-        _ctext(bus_draw, img_w // 2, cond_y + DRIVER_H // 2,
-               "Conductor", f_sub, TEXT_DIM)
+    # Línea separadora bajo "FRENTE"
+    sep_y = card_y0 + front_h - 2
+    draw.line([(card_x0 + 24, sep_y), (card_x1 - 24, sep_y)],
+              fill=CARD_BORDER, width=1)
 
-    # Asientos
-    seat_row_idx = 0
-    for row in seats:
-        if all(s.get("type", "").lower() in ("conductor", "pasillo") for s in row):
-            continue
+    # Zona conductor (si hay fila 100% conductor/pasillo)
+    cur_y = card_y0 + front_h + 8
+    if has_driver_row:
+        dy0 = cur_y
+        dy1 = dy0 + DRIVER_H
+        _rrect(draw, card_x0 + 18, dy0, card_x1 - 18, dy1, 12, fill=DRIVER_BG)
+        _ctext(draw, img_w // 2, (dy0 + dy1) // 2, "Conductor",
+               fonts["sub"], TEXT_LIGHT)
+        cur_y = dy1 + 12
 
-        y0 = first_seat_y + seat_row_idx * (SEAT_H + ROW_GAP)
+    grid_y0 = cur_y + (PAD_TOP - 8 if not has_driver_row else 0)
+
+    # Franja del pasillo (gris claro vertical)
+    n_left  = max(len(left_cols), 1)
+    aisle_x0 = left_x0 + n_left * SEAT_W + max(0, n_left - 1) * SEAT_GAP + 4
+    aisle_x1 = aisle_x0 + AISLE_W - 8
+    if right_cols:  # solo dibujar si hay sillas al otro lado
+        _rrect(draw, aisle_x0, grid_y0 - 6,
+               aisle_x1, grid_y0 + grid_h + 6, 10, fill=AISLE_BG)
+        # Texto vertical "PASILLO" sutil
+        if grid_h >= 120:
+            _ctext(draw, (aisle_x0 + aisle_x1) // 2,
+                   grid_y0 + grid_h // 2, "↕", fonts["row"], (180, 195, 215))
+
+    # Render de las filas de sillas
+    for row_idx, row in enumerate(seat_rows):
+        y0 = grid_y0 + row_idx * (SEAT_H + ROW_GAP)
         y1 = y0 + SEAT_H
-        yc = (y0 + y1) // 2
 
+        # Número de fila a la izquierda
+        _ctext(draw, card_x0 + 18 + ROW_LABEL_W // 2 - 4,
+               (y0 + y1) // 2,
+               str(row_idx + 1), fonts["row"], ROW_LABEL)
+
+        # Sillas izquierda
         for i, col in enumerate(left_cols):
             seat = row[col] if col < len(row) else {}
             if not seat or seat.get("type", "").lower() in ("pasillo", "conductor"):
                 continue
-            x0 = left_x0 + i * (SEAT_W + PAIR_GAP)
-            x1 = x0 + SEAT_W
-            color = _seat_color(seat)
-            _rrect(bus_draw, x0, y0, x1, y1, CORNER_R, color)
             num = str(seat.get("number", "") or "")
-            if num and num != "0":
-                is_occ = "disponible" not in (seat.get("state", "") or "").lower()
-                _ctext(bus_draw, (x0 + x1) // 2, yc, "X" if is_occ else num,
-                       f_x if is_occ else f_num, TEXT_W)
+            if not num or num == "0":
+                continue
+            sx0 = left_x0 + i * (SEAT_W + SEAT_GAP)
+            sx1 = sx0 + SEAT_W
+            fill, border = _seat_color(seat)
+            is_occ = "disponible" not in (seat.get("state", "") or "").lower()
+            _draw_seat(draw, sx0, y0, sx1, y1, fill, border, num, is_occ, fonts)
 
+        # Sillas derecha
         for i, col in enumerate(right_cols):
             seat = row[col] if col < len(row) else {}
             if not seat or seat.get("type", "").lower() in ("pasillo", "conductor"):
                 continue
-            x0 = right_x0 + i * (SEAT_W + PAIR_GAP)
-            x1 = x0 + SEAT_W
-            color = _seat_color(seat)
-            _rrect(bus_draw, x0, y0, x1, y1, CORNER_R, color)
             num = str(seat.get("number", "") or "")
-            if num and num != "0":
-                is_occ = "disponible" not in (seat.get("state", "") or "").lower()
-                _ctext(bus_draw, (x0 + x1) // 2, yc, "X" if is_occ else num,
-                       f_x if is_occ else f_num, TEXT_W)
+            if not num or num == "0":
+                continue
+            sx0 = right_x0 + i * (SEAT_W + SEAT_GAP)
+            sx1 = sx0 + SEAT_W
+            fill, border = _seat_color(seat)
+            is_occ = "disponible" not in (seat.get("state", "") or "").lower()
+            _draw_seat(draw, sx0, y0, sx1, y1, fill, border, num, is_occ, fonts)
 
-        seat_row_idx += 1
+    # Línea separadora antes de TRASERA
+    sep2_y = card_y1 - rear_h + 4
+    draw.line([(card_x0 + 24, sep2_y), (card_x1 - 24, sep2_y)],
+              fill=CARD_BORDER, width=1)
+    _ctext(draw, img_w // 2, card_y1 - 16, "▼  TRASERA  ▼",
+           fonts["label"], TEXT_MUTED)
 
-    # Etiqueta TRASERA al final del bus
-    _ctext(bus_draw, img_w // 2, bus_h - 14, "TRASERA", f_sub, TEXT_DIM)
-
-    img.paste(bus_img, (0, header_h))
-
-    # ── 3. Leyenda (debajo del bus, sobre BG_IMG) ─────────────────────────────
+    # ── 3. Leyenda ────────────────────────────────────────────────────────────
     leg_items = [
-        (C_LIBRE,   "Libre"),
-        (C_OCUPADO, "Ocupado"),
-        (C_PREF,    "Preferencial"),
-        (C_VIP,     "VIP"),
+        (C_LIBRE,   C_LIBRE_B,   "Libre"),
+        (C_OCUPADO, C_OCUPADO_B, "Ocupado"),
+        (C_PREF,    C_PREF_B,    "Preferencial"),
+        (C_VIP,     C_VIP_B,     "VIP"),
     ]
-    box = 20
-    lx  = BUS_WALL
-    ly  = header_h + bus_h + 18
-    for color, label in leg_items:
-        _rrect(draw, lx, ly, lx + box, ly + box, 4, color)
-        draw.text((lx + box + 7, ly + 3), label, font=f_tiny, fill=(50, 70, 110))
-        bb  = draw.textbbox((0, 0), label, font=f_tiny)
-        lx += box + 7 + (bb[2] - bb[0]) + 18
-        if lx > img_w - 90:
-            lx, ly = BUS_WALL, ly + 26
+    leg_y0 = card_y1 + margin_bot_card
+    # Calcular ancho total para centrar
+    box = 22
+    gap_item = 18
+    items_w = []
+    for _, _, lbl in leg_items:
+        bb = draw.textbbox((0, 0), lbl, font=fonts["legend"])
+        items_w.append(box + 8 + (bb[2] - bb[0]))
+    total_leg_w = sum(items_w) + gap_item * (len(leg_items) - 1)
+
+    # Si no caben en una línea, distribuir en dos
+    if total_leg_w > img_w - 24:
+        # 2 + 2
+        line1 = leg_items[:2]
+        line2 = leg_items[2:]
+        for line_idx, line in enumerate((line1, line2)):
+            line_w = sum(items_w[i + line_idx*2] for i in range(len(line))) + gap_item * (len(line) - 1)
+            lx = (img_w - line_w) // 2
+            ly = leg_y0 + 8 + line_idx * 28
+            for i, (fill, border, lbl) in enumerate(line):
+                _rrect(draw, lx, ly, lx + box, ly + box, 5, fill=fill, outline=border, width=1)
+                bb = draw.textbbox((0, 0), lbl, font=fonts["legend"])
+                draw.text((lx + box + 8, ly + 3), lbl, font=fonts["legend"], fill=TEXT_DARK)
+                lx += box + 8 + (bb[2] - bb[0]) + gap_item
+    else:
+        lx = (img_w - total_leg_w) // 2
+        ly = leg_y0 + 20
+        for i, (fill, border, lbl) in enumerate(leg_items):
+            _rrect(draw, lx, ly, lx + box, ly + box, 5, fill=fill, outline=border, width=1)
+            bb = draw.textbbox((0, 0), lbl, font=fonts["legend"])
+            draw.text((lx + box + 8, ly + 3), lbl, font=fonts["legend"], fill=TEXT_DARK)
+            lx += box + 8 + (bb[2] - bb[0]) + gap_item
 
     buf = io.BytesIO()
     img.save(buf, format="PNG", optimize=True)
