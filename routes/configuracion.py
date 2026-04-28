@@ -22,7 +22,7 @@ else:  # pragma: no cover - fallback cuando falta el conector
 from config import Config
 from services import tenants
 from services.catalog_pdf_worker import enqueue_catalog_pdf_ingest
-from services.whatsapp_api import list_phone_numbers
+from services.whatsapp_api import list_phone_numbers, get_phone_number_by_id
 from services.db import get_connection, get_chat_state_definitions
 
 config_bp = Blueprint('configuracion', __name__)
@@ -3035,9 +3035,18 @@ def whatsapp_phone_numbers():
 
     tenant_env = tenants.get_tenant_env(tenant)
     token = tenant_env.get("META_TOKEN")
-    waba_id = tenant_env.get("WABA_ID")
+    waba_id = (tenant_env.get("WABA_ID") or "").strip()
+    if waba_id.lower() in ("none", "null", "undefined"):
+        waba_id = ""
+    phone_number_id = (tenant_env.get("PHONE_NUMBER_ID") or "").strip()
 
-    response = list_phone_numbers(token, waba_id)
+    if waba_id:
+        response = list_phone_numbers(token, waba_id)
+    elif phone_number_id:
+        response = get_phone_number_by_id(token, phone_number_id)
+    else:
+        response = {"ok": False, "error": "Falta WABA_ID o PHONE_NUMBER_ID para consultar números."}
+
     status = 200 if response.get("ok") else 400
     return response, status
 

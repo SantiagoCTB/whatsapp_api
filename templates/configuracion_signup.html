@@ -911,8 +911,8 @@
       });
     });
 
-    if (wabaId) {
-      fetchPhoneNumbers().finally(() => fetchWabaApprovalStatus());
+    if (wabaId || currentPhoneNumberId) {
+      fetchPhoneNumbers().finally(() => { if (wabaId) fetchWabaApprovalStatus(); });
       loadBusinessProfile();
     } else {
       updatePhoneStatus('Completa el signup para cargar los números disponibles.');

@@ -637,6 +637,45 @@ def list_phone_numbers(token: str, waba_id: str) -> Dict[str, Any]:
 
     return {"ok": True, "data": phone_numbers}
 
+
+def get_phone_number_by_id(token: str, phone_number_id: str) -> Dict[str, Any]:
+    if not token or not phone_number_id:
+        return {"ok": False, "error": "Faltan credenciales para consultar el número."}
+
+    url = f"{GRAPH_BASE_URL}/{phone_number_id}"
+    params = {
+        "fields": "id,display_phone_number,verified_name,quality_rating,code_verification_status",
+    }
+    headers = {"Authorization": f"Bearer {token}"}
+
+    try:
+        response = requests.get(url, params=params, headers=headers, timeout=15)
+    except requests.RequestException as exc:
+        logger.warning("Error consultando número de WhatsApp por ID: %s", exc)
+        return {"ok": False, "error": "No se pudo conectar con la API de Meta."}
+
+    if response.status_code >= 400:
+        details = _extract_error_details(response)
+        return {"ok": False, "error": "No se pudo obtener el número.", "details": details}
+
+    try:
+        item = response.json()
+    except ValueError:
+        return {"ok": False, "error": "Respuesta inválida de la API."}
+
+    if not isinstance(item, dict) or not item.get("id"):
+        return {"ok": False, "error": "No se encontró información del número."}
+
+    phone_number = {
+        "id": item.get("id"),
+        "display_phone_number": item.get("display_phone_number"),
+        "verified_name": item.get("verified_name"),
+        "quality_rating": item.get("quality_rating"),
+        "code_verification_status": item.get("code_verification_status"),
+    }
+    return {"ok": True, "data": [phone_number]}
+
+
 def enviar_mensaje(
     numero,
     mensaje,
