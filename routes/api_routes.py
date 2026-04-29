@@ -5,6 +5,7 @@ Autenticación: Authorization: Bearer <token>
 Tenant:        X-Tenant-ID: <tenant_key>
 
   POST /api/v1/mensaje          — envía un mensaje de texto
+  POST /api/v1/template         — envía una plantilla de WhatsApp
 
 ── Compatibilidad WAHA (Uptime Kuma / herramientas externas) ────────────────
 Autenticación: X-Api-Key: <token>
@@ -126,6 +127,77 @@ def api_enviar_mensaje():
         extra={"tenant_key": tenant.tenant_key},
     )
     return jsonify({"ok": True, "mensaje": "Mensaje enviado correctamente."})
+
+
+@api_bp.route("/api/v1/template", methods=["POST"])
+def api_enviar_template():
+    """Envía una plantilla de WhatsApp aprobada al número indicado.
+
+    Body JSON:
+      numero        — número en formato internacional sin '+' (ej. 573001234567)
+      template      — nombre exacto de la plantilla (ej. "hello_world")
+      idioma        — código de idioma (ej. "es_CO", "en_US"). Default: "es"
+      params        — lista de strings para los {{1}}, {{2}}... del body (opcional)
+    """
+    tenant, err = _require_api_auth()
+    if err:
+        return err
+
+    if not request.is_json:
+        return jsonify({"ok": False, "error": "Content-Type debe ser application/json."}), 415
+
+    payload = request.get_json(silent=True) or {}
+    numero        = (payload.get("numero") or "").strip()
+    template_name = (payload.get("template") or "").strip()
+    idioma        = (payload.get("idioma") or "es").strip()
+    params        = payload.get("params") or []
+
+    if not numero:
+        return jsonify({"ok": False, "error": "El campo 'numero' es requerido."}), 400
+    if not template_name:
+        return jsonify({"ok": False, "error": "El campo 'template' es requerido."}), 400
+    if not isinstance(params, list):
+        return jsonify({"ok": False, "error": "'params' debe ser una lista."}), 400
+
+    from services import tenants as _tenants
+    env = _tenants.get_tenant_env(tenant)
+    token    = (env.get("META_TOKEN") or "").strip()
+    phone_id = (env.get("PHONE_NUMBER_ID") or "").strip()
+
+    if not token or not phone_id:
+        return jsonify({"ok": False, "error": "El tenant no tiene META_TOKEN o PHONE_NUMBER_ID configurado."}), 503
+
+    from services.template_builders import build_template_send_payload, TemplateValidationError
+    try:
+        graph_payload = build_template_send_payload({
+            "to": numero,
+            "template_name": template_name,
+            "language_code": idioma,
+            "body_parameters": [str(p) for p in params],
+        })
+    except TemplateValidationError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+    import requests as _requests
+    try:
+        resp = _requests.post(
+            f"https://graph.facebook.com/v22.0/{phone_id}/messages",
+            params={"access_token": token},
+            json=graph_payload,
+            timeout=20,
+        )
+    except _requests.RequestException as exc:
+        logger.warning("API template: error de red: %s", exc, extra={"tenant_key": tenant.tenant_key})
+        return jsonify({"ok": False, "error": "No se pudo conectar con la API de Meta."}), 502
+
+    data = resp.json() if resp.content else {}
+    if resp.status_code >= 400:
+        error_detail = (data.get("error") or {}).get("message") or "Error de Meta API."
+        logger.warning("API template: error Meta %s", resp.status_code, extra={"tenant_key": tenant.tenant_key, "detail": error_detail})
+        return jsonify({"ok": False, "error": error_detail}), 502
+
+    logger.info("API template: enviada '%s'", template_name, extra={"tenant_key": tenant.tenant_key})
+    return jsonify({"ok": True, "mensaje": "Plantilla enviada correctamente.", "data": data})
 
 
 # ── Endpoints de administración ───────────────────────────────────────────────

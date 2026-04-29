@@ -348,12 +348,31 @@
             </div>
             <div class="form-row" style="margin-top:0.75rem;">
                 <details class="muted" style="font-size:0.85rem;">
-                    <summary style="cursor:pointer;font-weight:600;">Ver ejemplo de uso (cURL)</summary>
-                    <pre style="margin-top:0.5rem;background:var(--bg-secondary,#f1f5f9);padding:0.75rem;border-radius:8px;overflow-x:auto;font-size:0.8rem;white-space:pre-wrap;">curl -X POST {{ request.host_url.rstrip('/') }}/api/v1/mensaje \
-  -H "X-Tenant-ID: {{ tenant_key }}" \
-  -H "Authorization: Bearer &lt;tu-token&gt;" \
-  -H "Content-Type: application/json" \
-  -d '{"numero":"573001234567","mensaje":"Hola desde la API"}'</pre>
+                    <summary style="cursor:pointer;font-weight:600;">Enviar mensaje de texto</summary>
+                    <pre style="margin-top:0.5rem;background:var(--bg-secondary,#f1f5f9);padding:0.75rem;border-radius:8px;overflow-x:auto;font-size:0.8rem;white-space:pre-wrap;">POST {{ request.host_url.rstrip('/') }}/api/v1/mensaje
+X-Tenant-ID: {{ tenant_key }}
+Authorization: Bearer &lt;token&gt;
+
+{"numero":"573001234567","mensaje":"Hola!"}</pre>
+                </details>
+            </div>
+            <div class="form-row" style="margin-top:0.5rem;">
+                <details class="muted" style="font-size:0.85rem;">
+                    <summary style="cursor:pointer;font-weight:600;">Enviar plantilla de WhatsApp</summary>
+                    <pre style="margin-top:0.5rem;background:var(--bg-secondary,#f1f5f9);padding:0.75rem;border-radius:8px;overflow-x:auto;font-size:0.8rem;white-space:pre-wrap;">POST {{ request.host_url.rstrip('/') }}/api/v1/template
+X-Tenant-ID: {{ tenant_key }}
+Authorization: Bearer &lt;token&gt;
+
+{
+  "numero":   "573001234567",
+  "template": "nombre_plantilla",
+  "idioma":   "es_CO",
+  "params":   ["valor1", "valor2"]
+}</pre>
+                    <p style="margin-top:0.4rem;color:var(--muted,#64748b);">
+                        <strong>template</strong>: nombre exacto de la plantilla aprobada en Meta.<br>
+                        <strong>params</strong>: valores para las variables <code>{{1}}</code>, <code>{{2}}</code>… del cuerpo (puede ser lista vacía).
+                    </p>
                 </details>
             </div>
             <div class="form-row" style="margin-top:1rem;display:flex;gap:0.5rem;flex-wrap:wrap;">
