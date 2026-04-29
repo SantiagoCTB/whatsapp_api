@@ -467,21 +467,13 @@ def build_available_seats_opciones(seats: list[list[dict]]) -> str | None:
     vip.sort(key=_num_key)
     regular.sort(key=_num_key)
 
-    sections: list[dict] = []
-    if pref:
-        sections.append({"title": "Preferencial", "rows": pref[:10]})
-    if vip:
-        sections.append({"title": "VIP", "rows": vip[:10]})
-
-    # Dividir regulares en bloques de 10 (límite de WhatsApp por sección)
-    for i in range(0, len(regular), 10):
-        chunk = regular[i:i + 10]
-        first, last = chunk[0]["id"], chunk[-1]["id"]
-        title = f"Sillas {first}-{last}" if len(chunk) > 1 else f"Silla {first}"
-        sections.append({"title": title[:24], "rows": chunk})
-
-    if not sections:
+    # Una sola sección con todas las sillas disponibles ordenadas (pref → vip → regular)
+    # WhatsApp acepta de forma confiable solo 1 sección; mostrar las primeras 10.
+    all_seats = (pref + vip + regular)[:10]
+    if not all_seats:
         return None
+
+    sections: list[dict] = [{"title": "Sillas disponibles", "rows": all_seats}]
 
     return json.dumps({
         "sections": sections[:10],          # WhatsApp: máx 10 secciones
