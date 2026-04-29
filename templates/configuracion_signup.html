@@ -307,6 +307,61 @@
             </div>
         </div>
     </div>
+
+    {# ── API de mensajería ──────────────────────────────────────────────── #}
+    <div class="integration-card card">
+        <div class="integration-header">
+            <div style="width:48px;height:48px;background:var(--primary,#1a56db);border-radius:12px;display:flex;align-items:center;justify-content:center;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+            </div>
+            <div>
+                <h3>API de mensajería</h3>
+                <p class="muted">Envía mensajes de WhatsApp desde sistemas externos</p>
+            </div>
+        </div>
+        <div class="integration-body">
+            <div class="form-row">
+                <label class="muted">Token de acceso</label>
+                <div style="display:flex;gap:0.5rem;align-items:center;">
+                    <input id="api-token-display" type="password" readonly
+                           style="flex:1;font-family:monospace;font-size:0.85rem;"
+                           placeholder="Sin token generado">
+                    <button id="api-token-toggle" class="btn-secondary" type="button" title="Mostrar/ocultar token">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                    </button>
+                    <button id="api-token-copy" class="btn-secondary" type="button" title="Copiar token">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                    </button>
+                </div>
+                <div id="api-token-status" class="help" style="margin-top:0.5rem"></div>
+            </div>
+            <div class="form-row" style="margin-top:0.75rem;">
+                <label class="muted">URL del endpoint</label>
+                <div style="display:flex;gap:0.5rem;align-items:center;">
+                    <input id="api-endpoint-display" type="text" readonly
+                           style="flex:1;font-family:monospace;font-size:0.85rem;"
+                           value="{{ request.host_url.rstrip('/') }}/api/v1/mensaje">
+                    <button id="api-endpoint-copy" class="btn-secondary" type="button" title="Copiar URL">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                    </button>
+                </div>
+            </div>
+            <div class="form-row" style="margin-top:0.75rem;">
+                <details class="muted" style="font-size:0.85rem;">
+                    <summary style="cursor:pointer;font-weight:600;">Ver ejemplo de uso (cURL)</summary>
+                    <pre style="margin-top:0.5rem;background:var(--bg-secondary,#f1f5f9);padding:0.75rem;border-radius:8px;overflow-x:auto;font-size:0.8rem;white-space:pre-wrap;">curl -X POST {{ request.host_url.rstrip('/') }}/api/v1/mensaje \
+  -H "X-Tenant-ID: {{ tenant_key }}" \
+  -H "Authorization: Bearer &lt;tu-token&gt;" \
+  -H "Content-Type: application/json" \
+  -d '{"numero":"573001234567","mensaje":"Hola desde la API"}'</pre>
+                </details>
+            </div>
+            <div class="form-row" style="margin-top:1rem;display:flex;gap:0.5rem;flex-wrap:wrap;">
+                <button id="api-token-generate" class="btn-primary" type="button">Generar nuevo token</button>
+                <button id="api-token-revoke" class="btn-danger" type="button">Revocar token</button>
+            </div>
+        </div>
+    </div>
 </div>
 {% endblock %}
 
@@ -1687,6 +1742,103 @@
           statusTarget: backfillDisconnectStatus,
           successMessage: 'Instagram desconectado correctamente.',
         });
+      });
+    }
+  })();
+</script>
+<script>
+  (function () {
+    const tokenDisplay   = document.getElementById('api-token-display');
+    const toggleBtn      = document.getElementById('api-token-toggle');
+    const copyTokenBtn   = document.getElementById('api-token-copy');
+    const copyEndpointBtn= document.getElementById('api-endpoint-copy');
+    const endpointDisplay= document.getElementById('api-endpoint-display');
+    const generateBtn    = document.getElementById('api-token-generate');
+    const revokeBtn      = document.getElementById('api-token-revoke');
+    const statusEl       = document.getElementById('api-token-status');
+
+    function setStatus(msg, isError) {
+      if (!statusEl) return;
+      statusEl.textContent = msg;
+      statusEl.style.color = isError ? 'var(--danger,#dc2626)' : 'var(--muted,#64748b)';
+    }
+
+    function copyToClipboard(text, label) {
+      navigator.clipboard.writeText(text).then(() => {
+        setStatus((label || 'Copiado') + ' al portapapeles.');
+      }).catch(() => setStatus('No se pudo copiar.', true));
+    }
+
+    // Cargar token actual al abrir la página
+    fetch('{{ url_for("api_public.api_ver_token") }}')
+      .then(r => r.json())
+      .then(resp => {
+        if (resp.ok && resp.token) {
+          tokenDisplay.value = resp.token;
+          setStatus('Token cargado.');
+        } else {
+          setStatus('Sin token generado.');
+        }
+      })
+      .catch(() => setStatus('No se pudo cargar el token.', true));
+
+    if (toggleBtn) {
+      toggleBtn.addEventListener('click', () => {
+        tokenDisplay.type = tokenDisplay.type === 'password' ? 'text' : 'password';
+      });
+    }
+
+    if (copyTokenBtn) {
+      copyTokenBtn.addEventListener('click', () => {
+        if (tokenDisplay.value) copyToClipboard(tokenDisplay.value, 'Token copiado');
+        else setStatus('No hay token para copiar.', true);
+      });
+    }
+
+    if (copyEndpointBtn) {
+      copyEndpointBtn.addEventListener('click', () => {
+        if (endpointDisplay) copyToClipboard(endpointDisplay.value, 'URL copiada');
+      });
+    }
+
+    if (generateBtn) {
+      generateBtn.addEventListener('click', () => {
+        if (!confirm('¿Generar un nuevo token? El anterior dejará de funcionar de inmediato.')) return;
+        setStatus('Generando token...');
+        generateBtn.disabled = true;
+        fetch('{{ url_for("api_public.api_generar_token") }}', { method: 'POST' })
+          .then(r => r.json())
+          .then(resp => {
+            if (resp.ok && resp.token) {
+              tokenDisplay.value = resp.token;
+              tokenDisplay.type = 'text';
+              setStatus('Token generado. Cópialo ahora, no se volverá a mostrar completo.');
+            } else {
+              setStatus(resp.error || 'No se pudo generar el token.', true);
+            }
+          })
+          .catch(() => setStatus('Error al generar el token.', true))
+          .finally(() => { generateBtn.disabled = false; });
+      });
+    }
+
+    if (revokeBtn) {
+      revokeBtn.addEventListener('click', () => {
+        if (!confirm('¿Revocar el token? Los sistemas que lo usen perderán acceso de inmediato.')) return;
+        setStatus('Revocando token...');
+        revokeBtn.disabled = true;
+        fetch('{{ url_for("api_public.api_revocar_token") }}', { method: 'POST' })
+          .then(r => r.json())
+          .then(resp => {
+            if (resp.ok) {
+              tokenDisplay.value = '';
+              setStatus('Token revocado correctamente.');
+            } else {
+              setStatus(resp.error || 'No se pudo revocar el token.', true);
+            }
+          })
+          .catch(() => setStatus('Error al revocar el token.', true))
+          .finally(() => { revokeBtn.disabled = false; });
       });
     }
   })();
