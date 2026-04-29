@@ -129,15 +129,56 @@ def api_enviar_mensaje():
     return jsonify({"ok": True, "mensaje": "Mensaje enviado correctamente."})
 
 
+def _resolve_template_language(token: str, waba_id: str, phone_id: str, template_name: str) -> str:
+    """Consulta la API de Meta para obtener el idioma de una plantilla por su nombre.
+    Devuelve el language_code encontrado, o 'en_US' como fallback.
+    """
+    import requests as _req
+
+    if not waba_id:
+        try:
+            r = _req.get(
+                f"https://graph.facebook.com/v22.0/{phone_id}",
+                params={"fields": "whatsapp_business_account", "access_token": token},
+                timeout=10,
+            )
+            if r.ok:
+                waba_id = str(((r.json() or {}).get("whatsapp_business_account") or {}).get("id") or "").strip()
+        except Exception:
+            pass
+
+    if not waba_id:
+        return "en_US"
+
+    try:
+        r = _req.get(
+            f"https://graph.facebook.com/v22.0/{waba_id}/message_templates",
+            params={"name": template_name, "fields": "name,language,status", "access_token": token},
+            timeout=10,
+        )
+        if r.ok:
+            templates = (r.json() or {}).get("data", [])
+            if templates:
+                lang = (templates[0].get("language") or "").strip()
+                if lang:
+                    return lang
+    except Exception:
+        pass
+
+    return "en_US"
+
+
 @api_bp.route("/api/v1/template", methods=["POST"])
 def api_enviar_template():
     """Envía una plantilla de WhatsApp aprobada al número indicado.
 
-    Body JSON:
+    Body JSON (solo numero y template son obligatorios):
       numero        — número en formato internacional sin '+' (ej. 573001234567)
       template      — nombre exacto de la plantilla (ej. "hello_world")
-      idioma        — código de idioma (ej. "es_CO", "en_US"). Default: "es"
-      params        — lista de strings para los {{1}}, {{2}}... del body (opcional)
+      idioma        — código de idioma (ej. "es_CO", "en_US"). Si se omite se
+                      detecta automáticamente consultando la API de Meta.
+      params        — lista de strings para los {{1}}, {{2}}... del body. Omitir
+                      si la plantilla no tiene variables.
     """
     tenant, err = _require_api_auth()
     if err:
@@ -149,7 +190,7 @@ def api_enviar_template():
     payload = request.get_json(silent=True) or {}
     numero        = (payload.get("numero") or "").strip()
     template_name = (payload.get("template") or "").strip()
-    idioma        = (payload.get("idioma") or "es").strip()
+    idioma        = (payload.get("idioma") or "").strip()
     params        = payload.get("params") or []
 
     if not numero:
@@ -163,9 +204,13 @@ def api_enviar_template():
     env = _tenants.get_tenant_env(tenant)
     token    = (env.get("META_TOKEN") or "").strip()
     phone_id = (env.get("PHONE_NUMBER_ID") or "").strip()
+    waba_id  = (env.get("WABA_ID") or "").strip()
 
     if not token or not phone_id:
         return jsonify({"ok": False, "error": "El tenant no tiene META_TOKEN o PHONE_NUMBER_ID configurado."}), 503
+
+    if not idioma:
+        idioma = _resolve_template_language(token, waba_id, phone_id, template_name)
 
     from services.template_builders import build_template_send_payload, TemplateValidationError
     try:

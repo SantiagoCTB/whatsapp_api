@@ -460,6 +460,13 @@ def build_available_seats_opciones(seats: list[list[dict]]) -> str | None:
     if not pref and not vip and not regular:
         return None
 
+    def _num_key(entry: dict) -> int:
+        return int(entry["id"]) if entry["id"].isdigit() else 0
+
+    pref.sort(key=_num_key)
+    vip.sort(key=_num_key)
+    regular.sort(key=_num_key)
+
     sections: list[dict] = []
     if pref:
         sections.append({"title": "Preferencial", "rows": pref[:10]})

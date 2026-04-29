@@ -155,6 +155,21 @@ def extract_path(data: Any, path: str) -> Any:
 # Construcción de opciones WhatsApp
 # ---------------------------------------------------------------------------
 
+def _parse_time_sort_key(time_str: str) -> str:
+    """Convierte 'H:MM a. m.' / 'H:MM p. m.' en 'HH:MM' para ordenamiento."""
+    import re
+    m = re.match(r'(\d{1,2}):(\d{2})\s*(a\.?\s*m\.?|p\.?\s*m\.?)', time_str.strip().lower())
+    if not m:
+        return time_str
+    h, mn = int(m.group(1)), int(m.group(2))
+    period = m.group(3).replace(" ", "").replace(".", "")
+    if period == "pm" and h != 12:
+        h += 12
+    elif period == "am" and h == 12:
+        h = 0
+    return f"{h:02d}:{mn:02d}"
+
+
 def _build_lista_sections(items: list, fmt: dict) -> list[dict]:
     """Construye el array de secciones para tipo_respuesta='lista'."""
     id_field    = fmt.get("id_field", "id")
@@ -162,6 +177,10 @@ def _build_lista_sections(items: list, fmt: dict) -> list[dict]:
     desc_field  = fmt.get("description_field")
     section_title = fmt.get("section_title", "Opciones")
     store_selected_as = fmt.get("store_selected_as", "")
+    sort_by     = fmt.get("sort_by")
+
+    if sort_by:
+        items = sorted(items, key=lambda x: _parse_time_sort_key(str(x.get(sort_by, ""))))
 
     rows = []
     for item in items:
@@ -178,7 +197,6 @@ def _build_lista_sections(items: list, fmt: dict) -> list[dict]:
         if row_desc:
             row["description"] = row_desc
 
-        # Encode store_selected_as so the next rule can persist the chosen value
         if store_selected_as:
             row["_store_as"] = store_selected_as
 
