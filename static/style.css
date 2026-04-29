@@ -1933,6 +1933,29 @@
       border-top: 1px solid rgba(0, 0, 0, 0.08);
     }
 
+    .chat-context-menu .menu-options .context-option.loading {
+      opacity: 0.5;
+      pointer-events: none;
+      cursor: default;
+    }
+
+    .chat-context-menu .menu-options .context-option.loading::after {
+      content: '';
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      border: 2px solid currentColor;
+      border-top-color: transparent;
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+      margin-left: 6px;
+      vertical-align: middle;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
     .builder-list {
       display: flex;
       flex-direction: column;

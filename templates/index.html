@@ -193,6 +193,14 @@
   <div id="contextMenu" class="context-menu"><div id="replyAction">Responder</div></div>
   <div id="chatContextMenu" class="context-menu chat-context-menu">
     <div id="chatAliasAction">Asignar alias</div>
+    <div id="chatAliasForm" style="display:none;padding:6px 10px;">
+      <input id="chatAliasInput" type="text" placeholder="Nombre del alias"
+             style="width:100%;box-sizing:border-box;font-size:0.85rem;padding:5px 8px;border:1px solid var(--border,#cbd5e1);border-radius:6px;outline:none;">
+      <div style="display:flex;gap:6px;margin-top:6px;">
+        <button id="chatAliasSave" style="flex:1;font-size:0.8rem;padding:4px 0;background:var(--primary,#1a56db);color:#fff;border:none;border-radius:6px;cursor:pointer;">Guardar</button>
+        <button id="chatAliasCancel" style="flex:1;font-size:0.8rem;padding:4px 0;background:var(--bg-secondary,#f1f5f9);border:1px solid var(--border,#cbd5e1);border-radius:6px;cursor:pointer;">Cancelar</button>
+      </div>
+    </div>
     <div id="chatToggleAiAction">Desactivar IA</div>
     <div id="chatToggleFollowupAction">Desactivar seguimiento</div>
     <div id="chatFinishAction" class="danger-action">Finalizar chat</div>
@@ -1834,8 +1842,7 @@
           label.textContent = roleName;
           option.appendChild(label);
 
-          const hasRole = assigned.includes(roleKeyword);
-          if (hasRole) {
+          if (assigned.includes(roleKeyword)) {
             option.classList.add('active');
             const check = document.createElement('span');
             check.className = 'role-option-check';
@@ -1843,8 +1850,31 @@
             option.appendChild(check);
           }
 
-          option.addEventListener('click', () => {
-            toggleChatRole(chatData.numero, roleKeyword, hasRole);
+          option.addEventListener('click', e => {
+            e.stopPropagation();
+            if (option.classList.contains('loading')) return;
+            const currentlyHas = option.classList.contains('active');
+            // Actualización optimista del DOM
+            option.classList.toggle('active', !currentlyHas);
+            const existingCheck = option.querySelector('.role-option-check');
+            if (currentlyHas) {
+              if (existingCheck) existingCheck.remove();
+            } else if (!existingCheck) {
+              const check = document.createElement('span');
+              check.className = 'role-option-check';
+              check.textContent = '✔';
+              option.appendChild(check);
+            }
+            // Actualizar estado en memoria para que otras acciones sean consistentes
+            if (chatContextTarget) {
+              if (!Array.isArray(chatContextTarget.roles_kw)) chatContextTarget.roles_kw = [];
+              if (currentlyHas) {
+                chatContextTarget.roles_kw = chatContextTarget.roles_kw.filter(r => r !== roleKeyword);
+              } else if (!chatContextTarget.roles_kw.includes(roleKeyword)) {
+                chatContextTarget.roles_kw.push(roleKeyword);
+              }
+            }
+            toggleChatRole(chatData.numero, roleKeyword, currentlyHas, option);
           });
 
           chatRoleOptionsContainer.appendChild(option);
@@ -1912,8 +1942,9 @@
         });
       }
 
-      async function toggleChatRole(numero, roleKeyword, hasRole) {
+      async function toggleChatRole(numero, roleKeyword, hadRole, optionEl) {
         if (!numero || !roleKeyword) return;
+        if (optionEl) optionEl.classList.add('loading');
         try {
           const res = await fetch('/assign_chat_role', {
             method: 'POST',
@@ -1921,14 +1952,36 @@
             body: JSON.stringify({
               numero,
               role: roleKeyword,
-              action: hasRole ? 'remove' : 'add'
+              action: hadRole ? 'remove' : 'add'
             })
           });
           if (!res.ok) throw new Error('No se pudo actualizar el rol');
-          hideChatContextMenu();
           fetchChatList();
         } catch (err) {
           console.error(err);
+          // Revertir actualización optimista
+          if (optionEl) {
+            optionEl.classList.toggle('active', hadRole);
+            const existingCheck = optionEl.querySelector('.role-option-check');
+            if (hadRole && !existingCheck) {
+              const check = document.createElement('span');
+              check.className = 'role-option-check';
+              check.textContent = '✔';
+              optionEl.appendChild(check);
+            } else if (!hadRole && existingCheck) {
+              existingCheck.remove();
+            }
+            if (chatContextTarget) {
+              if (!Array.isArray(chatContextTarget.roles_kw)) chatContextTarget.roles_kw = [];
+              if (hadRole && !chatContextTarget.roles_kw.includes(roleKeyword)) {
+                chatContextTarget.roles_kw.push(roleKeyword);
+              } else if (!hadRole) {
+                chatContextTarget.roles_kw = chatContextTarget.roles_kw.filter(r => r !== roleKeyword);
+              }
+            }
+          }
+        } finally {
+          if (optionEl) optionEl.classList.remove('loading');
         }
       }
 
@@ -1969,20 +2022,69 @@
       chatContextMenu.addEventListener('contextmenu', e => e.preventDefault());
 
 
-      chatAliasAction.addEventListener('click', () => {
+      const chatAliasForm   = document.getElementById('chatAliasForm');
+      const chatAliasInput  = document.getElementById('chatAliasInput');
+      const chatAliasSave   = document.getElementById('chatAliasSave');
+      const chatAliasCancel = document.getElementById('chatAliasCancel');
+
+      function showAliasForm() {
         if (!chatContextTarget) return;
-        const chatData = chatContextTarget;
+        chatAliasAction.style.display = 'none';
+        chatAliasForm.style.display = 'block';
+        chatAliasInput.value = chatContextTarget.alias || '';
+        // Reposicionar menú si se sale de pantalla
+        requestAnimationFrame(() => {
+          const rect = chatContextMenu.getBoundingClientRect();
+          const margin = 8;
+          if (rect.bottom > window.innerHeight - margin) {
+            chatContextMenu.style.top = `${Math.max(margin, window.innerHeight - rect.height - margin)}px`;
+          }
+          chatAliasInput.focus();
+        });
+      }
+
+      function hideAliasForm() {
+        chatAliasAction.style.display = '';
+        chatAliasForm.style.display = 'none';
+        chatAliasInput.value = '';
+      }
+
+      chatAliasAction.addEventListener('click', e => {
+        e.stopPropagation();
+        showAliasForm();
+      });
+
+      chatAliasCancel.addEventListener('click', e => {
+        e.stopPropagation();
+        hideAliasForm();
+      });
+
+      chatAliasSave.addEventListener('click', e => {
+        e.stopPropagation();
+        if (!chatContextTarget) return;
+        const trimmed = chatAliasInput.value.trim();
+        if (!trimmed) { chatAliasInput.focus(); return; }
+        const numero = chatContextTarget.numero;
+        hideAliasForm();
         hideChatContextMenu();
-        const nombre = prompt(`Asignar alias a: ${chatData.numero}`, chatData.alias || "");
-        if (nombre === null) return;
-        const trimmed = nombre.trim();
-        if (!trimmed) return;
         fetch('/set_alias', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ numero: chatData.numero, nombre: trimmed })
+          body: JSON.stringify({ numero, nombre: trimmed })
         }).then(() => fetchChatList());
       });
+
+      chatAliasInput.addEventListener('keydown', e => {
+        if (e.key === 'Enter') { e.preventDefault(); chatAliasSave.click(); }
+        if (e.key === 'Escape') { e.stopPropagation(); hideAliasForm(); }
+      });
+
+      // Ocultar el form de alias al cerrar el menú
+      const _origHideChatContextMenu = hideChatContextMenu;
+      hideChatContextMenu = function() {
+        hideAliasForm();
+        _origHideChatContextMenu();
+      };
 
       function toggleChatAutomation(endpoint, numero, enabled, fallbackMessage) {
         return fetch(endpoint, {
