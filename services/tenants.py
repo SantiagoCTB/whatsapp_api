@@ -147,8 +147,13 @@ def _default_tenant_env(*, include_legacy_credentials: bool = False) -> dict:
     return env
 
 
+_FALSY_STRINGS = frozenset({"none", "null", "undefined", ""})
+
+
 def _coerce_env_value(key: str, value):
-    if value in (None, ""):
+    if value is None:
+        return None
+    if isinstance(value, str) and value.strip().lower() in _FALSY_STRINGS:
         return None
 
     if key == "SESSION_TIMEOUT":
