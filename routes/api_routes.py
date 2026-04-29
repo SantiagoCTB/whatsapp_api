@@ -1,12 +1,19 @@
 """API pública para envío de mensajes de WhatsApp.
 
+── API propia ────────────────────────────────────────────────────────────────
 Autenticación: Authorization: Bearer <token>
 Tenant:        X-Tenant-ID: <tenant_key>
 
-Endpoints públicos (requieren token de API):
   POST /api/v1/mensaje          — envía un mensaje de texto
 
-Endpoints de administración (requieren sesión admin):
+── Compatibilidad WAHA (Uptime Kuma / herramientas externas) ────────────────
+Autenticación: X-Api-Key: <token>
+Tenant:        campo "session" del body (= tenant_key)
+
+  POST /api/sendText            — envía texto (formato WAHA)
+  GET  /api/version             — responde versión (health-check de WAHA)
+
+── Administración (requieren sesión admin) ───────────────────────────────────
   GET  /api/v1/token            — muestra si hay token configurado
   POST /api/v1/token/generar    — genera / rota el token del tenant actual
   POST /api/v1/token/revocar    — elimina el token del tenant actual
@@ -176,3 +183,107 @@ def api_revocar_token():
         extra={"tenant_key": tenant.tenant_key},
     )
     return jsonify({"ok": True, "mensaje": "Token revocado correctamente."})
+
+
+# ── Compatibilidad WAHA ───────────────────────────────────────────────────────
+
+def _parse_chat_id(chat_id: str) -> str:
+    """Extrae el número de teléfono de un chatId estilo WAHA.
+
+    Ejemplos de entrada:
+      573001234567          → 573001234567
+      573001234567@c.us     → 573001234567
+      573001234567@s.whatsapp.net → 573001234567
+    """
+    return (chat_id or "").split("@")[0].strip()
+
+
+def _waha_auth() -> tuple:
+    """Valida X-Api-Key + session (tenant).
+
+    Retorna (tenant, None) si OK, o (None, (response, status)) si falla.
+    El mismo mensaje de error para clave inválida y tenant inexistente,
+    para no revelar qué falla.
+    """
+    api_key = (request.headers.get("X-Api-Key") or "").strip()
+    if not api_key:
+        return None, (jsonify({"error": "X-Api-Key requerida."}), 401)
+
+    payload = request.get_json(silent=True) or {}
+    session = (payload.get("session") or "").strip()
+    if not session:
+        return None, (jsonify({"error": "El campo 'session' es requerido."}), 400)
+
+    tenant = tenants.get_tenant(session)
+    if not tenant:
+        return None, (jsonify({"error": "Clave API o sesión inválida."}), 401)
+
+    stored = _get_stored_token(tenant)
+    if not stored:
+        return None, (jsonify({"error": "Clave API o sesión inválida."}), 401)
+
+    if not hmac.compare_digest(stored.encode(), api_key.encode()):
+        logger.warning(
+            "WAHA API: intento con clave inválida",
+            extra={"session": session},
+        )
+        return None, (jsonify({"error": "Clave API o sesión inválida."}), 401)
+
+    return tenant, None
+
+
+@api_bp.route("/api/sendText", methods=["POST"])
+def waha_send_text():
+    """Endpoint compatible con WAHA para herramientas como Uptime Kuma.
+
+    Body JSON:
+      chatId   — número con prefijo internacional o ID@c.us / @g.us
+      text     — texto del mensaje
+      session  — nombre de sesión (= tenant_key en Whapco)
+
+    Header:
+      X-Api-Key — token de API del tenant
+    """
+    tenant, err = _waha_auth()
+    if err:
+        return err
+
+    payload = request.get_json(silent=True) or {}
+    chat_id = (payload.get("chatId") or "").strip()
+    text    = (payload.get("text")   or "").strip()
+
+    if not chat_id:
+        return jsonify({"error": "El campo 'chatId' es requerido."}), 400
+    if not text:
+        return jsonify({"error": "El campo 'text' es requerido."}), 400
+    if len(text) > 4096:
+        return jsonify({"error": "El texto excede el límite de 4096 caracteres."}), 400
+
+    numero = _parse_chat_id(chat_id)
+
+    # Activar el contexto del tenant para que enviar_mensaje use sus credenciales
+    tenants.set_current_tenant(tenant)
+
+    from services.whatsapp_api import enviar_mensaje
+
+    ok, error_msg = enviar_mensaje(numero, text, tipo="api", return_error=True)
+
+    if not ok:
+        logger.warning(
+            "WAHA API: no se pudo enviar mensaje",
+            extra={"tenant_key": tenant.tenant_key, "error": error_msg},
+        )
+        return jsonify({"error": error_msg or "No se pudo enviar el mensaje."}), 502
+
+    logger.info(
+        "WAHA API: mensaje enviado",
+        extra={"tenant_key": tenant.tenant_key},
+    )
+    # WAHA devuelve el objeto del mensaje; devolvemos un subset compatible
+    return jsonify({"id": None, "timestamp": None, "chatId": chat_id})
+
+
+@api_bp.route("/api/version", methods=["GET"])
+def waha_version():
+    """Health-check compatible con WAHA. Uptime Kuma lo usa para verificar la conexión."""
+    return jsonify({"version": "whapco", "engine": "WEBJS"})
