@@ -1031,7 +1031,10 @@ def _normalize_media_url(url: str | None) -> str | None:
 
 
 def _get_verify_token():
-    return tenants.get_runtime_setting("VERIFY_TOKEN", default=Config.VERIFY_TOKEN)
+    token = tenants.get_runtime_setting("VERIFY_TOKEN")
+    if not token:
+        token = tenants.get_runtime_setting("SECRET_KEY")
+    return token or Config.VERIFY_TOKEN
 
 
 def _get_session_timeout():
