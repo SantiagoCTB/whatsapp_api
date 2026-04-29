@@ -41,6 +41,7 @@ from services.db import (
     get_chat_state,
     update_chat_state,
     delete_chat_state,
+    reset_chat_roles,
     hide_chat,
     get_chat_state_definitions,
     obtener_ultimo_mensaje_cliente_info,
@@ -195,6 +196,7 @@ def _maybe_close_expired_session(
 
     delete_chat_state(numero)
     clear_chat_runtime_state(numero)
+    reset_chat_roles(numero)
     notify_session_closed(numero, origin="timeout")
     return "inactivo"
 
@@ -266,6 +268,26 @@ def _require_chat_access(cursor, numero: str) -> bool:
     role_ids = _get_role_ids(cursor, roles)
     user_id = _get_session_user_id(cursor)
     return _has_chat_access(cursor, numero, role_ids, user_id)
+
+
+def _can_manage_chat_roles(cursor, numero: str) -> bool:
+    """Verifica si el usuario puede gestionar roles del chat.
+
+    Permite a admins siempre; a otros usuarios si el chat tiene al menos un
+    rol que coincida con los suyos (sin restricción de asignación de usuario).
+    """
+    roles = _get_session_roles()
+    if 'admin' in roles:
+        return True
+    role_ids = _get_role_ids(cursor, roles)
+    if not role_ids:
+        return False
+    placeholders = ','.join(['%s'] * len(role_ids))
+    cursor.execute(
+        f"SELECT 1 FROM chat_roles WHERE numero = %s AND role_id IN ({placeholders}) LIMIT 1",
+        (numero, *role_ids),
+    )
+    return cursor.fetchone() is not None
 
 
 def _select_matching_rule(rules, text_norm: str | None):
@@ -2013,6 +2035,7 @@ def finalizar_chat():
     step = state_row[0] if state_row else None
     update_chat_state(numero, step, "inactivo")
     clear_chat_runtime_state(numero)
+    reset_chat_roles(numero)
 
     notify_session_closed(numero, origin="manual")
 
@@ -2100,7 +2123,7 @@ def assign_chat_role():
 
     conn = get_connection()
     c    = conn.cursor()
-    if not _require_chat_access(c, numero):
+    if not _can_manage_chat_roles(c, numero):
         conn.close()
         return jsonify({'error': 'No autorizado'}), 403
 

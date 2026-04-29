@@ -1591,6 +1591,17 @@ def delete_chat_state(numero):
     conn.commit()
     conn.close()
 
+
+def reset_chat_roles(numero: str) -> None:
+    """Elimina los roles y la asignación de usuario asociados a un chat."""
+    conn = get_connection()
+    c    = conn.cursor()
+    c.execute("DELETE FROM chat_roles WHERE numero=%s", (numero,))
+    c.execute("DELETE FROM chat_assignments WHERE numero=%s", (numero,))
+    conn.commit()
+    conn.close()
+
+
 def obtener_mensajes_por_numero(numero):
     conn = get_connection()
     c    = conn.cursor()

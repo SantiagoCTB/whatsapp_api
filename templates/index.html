@@ -1980,6 +1980,7 @@
               }
             }
           }
+          alert(err.message || 'No se pudo actualizar el rol');
         } finally {
           if (optionEl) optionEl.classList.remove('loading');
         }
